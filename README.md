@@ -1,0 +1,2 @@
+# LingQ_Add-On
+ LingQ Addon is a userscript that enhances the LingQ language learning platform by providing customizable layouts and added functionality to improve the reading and learning experience. It allows users to adjust the layout of the reader, download vocabulary lists, and streamline the learning process with features like automatic lesson completion. Customizations include different reader layouts (Video, Audio, Off), adjustable font sizes and line heights, color theme options, and keyboard shortcuts.
