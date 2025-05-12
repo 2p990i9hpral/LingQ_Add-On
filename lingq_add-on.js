@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*/learn/*/web/reader/*
 // @match        https://www.lingq.com/*/learn/*/web/library/course/*
 // @exclude      https://www.lingq.com/*/learn/*/web/editor/*
-// @version      4.5.2
+// @version      4.5.3
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @namespace https://greasyfork.org/users/1458847
@@ -1676,9 +1676,9 @@
                 grid-template-columns: repeat(3, auto) !important;
             }
 
-            .word-indicator--box-green {
-                background-color: var(--green-450);
-                border-color: var(--green-default);
+            .word-indicator--box-white {
+                background-color: rgb(255 255 255 / 85%);
+                border-color: rgb(255 255 255);
             }
             `;
             const styleElement = createElement("style", { textContent: css });
@@ -1693,7 +1693,7 @@
             
                 const knownWordsItem = createElement('div', {className: 'word-indicator--item grid-layout grid-align--center grid-item is-fluid--left', title: 'Known Words'});
             
-                const knownWordsBox = createElement('div', {className: 'word-indicator--box word-indicator--box-green'});
+                const knownWordsBox = createElement('div', {className: 'word-indicator--box word-indicator--box-white'});
                 knownWordsItem.appendChild(knownWordsBox);
             
                 const textWrapper = createElement('span', {className: 'text-wrapper is-size-8'});
