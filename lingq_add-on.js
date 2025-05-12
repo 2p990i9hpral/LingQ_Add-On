@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*/learn/*/web/reader/*
 // @match        https://www.lingq.com/*/learn/*/web/library/course/*
 // @exclude      https://www.lingq.com/*/learn/*/web/editor/*
-// @version      4.5.4
+// @version      4.5.5
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @namespace https://greasyfork.org/users/1458847
@@ -62,7 +62,7 @@
     };
 
     const colorSettings = getColorSettings(settings.colorMode);
-    
+
     let styleElement = null;
 
     function getColorSettings(colorMode) {
@@ -117,59 +117,59 @@
         function addSelect(parent, id, labelText, options, selectedValue) {
             const container = createElement("div", {className: "popup-row"});
             container.appendChild(createElement("label", {htmlFor: id, textContent: labelText}));
-    
+
             const select = createElement("select", {id, style: "width: 100%; margin-top: 5px; padding: 5px;"});
             options.forEach(option => {
                 select.appendChild(createElement("option", {value: option.value, textContent: option.text, selected: selectedValue === option.value}));
             });
-    
+
             container.appendChild(select);
             parent.appendChild(container);
             return container;
         }
-    
+
         function addSlider(parent, id, labelText, valueId, value, unit, min, max, step) {
             const container = createElement("div", {className: "popup-row"});
-    
+
             const label = createElement("label", { htmlFor: id });
             label.appendChild(document.createTextNode(labelText + " "));
             label.appendChild(createElement("span", { id: valueId, textContent: value }));
             if (unit) label.appendChild(document.createTextNode(unit));
-    
+
             container.appendChild(label);
             container.appendChild(createElement("input", {type: "range", id, min, max, step, value, style: "width: 100%;"}));
-    
+
             parent.appendChild(container);
             return container;
         }
-    
+
         function addColorPicker(parent, id, labelText, value) {
             const container = createElement("div", {className: "popup-row"});
             container.appendChild(createElement("label", {htmlFor: id + "Text", textContent: labelText}));
-    
+
             const flexContainer = createElement("div", {style: "display: flex; align-items: center;"});
             flexContainer.appendChild(createElement("div", {id: id + "Picker", className: "color-picker" }));
             flexContainer.appendChild(createElement("input", {type: "text", id: id + "Text", value, style: "flex-grow: 1; margin-left: 10px;"}));
-    
+
             container.appendChild(flexContainer);
             parent.appendChild(container);
             return container;
         }
-    
+
         function addCheckbox(parent, id, labelText, checked) {
             const container = createElement("div", {className: "popup-row"});
             const label = createElement("label", {htmlFor: id, textContent: labelText});
             const checkbox = createElement("input", {type: "checkbox", id, checked, style: "margin-left: 10px;"});
-    
+
             label.style.display = "flex";
             label.style.alignItems = "center";
             container.appendChild(label);
             label.appendChild(checkbox);
             parent.appendChild(container);
-    
+
             return container;
         }
-        
+
         const container = createElement("div");
 
         addSelect(container, "styleTypeSelector", "Layout Style:", [
@@ -377,14 +377,14 @@
                     const prefix = currentColorMode === "dark" ? "dark_" : "white_";
                     storage.set(prefix + key, value);
                 }
-                
+
                 const pickerElement = document.getElementById(pickerId);
                 const textElement = document.getElementById(textId);
-        
+
                 if (!pickerElement || !textElement) return;
-        
+
                 pickerElement.style.backgroundColor = textElement.value;
-        
+
                 const pickr = Pickr.create({
                     el: pickerElement,
                     theme: 'nano',
@@ -392,46 +392,46 @@
                     default: textElement.value,
                     components: {preview: true, opacity: true, hue: true}
                 });
-        
+
                 pickr.on('change', (color) => {
                     const rgbaColor = color.toRGBA();
-        
+
                     const r = Math.round(rgbaColor[0]);
                     const g = Math.round(rgbaColor[1]);
                     const b = Math.round(rgbaColor[2]);
                     const a = rgbaColor[3];
-        
+
                     const roundedRGBA = `rgba(${r}, ${g}, ${b}, ${a})`;
-        
+
                     textElement.value = roundedRGBA;
                     pickerElement.style.backgroundColor = roundedRGBA;
                     document.documentElement.style.setProperty(cssVar, roundedRGBA);
-        
+
                     saveColorSetting(settingKey, roundedRGBA);
                 });
-        
+
                 textElement.addEventListener('change', function () {
                     const rgbaColor = this.value;
-        
+
                     pickr.setColor(this.value);
                     saveColorSetting(settingKey, rgbaColor);
                     document.documentElement.style.setProperty(cssVar, rgbaColor);
                     pickerElement.style.backgroundColor = rgbaColor;
                 });
-        
+
                 pickr.on('hide', () => {
                     const rgbaColor = pickr.getColor().toRGBA().toString();
                     pickerElement.style.backgroundColor = rgbaColor;
                 });
             }
-            
+
             return new Promise((resolve) => {
                 const pickrCss = createElement('link', {
                     rel: 'stylesheet',
                     href: 'https://cdn.jsdelivr.net/npm/@simonwep/pickr/dist/themes/nano.min.css'
                 });
                 document.head.appendChild(pickrCss);
-    
+
                 const pickrScript = createElement('script', {
                     src: 'https://cdn.jsdelivr.net/npm/@simonwep/pickr/dist/pickr.min.js',
                     onload: () => resolve() // Pass function reference directly
@@ -446,7 +446,7 @@
                 setupRGBAPickr('playingUnderlinePicker', 'playingUnderlineText', 'playingUnderline', '--is_playing_underline');
             });
         }
-        
+
         settingsButton.addEventListener("click", () => {
             settingsPopup.style.display = "block";
             initializePickrs();
@@ -472,10 +472,10 @@
             document.getElementById("lingqBorderLearnedText").value = colorSettings.lingqBorderLearned;
             document.getElementById("blueBorderText").value = colorSettings.blueBorder;
             document.getElementById("playingUnderlineText").value = colorSettings.playingUnderline;
-    
+
             const fontColorPicker = document.getElementById("fontColorPicker");
             if (fontColorPicker) fontColorPicker.style.backgroundColor = colorSettings.fontColor;
-    
+
             const playingUnderlinePicker = document.getElementById("playingUnderlinePicker");
             if (playingUnderlinePicker) playingUnderlinePicker.style.backgroundColor = colorSettings.playingUnderline;
         }
@@ -489,7 +489,7 @@
                 { id: "fontColorPicker", color: colorSettings.fontColor },
                 { id: "playingUnderlinePicker", color: colorSettings.playingUnderline }
             ];
-    
+
             pickerIds.forEach(item => {
                 const picker = document.getElementById(item.id);
                 if (picker) {
@@ -509,25 +509,25 @@
 
         function updateColorMode(event) {
             event.stopPropagation();
-    
+
             const selectedColorMode = this.value;
             const settingsPopup = document.getElementById("lingqAddonSettingsPopup");
             settingsPopup.style.backgroundColor = selectedColorMode === "dark" ? "#2a2c2e" : "#ffffff";
-    
+
             storage.set("colorMode", selectedColorMode);
-    
+
             const colorSettings = getColorSettings(selectedColorMode);
-    
+
             updateColorInputs(colorSettings);
-    
+
             document.documentElement.style.setProperty(
                 "--background-color",
                 selectedColorMode === "dark" ? "#2a2c2e" : "#ffffff"
             );
             updateCssColorVariables(colorSettings);
-    
+
             applyStyles(document.getElementById("styleTypeSelector").value, selectedColorMode);
-    
+
             updateColorPickerBackgrounds(colorSettings);
         }
 
@@ -536,17 +536,17 @@
         function setupSlider(sliderId, valueId, settingKey, unit, cssVar, valueTransform) {
             const slider = document.getElementById(sliderId);
             const valueDisplay = document.getElementById(valueId);
-    
+
             slider.addEventListener("input", function () {
                 const value = parseFloat(this.value);
                 const transformedValue = valueTransform(value);
-    
+
                 valueDisplay.textContent = transformedValue.toString().replace(unit, '');
                 storage.set(settingKey, value);
                 document.documentElement.style.setProperty(cssVar, transformedValue);
             });
         }
-        
+
         setupSlider("fontSizeSlider", "fontSizeValue", "fontSize", "rem", "--font_size", (val) => `${val}rem`);
         setupSlider("lineHeightSlider", "lineHeightValue", "lineHeight", "", "--line_height", (val) => val);
         setupSlider("heightBigSlider", "heightBigValue", "heightBig", "px", "--height_big", (val) => `${val}px`);
@@ -565,10 +565,10 @@
 
         function resetSettings() {
             if (!confirm("Reset all settings to default?")) return;
-    
+
             const currentColorMode = document.getElementById("colorModeSelector").value;
             const defaultColorSettings = currentColorMode === "dark" ? defaults.darkColors : defaults.whiteColors;
-    
+
             document.getElementById("styleTypeSelector").value = defaults.styleType;
             document.getElementById("fontSizeSlider").value = defaults.fontSize;
             document.getElementById("fontSizeValue").textContent = defaults.fontSize;
@@ -578,30 +578,30 @@
             document.getElementById("heightBigValue").textContent = defaults.heightBig;
             document.getElementById("sentenceHeightSlider").value = defaults.sentenceHeight;
             document.getElementById("sentenceHeightValue").textContent = defaults.sentenceHeight;
-    
+
             updateColorInputs(defaultColorSettings);
             updateColorPickerBackgrounds(defaultColorSettings);
-    
+
             for (const [key, value] of Object.entries(defaults)) {
                 storage.set(key, value);
             }
-    
+
             const prefix = currentColorMode === "dark" ? "dark_" : "white_";
             for (const [key, value] of Object.entries(defaultColorSettings)) {
                 storage.set(prefix + key, value);
             }
-    
+
             applyStyles(defaults.styleType, currentColorMode);
-    
+
             document.getElementById("videoSettings").style.display = defaults.styleType === "video" ? "block" : "none";
             document.getElementById("sentenceVideoSettings").style.display = defaults.styleType === "off" ? "block" : "none";
-    
+
             document.documentElement.style.setProperty("--font_size", `${defaults.fontSize}rem`);
             document.documentElement.style.setProperty("--line_height", defaults.lineHeight);
             document.documentElement.style.setProperty("--height_big", `${defaults.heightBig}px`);
             document.documentElement.style.setProperty("--sentence_height", `${defaults.sentenceHeight}px`);
             updateCssColorVariables(defaultColorSettings);
-    
+
             document.getElementById("autoFinishingCheckbox").checked = defaults.autoFinishing;
         }
 
@@ -615,26 +615,26 @@
             let currentPage = 0;
             let totalPages = 0;
             let isFirstCall = true;
-    
+
             while (nextUrl) {
                 try {
                     const response = await fetch(nextUrl);
-    
+
                     if (!response.ok) {
                         throw new Error(`HTTP error! Status: ${response.status}`);
                     }
-    
+
                     const data = await response.json();
                     currentPage++;
-    
+
                     if (isFirstCall) {
                         isFirstCall = false;
                         totalPages = Math.ceil(data.count / pageSize);
                         console.log(`total pages: ${totalPages}`);
                     }
-    
+
                     progressCallback(currentPage, totalPages, false, null, data.count);
-    
+
                     if (apiType === 'lingq') {
                         const filteredResults = data.results.map(item => ({
                             pk: item.pk,
@@ -647,9 +647,9 @@
                     } else if (apiType === 'known') {
                         allResults = allResults.concat(data.results);
                     }
-    
+
                     nextUrl = data.next;
-    
+
                     if (nextUrl) {
                         console.log("Fetched page. Next URL:", nextUrl);
                     } else {
@@ -662,22 +662,22 @@
                     break;
                 }
             }
-    
+
             return allResults;
         }
-    
+
         async function downloadWords(baseUrl, pageSize, fileName, apiType, additionalParams="") {
             const progressContainer = document.getElementById("downloadProgressContainer");
             const progressBar = document.getElementById("downloadProgressBar");
             const progressText = document.getElementById("downloadProgressText");
-    
+
             if (progressContainer && progressBar && progressText) {
                 progressBar.value = 0;
                 progressBar.max = 100;
                 progressText.textContent = "Initializing download...";
                 progressContainer.style.display = "block";
             }
-    
+
             const progressCallback = (currentPage, totalPages,_isDone, error_isErrorEncountered, totalCount) => {
                 if (progressBar && progressText) {
                     if (error_isErrorEncountered) {
@@ -685,28 +685,28 @@
                         progressBar.style.backgroundColor = 'red';
                         return;
                     }
-    
+
                     progressBar.max = totalPages;
                     progressBar.value = currentPage;
                     progressText.textContent = `Fetching data... Page ${currentPage} of ${totalPages} (Total items: ${totalCount || 'N/A'})`;
-    
+
                     if (_isDone) {
                         progressText.textContent = error_isErrorEncountered ? `Export failed: ${error_isErrorEncountered.message}` : `${totalCount} items exported`;
                     }
                 }
             };
-    
+
             try {
                 const allWords = await getAllWords(baseUrl, pageSize, apiType, additionalParams, progressCallback);
-    
+
                 if (!allWords || allWords.length === 0) {
                     console.warn("No words found or an error occurred.");
                     return;
                 }
-    
+
                 let blob;
                 const fileType = fileName.split(".")[1];
-    
+
                 if (fileType === 'json') {
                     const dataString = JSON.stringify(allWords, null, 2);
                     blob = new Blob([dataString], { type: 'application/json' });
@@ -720,18 +720,18 @@
                             return value;
                         }).join(',');
                     }).join('\n');
-    
+
                     const dataString = headers + '\n' + rows;
                     blob = new Blob([dataString], { type: 'text/csv' });
                 }
-    
+
                 downloadBlob(blob, fileName);
                 console.log("Export completed.");
             } catch (error) {
                 console.error('Error:', error);
             }
         }
-    
+
         function downloadBlob(blob, fileName) {
             const url = URL.createObjectURL(blob);
             const a = createElement("a", {href: url, download: fileName});
@@ -740,7 +740,7 @@
             document.body.removeChild(a);
             URL.revokeObjectURL(url);
         }
-        
+
         downloadWordsButton.addEventListener("click", () => {
             downloadWordsPopup.style.display = "block";
 
@@ -1419,10 +1419,10 @@
 
     async function getLanguageCode() {
         const url = `https://www.lingq.com/api/v3/profiles/`;
-        
+
         const response = await fetch(url);
         const data = await response.json();
-        
+
         return data.results[0].active_language;
     }
 
@@ -1445,10 +1445,10 @@
     async function getLessonInfo(lessonId) {
         const languageCode = await getLanguageCode();
         const url = `https://www.lingq.com/api/v3/${languageCode}/lessons/counters/?lesson=${lessonId}`;
-        
+
         const response = await fetch(url);
         const data = await response.json();
-        
+
         return data[lessonId];
     }
 
@@ -1507,7 +1507,7 @@
             console.log(`last progress: ${lastCompletedPercentage}`);
 
             const sliderTrack = document.querySelector('.audio-player--progress .rc-slider-track');
-            
+
             const sliderContainer = createSliderElements();
             const videoContainer = document.querySelector(".modal-content > div");
             videoContainer.appendChild(sliderContainer);
@@ -1520,7 +1520,7 @@
             const updateLessonProgress = (lessonId, lessonInfo, progressPercentage, lastCompletedPercentage) => {
                 const progressUpdatePeriod = 5;
                 const flooredProgressPercentage = Math.floor(progressPercentage / progressUpdatePeriod) * progressUpdatePeriod;
-        
+
                 if (flooredProgressPercentage > lastCompletedPercentage) {
                     console.log(`progress percentage: ${flooredProgressPercentage}. Updated`);
                     const wordIndex = Math.floor(lessonInfo["totalWordsCount"] * (flooredProgressPercentage / 100));
@@ -1534,13 +1534,13 @@
                 for (const mutation of mutationsList) {
                     if (mutation.type === 'attributes' && mutation.attributeName === 'style') {
                         syncVideoSliderTrack(videoSliderTrack, sliderTrack);
-                        
+
                         const progressPercentage = parseFloat(sliderTrack.style.width);
 
                         lastCompletedPercentage = updateLessonProgress(lessonId, lessonInfo, progressPercentage, lastCompletedPercentage);
                         const isLessonFinished = progressPercentage >= 99.5;
                         if (isLessonFinished && settings.autoFinishing) {
-                            finishLesson();
+                            setTimeout(finishLesson, 3000);
                         }
                     }
                 }
@@ -1576,18 +1576,17 @@
         iframeObserver.observe(document.body, {childList: true, subtree: true, attributes: true, attributeFilter: ["src"]});
     }
 
-    function setupScrollCustomization() {
-        setTimeout(() => {
-            const readerContainer = document.querySelector(".reader-container");
-            if (readerContainer) {
-                readerContainer.addEventListener("wheel", (event) => {
-                    event.preventDefault();
-                    const delta = event.deltaY;
-                    const scrollAmount = 0.3;
-                    readerContainer.scrollTop += delta * scrollAmount;
-                });
-            }
-        }, 3000);
+    async function changeScrollAmount() {
+        const readerContainer = await waitForElement(".reader-container");
+
+        if (readerContainer) {
+            readerContainer.addEventListener("wheel", (event) => {
+                event.preventDefault();
+                const delta = event.deltaY;
+                const scrollAmount = 0.3;
+                readerContainer.scrollTop += delta * scrollAmount;
+            });
+        }
     }
 
     function setupSentenceFocus() {
@@ -1632,14 +1631,14 @@
             if (document.querySelector(selector)) {
                 return resolve(document.querySelector(selector));
             }
-    
+
             const observer = new MutationObserver(() => {
                 if (document.querySelector(selector)) {
                     resolve(document.querySelector(selector));
                     observer.disconnect();
                 }
             });
-    
+
             observer.observe(document.documentElement, {
                 childList: true,
                 subtree: true
@@ -1655,11 +1654,11 @@
                 title: "Reset all lessons to the first page",
                 className: "nav-button"
             });
-    
+
             let nav = document.querySelector(".library-section > .list-header > .list-header-index");
             nav.appendChild(resetButton);
         }
-        
+
         function setupCourseStyles() {
             const css = `
             .nav-button {
@@ -1668,7 +1667,7 @@
                 cursor: pointer;
                 font-size: 1.5rem;
             }
-    
+
             .library-section > .list-header > .list-header-index {
                 grid-template-columns: auto 1fr auto !important;
             }
@@ -1689,35 +1688,35 @@
         function enrichLessonDetails() {
             function addKnownWordsIndicator(lessonElement, lessonInfo) {
                 const dynamicWordProgress = lessonElement.querySelector('.dynamic--word-progress');
-            
+
                 const knownWordPercentage = Math.round((lessonInfo.knownWordsCount / lessonInfo.uniqueWordsCount) * 100);
-            
+
                 const knownWordsItem = createElement('div', {className: 'word-indicator--item grid-layout grid-align--center grid-item is-fluid--left', title: 'Known Words'});
-            
+
                 const knownWordsBox = createElement('div', {className: 'word-indicator--box word-indicator--box-white'});
                 knownWordsItem.appendChild(knownWordsBox);
-            
+
                 const textWrapper = createElement('span', {className: 'text-wrapper is-size-8'});
                 textWrapper.appendChild(createElement('span', {textContent: `${lessonInfo.knownWordsCount} (${knownWordPercentage}%)`}));
-            
+
                 knownWordsItem.appendChild(textWrapper);
                 dynamicWordProgress.appendChild(knownWordsItem);
             }
-            
+
             async function updateWordIndicatorPercentages(lessonElement, lessonId) {
                 console.log(`lessonId: ${lessonId}`);
                 const lessonInfo = await getLessonInfo(lessonId);
-                
+
                 const wordIndicatorItems = lessonElement.querySelector(".word-indicator--item");
-                if (!wordIndicatorItems) { return; } 
-   
+                if (!wordIndicatorItems) { return; }
+
                 const lingqsPercentage = Math.round((lessonInfo.cardsCount / lessonInfo.uniqueWordsCount) * 100);
                 const lingqsElement = lessonElement.querySelector('.word-indicator--item[title="LingQs"] > span > span');
                 lingqsElement.textContent = `${lessonInfo.cardsCount} (${lingqsPercentage}%)`;
 
                 addKnownWordsIndicator(lessonElement, lessonInfo);
             }
-    
+
             const observer = new MutationObserver((mutations) => {
                 mutations.forEach((mutation) => {
                     if (mutation.type === 'childList' && mutation.addedNodes.length > 0) {
@@ -1730,7 +1729,7 @@
                     }
                 });
             });
-    
+
             const targetNode = document.querySelector('.library-section .library-list');
             console.log(targetNode);
             const config = { childList: true, subtree: true };
@@ -1757,22 +1756,22 @@
                 return false;
             }
         }
-    
+
         function setupLessonResetButton() {
             const resetButton = document.getElementById("resetLessonPositions");
             resetButton.addEventListener("click", async () => {
                 const languageCode = await getLanguageCode();
                 const collectionId = await getCollectionId();
-    
+
                 const allLessons = await getAllLessons(languageCode, collectionId);
                 const confirmed = confirm(`Reset all ${allLessons.length} lessons to their starting positions?`);
                 if (!confirmed) { return; }
-    
+
                 for (const lesson of allLessons) {
                     await setLessonProgress(lesson.id, 0);
                     console.log(`Reset lesson ID: ${lesson.id} to the first page`);
                 }
-    
+
                 alert(`Successfully reset ${allLessons.length} lessons to their starting positions.`);
             });
         }
@@ -1780,7 +1779,7 @@
         const libraryHeader = await waitForElement('.library-section > .list-header');
         createCourseUI();
         setupCourseStyles();
-        
+
         enrichLessonDetails();
         enableCourseSorting();
         setupLessonResetButton();
@@ -1808,7 +1807,7 @@
             applyStyles(settings.styleType, settings.colorMode);
             setupKeyboardShortcuts();
             setupYoutubePlayerCustomization();
-            setupScrollCustomization();
+            changeScrollAmount();
             setupSentenceFocus();
         }
         if (document.URL.includes("library")) {
