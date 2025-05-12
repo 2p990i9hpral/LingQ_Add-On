@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*/learn/*/web/reader/*
 // @match        https://www.lingq.com/*/learn/*/web/library/course/*
 // @exclude      https://www.lingq.com/*/learn/*/web/editor/*
-// @version      4.5.6
+// @version      4.6
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @namespace https://greasyfork.org/users/1458847
@@ -35,7 +35,8 @@
             lingqBackground: "rgba(109, 89, 44, 0.7)",
             lingqBorder: "rgba(254, 203, 72, 0.3)",
             lingqBorderLearned: "rgba(254, 203, 72, 0.5)",
-            blueBorder: "rgba(72, 154, 254, 0.5)",
+            knownBackground: "rgba(37, 57, 82, 0.7)",
+            knownBorder: "rgba(72, 154, 254, 0.5)",
             playingUnderline: "#ffffff"
         },
         whiteColors: {
@@ -43,11 +44,14 @@
             lingqBackground: "rgba(255, 200, 0, 0.4)",
             lingqBorder: "rgba(255, 200, 0, 0.3)",
             lingqBorderLearned: "rgba(255, 200, 0, 1)",
-            blueBorder: "rgba(0, 111, 255, 0.3)",
+            knownBackground: "rgba(198, 223, 255, 0.7)",
+            knownBorder: "rgba(0, 111, 255, 0.3)",
             playingUnderline: "#000000"
         },
         librarySortOption: 0,
-        autoFinishing: false
+        autoFinishing: false,
+        llmProvider: "openai",
+        llmApiKey: ""
     };
 
     const settings = {
@@ -58,7 +62,9 @@
         heightBig: storage.get("heightBig", defaults.heightBig),
         sentenceHeight: storage.get("sentenceHeight", defaults.sentenceHeight),
         librarySortOption: storage.get("librarySortOption", defaults.librarySortOption),
-        autoFinishing: storage.get("autoFinishing", defaults.autoFinishing)
+        autoFinishing: storage.get("autoFinishing", defaults.autoFinishing),
+        llmProvider: storage.get("llmProvider", defaults.llmProvider),
+        llmApiKey: storage.get("llmApiKey", defaults.llmApiKey),
     };
 
     const colorSettings = getColorSettings(settings.colorMode);
@@ -74,7 +80,8 @@
             lingqBackground: storage.get(prefix + "lingqBackground", defaultColors.lingqBackground),
             lingqBorder: storage.get(prefix + "lingqBorder", defaultColors.lingqBorder),
             lingqBorderLearned: storage.get(prefix + "lingqBorderLearned", defaultColors.lingqBorderLearned),
-            blueBorder: storage.get(prefix + "blueBorder", defaultColors.blueBorder),
+            knownBackground: storage.get(prefix + "knownBackground", defaultColors.knownBackground),
+            knownBorder: storage.get(prefix + "knownBorder", defaultColors.knownBorder),
             playingUnderline: storage.get(prefix + "playingUnderline", defaultColors.playingUnderline)
         };
     }
@@ -149,7 +156,7 @@
 
             const flexContainer = createElement("div", {style: "display: flex; align-items: center;"});
             flexContainer.appendChild(createElement("div", {id: id + "Picker", className: "color-picker" }));
-            flexContainer.appendChild(createElement("input", {type: "text", id: id + "Text", value, style: "flex-grow: 1; margin-left: 10px;"}));
+            flexContainer.appendChild(createElement("input", {type: "text", id: id + "Text", value, style: "margin-left: 10px;", className: "popup-input"}));
 
             container.appendChild(flexContainer);
             parent.appendChild(container);
@@ -196,9 +203,7 @@
         addSlider(container, "fontSizeSlider", "Font Size:", "fontSizeValue", settings.fontSize, "rem", 0.8, 1.8, 0.05);
         addSlider(container, "lineHeightSlider", "Line Height:", "lineHeightValue", settings.lineHeight, "", 1.2, 3.0, 0.1);
 
-        const colorSection = createElement("div", {
-            style: "border: 1px solid var(--font_color, #e0e0e0); padding: 0 10px; border-radius: 5px;"
-        });
+        const colorSection = createElement("div", {className: "popup-section"});
 
         addSelect(colorSection, "colorModeSelector", "Color Mode:", [
             { value: "dark", text: "Dark" },
@@ -210,11 +215,31 @@
             { id: "lingqBackground", label: "LingQ Background:", value: colorSettings.lingqBackground },
             { id: "lingqBorder", label: "LingQ Border:", value: colorSettings.lingqBorder },
             { id: "lingqBorderLearned", label: "LingQ Border Learned:", value: colorSettings.lingqBorderLearned },
-            { id: "blueBorder", label: "Blue Border:", value: colorSettings.blueBorder },
+            { id: "knownBackground", label: "Known Background:", value: colorSettings.knownBackground },
+            { id: "knownBorder", label: "Known Border:", value: colorSettings.knownBorder },
             { id: "playingUnderline", label: "Playing Underline:", value: colorSettings.playingUnderline }
         ].forEach(config => addColorPicker(colorSection, config.id, config.label, config.value));
 
         container.appendChild(colorSection);
+
+        const llmSection = createElement("div", {className: "popup-section"});
+
+        /* gpt-4.1-nano,  gemini-2.0-flash*/
+        addSelect(llmSection, "llmProviderSelector", "LLM Provider:", [
+            { value: "openai", text: "OpenAI (GPT-4.1 nano)" },
+            { value: "google", text: "Google (Gemini 2.0 Flash)" }
+        ], settings.llmProvider);
+    
+        const apiKeyContainer = createElement("div", {className: "popup-row"});
+        apiKeyContainer.appendChild(createElement("label", {htmlFor: "llmApiKeyInput", textContent: "API Key:"}));
+    
+        const apiKeyFlexContainer = createElement("div", {style: "display: flex; align-items: center;"});
+        const apiKeyInput= createElement("input", {type: "password", id: "llmApiKeyInput", value: settings.llmApiKey, className: "popup-input"});
+        apiKeyFlexContainer.appendChild(apiKeyInput)
+        apiKeyContainer.appendChild(apiKeyFlexContainer);
+        llmSection.appendChild(apiKeyContainer);
+    
+        container.appendChild(llmSection);
 
         addCheckbox(container, "autoFinishingCheckbox", "Finish Lesson Automatically", settings.autoFinishing);
 
@@ -441,7 +466,8 @@
                 setupRGBAPickr('lingqBackgroundPicker', 'lingqBackgroundText', 'lingqBackground', '--lingq_background');
                 setupRGBAPickr('lingqBorderPicker', 'lingqBorderText', 'lingqBorder', '--lingq_border');
                 setupRGBAPickr('lingqBorderLearnedPicker', 'lingqBorderLearnedText', 'lingqBorderLearned', '--lingq_border_learned');
-                setupRGBAPickr('blueBorderPicker', 'blueBorderText', 'blueBorder', '--blue_border');
+                setupRGBAPickr('knownBackgroundPicker', 'knownBackgroundText', 'knownBackground', '--known_background');
+                setupRGBAPickr('knownBorderPicker', 'knownBorderText', 'knownBorder', '--known_border');
                 setupRGBAPickr('fontColorPicker', 'fontColorText', 'fontColor', '--font_color');
                 setupRGBAPickr('playingUnderlinePicker', 'playingUnderlineText', 'playingUnderline', '--is_playing_underline');
             });
@@ -455,7 +481,6 @@
             makeDraggable(settingsPopup, dragHandle);
         });
 
-        // Style type selector
         const styleTypeSelector = document.getElementById("styleTypeSelector");
         styleTypeSelector.addEventListener("change", (event) => {
             const selectedStyleType = event.target.value;
@@ -470,7 +495,8 @@
             document.getElementById("lingqBackgroundText").value = colorSettings.lingqBackground;
             document.getElementById("lingqBorderText").value = colorSettings.lingqBorder;
             document.getElementById("lingqBorderLearnedText").value = colorSettings.lingqBorderLearned;
-            document.getElementById("blueBorderText").value = colorSettings.blueBorder;
+            document.getElementById("knownBackgroundText").value = colorSettings.knownBackground;
+            document.getElementById("knownBorderText").value = colorSettings.knownBorder;
             document.getElementById("playingUnderlineText").value = colorSettings.playingUnderline;
 
             const fontColorPicker = document.getElementById("fontColorPicker");
@@ -485,7 +511,8 @@
                 { id: "lingqBackgroundPicker", color: colorSettings.lingqBackground },
                 { id: "lingqBorderPicker", color: colorSettings.lingqBorder },
                 { id: "lingqBorderLearnedPicker", color: colorSettings.lingqBorderLearned },
-                { id: "blueBorderPicker", color: colorSettings.blueBorder },
+                { id: "knownBackgroundPicker", color: colorSettings.knownBackground },
+                { id: "knownBorderPicker", color: colorSettings.knownBorder },
                 { id: "fontColorPicker", color: colorSettings.fontColor },
                 { id: "playingUnderlinePicker", color: colorSettings.playingUnderline }
             ];
@@ -503,7 +530,8 @@
             document.documentElement.style.setProperty("--lingq_background", colorSettings.lingqBackground);
             document.documentElement.style.setProperty("--lingq_border", colorSettings.lingqBorder);
             document.documentElement.style.setProperty("--lingq_border_learned", colorSettings.lingqBorderLearned);
-            document.documentElement.style.setProperty("--blue_border", colorSettings.blueBorder);
+            document.documentElement.style.setProperty("--known_background", colorSettings.knownBackground);
+            document.documentElement.style.setProperty("--known_border", colorSettings.knownBorder);
             document.documentElement.style.setProperty("--is_playing_underline", colorSettings.playingUnderline);
         }
 
@@ -552,6 +580,18 @@
         setupSlider("heightBigSlider", "heightBigValue", "heightBig", "px", "--height_big", (val) => `${val}px`);
         setupSlider("sentenceHeightSlider", "sentenceHeightValue", "sentenceHeight", "px", "--sentence_height", (val) => `${val}px`);
 
+        const llmProviderSelector = document.getElementById("llmProviderSelector");
+        llmProviderSelector.addEventListener("change", (event) => {
+            const selectedProvider = event.target.value;
+            storage.set("llmProvider", selectedProvider);
+        });
+
+        const llmApiKeyInput = document.getElementById("llmApiKeyInput");
+        llmApiKeyInput.addEventListener("change", (event) => {
+            const apiKey = event.target.value;
+            storage.set("llmApiKey", apiKey);
+        });
+
         const autoFinishingCheckbox = document.getElementById("autoFinishingCheckbox");
         autoFinishingCheckbox.addEventListener('change', (event) => {
             const checked = event.target.checked;
@@ -582,15 +622,6 @@
             updateColorInputs(defaultColorSettings);
             updateColorPickerBackgrounds(defaultColorSettings);
 
-            for (const [key, value] of Object.entries(defaults)) {
-                storage.set(key, value);
-            }
-
-            const prefix = currentColorMode === "dark" ? "dark_" : "white_";
-            for (const [key, value] of Object.entries(defaultColorSettings)) {
-                storage.set(prefix + key, value);
-            }
-
             applyStyles(defaults.styleType, currentColorMode);
 
             document.getElementById("videoSettings").style.display = defaults.styleType === "video" ? "block" : "none";
@@ -602,7 +633,19 @@
             document.documentElement.style.setProperty("--sentence_height", `${defaults.sentenceHeight}px`);
             updateCssColorVariables(defaultColorSettings);
 
+            document.getElementById("llmProviderSelector").value = defaults.llmProvider;
+            document.getElementById("llmApiKeyInput").value = defaults.llmApiKey;
+
             document.getElementById("autoFinishingCheckbox").checked = defaults.autoFinishing;
+
+            for (const [key, value] of Object.entries(defaults)) {
+                storage.set(key, value);
+            }
+
+            const prefix = currentColorMode === "dark" ? "dark_" : "white_";
+            for (const [key, value] of Object.entries(defaultColorSettings)) {
+                storage.set(prefix + key, value);
+            }
         }
 
         document.getElementById("resetSettingsBtn").addEventListener("click", resetSettings);
@@ -923,6 +966,19 @@
             margin: 5px 0;
         }
 
+        .popup-section {
+            border: 1px solid var(--font_color); 
+            padding: 5px 10px; 
+            border-radius: 5px;
+            margin: 10px 0;
+        }
+
+        .popup-input {
+            flex-grow: 1;    
+            border: 1px solid grey;
+            border-radius: 5px;
+        }
+
         #downloadProgressContainer {
             display: none;
         }
@@ -961,7 +1017,8 @@
             --lingq_background: ${colorSettings.lingqBackground};
             --lingq_border: ${colorSettings.lingqBorder};
             --lingq_border_learned: ${colorSettings.lingqBorderLearned};
-            --blue_border: ${colorSettings.blueBorder};
+            --known_background: ${colorSettings.knownBackground};
+            --known_border: ${colorSettings.knownBorder};
             --is_playing_underline: ${colorSettings.playingUnderline};
 
             --background-color: ${colorMode === "dark" ? "#2a2c2e" : "#ffffff"}
@@ -1209,7 +1266,8 @@
         }
 
         .reader-container .sentence .blue-word {
-            border: 1px solid var(--blue_border) !important;
+            border: 1px solid var(--known_border) !important;
+            background-color: var(--known_background) !important;;
         }
 
         .phrase-cluster:hover,
