@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*/learn/*/web/reader/*
 // @match        https://www.lingq.com/*/learn/*/web/library/course/*
 // @exclude      https://www.lingq.com/*/learn/*/web/editor/*
-// @version      5.0
+// @version      5.1
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @namespace https://greasyfork.org/users/1458847
@@ -853,17 +853,15 @@
     function applyStyles(styleType, colorMode) {
         const colorSettings = getColorSettings(colorMode);
 
-        let css = generateBaseCSS(colorSettings, colorMode);
-        let uiCSS = generateUICSS();
+        let baseCSS = generateBaseCSS(colorSettings, colorMode);
+        let layoutCSS = generateLayoutCSS();
         let specificCSS = "";
 
         switch (colorMode) {
             case "dark":
-                console.log('dark clicked');
                 clickElement(".reader-themes-component > button:nth-child(5)");
                 break;
             case "white":
-                console.log('white clicked');
                 clickElement(".reader-themes-component > button:nth-child(1)");
                 break;
         }
@@ -879,24 +877,40 @@
                 specificCSS = generateAudioCSS();
                 break;
             case "off":
-                css = generateOffModeCSS(colorSettings);
+                specificCSS = generateOffModeCSS();
+                layoutCSS = "";
                 break;
         }
 
-        css += specificCSS;
-        css += uiCSS;
+        baseCSS += layoutCSS;
+        baseCSS += specificCSS;
 
         if (styleElement) {
             styleElement.remove();
             styleElement = null;
         }
 
-        styleElement = createElement("style", {textContent: css});
+        styleElement = createElement("style", {textContent: baseCSS});
         document.querySelector("head").appendChild(styleElement);
     }
 
-    function generateUICSS() {
+    function generateBaseCSS(colorSettings, colorMode) {
         return`
+        :root {
+            --font_size: ${settings.fontSize}rem;
+            --line_height: ${settings.lineHeight};
+
+            --font_color: ${colorSettings.fontColor};
+            --lingq_background: ${colorSettings.lingqBackground};
+            --lingq_border: ${colorSettings.lingqBorder};
+            --lingq_border_learned: ${colorSettings.lingqBorderLearned};
+            --known_background: ${colorSettings.knownBackground};
+            --known_border: ${colorSettings.knownBorder};
+            --is_playing_underline: ${colorSettings.playingUnderline};
+
+            --background-color: ${colorMode === "dark" ? "#2a2c2e" : "#ffffff"}
+        }
+        
         /*Color picker*/
 
         .color-picker {
@@ -1045,27 +1059,93 @@
         .bot-message {
             background-color: var(--readerGlobalBackground);
         }
+
+        /*font settings*/
+
+        .reader-container {
+            line-height: var(--line_height) !important;
+            font-size: var(--font_size) !important;
+        }
+
+        .sentence-text-head {
+            min-height: 4.5rem !important;
+        }
+
+        .reader-container p {
+            margin-top: 0 !important;
+        }
+
+        .reader-container p span.sentence-item,
+        .reader-container p .sentence {
+            color: var(--font_color) !important;
+        }
+
+        .sentence.is-playing,
+        .sentence.is-playing span {
+            text-underline-offset: .2em !important;
+            text-decoration-color: var(--is_playing_underline) !important;
+        }
+
+        /*highlightings*/
+
+        .phrase-item {
+            padding: 0 !important;
+        }
+
+        .phrase-item:not(.phrase-item-status--4, .phrase-item-status--4x2)) {
+            background-color: var(--lingq_background) !important;
+        }
+
+        .phrase-item.phrase-item-status--4,
+        .phrase-item.phrase-item-status--4x2 {
+            background-color: rgba(0, 0, 0, 0) !important;
+        }
+
+        .phrase-cluster:not(:has(.phrase-item-status--4, .phrase-item-status--4x2)) {
+            border: 1px solid var(--lingq_border) !important;
+            border-radius: .25rem;
+        }
+
+        .phrase-cluster:has(.phrase-item-status--4, .phrase-item-status--4x2) {
+            border: 1px solid var(--lingq_border_learned) !important;
+            border-radius: .25rem;
+        }
+
+        .reader-container .sentence .lingq-word:not(.is-learned) {
+            border: 1px solid var(--lingq_border) !important;
+            background-color: var(--lingq_background) !important;
+        }
+
+        .reader-container .sentence .lingq-word.is-learned {
+            border: 1px solid var(--lingq_border_learned) !important;
+        }
+
+        .reader-container .sentence .blue-word {
+            border: 1px solid var(--known_border) !important;
+            background-color: var(--known_background) !important;;
+        }
+
+        .phrase-cluster:hover,
+        .phrase-created:hover {
+            padding: 0 !important;
+        }
+
+        .phrase-cluster:hover .phrase-item,
+        .phrase-created .phrase-item {
+            padding: 0 !important;
+        }
+
+        .reader-container .sentence .selected-text {
+            padding: 0 !important;
+        }
         `;
     }
 
-    function generateBaseCSS(colorSettings, colorMode) {
+    function generateLayoutCSS() {
         return `
         :root {
-            --font_size: ${settings.fontSize}rem;
-            --line_height: ${settings.lineHeight};
-
             --article_height: calc(var(--app-height) - var(--height_big) - 10px);
             --grid-layout: var(--article_height) calc(var(--height_big) - 80px) 90px;
-
-            --font_color: ${colorSettings.fontColor};
-            --lingq_background: ${colorSettings.lingqBackground};
-            --lingq_border: ${colorSettings.lingqBorder};
-            --lingq_border_learned: ${colorSettings.lingqBorderLearned};
-            --known_background: ${colorSettings.knownBackground};
-            --known_border: ${colorSettings.knownBorder};
-            --is_playing_underline: ${colorSettings.playingUnderline};
-
-            --background-color: ${colorMode === "dark" ? "#2a2c2e" : "#ffffff"}
         }
 
         /*header settings*/
@@ -1180,6 +1260,16 @@
             padding: 0 0 5px 15px !important;;
         }
 
+        /*font settings*/
+
+        .reader-container {
+            margin: 0 !important;
+            float: left !important;
+            columns: unset !important;
+            overflow-y: scroll !important;
+            max-width: unset !important;
+        }
+
         /*video viewer*/
 
         .video-player {
@@ -1242,90 +1332,6 @@
 
         .audio-player {
             padding: 0 0.5rem !important;
-        }
-
-        /*font settings*/
-
-        .reader-container {
-            margin: 0 !important;
-            float: left !important;
-            line-height: var(--line_height) !important;
-            font-size: var(--font_size) !important;
-            columns: unset !important;
-            overflow-y: scroll !important;
-            max-width: unset !important;
-        }
-
-        .sentence-text-head {
-            min-height: 4.5rem !important;
-        }
-
-        .reader-container p {
-            margin-top: 0 !important;
-        }
-
-        .reader-container p span.sentence-item,
-        .reader-container p .sentence {
-            color: var(--font_color) !important;
-        }
-
-        .sentence.is-playing,
-        .sentence.is-playing span {
-            text-underline-offset: .2em !important;
-            text-decoration-color: var(--is_playing_underline) !important;
-        }
-
-        /*highlightings*/
-
-        .phrase-item {
-            padding: 0 !important;
-        }
-
-        .phrase-item:not(.phrase-item-status--4, .phrase-item-status--4x2)) {
-            background-color: var(--lingq_background) !important;
-        }
-
-        .phrase-item.phrase-item-status--4,
-        .phrase-item.phrase-item-status--4x2 {
-            background-color: rgba(0, 0, 0, 0) !important;
-        }
-
-        .phrase-cluster:not(:has(.phrase-item-status--4, .phrase-item-status--4x2)) {
-            border: 1px solid var(--lingq_border) !important;
-            border-radius: .25rem;
-        }
-
-        .phrase-cluster:has(.phrase-item-status--4, .phrase-item-status--4x2) {
-            border: 1px solid var(--lingq_border_learned) !important;
-            border-radius: .25rem;
-        }
-
-        .reader-container .sentence .lingq-word:not(.is-learned) {
-            border: 1px solid var(--lingq_border) !important;
-            background-color: var(--lingq_background) !important;
-        }
-
-        .reader-container .sentence .lingq-word.is-learned {
-            border: 1px solid var(--lingq_border_learned) !important;
-        }
-
-        .reader-container .sentence .blue-word {
-            border: 1px solid var(--known_border) !important;
-            background-color: var(--known_background) !important;;
-        }
-
-        .phrase-cluster:hover,
-        .phrase-created:hover {
-            padding: 0 !important;
-        }
-
-        .phrase-cluster:hover .phrase-item,
-        .phrase-created .phrase-item {
-            padding: 0 !important;
-        }
-
-        .reader-container .sentence .selected-text {
-            padding: 0 !important;
         }
         `;
     }
@@ -1403,7 +1409,7 @@
         `;
     }
 
-    function generateOffModeCSS(colorSettings) {
+    function generateOffModeCSS() {
         return `
         :root {
             --width_small: 440px;
@@ -1931,7 +1937,7 @@
             }
 
             let currentProvider = settings.llmProvider;
-            let currentModel = currentProvider === 'openai' ? 'gpt-4o-mini' : 'gemini-2.0-flash';
+            let currentModel = currentProvider === 'openai' ? 'gpt-4.1-nano' : 'gemini-2.0-flash';
 
             const chatWrapper = createElement("div", {id: "chatWidget", style: "margin: 10px 0;"});
 
