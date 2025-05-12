@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*/learn/*/web/reader/*
 // @match        https://www.lingq.com/*/learn/*/web/library/course/*
 // @exclude      https://www.lingq.com/*/learn/*/web/editor/*
-// @version      4.5.5
+// @version      4.5.6
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @namespace https://greasyfork.org/users/1458847
@@ -1006,6 +1006,10 @@
         .main-header svg {
             width: 20px !important;
             height: 20px !important;
+        }
+
+        .main-header section .dropdown-content {
+            position: fixed;
         }
 
         .lesson-progress-section {
