@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*/learn/*/web/reader/*
 // @match        https://www.lingq.com/*/learn/*/web/library/course/*
 // @exclude      https://www.lingq.com/*/learn/*/web/editor/*
-// @version      4.5
+// @version      4.5.2
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @namespace https://greasyfork.org/users/1458847
@@ -1110,6 +1110,11 @@
             background-color: dimgrey !important;
         }
 
+        .rc-slider-step {
+            margin-top: -8px !important;
+            height: 1.2rem !important;
+        }
+
         .lingq-audio-player {
             margin-left: 10px;
         }
@@ -1529,11 +1534,10 @@
                     if (mutation.type === 'attributes' && mutation.attributeName === 'style') {
                         syncVideoSliderTrack(videoSliderTrack, sliderTrack);
                         
-                        const progressPercentageString = sliderTrack.style.width;
-                        const progressPercentage = parseFloat(progressPercentageString);
+                        const progressPercentage = parseFloat(sliderTrack.style.width);
 
                         lastCompletedPercentage = updateLessonProgress(lessonId, lessonInfo, progressPercentage, lastCompletedPercentage);
-                        const isLessonFinished = progressPercentageString === "100%";
+                        const isLessonFinished = progressPercentage >= 99.5;
                         if (isLessonFinished && settings.autoFinishing) {
                             finishLesson();
                         }
