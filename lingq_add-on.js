@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*/learn/*/web/reader/*
 // @match        https://www.lingq.com/*/learn/*/web/library/course/*
 // @exclude      https://www.lingq.com/*/learn/*/web/editor/*
-// @version      4.6
+// @version      5.0
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @namespace https://greasyfork.org/users/1458847
@@ -229,16 +229,16 @@
             { value: "openai", text: "OpenAI (GPT-4.1 nano)" },
             { value: "google", text: "Google (Gemini 2.0 Flash)" }
         ], settings.llmProvider);
-    
+
         const apiKeyContainer = createElement("div", {className: "popup-row"});
         apiKeyContainer.appendChild(createElement("label", {htmlFor: "llmApiKeyInput", textContent: "API Key:"}));
-    
+
         const apiKeyFlexContainer = createElement("div", {style: "display: flex; align-items: center;"});
         const apiKeyInput= createElement("input", {type: "password", id: "llmApiKeyInput", value: settings.llmApiKey, className: "popup-input"});
         apiKeyFlexContainer.appendChild(apiKeyInput)
         apiKeyContainer.appendChild(apiKeyFlexContainer);
         llmSection.appendChild(apiKeyContainer);
-    
+
         container.appendChild(llmSection);
 
         addCheckbox(container, "autoFinishingCheckbox", "Finish Lesson Automatically", settings.autoFinishing);
@@ -967,14 +967,14 @@
         }
 
         .popup-section {
-            border: 1px solid var(--font_color); 
-            padding: 5px 10px; 
+            border: 1px solid var(--font_color);
+            padding: 5px 10px;
             border-radius: 5px;
             margin: 10px 0;
         }
 
         .popup-input {
-            flex-grow: 1;    
+            flex-grow: 1;
             border: 1px solid grey;
             border-radius: 5px;
         }
@@ -1000,6 +1000,50 @@
 
         progress[value]::-webkit-progress-value {
             border-radius: 5px;
+        }
+
+        /*Chat*/
+
+        #chat-container {
+            margin-bottom:10px;
+            border: 1px solid grey;
+            border-radius: 5px;
+            height: 250px;
+            overflow-y: scroll;
+            resize: vertical;
+        }
+
+        .input-container {
+            display: flex;
+            margin-bottom:10px;
+        }
+
+        #user-input {
+            flex-grow: 1;
+            padding: 5px;
+            margin-right: 5px;
+            border: 1px solid grey;
+            border-radius: 5px;
+        }
+
+        #send-button {
+            padding: 5px 10px;
+            border: 1px solid grey;
+            border-radius: 5px;
+        }
+
+        .message {
+            padding: 3px 7px;
+            margin: 3px 3px 8px 3px !important;
+            border-radius: 8px;
+        }
+
+        .user-message {
+            background-color: var(--readerWidgetBoxBackground);
+        }
+
+        .bot-message {
+            background-color: var(--readerGlobalBackground);
         }
         `;
     }
@@ -1452,7 +1496,11 @@
             const withoutModifierKeys = !event.ctrlKey && !event.shiftKey && !event.altKey;
             const eventKey = event.key.toLowerCase();
             if (isTextInput) {
-                if ((eventKey == 'enter' || eventKey == 'esc') && withoutModifierKeys) {
+                if (targetElement.id == "user-input") {
+                    return;
+                }
+
+                if ((eventKey == 'enter' || eventKey == 'escape') && withoutModifierKeys) {
                     preventPropagation(event);
                     event.target.blur();
                 } else {
@@ -1479,13 +1527,23 @@
         }, true);
     }
 
-    async function getLanguageCode() {
+    async function getUserProfile() {
         const url = `https://www.lingq.com/api/v3/profiles/`;
 
         const response = await fetch(url);
         const data = await response.json();
 
-        return data.results[0].active_language;
+        return data.results[0]
+    }
+
+    async function getLanguageCode() {
+        const userProfile = await getUserProfile();
+        return userProfile.active_language;
+    }
+
+    async function getDictionaryLanguage() {
+        const userProfile = await getUserProfile();
+        return await userProfile.dictionary_languages[0];
     }
 
     function getLessonId() {
@@ -1861,6 +1919,195 @@
         resizeToast();
     }
 
+    function observeLessonReader() {
+        async function setupchatWidget() {
+            if (document.getElementById('chatWidget')) {
+                return;
+            }
+
+            let targetSectionHead = document.querySelector("#lesson-reader .widget-area > .reader-widget > .section-widget--head");
+            if (!targetSectionHead) {
+                return;
+            }
+
+            let currentProvider = settings.llmProvider;
+            let currentModel = currentProvider === 'openai' ? 'gpt-4o-mini' : 'gemini-2.0-flash';
+
+            const chatWrapper = createElement("div", {id: "chatWidget", style: "margin: 10px 0;"});
+
+            const chatContainer = createElement("div", {id: "chat-container"});
+            const inputContainer = createElement("div", {className: "input-container"});
+
+            const userInput = createElement("input", {type: "text", id: "user-input", placeholder: "Ask anything"});
+            const sendButton = createElement("button", {id: "send-button", textContent: "Send"});
+
+            inputContainer.appendChild(userInput);
+            inputContainer.appendChild(sendButton);
+
+            chatWrapper.appendChild(chatContainer);
+            chatWrapper.appendChild(inputContainer);
+
+            targetSectionHead.appendChild(chatWrapper);
+
+            function addMessage(message, isUser) {
+                const messageDiv = createElement("div", {className: `message ${isUser ? 'user-message' : 'bot-message'}`, innerHTML: message});
+                chatContainer.appendChild(messageDiv);
+                chatContainer.scrollTop = chatContainer.scrollHeight;
+
+                updateChatHistory(message, isUser);
+            }
+
+            function updateChatHistory(message, isUser) {
+                let role;
+                if (isUser) {
+                    role = 'user';
+                } else {
+                    role = (currentProvider === 'openai') ? 'assistant' : 'model';
+                }
+
+                chatHistory.push({ role: role, content: message });
+            }
+
+            function initializeChatHistory(prompt) {
+                chatHistory = [];
+
+                if (currentProvider === 'openai') {
+                    chatHistory.push({ role: 'system', content: prompt });
+                } else if (currentProvider === 'google') {
+                    chatHistory.push({ role: 'user', content: prompt });
+                }
+
+                const selectedText = document.querySelector(".reference-word").textContent;
+                const contextElement = document.querySelector(".sentence:has(.sentence-item.is-selected)")
+                let context_text = null
+                if (contextElement) {
+                    context_text = contextElement.innerText;
+                } else {
+                    context_text = "";
+                }
+
+                userInput.value = `Given text: ${selectedText}, Context: ${context_text}`;
+                sendMessage();
+            }
+
+            async function getOpenAIResponse() {
+                try {
+                    const response = await fetch(
+                        `https://api.openai.com/v1/chat/completions`,
+                        {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'Authorization': `Bearer ${settings.llmApiKey}`
+                            },
+                            body: JSON.stringify({
+                                model: currentModel,
+                                messages: chatHistory,
+                                max_tokens: 500,
+                                temperature: 0.7,
+                            })
+                        }
+                    );
+
+                    if (!response.ok) {
+                        const errorData = await response.json();
+                        console.error('OpenAI API error:', errorData);
+                        throw new Error(`OpenAI API error: ${response.status} - ${response.statusText}`);
+                    }
+
+                    const data = await response.json();
+                    return data.choices[0].message.content;
+
+                } catch (error) {
+                    console.error('OpenAI API error:', error);
+                    return "Sorry, something went wrong.";
+                }
+            }
+
+            async function getGoogleResponse() {
+                try {
+                    const formattedMessages = chatHistory.map(msg => ({ role: msg.role, parts: [{ text: msg.content }] }));
+
+                    const response = await fetch(
+                        `https://generativelanguage.googleapis.com/v1/models/${currentModel}:generateContent?key=${settings.llmApiKey}`,
+                        {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                contents: formattedMessages,
+                                generationConfig: { temperature: 0.7, maxOutputTokens: 500, }
+                            })
+                        }
+                    );
+
+                    if (!response.ok) {
+                        const errorData = await response.json();
+                        console.error('Google Gemini API error:', errorData);
+                        throw new Error(`Google Gemini API error: ${response.status} - ${response.statusText}`);
+                    }
+
+                    const data = await response.json();
+                    return data.candidates[0].content.parts[0].text;
+                } catch (error) {
+                    console.error('Google Gemini API error:', error);
+                    return "Sorry, something went wrong.";
+                }
+            }
+
+            async function getBotResponse() {
+                if (currentProvider === 'openai') {
+                    return await getOpenAIResponse();
+                } else if (currentProvider === 'google') {
+                    return await getGoogleResponse();
+                }
+            }
+
+            async function sendMessage() {
+                const message = userInput.value.trim();
+
+                if (message) {
+                    addMessage(message, true);
+                    userInput.value = '';
+                    const botResponse = await getBotResponse();
+                    addMessage(botResponse, false);
+                }
+            }
+
+            let chatHistory = [];
+            const user_dictionary_lang = await getDictionaryLanguage();
+            let prompt = `The reply will be used as an innerHTML of a div so use HTML tags like <b>, <p>, <ul>, and <li> for formatting.
+            Do not use markdown format. like **word**
+            You are a helpful language learning assistant. Your goal is to assist users in understanding words and sentences.
+            Analyze the input:
+            If the input is a single word:
+            - Provide a concise definition
+            - Give an example sentence using the word
+            If the input is a sentence:
+            - Translate the sentence to the user's language
+            - Explain any interesting, difficult, or idiomatic expressions in the sentence
+            preface is not allowed, do not tell user given text again. do not verbose
+            User's language code is ${user_dictionary_lang}. Response in the language.`;
+            initializeChatHistory(prompt)
+
+            sendButton.addEventListener('click', sendMessage);
+            userInput.addEventListener('keydown', (event) => {
+                if (event.key === 'Enter') {
+                    sendMessage();
+                }
+                event.stopPropagation();
+            }, true);
+        }
+
+        const lessonReader = document.getElementById('lesson-reader');
+
+        const config = { childList: true, subtree: true };
+
+        const lessonReaderObserverInstance = new MutationObserver((mutations) => {
+            setupchatWidget();
+        });
+        lessonReaderObserverInstance.observe(lessonReader, config);
+    }
+
     function init() {
         fixBugs();
 
@@ -1871,6 +2118,7 @@
             setupYoutubePlayerCustomization();
             changeScrollAmount();
             setupSentenceFocus();
+            observeLessonReader();
         }
         if (document.URL.includes("library")) {
             setupCourse();
