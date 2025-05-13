@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*/learn/*/web/reader/*
 // @match        https://www.lingq.com/*/learn/*/web/library/course/*
 // @exclude      https://www.lingq.com/*/learn/*/web/editor/*
-// @version      5.3
+// @version      5.3.1
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @namespace https://greasyfork.org/users/1458847
@@ -1979,38 +1979,63 @@
             const userDictionaryLang = await getDictionaryLanguage();
 
             const systemPrompt = `
-                Use HTML tags for formatting, avoiding markdown. Respond in the user's language, determined by the language code '${userDictionaryLang}'. 
+                You are a helpful language learning assistant tasked with assisting users in understanding words and sentences. Use HTML tags for formatting, avoiding markdown. Importantly, respond in the user's specified language, determined by the language code '${userDictionaryLang}'. 
 
-                You are a helpful language learning assistant tasked with assisting users in understanding words and sentences. 
+                ## Instructions for Different Input Types
                 
-                - If the input is a single word:
-                  1. Provide a concise definition considering the given context.
-                  2. Include an example sentence using the word.
+                - **Single Word Input:**
+                  1. Provide a concise definition considering the given context in the user's specified language.
+                  2. Include an example sentence using the word, addressing the user's request for additional details like original form, part of speech, meaning, explanation, original example, and translated example.
                 
-                - If the input is a sentence:
-                  1. Provide the translation of the full sentence to the user's language.
-                  2. Explain any interesting, difficult, or idiomatic expressions found in the sentence.
+                - **Sentence Input:**
+                  1. Provide the translation of the entire sentence into the user's specified language.
+                  2. Explain any interesting, difficult, or idiomatic expressions in the sentence in the user's specified language.
                 
-                Keep responses concise without superfluous detail, avoiding the repetition of user input text.
-                
-                # Output Format
+                ## Formatting
                 
                 - Use '<b>', '<p>', '<ul>', '<li>', and '<br>' for formatting.
-                - Since the div element width is narrow, use '<br>' appropriately for line breaks.
                 - Do not include a preface; answer directly.
                 
-                # Examples
+                ## Output Format
                 
-                # Notes
+                - The output must incorporate the language specified by the language code '${userDictionaryLang}'.
                 
+                ## Examples
+                
+                ### Example 1: Single Word (User's language code: ko)
+                
+                **User Input:** 'ubiquitous'
+                
+                **Assistant Output:**
+                <b>ubiquitous (형용사)</b>
+                <p><b>뜻:</b> 어디에나 있는, 아주 흔한</p>
+                <p><b>설명:</b> 동시에 여러 장소에 존재하거나 어디에서나 매우 흔하게 발견되는 상태를 의미합니다.</p>
+                <ul>
+                  <li><b>원문 예문:</b> Coffee shops are ubiquitous in most cities.</li>
+                  <li><b>번역 예문:</b> 커피숍은 대부분의 도시에서 아주 흔합니다.</li>
+                </ul>
+                
+                ### Example 2: Sentence Input (User's language code: ko)
+                
+                **User Input:** 'It's raining cats and dogs.'
+                
+                **Assistant Output:**
+                <p><b>번역:</b> 비가 억수같이 쏟아지고 있어요.</p>
+                <ul>
+                  <li><b>raining cats and dogs:</b> '비가 매우 심하게 온다', '억수같이 쏟아진다'는 의미의 영어 관용 표현입니다. 문자 그대로 고양이나 개가 하늘에서 떨어지는 것을 의미하지 않습니다.</li>
+                </ul>
+                
+                ## Notes
+                
+                - Focus on ensuring the output is in the language specified by '${userDictionaryLang}'.
                 - Avoid verbosity and unnecessary details.
                 - Aim for clarity and usefulness in language learning contexts.
             `;
             const ttsInstructions = `
-                Accent/Affect: Neutral, clear, and focused on accuracy. Think of a language instructor or a professional voice-over artist giving precise directions.
-                Tone: Objective, methodical, and slightly formal. Avoid overly emotional delivery. Prioritize clarity and precision in pronunciation.
-                Pacing: Distinct pauses between words and phrases, especially when demonstrating pronunciation nuances. Emphasis should be placed on syllabic clarity.
-                Additional Instructions: Words should be enunciated with deliberate clarity, particularly paying attention to vowel sounds and consonant clusters. Pronunciation follows standard General American English conventions.
+                Accent/Affect: Neutral and clear, like a professional voice-over artist. Focus on accuracy.
+                Tone: Objective and methodical. Maintain a slightly formal tone without emotion.
+                Pacing: Use distinct pauses between words and phrases to demonstrate pronunciation nuances. Emphasize syllabic clarity.
+                Pronunciation: Enunciate words with deliberate clarity, focusing on vowel sounds and consonant clusters. Follow General American English conventions.
             `;
             let chatHistory = [];
 
@@ -2154,7 +2179,7 @@
                     if (audioData != null) {
                         const ttsButton = await waitForElement('.is-tts');
                         if (!ttsButton) {console.log("tts button doesn't exist.")}
-                        const newTtsButton = createElement("button", {id: "playAudio", textContent: "🔊"});
+                        const newTtsButton = createElement("button", {id: "playAudio", textContent: "🔊", className: "is-tts"});
                         newTtsButton.addEventListener('click', async (event) => {
                             await playAudio(audioData, 1.0);
                         })
@@ -2183,6 +2208,7 @@
         const observerConfig = { childList: true, subtree: true };
 
         const observerInstance = new MutationObserver((mutations, observer) => {
+            console.log(mutations);
             if (settings.chatWidget){
                 setupChatWidget();
             }
