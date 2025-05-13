@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*/learn/*/web/reader/*
 // @match        https://www.lingq.com/*/learn/*/web/library/course/*
 // @exclude      https://www.lingq.com/*/learn/*/web/editor/*
-// @version      5.2
+// @version      5.2.1
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @namespace https://greasyfork.org/users/1458847
@@ -1043,8 +1043,7 @@
             margin-bottom:10px;
             border: 1px solid grey;
             border-radius: 5px;
-            min-height: 150px;
-            max-height: 250px;
+            height: 200px;
             overflow-y: auto;
             resize: vertical;
         }
