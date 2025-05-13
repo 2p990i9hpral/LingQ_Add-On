@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*/learn/*/web/reader/*
 // @match        https://www.lingq.com/*/learn/*/web/library/course/*
 // @exclude      https://www.lingq.com/*/learn/*/web/editor/*
-// @version      5.1
+// @version      5.2
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @namespace https://greasyfork.org/users/1458847
@@ -22,7 +22,7 @@
         },
         set: (key, value) => GM_setValue(key, value)
     };
-
+    
     const defaults = {
         styleType: "video",
         colorMode: "dark",
@@ -49,9 +49,11 @@
             playingUnderline: "#000000"
         },
         librarySortOption: 0,
-        autoFinishing: false,
+        chatWidget: false,
         llmProvider: "openai",
-        llmApiKey: ""
+        llmApiKey: "",
+        defaultAsk: false,
+        autoFinishing: false,
     };
 
     const settings = {
@@ -62,9 +64,11 @@
         heightBig: storage.get("heightBig", defaults.heightBig),
         sentenceHeight: storage.get("sentenceHeight", defaults.sentenceHeight),
         librarySortOption: storage.get("librarySortOption", defaults.librarySortOption),
-        autoFinishing: storage.get("autoFinishing", defaults.autoFinishing),
-        llmProvider: storage.get("llmProvider", defaults.llmProvider),
-        llmApiKey: storage.get("llmApiKey", defaults.llmApiKey),
+        get llmProvider() { return storage.get("llmProvider", defaults.llmProvider); },
+        get llmApiKey() { return storage.get("llmApiKey", defaults.llmApiKey); },
+        get chatWidget() { return storage.get("chatWidget", defaults.chatWidget); },
+        get askSelected() { return storage.get("askSelected", defaults.askSelected); },
+        get autoFinishing() { return storage.get("autoFinishing", defaults.autoFinishing); },
     };
 
     const colorSettings = getColorSettings(settings.colorMode);
@@ -222,9 +226,10 @@
 
         container.appendChild(colorSection);
 
-        const llmSection = createElement("div", {className: "popup-section"});
+        addCheckbox(container, "chatWidgetCheckbox", "Enable the Chat Widget", settings.chatWidget);
 
-        /* gpt-4.1-nano,  gemini-2.0-flash*/
+        const llmSection = createElement("div", {id: "llmSection", className: "popup-section", style: `${settings.chatWidget ? "" : "display: none"}`});
+
         addSelect(llmSection, "llmProviderSelector", "LLM Provider:", [
             { value: "openai", text: "OpenAI (GPT-4.1 nano)" },
             { value: "google", text: "Google (Gemini 2.0 Flash)" }
@@ -238,6 +243,8 @@
         apiKeyFlexContainer.appendChild(apiKeyInput)
         apiKeyContainer.appendChild(apiKeyFlexContainer);
         llmSection.appendChild(apiKeyContainer);
+
+        addCheckbox(llmSection, "askSelectedCheckbox", "Enable asking with selected text", settings.askSelected);
 
         container.appendChild(llmSection);
 
@@ -580,6 +587,13 @@
         setupSlider("heightBigSlider", "heightBigValue", "heightBig", "px", "--height_big", (val) => `${val}px`);
         setupSlider("sentenceHeightSlider", "sentenceHeightValue", "sentenceHeight", "px", "--sentence_height", (val) => `${val}px`);
 
+        const chatWidgetCheckbox = document.getElementById("chatWidgetCheckbox");
+        chatWidgetCheckbox.addEventListener('change', (event) => {
+            const checked = event.target.checked;
+            document.getElementById("llmSection").style.display = checked ? "block" : "none";
+            storage.set("chatWidget", checked);
+        });
+
         const llmProviderSelector = document.getElementById("llmProviderSelector");
         llmProviderSelector.addEventListener("change", (event) => {
             const selectedProvider = event.target.value;
@@ -592,11 +606,16 @@
             storage.set("llmApiKey", apiKey);
         });
 
+        const askSelectedCheckbox = document.getElementById("askSelectedCheckbox");
+        askSelectedCheckbox.addEventListener('change', (event) => {
+            const checked = event.target.checked;
+            storage.set("askSelected", checked);
+        });
+
         const autoFinishingCheckbox = document.getElementById("autoFinishingCheckbox");
         autoFinishingCheckbox.addEventListener('change', (event) => {
             const checked = event.target.checked;
             storage.set("autoFinishing", checked);
-            settings.autoFinishing = checked;
         });
 
         document.getElementById("closeSettingsBtn").addEventListener("click", () => {
@@ -633,8 +652,10 @@
             document.documentElement.style.setProperty("--sentence_height", `${defaults.sentenceHeight}px`);
             updateCssColorVariables(defaultColorSettings);
 
+            document.getElementById("chatWidgetCheckbox").value = defaults.chatWidget;
             document.getElementById("llmProviderSelector").value = defaults.llmProvider;
             document.getElementById("llmApiKeyInput").value = defaults.llmApiKey;
+            document.getElementById("askSelectedCheckbox").value = defaults.askSelected;
 
             document.getElementById("autoFinishingCheckbox").checked = defaults.autoFinishing;
 
@@ -1022,8 +1043,9 @@
             margin-bottom:10px;
             border: 1px solid grey;
             border-radius: 5px;
-            height: 250px;
-            overflow-y: scroll;
+            min-height: 150px;
+            max-height: 250px;
+            overflow-y: auto;
             resize: vertical;
         }
 
@@ -1046,10 +1068,12 @@
             border-radius: 5px;
         }
 
-        .message {
+        .user-message, 
+        .bot-message {
             padding: 3px 7px;
             margin: 3px 3px 8px 3px !important;
             border-radius: 8px;
+            font-size: 0.85rem;
         }
 
         .user-message {
@@ -1925,90 +1949,68 @@
         resizeToast();
     }
 
-    function observeLessonReader() {
-        async function setupchatWidget() {
-            if (document.getElementById('chatWidget')) {
+    function setupChatWidgetObserver() {
+        let isSetupInProgress = false;
+
+        async function setupChatWidget() {
+            if (document.getElementById('chatWidget') || isSetupInProgress) {
                 return;
             }
 
-            let targetSectionHead = document.querySelector("#lesson-reader .widget-area > .reader-widget > .section-widget--head");
+            const targetSectionHead = document.querySelector("#lesson-reader .widget-area > .reader-widget > .section-widget--head");
             if (!targetSectionHead) {
                 return;
             }
 
-            let currentProvider = settings.llmProvider;
-            let currentModel = currentProvider === 'openai' ? 'gpt-4.1-nano' : 'gemini-2.0-flash';
+            isSetupInProgress = true;
 
-            const chatWrapper = createElement("div", {id: "chatWidget", style: "margin: 10px 0;"});
+            const llmProvider = settings.llmProvider;
+            const llmApiKey = settings.llmApiKey;
+            const llmModel = llmProvider === 'openai' ? 'gpt-4.1-nano' : 'gemini-2.0-flash';
+            console.log(llmProvider, llmModel)
+            const userDictionaryLang = await getDictionaryLanguage();
+            let chatHistory = [];
 
-            const chatContainer = createElement("div", {id: "chat-container"});
-            const inputContainer = createElement("div", {className: "input-container"});
-
-            const userInput = createElement("input", {type: "text", id: "user-input", placeholder: "Ask anything"});
-            const sendButton = createElement("button", {id: "send-button", textContent: "Send"});
+            const chatWrapper = createElement("div", { id: "chatWidget", style: "margin: 10px 0;" });
+            const chatContainer = createElement("div", { id: "chat-container" });
+            const inputContainer = createElement("div", { className: "input-container" });
+            const userInput = createElement("input", { type: "text", id: "user-input", placeholder: "Ask anything" });
+            const sendButton = createElement("button", { id: "send-button", textContent: "Send" });
 
             inputContainer.appendChild(userInput);
             inputContainer.appendChild(sendButton);
-
             chatWrapper.appendChild(chatContainer);
             chatWrapper.appendChild(inputContainer);
-
             targetSectionHead.appendChild(chatWrapper);
 
-            function addMessage(message, isUser) {
-                const messageDiv = createElement("div", {className: `message ${isUser ? 'user-message' : 'bot-message'}`, innerHTML: message});
-                chatContainer.appendChild(messageDiv);
-                chatContainer.scrollTop = chatContainer.scrollHeight;
-
-                updateChatHistory(message, isUser);
+            function addMessageToUI(message, isUser, container) {
+                const messageDiv = createElement("div", {
+                    className: `${isUser ? 'user-message' : 'bot-message'}`,
+                    innerHTML: message
+                });
+                container.appendChild(messageDiv);
+                container.scrollTop = container.scrollHeight; // Auto-scroll
             }
 
-            function updateChatHistory(message, isUser) {
-                let role;
-                if (isUser) {
-                    role = 'user';
-                } else {
-                    role = (currentProvider === 'openai') ? 'assistant' : 'model';
-                }
-
-                chatHistory.push({ role: role, content: message });
+            function updateChatHistoryState(currentHistory, message, isUser, provider) {
+                const role = isUser ? 'user' : (provider === 'openai' ? 'assistant' : 'model');
+                return [...currentHistory, { role: role, content: message }];
             }
 
-            function initializeChatHistory(prompt) {
-                chatHistory = [];
-
-                if (currentProvider === 'openai') {
-                    chatHistory.push({ role: 'system', content: prompt });
-                } else if (currentProvider === 'google') {
-                    chatHistory.push({ role: 'user', content: prompt });
-                }
-
-                const selectedText = document.querySelector(".reference-word").textContent;
-                const contextElement = document.querySelector(".sentence:has(.sentence-item.is-selected)")
-                let context_text = null
-                if (contextElement) {
-                    context_text = contextElement.innerText;
-                } else {
-                    context_text = "";
-                }
-
-                userInput.value = `Given text: ${selectedText}, Context: ${context_text}`;
-                sendMessage();
-            }
-
-            async function getOpenAIResponse() {
+            async function getOpenAIResponse(apiKey, model, history) {
                 try {
+                    const api_url = `https://api.openai.com/v1/chat/completions`;
                     const response = await fetch(
-                        `https://api.openai.com/v1/chat/completions`,
+                        api_url,
                         {
                             method: 'POST',
                             headers: {
                                 'Content-Type': 'application/json',
-                                'Authorization': `Bearer ${settings.llmApiKey}`
+                                'Authorization': `Bearer ${apiKey}`
                             },
                             body: JSON.stringify({
-                                model: currentModel,
-                                messages: chatHistory,
+                                model: model,
+                                messages: history,
                                 max_tokens: 500,
                                 temperature: 0.7,
                             })
@@ -2022,26 +2024,29 @@
                     }
 
                     const data = await response.json();
-                    return data.choices[0].message.content;
+                    return data.choices[0]?.message?.content || "Sorry, could not get a response.";
 
                 } catch (error) {
-                    console.error('OpenAI API error:', error);
-                    return "Sorry, something went wrong.";
+                    console.error('OpenAI API call failed:', error);
+                    return "Sorry, something went wrong communicating with OpenAI.";
                 }
             }
 
-            async function getGoogleResponse() {
+            async function getGoogleResponse(apiKey, model, history) {
                 try {
-                    const formattedMessages = chatHistory.map(msg => ({ role: msg.role, parts: [{ text: msg.content }] }));
+                    const formattedMessages = history
+                        .filter(msg => msg.role !== 'system')
+                        .map(msg => ({ role: msg.role, parts: [{ text: msg.content }] }));
 
+                    const api_url = `https://generativelanguage.googleapis.com/v1/models/${model}:generateContent?key=${apiKey}`;
                     const response = await fetch(
-                        `https://generativelanguage.googleapis.com/v1/models/${currentModel}:generateContent?key=${settings.llmApiKey}`,
+                        api_url,
                         {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify({
                                 contents: formattedMessages,
-                                generationConfig: { temperature: 0.7, maxOutputTokens: 500, }
+                                generationConfig: { temperature: 0.7, maxOutputTokens: 500}
                             })
                         }
                     );
@@ -2049,69 +2054,103 @@
                     if (!response.ok) {
                         const errorData = await response.json();
                         console.error('Google Gemini API error:', errorData);
-                        throw new Error(`Google Gemini API error: ${response.status} - ${response.statusText}`);
+                        const message = errorData?.error?.message || `Google Gemini API error: ${response.status} - ${response.statusText}`;
+                        throw new Error(message);
                     }
 
                     const data = await response.json();
                     return data.candidates[0].content.parts[0].text;
                 } catch (error) {
-                    console.error('Google Gemini API error:', error);
-                    return "Sorry, something went wrong.";
+                    console.error('Google Gemini API call failed:', error);
+                    return `Sorry, something went wrong communicating with Google. ${error.message || ''}`;
                 }
             }
 
-            async function getBotResponse() {
-                if (currentProvider === 'openai') {
-                    return await getOpenAIResponse();
-                } else if (currentProvider === 'google') {
-                    return await getGoogleResponse();
+            async function getBotResponse(provider, apiKey, model, history) {
+                if (provider === 'openai') {
+                    return await getOpenAIResponse(apiKey, model, history);
+                } else if (provider === 'google') {
+                    return await getGoogleResponse(apiKey, model, history);
                 }
             }
 
-            async function sendMessage() {
+            async function handleSendMessage() {
                 const message = userInput.value.trim();
+                if (!message) return;
 
-                if (message) {
-                    addMessage(message, true);
-                    userInput.value = '';
-                    const botResponse = await getBotResponse();
-                    addMessage(botResponse, false);
+                const userMessage = message;
+                userInput.value = '';
+
+                addMessageToUI(userMessage, true, chatContainer);
+                chatHistory = updateChatHistoryState(chatHistory, userMessage, true, llmProvider);
+                const botResponse = await getBotResponse(llmProvider, llmApiKey, llmModel, chatHistory);
+                addMessageToUI(botResponse, false, chatContainer);
+                chatHistory = updateChatHistoryState(chatHistory, botResponse, false, llmProvider);
+            }
+
+            function initializeChat(langCode, provider) {
+                const initialPrompt = `
+                The reply will be used as an innerHTML of a div so use HTML tags like <b>, <p>, <ul>, and <li> for formatting. 
+                Do not use markdown format like **word**. 
+                You are a helpful language learning assistant. 
+                Your goal is to assist users in understanding words and sentences.
+                 Analyze the input: If the input is a single word:
+                 - Provide a concise definition considering given context.
+                 - Give an example sentence using the word. 
+                 If the input is a sentence: 
+                 - Translate the sentence to the user's language 
+                 - Explain any interesting, difficult, or idiomatic expressions in the sentence. 
+                 Preface is not needed, Do not repeat the user given text. Do not verbose. 
+                 User's language code is ${langCode}. Respond in the language with code ${langCode}.`;
+
+                let initialHistory = [];
+                if (provider === 'openai') {
+                    initialHistory = updateChatHistoryState(initialHistory, initialPrompt, false, provider);
+                    if (initialHistory.length > 0) initialHistory[0].role = 'system';
+                } else if (provider === 'google') {
+                    initialHistory = updateChatHistoryState(initialHistory, initialPrompt, true, provider);
+                }
+
+                const selectedTextElement = document.querySelector(".reference-word");
+                const contextElement = document.querySelector(".sentence:has(.sentence-item.is-selected)");
+                const selectedText = selectedTextElement ? selectedTextElement.textContent.trim() : "";
+                const contextText = contextElement ? contextElement.innerText.trim() : "";
+
+                if (settings.askSelected) {
+                    let initialUserMessage = `Given text: "${selectedText}"`;
+                    if (contextText) {
+                        initialUserMessage += `, Context: "${contextText}"`;
+                    }
+                    userInput.value = initialUserMessage;
+                    chatHistory = initialHistory
+                    handleSendMessage();
                 }
             }
 
-            let chatHistory = [];
-            const user_dictionary_lang = await getDictionaryLanguage();
-            let prompt = `The reply will be used as an innerHTML of a div so use HTML tags like <b>, <p>, <ul>, and <li> for formatting.
-            Do not use markdown format. like **word**
-            You are a helpful language learning assistant. Your goal is to assist users in understanding words and sentences.
-            Analyze the input:
-            If the input is a single word:
-            - Provide a concise definition
-            - Give an example sentence using the word
-            If the input is a sentence:
-            - Translate the sentence to the user's language
-            - Explain any interesting, difficult, or idiomatic expressions in the sentence
-            preface is not allowed, do not tell user given text again. do not verbose
-            User's language code is ${user_dictionary_lang}. Response in the language.`;
-            initializeChatHistory(prompt)
-
-            sendButton.addEventListener('click', sendMessage);
+            sendButton.addEventListener('click', handleSendMessage);
             userInput.addEventListener('keydown', (event) => {
-                if (event.key === 'Enter') {
-                    sendMessage();
+                if (event.key === 'Enter' && !event.shiftKey) {
+                    event.preventDefault();
+                    handleSendMessage();
                 }
                 event.stopPropagation();
             }, true);
+
+            initializeChat(userDictionaryLang, llmProvider);
+            isSetupInProgress = false;
         }
 
         const lessonReader = document.getElementById('lesson-reader');
 
-        const config = { childList: true, subtree: true };
+        const observerConfig = { childList: true, subtree: true };
 
-        const lessonReaderObserverInstance = new MutationObserver((mutations) => {
-            setupchatWidget();
+        const observerInstance = new MutationObserver((mutations, observer) => {
+            if (settings.chatWidget){
+                setupChatWidget();
+            }
         });
-        lessonReaderObserverInstance.observe(lessonReader, config);
+
+        observerInstance.observe(lessonReader, observerConfig);
     }
 
     function init() {
@@ -2124,7 +2163,7 @@
             setupYoutubePlayerCustomization();
             changeScrollAmount();
             setupSentenceFocus();
-            observeLessonReader();
+            setupChatWidgetObserver();
         }
         if (document.URL.includes("library")) {
             setupCourse();
