@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*/learn/*/web/reader/*
 // @match        https://www.lingq.com/*/learn/*/web/library/course/*
 // @exclude      https://www.lingq.com/*/learn/*/web/editor/*
-// @version      5.2.2
+// @version      5.3
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @namespace https://greasyfork.org/users/1458847
@@ -49,11 +49,14 @@
             playingUnderline: "#000000"
         },
         librarySortOption: 0,
+        autoFinishing: false,
         chatWidget: false,
         llmProvider: "openai",
         llmApiKey: "",
-        defaultAsk: false,
-        autoFinishing: false,
+        askSelected: false,
+        tts: false,
+        ttsApiKey: "",
+        ttsVoice: "alloy",
     };
 
     const settings = {
@@ -64,11 +67,14 @@
         heightBig: storage.get("heightBig", defaults.heightBig),
         sentenceHeight: storage.get("sentenceHeight", defaults.sentenceHeight),
         librarySortOption: storage.get("librarySortOption", defaults.librarySortOption),
+        get autoFinishing() { return storage.get("autoFinishing", defaults.autoFinishing); },
+        get chatWidget() { return storage.get("chatWidget", defaults.chatWidget); },
         get llmProvider() { return storage.get("llmProvider", defaults.llmProvider); },
         get llmApiKey() { return storage.get("llmApiKey", defaults.llmApiKey); },
-        get chatWidget() { return storage.get("chatWidget", defaults.chatWidget); },
         get askSelected() { return storage.get("askSelected", defaults.askSelected); },
-        get autoFinishing() { return storage.get("autoFinishing", defaults.autoFinishing); },
+        get tts() { return storage.get("tts", defaults.tts); },
+        get ttsApiKey() { return storage.get("ttsApiKey", defaults.ttsApiKey); },
+        get ttsVoice() { return storage.get("ttsVoice", defaults.ttsVoice); },
     };
 
     const colorSettings = getColorSettings(settings.colorMode);
@@ -181,7 +187,10 @@
             return container;
         }
 
-        const container = createElement("div");
+        const popupLayout = createElement("div");
+        const columns = createElement("div", {style: "display: flex; flex-direction: row;"});
+
+        const container = createElement("div", {style: "padding: 10px; width: 350px;"});
 
         addSelect(container, "styleTypeSelector", "Layout Style:", [
             { value: "video", text: "Video" },
@@ -226,7 +235,13 @@
 
         container.appendChild(colorSection);
 
-        addCheckbox(container, "chatWidgetCheckbox", "Enable the Chat Widget", settings.chatWidget);
+        addCheckbox(container, "autoFinishingCheckbox", "Finish Lesson Automatically", settings.autoFinishing);
+
+        columns.appendChild(container);
+
+        const llmContainer = createElement("div", {style: "padding: 10px; width: 350px;"});
+
+        addCheckbox(llmContainer, "chatWidgetCheckbox", "Enable the Chat Widget", settings.chatWidget);
 
         const llmSection = createElement("div", {id: "llmSection", className: "popup-section", style: `${settings.chatWidget ? "" : "display: none"}`});
 
@@ -246,9 +261,38 @@
 
         addCheckbox(llmSection, "askSelectedCheckbox", "Enable asking with selected text", settings.askSelected);
 
-        container.appendChild(llmSection);
+        llmContainer.appendChild(llmSection);
 
-        addCheckbox(container, "autoFinishingCheckbox", "Finish Lesson Automatically", settings.autoFinishing);
+        addCheckbox(llmContainer, "ttsCheckbox", "Enable AI-TTS", settings.tts);
+
+        const ttsSection = createElement("div", {id: "ttsSection", className: "popup-section", style: `${settings.tts ? "" : "display: none"}`});
+
+        const ttsApiKeyContainer = createElement("div", {className: "popup-row"});
+        ttsApiKeyContainer.appendChild(createElement("label", {htmlFor: "ttsApiKeyInput", textContent: "OpenAI API Key:"}));
+
+        const ttsApiKeyFlexContainer = createElement("div", {style: "display: flex; align-items: center;"});
+        const ttsApiKeyInput= createElement("input", {type: "password", id: "ttsApiKeyInput", value: settings.ttsApiKey, className: "popup-input"});
+        ttsApiKeyFlexContainer.appendChild(ttsApiKeyInput)
+        ttsApiKeyContainer.appendChild(ttsApiKeyFlexContainer);
+        ttsSection.appendChild(ttsApiKeyContainer);
+
+        addSelect(ttsSection, "ttsVoiceSelector", "TTS Voice:", [
+            { value: "alloy", text: "alloy" },
+            { value: "ash", text: "ash" },
+            { value: "ballad", text: "ballad" },
+            { value: "coral", text: "coral" },
+            { value: "echo", text: "onyx" },
+            { value: "fable", text: "onyx" },
+            { value: "onyx", text: "onyx" },
+            { value: "nova", text: "nova" },
+            { value: "sage", text: "sage" },
+            { value: "shimmer", text: "onyx" },
+            { value: "verse", text: "verse" },
+        ], settings.ttsVoice);
+
+        llmContainer.appendChild(ttsSection);
+
+        columns.appendChild(llmContainer);
 
         const buttonContainer = createElement("div", {style: "display: flex; justify-content: space-between;", className: "popup-row"});
         [
@@ -258,8 +302,9 @@
             buttonContainer.appendChild(createElement("button", prop));
         });
 
-        container.appendChild(buttonContainer);
-        return container;
+        popupLayout.appendChild(columns)
+        popupLayout.appendChild(buttonContainer);
+        return popupLayout;
     }
 
     function createDownloadWordsPopup() {
@@ -587,6 +632,12 @@
         setupSlider("heightBigSlider", "heightBigValue", "heightBig", "px", "--height_big", (val) => `${val}px`);
         setupSlider("sentenceHeightSlider", "sentenceHeightValue", "sentenceHeight", "px", "--sentence_height", (val) => `${val}px`);
 
+        const autoFinishingCheckbox = document.getElementById("autoFinishingCheckbox");
+        autoFinishingCheckbox.addEventListener('change', (event) => {
+            const checked = event.target.checked;
+            storage.set("autoFinishing", checked);
+        });
+
         const chatWidgetCheckbox = document.getElementById("chatWidgetCheckbox");
         chatWidgetCheckbox.addEventListener('change', (event) => {
             const checked = event.target.checked;
@@ -612,10 +663,23 @@
             storage.set("askSelected", checked);
         });
 
-        const autoFinishingCheckbox = document.getElementById("autoFinishingCheckbox");
-        autoFinishingCheckbox.addEventListener('change', (event) => {
+        const ttsCheckbox = document.getElementById("ttsCheckbox");
+        ttsCheckbox.addEventListener('change', (event) => {
             const checked = event.target.checked;
-            storage.set("autoFinishing", checked);
+            document.getElementById("ttsSection").style.display = checked ? "block" : "none";
+            storage.set("tts", checked);
+        });
+
+        const ttsApiKeyInput = document.getElementById("ttsApiKeyInput");
+        ttsApiKeyInput.addEventListener("change", (event) => {
+            const apiKey = event.target.value;
+            storage.set("ttsApiKey", apiKey);
+        });
+
+        const ttsVoiceSelector = document.getElementById("ttsVoiceSelector");
+        ttsVoiceSelector.addEventListener("change", (event) => {
+            const selectedVoice = event.target.value;
+            storage.set("ttsVoice", selectedVoice);
         });
 
         document.getElementById("closeSettingsBtn").addEventListener("click", () => {
@@ -652,12 +716,16 @@
             document.documentElement.style.setProperty("--sentence_height", `${defaults.sentenceHeight}px`);
             updateCssColorVariables(defaultColorSettings);
 
+            document.getElementById("autoFinishingCheckbox").checked = defaults.autoFinishing;
+
             document.getElementById("chatWidgetCheckbox").value = defaults.chatWidget;
             document.getElementById("llmProviderSelector").value = defaults.llmProvider;
             document.getElementById("llmApiKeyInput").value = defaults.llmApiKey;
             document.getElementById("askSelectedCheckbox").value = defaults.askSelected;
 
-            document.getElementById("autoFinishingCheckbox").checked = defaults.autoFinishing;
+            document.getElementById("ttsCheckbox").value = defaults.tts;
+            document.getElementById("ttsApiKeyInput").value = defaults.ttsApiKey;
+            document.getElementById("ttsVoiceSelector").value = defaults.ttsVoice;
 
             for (const [key, value] of Object.entries(defaults)) {
                 storage.set(key, value);
@@ -967,7 +1035,6 @@
             box-shadow: 8px 8px 8px rgba(0, 0, 0, 0.2);
             z-index: 10000;
             display: none;
-            width: 400px;
             max-height: 90vh;
             overflow-y: auto;
         }
@@ -1081,6 +1148,12 @@
 
         .bot-message {
             background-color: var(--readerGlobalBackground);
+        }
+        
+        #playAudio {
+            cursor: pointer;
+            font-size: 1.5rem;
+            padding: 5px;
         }
 
         /*font settings*/
@@ -1521,7 +1594,7 @@
 
         document.addEventListener("keydown", function (event) {
             const targetElement = event.target;
-            const isTextInput = targetElement.type === "text" || targetElement.type === "textarea";
+            const isTextInput = targetElement.type === "text" || targetElement.type === "textarea" || targetElement.type === "input";
             const withoutModifierKeys = !event.ctrlKey && !event.shiftKey && !event.altKey;
             const eventKey = event.key.toLowerCase();
             if (isTextInput) {
@@ -1795,6 +1868,329 @@
         });
     }
 
+    async function playAudio(audioData, volume = 0.5) {
+        if (typeof volume !== 'number' || volume < 0 || volume > 1) {
+            console.warn(`Invalid volume "${volume}". Using default volume 0.5.`);
+            volume = 0.5;
+        }
+
+        return new Promise((resolve, reject) => {
+            const audioContext = new AudioContext();
+            const gainNode = audioContext.createGain();
+            gainNode.gain.value = volume;
+            gainNode.connect(audioContext.destination);
+
+            const audioDataCopy = audioData.slice(0);
+
+            audioContext.decodeAudioData(audioDataCopy)
+                .then(buffer => {
+                    const source = audioContext.createBufferSource();
+                    source.buffer = buffer;
+                    source.connect(gainNode);
+                    source.start(0);
+
+                    source.onended = () => {
+                        resolve();
+                        audioContext.close();
+                    };
+                    source.onerror = (e) => {
+                        reject("Audio play error : " + e);
+                    }
+                })
+                .catch(e => {
+                    reject("Decoding error : " + e)
+                });
+        });
+    }
+
+    async function openAITTS(text, API_KEY, voice = "nova", playbackRate = 1, instructions) {
+        const modelId = "gpt-4o-mini-tts";
+        const apiUrl = "https://api.openai.com/v1/audio/speech";
+
+        if (!API_KEY) {
+            throw new Error("Invalid or missing OpenAI API key.  Please set the API_KEY");
+        }
+
+        if (!["nova", "onyx", "alloy", "echo", "fable", "shimmer"].includes(voice)) {
+            console.warn(`Invalid voice "${voice}".  Using default voice "nova".`);
+            voice = "nova";
+        }
+
+        if (typeof playbackRate !== 'number' || playbackRate < 0.5 || playbackRate > 1.5) {
+            console.warn(`Invalid playback rate "${playbackRate}". Using default rate 1.`);
+            playbackRate = 1;
+        }
+
+        try {
+            const response = await fetch(apiUrl, {
+                method: "POST",
+                headers: {
+                    "Accept": "audio/mpeg",
+                    "Content-Type": "application/json",
+                    "Authorization": `Bearer ${API_KEY}`
+                },
+                body: JSON.stringify({
+                    input: text,
+                    model: modelId,
+                    voice: voice,
+                    instructions: instructions,
+                    speed: playbackRate
+                })
+            });
+
+            if (!response.ok) {
+                let errorMessage = `HTTP error! Status: ${response.status}`;
+                try {
+                    const errorBody = await response.json();
+                    errorMessage += ` - OpenAI Error: ${errorBody?.error?.message || JSON.stringify(errorBody)}`;
+                } catch (parseError) {
+                    errorMessage += ` - Failed to parse error response.`;
+                }
+                throw new Error(errorMessage);
+            }
+
+            return await response.arrayBuffer();
+
+        } catch (error) {
+            console.error("Error during OpenAI TTS request:", error);
+            throw error;
+        }
+    }
+
+    function setupChatWidgetObserver() {
+        let isSetupInProgress = false;
+
+        async function setupChatWidget() {
+            if (document.getElementById('chatWidget') || isSetupInProgress) {
+                return;
+            }
+
+            const targetSectionHead = document.querySelector("#lesson-reader .widget-area > .reader-widget > .section-widget--head");
+            if (!targetSectionHead) {
+                return;
+            }
+
+            isSetupInProgress = true;
+
+            const llmProvider = settings.llmProvider;
+            const llmApiKey = settings.llmApiKey;
+            const llmModel = llmProvider === 'openai' ? 'gpt-4.1-nano' : 'gemini-2.0-flash';
+            console.log(llmProvider, llmModel)
+            const userDictionaryLang = await getDictionaryLanguage();
+
+            const systemPrompt = `
+                Use HTML tags for formatting, avoiding markdown. Respond in the user's language, determined by the language code '${userDictionaryLang}'. 
+
+                You are a helpful language learning assistant tasked with assisting users in understanding words and sentences. 
+                
+                - If the input is a single word:
+                  1. Provide a concise definition considering the given context.
+                  2. Include an example sentence using the word.
+                
+                - If the input is a sentence:
+                  1. Provide the translation of the full sentence to the user's language.
+                  2. Explain any interesting, difficult, or idiomatic expressions found in the sentence.
+                
+                Keep responses concise without superfluous detail, avoiding the repetition of user input text.
+                
+                # Output Format
+                
+                - Use '<b>', '<p>', '<ul>', '<li>', and '<br>' for formatting.
+                - Since the div element width is narrow, use '<br>' appropriately for line breaks.
+                - Do not include a preface; answer directly.
+                
+                # Examples
+                
+                # Notes
+                
+                - Avoid verbosity and unnecessary details.
+                - Aim for clarity and usefulness in language learning contexts.
+            `;
+            const ttsInstructions = `
+                Accent/Affect: Neutral, clear, and focused on accuracy. Think of a language instructor or a professional voice-over artist giving precise directions.
+                Tone: Objective, methodical, and slightly formal. Avoid overly emotional delivery. Prioritize clarity and precision in pronunciation.
+                Pacing: Distinct pauses between words and phrases, especially when demonstrating pronunciation nuances. Emphasis should be placed on syllabic clarity.
+                Additional Instructions: Words should be enunciated with deliberate clarity, particularly paying attention to vowel sounds and consonant clusters. Pronunciation follows standard General American English conventions.
+            `;
+            let chatHistory = [];
+
+            const chatWrapper = createElement("div", { id: "chatWidget", style: "margin: 10px 0;" });
+            const chatContainer = createElement("div", { id: "chat-container" });
+            const inputContainer = createElement("div", { className: "input-container" });
+            const userInput = createElement("input", { type: "text", id: "user-input", placeholder: "Ask anything" });
+            const sendButton = createElement("button", { id: "send-button", textContent: "Send" });
+
+            inputContainer.appendChild(userInput);
+            inputContainer.appendChild(sendButton);
+            chatWrapper.appendChild(chatContainer);
+            chatWrapper.appendChild(inputContainer);
+            targetSectionHead.appendChild(chatWrapper);
+
+            function addMessageToUI(message, isUser, container) {
+                const messageDiv = createElement("div", {
+                    className: `${isUser ? 'user-message' : 'bot-message'}`,
+                    innerHTML: message
+                });
+                container.appendChild(messageDiv);
+                container.scrollTop = container.scrollHeight; // Auto-scroll
+            }
+
+            function updateChatHistoryState(currentHistory, message, role) {
+                return [...currentHistory, { role: role, content: message }];
+            }
+
+            async function getOpenAIResponse(apiKey, model, history) {
+                try {
+                    const api_url = `https://api.openai.com/v1/chat/completions`;
+                    const response = await fetch(
+                        api_url,
+                        {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'Authorization': `Bearer ${apiKey}`
+                            },
+                            body: JSON.stringify({
+                                model: model,
+                                messages: history,
+                                max_tokens: 500,
+                                temperature: 0.7,
+                            })
+                        }
+                    );
+
+                    if (!response.ok) {
+                        const errorData = await response.json();
+                        console.error('OpenAI API error:', errorData);
+                        throw new Error(`OpenAI API error: ${response.status} - ${response.statusText}`);
+                    }
+
+                    const data = await response.json();
+                    return data.choices[0]?.message?.content || "Sorry, could not get a response.";
+
+                } catch (error) {
+                    console.error('OpenAI API call failed:', error);
+                    return "Sorry, something went wrong communicating with OpenAI.";
+                }
+            }
+
+            async function getGoogleResponse(apiKey, model, history) {
+                try {
+                    const formattedMessages = history.map(msg => ({ role: msg.role, parts: [{ text: msg.content }] }));
+
+                    const api_url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+                    const response = await fetch(
+                        api_url,
+                        {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                system_instruction: {parts: [{text: systemPrompt}]},
+                                contents: formattedMessages,
+                                generationConfig: { temperature: 0.7, maxOutputTokens: 500}
+                            })
+                        }
+                    );
+
+                    if (!response.ok) {
+                        const errorData = await response.json();
+                        console.error('Google Gemini API error:', errorData);
+                        const message = errorData?.error?.message || `Google Gemini API error: ${response.status} - ${response.statusText}`;
+                        throw new Error(message);
+                    }
+
+                    const data = await response.json();
+                    return data.candidates[0].content.parts[0].text;
+                } catch (error) {
+                    console.error('Google Gemini API call failed:', error);
+                    return `Sorry, something went wrong communicating with Google. ${error.message || ''}`;
+                }
+            }
+
+            async function getBotResponse(provider, apiKey, model, history) {
+                if (provider === 'openai') {
+                    return await getOpenAIResponse(apiKey, model, history);
+                } else if (provider === 'google') {
+                    return await getGoogleResponse(apiKey, model, history);
+                }
+            }
+
+            async function handleSendMessage() {
+                const message = userInput.value.trim();
+                if (!message) return;
+
+                const userMessage = message;
+                userInput.value = '';
+
+                addMessageToUI(userMessage, true, chatContainer);
+                chatHistory = updateChatHistoryState(chatHistory, userMessage, "user");
+                const botResponse = await getBotResponse(llmProvider, llmApiKey, llmModel, chatHistory);
+                addMessageToUI(botResponse, false, chatContainer);
+                chatHistory = updateChatHistoryState(chatHistory, botResponse, "model");
+            }
+
+            async function initializeChat(provider) {
+                const selectedTextElement = document.querySelector(".reference-word");
+                const contextElement = document.querySelector(".sentence:has(.sentence-item.is-selected)");
+                const selectedText = selectedTextElement ? selectedTextElement.textContent.trim() : "";
+                const contextText = contextElement ? contextElement.innerText.trim() : "";
+
+                let initialHistory = [];
+                if (provider === 'openai') {
+                    initialHistory = updateChatHistoryState(initialHistory, systemPrompt, "developer");
+                }
+                if (settings.askSelected) {
+                    let initialUserMessage = `Input: "${selectedText}"`;
+                    if (contextText) {
+                        initialUserMessage += `, Context of the input: "${contextText}"`;
+                    }
+                    userInput.value = initialUserMessage;
+                    chatHistory = initialHistory
+                    handleSendMessage();
+                }
+
+                if (settings.tts){
+                    let audioData = await openAITTS(`${selectedText}`, settings.ttsApiKey, settings.ttsVoice, 1.0, ttsInstructions);
+                    if (audioData != null) {
+                        const ttsButton = await waitForElement('.is-tts');
+                        if (!ttsButton) {console.log("tts button doesn't exist.")}
+                        const newTtsButton = createElement("button", {id: "playAudio", textContent: "🔊"});
+                        newTtsButton.addEventListener('click', async (event) => {
+                            await playAudio(audioData, 1.0);
+                        })
+                        ttsButton.replaceWith(newTtsButton);
+
+                        playAudio(audioData, 1.0);
+                    }
+                }
+            }
+
+            sendButton.addEventListener('click', handleSendMessage);
+            userInput.addEventListener('keydown', (event) => {
+                if (event.key === 'Enter' && !event.shiftKey) {
+                    event.preventDefault();
+                    handleSendMessage();
+                }
+                event.stopPropagation();
+            }, true);
+
+            initializeChat(llmProvider, llmApiKey);
+            isSetupInProgress = false;
+        }
+
+        const lessonReader = document.getElementById('lesson-reader');
+
+        const observerConfig = { childList: true, subtree: true };
+
+        const observerInstance = new MutationObserver((mutations, observer) => {
+            if (settings.chatWidget){
+                setupChatWidget();
+            }
+        });
+
+        observerInstance.observe(lessonReader, observerConfig);
+    }
+
     async function setupCourse() {
         function createCourseUI(){
             const resetButton = createElement("button", {
@@ -1946,220 +2342,6 @@
         }
 
         resizeToast();
-    }
-
-    function setupChatWidgetObserver() {
-        let isSetupInProgress = false;
-
-        async function setupChatWidget() {
-            if (document.getElementById('chatWidget') || isSetupInProgress) {
-                return;
-            }
-
-            const targetSectionHead = document.querySelector("#lesson-reader .widget-area > .reader-widget > .section-widget--head");
-            if (!targetSectionHead) {
-                return;
-            }
-
-            isSetupInProgress = true;
-
-            const llmProvider = settings.llmProvider;
-            const llmApiKey = settings.llmApiKey;
-            const llmModel = llmProvider === 'openai' ? 'gpt-4.1-nano' : 'gemini-2.0-flash';
-            console.log(llmProvider, llmModel)
-            const userDictionaryLang = await getDictionaryLanguage();
-
-            const systemPrompt = `
-                Use HTML tags for formatting, avoiding markdown. Respond in the user's language, determined by the language code '${userDictionaryLang}'. 
-
-                You are a helpful language learning assistant tasked with assisting users in understanding words and sentences. 
-                
-                - If the input is a single word:
-                  1. Provide a concise definition considering the given context.
-                  2. Include an example sentence using the word.
-                
-                - If the input is a sentence:
-                  1. Provide the translation of the full sentence to the user's language.
-                  2. Explain any interesting, difficult, or idiomatic expressions found in the sentence.
-                
-                Keep responses concise without superfluous detail, avoiding the repetition of user input text.
-                
-                # Output Format
-                
-                - Use '<b>', '<p>', '<ul>', '<li>', and '<br>' for formatting.
-                - Since the div element width is narrow, use '<br>' appropriately for line breaks.
-                - Do not include a preface; answer directly.
-                
-                # Examples
-                
-                # Notes
-                
-                - Avoid verbosity and unnecessary details.
-                - Aim for clarity and usefulness in language learning contexts.
-            `;
-            let chatHistory = [];
-
-            const chatWrapper = createElement("div", { id: "chatWidget", style: "margin: 10px 0;" });
-            const chatContainer = createElement("div", { id: "chat-container" });
-            const inputContainer = createElement("div", { className: "input-container" });
-            const userInput = createElement("input", { type: "text", id: "user-input", placeholder: "Ask anything" });
-            const sendButton = createElement("button", { id: "send-button", textContent: "Send" });
-
-            inputContainer.appendChild(userInput);
-            inputContainer.appendChild(sendButton);
-            chatWrapper.appendChild(chatContainer);
-            chatWrapper.appendChild(inputContainer);
-            targetSectionHead.appendChild(chatWrapper);
-
-            function addMessageToUI(message, isUser, container) {
-                const messageDiv = createElement("div", {
-                    className: `${isUser ? 'user-message' : 'bot-message'}`,
-                    innerHTML: message
-                });
-                container.appendChild(messageDiv);
-                container.scrollTop = container.scrollHeight; // Auto-scroll
-            }
-
-            function updateChatHistoryState(currentHistory, message, role) {
-                return [...currentHistory, { role: role, content: message }];
-            }
-
-            async function getOpenAIResponse(apiKey, model, history) {
-                try {
-                    const api_url = `https://api.openai.com/v1/chat/completions`;
-                    const response = await fetch(
-                        api_url,
-                        {
-                            method: 'POST',
-                            headers: {
-                                'Content-Type': 'application/json',
-                                'Authorization': `Bearer ${apiKey}`
-                            },
-                            body: JSON.stringify({
-                                model: model,
-                                messages: history,
-                                max_tokens: 500,
-                                temperature: 0.7,
-                            })
-                        }
-                    );
-
-                    if (!response.ok) {
-                        const errorData = await response.json();
-                        console.error('OpenAI API error:', errorData);
-                        throw new Error(`OpenAI API error: ${response.status} - ${response.statusText}`);
-                    }
-
-                    const data = await response.json();
-                    return data.choices[0]?.message?.content || "Sorry, could not get a response.";
-
-                } catch (error) {
-                    console.error('OpenAI API call failed:', error);
-                    return "Sorry, something went wrong communicating with OpenAI.";
-                }
-            }
-
-            async function getGoogleResponse(apiKey, model, history) {
-                try {
-                    const formattedMessages = history.map(msg => ({ role: msg.role, parts: [{ text: msg.content }] }));
-
-                    const api_url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
-                    const response = await fetch(
-                        api_url,
-                        {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({
-                                system_instruction: {parts: [{text: systemPrompt}]},
-                                contents: formattedMessages,
-                                generationConfig: { temperature: 0.7, maxOutputTokens: 500}
-                            })
-                        }
-                    );
-
-                    if (!response.ok) {
-                        const errorData = await response.json();
-                        console.error('Google Gemini API error:', errorData);
-                        const message = errorData?.error?.message || `Google Gemini API error: ${response.status} - ${response.statusText}`;
-                        throw new Error(message);
-                    }
-
-                    const data = await response.json();
-                    return data.candidates[0].content.parts[0].text;
-                } catch (error) {
-                    console.error('Google Gemini API call failed:', error);
-                    return `Sorry, something went wrong communicating with Google. ${error.message || ''}`;
-                }
-            }
-
-            async function getBotResponse(provider, apiKey, model, history) {
-                if (provider === 'openai') {
-                    return await getOpenAIResponse(apiKey, model, history);
-                } else if (provider === 'google') {
-                    return await getGoogleResponse(apiKey, model, history);
-                }
-            }
-
-            async function handleSendMessage() {
-                const message = userInput.value.trim();
-                if (!message) return;
-
-                const userMessage = message;
-                userInput.value = '';
-
-                addMessageToUI(userMessage, true, chatContainer);
-                chatHistory = updateChatHistoryState(chatHistory, userMessage, "user");
-                const botResponse = await getBotResponse(llmProvider, llmApiKey, llmModel, chatHistory);
-                addMessageToUI(botResponse, false, chatContainer);
-                chatHistory = updateChatHistoryState(chatHistory, botResponse, "model");
-            }
-
-            function initializeChat(provider) {
-                let initialHistory = [];
-                if (provider === 'openai') {
-                    initialHistory = updateChatHistoryState(initialHistory, systemPrompt, "developer");
-                }
-
-                const selectedTextElement = document.querySelector(".reference-word");
-                const contextElement = document.querySelector(".sentence:has(.sentence-item.is-selected)");
-                const selectedText = selectedTextElement ? selectedTextElement.textContent.trim() : "";
-                const contextText = contextElement ? contextElement.innerText.trim() : "";
-
-                if (settings.askSelected) {
-                    let initialUserMessage = `Input: "${selectedText}"`;
-                    if (contextText) {
-                        initialUserMessage += `, Context of the input: "${contextText}"`;
-                    }
-                    userInput.value = initialUserMessage;
-                    chatHistory = initialHistory
-                    handleSendMessage();
-                }
-            }
-
-            sendButton.addEventListener('click', handleSendMessage);
-            userInput.addEventListener('keydown', (event) => {
-                if (event.key === 'Enter' && !event.shiftKey) {
-                    event.preventDefault();
-                    handleSendMessage();
-                }
-                event.stopPropagation();
-            }, true);
-
-            initializeChat(llmProvider);
-            isSetupInProgress = false;
-        }
-
-        const lessonReader = document.getElementById('lesson-reader');
-
-        const observerConfig = { childList: true, subtree: true };
-
-        const observerInstance = new MutationObserver((mutations, observer) => {
-            if (settings.chatWidget){
-                setupChatWidget();
-            }
-        });
-
-        observerInstance.observe(lessonReader, observerConfig);
     }
 
     function init() {
