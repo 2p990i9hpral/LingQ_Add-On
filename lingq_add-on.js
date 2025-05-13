@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*/learn/*/web/reader/*
 // @match        https://www.lingq.com/*/learn/*/web/library/course/*
 // @exclude      https://www.lingq.com/*/learn/*/web/editor/*
-// @version      5.2.1
+// @version      5.2.2
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @namespace https://greasyfork.org/users/1458847
@@ -1968,6 +1968,35 @@
             const llmModel = llmProvider === 'openai' ? 'gpt-4.1-nano' : 'gemini-2.0-flash';
             console.log(llmProvider, llmModel)
             const userDictionaryLang = await getDictionaryLanguage();
+
+            const systemPrompt = `
+                Use HTML tags for formatting, avoiding markdown. Respond in the user's language, determined by the language code '${userDictionaryLang}'. 
+
+                You are a helpful language learning assistant tasked with assisting users in understanding words and sentences. 
+                
+                - If the input is a single word:
+                  1. Provide a concise definition considering the given context.
+                  2. Include an example sentence using the word.
+                
+                - If the input is a sentence:
+                  1. Provide the translation of the full sentence to the user's language.
+                  2. Explain any interesting, difficult, or idiomatic expressions found in the sentence.
+                
+                Keep responses concise without superfluous detail, avoiding the repetition of user input text.
+                
+                # Output Format
+                
+                - Use '<b>', '<p>', '<ul>', '<li>', and '<br>' for formatting.
+                - Since the div element width is narrow, use '<br>' appropriately for line breaks.
+                - Do not include a preface; answer directly.
+                
+                # Examples
+                
+                # Notes
+                
+                - Avoid verbosity and unnecessary details.
+                - Aim for clarity and usefulness in language learning contexts.
+            `;
             let chatHistory = [];
 
             const chatWrapper = createElement("div", { id: "chatWidget", style: "margin: 10px 0;" });
@@ -1991,8 +2020,7 @@
                 container.scrollTop = container.scrollHeight; // Auto-scroll
             }
 
-            function updateChatHistoryState(currentHistory, message, isUser, provider) {
-                const role = isUser ? 'user' : (provider === 'openai' ? 'assistant' : 'model');
+            function updateChatHistoryState(currentHistory, message, role) {
                 return [...currentHistory, { role: role, content: message }];
             }
 
@@ -2033,17 +2061,16 @@
 
             async function getGoogleResponse(apiKey, model, history) {
                 try {
-                    const formattedMessages = history
-                        .filter(msg => msg.role !== 'system')
-                        .map(msg => ({ role: msg.role, parts: [{ text: msg.content }] }));
+                    const formattedMessages = history.map(msg => ({ role: msg.role, parts: [{ text: msg.content }] }));
 
-                    const api_url = `https://generativelanguage.googleapis.com/v1/models/${model}:generateContent?key=${apiKey}`;
+                    const api_url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
                     const response = await fetch(
                         api_url,
                         {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify({
+                                system_instruction: {parts: [{text: systemPrompt}]},
                                 contents: formattedMessages,
                                 generationConfig: { temperature: 0.7, maxOutputTokens: 500}
                             })
@@ -2081,33 +2108,16 @@
                 userInput.value = '';
 
                 addMessageToUI(userMessage, true, chatContainer);
-                chatHistory = updateChatHistoryState(chatHistory, userMessage, true, llmProvider);
+                chatHistory = updateChatHistoryState(chatHistory, userMessage, "user");
                 const botResponse = await getBotResponse(llmProvider, llmApiKey, llmModel, chatHistory);
                 addMessageToUI(botResponse, false, chatContainer);
-                chatHistory = updateChatHistoryState(chatHistory, botResponse, false, llmProvider);
+                chatHistory = updateChatHistoryState(chatHistory, botResponse, "model");
             }
 
-            function initializeChat(langCode, provider) {
-                const initialPrompt = `
-                The reply will be used as an innerHTML of a div so use HTML tags like <b>, <p>, <ul>, and <li> for formatting. 
-                Do not use markdown format like **word**. 
-                You are a helpful language learning assistant. 
-                Your goal is to assist users in understanding words and sentences.
-                 Analyze the input: If the input is a single word:
-                 - Provide a concise definition considering given context.
-                 - Give an example sentence using the word. 
-                 If the input is a sentence: 
-                 - Translate the sentence to the user's language 
-                 - Explain any interesting, difficult, or idiomatic expressions in the sentence. 
-                 Preface is not needed, Do not repeat the user given text. Do not verbose. 
-                 User's language code is ${langCode}. Respond in the language with code ${langCode}.`;
-
+            function initializeChat(provider) {
                 let initialHistory = [];
                 if (provider === 'openai') {
-                    initialHistory = updateChatHistoryState(initialHistory, initialPrompt, false, provider);
-                    if (initialHistory.length > 0) initialHistory[0].role = 'system';
-                } else if (provider === 'google') {
-                    initialHistory = updateChatHistoryState(initialHistory, initialPrompt, true, provider);
+                    initialHistory = updateChatHistoryState(initialHistory, systemPrompt, "developer");
                 }
 
                 const selectedTextElement = document.querySelector(".reference-word");
@@ -2116,9 +2126,9 @@
                 const contextText = contextElement ? contextElement.innerText.trim() : "";
 
                 if (settings.askSelected) {
-                    let initialUserMessage = `Given text: "${selectedText}"`;
+                    let initialUserMessage = `Input: "${selectedText}"`;
                     if (contextText) {
-                        initialUserMessage += `, Context: "${contextText}"`;
+                        initialUserMessage += `, Context of the input: "${contextText}"`;
                     }
                     userInput.value = initialUserMessage;
                     chatHistory = initialHistory
@@ -2135,7 +2145,7 @@
                 event.stopPropagation();
             }, true);
 
-            initializeChat(userDictionaryLang, llmProvider);
+            initializeChat(llmProvider);
             isSetupInProgress = false;
         }
 
