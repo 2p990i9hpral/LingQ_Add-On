@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*/learn/*/web/reader/*
 // @match        https://www.lingq.com/*/learn/*/web/library/course/*
 // @exclude      https://www.lingq.com/*/learn/*/web/editor/*
-// @version      5.3.1
+// @version      5.3.2
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @namespace https://greasyfork.org/users/1458847
@@ -1957,99 +1957,90 @@
         }
     }
 
-    function setupChatWidgetObserver() {
-        let isSetupInProgress = false;
-
-        async function setupChatWidget() {
-            if (document.getElementById('chatWidget') || isSetupInProgress) {
-                return;
-            }
+    function setupLLMs() {
+        async function updateWidget() {
+            if (document.getElementById('chatWidget')) return;
 
             const targetSectionHead = document.querySelector("#lesson-reader .widget-area > .reader-widget > .section-widget--head");
-            if (!targetSectionHead) {
-                return;
-            }
-
-            isSetupInProgress = true;
+            if (!targetSectionHead) return;
 
             const llmProvider = settings.llmProvider;
             const llmApiKey = settings.llmApiKey;
             const llmModel = llmProvider === 'openai' ? 'gpt-4.1-nano' : 'gemini-2.0-flash';
-            console.log(llmProvider, llmModel)
             const userDictionaryLang = await getDictionaryLanguage();
+            console.log(llmProvider, llmModel)
 
             const systemPrompt = `
-                You are a helpful language learning assistant tasked with assisting users in understanding words and sentences. Use HTML tags for formatting, avoiding markdown. Importantly, respond in the user's specified language, determined by the language code '${userDictionaryLang}'. 
+Assist users in understanding words and sentences, using HTML tags for formatting, while responding in the language specified by '${userDictionaryLang}'. Focus on accurate translation and explanation based on the input type.
 
-                ## Instructions for Different Input Types
-                
-                - **Single Word Input:**
-                  1. Provide a concise definition considering the given context in the user's specified language.
-                  2. Include an example sentence using the word, addressing the user's request for additional details like original form, part of speech, meaning, explanation, original example, and translated example.
-                
-                - **Sentence Input:**
-                  1. Provide the translation of the entire sentence into the user's specified language.
-                  2. Explain any interesting, difficult, or idiomatic expressions in the sentence in the user's specified language.
-                
-                ## Formatting
-                
-                - Use '<b>', '<p>', '<ul>', '<li>', and '<br>' for formatting.
-                - Do not include a preface; answer directly.
-                
-                ## Output Format
-                
-                - The output must incorporate the language specified by the language code '${userDictionaryLang}'.
-                
-                ## Examples
-                
-                ### Example 1: Single Word (User's language code: ko)
-                
-                **User Input:** 'ubiquitous'
-                
-                **Assistant Output:**
-                <b>ubiquitous (형용사)</b>
-                <p><b>뜻:</b> 어디에나 있는, 아주 흔한</p>
-                <p><b>설명:</b> 동시에 여러 장소에 존재하거나 어디에서나 매우 흔하게 발견되는 상태를 의미합니다.</p>
-                <ul>
-                  <li><b>원문 예문:</b> Coffee shops are ubiquitous in most cities.</li>
-                  <li><b>번역 예문:</b> 커피숍은 대부분의 도시에서 아주 흔합니다.</li>
-                </ul>
-                
-                ### Example 2: Sentence Input (User's language code: ko)
-                
-                **User Input:** 'It's raining cats and dogs.'
-                
-                **Assistant Output:**
-                <p><b>번역:</b> 비가 억수같이 쏟아지고 있어요.</p>
-                <ul>
-                  <li><b>raining cats and dogs:</b> '비가 매우 심하게 온다', '억수같이 쏟아진다'는 의미의 영어 관용 표현입니다. 문자 그대로 고양이나 개가 하늘에서 떨어지는 것을 의미하지 않습니다.</li>
-                </ul>
-                
-                ## Notes
-                
-                - Focus on ensuring the output is in the language specified by '${userDictionaryLang}'.
-                - Avoid verbosity and unnecessary details.
-                - Aim for clarity and usefulness in language learning contexts.
+## Instructions for Different Input Types
+
+- **Single Word Input:**
+  - Focus on a single word, even if additional context is provided.
+  1. Provide a concise definition in the specified language.
+  2. Include an example sentence that aids in understanding without directly translating the provided context. Discuss the original form, part of speech, meaning, explanation, and create a new example with its translation.
+
+- **Sentence Input:**
+  1. Translate the entire sentence into the specified language, fully considering the context for accurate translation.
+  2. Identify and explain interesting, difficult, or idiomatic expressions within the user's specified language. Use context whenever needed for clarity.
+
+## Formatting
+
+- Use '<b>', '<p>', '<ul>', '<li>', and '<br>' for formatting.
+- Answer directly without a preface.
+
+# Output Format
+
+- Ensure the output is in the language specified by '${userDictionaryLang}'.
+
+# Steps for Sentence Input
+
+1. **Translate the Sentence:** Fully translate the provided sentence, maintaining the original context for accuracy.
+2. **Explain Expressions:** Identify any expressions that may require additional context or explanation, providing insights in the specified language.
+
+# Examples
+
+### Example 1: Single Word with Context (User's language code: ko)
+
+**User Input:** "Input: \"translators\", Context: \"However, the ESV translators chose to translate that same word as 'servant,' closing off the potential interpretation that she held any formal position of authority.\""
+
+**Assistant Output:**
+<b>translators (명사)</b>
+<p><b>뜻:</b> 번역가, 통역사</p>
+<p><b>설명:</b> 다른 언어로 문서나 발화를 번역하는 사람들을 의미합니다.</p>
+<ul>
+  <li><b>새로운 예문:</b> Many translators help publish books in multiple languages.</li>
+  <li><b>번역 예문:</b> 많은 번역가들이 책을 다양한 언어로 출간하도록 돕고 있습니다.</li>
+</ul>
+
+### Example 2: Sentence Input (User's language code: ko)
+
+**User Input:** "Input: \"Interestingly, elsewhere in the letters of Paul, the ESV editors translated that exact same word as \"minister\"\", Context: \"\""
+
+**Assistant Output:**
+<p><b>번역:</b> 흥미롭게도, 바울의 다른 서신들에서는 ESV 편집자들이 바로 그 같은 단어를 “minister”(일꾼, 봉사자)로 번역했습니다.</p>
+<ul>
+ <li>“Interestingly”는 어떤 사실이 대조적이거나 생각할 거리가 있을 때 쓰는 연결어입니다.</li> 
+</ul>
+
+
+# Notes
+
+- Focus on ensuring output in the user's specified language ('${userDictionaryLang}').
+- Avoid verbosity and unnecessary details; aim for clarity and usefulness in language learning contexts.
+- Do not provide explanations of individual words within sentences unless they are part of a larger idiomatic expression requiring translation.
             `;
             const ttsInstructions = `
                 Accent/Affect: Neutral and clear, like a professional voice-over artist. Focus on accuracy.
                 Tone: Objective and methodical. Maintain a slightly formal tone without emotion.
                 Pacing: Use distinct pauses between words and phrases to demonstrate pronunciation nuances. Emphasize syllabic clarity.
-                Pronunciation: Enunciate words with deliberate clarity, focusing on vowel sounds and consonant clusters. Follow General American English conventions.
+                Pronunciation: Enunciate words with deliberate clarity, focusing on vowel sounds and consonant clusters.
             `;
             let chatHistory = [];
 
-            const chatWrapper = createElement("div", { id: "chatWidget", style: "margin: 10px 0;" });
-            const chatContainer = createElement("div", { id: "chat-container" });
-            const inputContainer = createElement("div", { className: "input-container" });
-            const userInput = createElement("input", { type: "text", id: "user-input", placeholder: "Ask anything" });
-            const sendButton = createElement("button", { id: "send-button", textContent: "Send" });
-
-            inputContainer.appendChild(userInput);
-            inputContainer.appendChild(sendButton);
-            chatWrapper.appendChild(chatContainer);
-            chatWrapper.appendChild(inputContainer);
-            targetSectionHead.appendChild(chatWrapper);
+            function updateChatHistoryState(currentHistory, message, role) {
+                return [...currentHistory, { role: role, content: message }];
+            }
 
             function addMessageToUI(message, isUser, container) {
                 const messageDiv = createElement("div", {
@@ -2057,11 +2048,7 @@
                     innerHTML: message
                 });
                 container.appendChild(messageDiv);
-                container.scrollTop = container.scrollHeight; // Auto-scroll
-            }
-
-            function updateChatHistoryState(currentHistory, message, role) {
-                return [...currentHistory, { role: role, content: message }];
+                container.scrollTop = container.scrollHeight;
             }
 
             async function getOpenAIResponse(apiKey, model, history) {
@@ -2079,7 +2066,7 @@
                                 model: model,
                                 messages: history,
                                 max_tokens: 500,
-                                temperature: 0.7,
+                                temperature: 1.0,
                             })
                         }
                     );
@@ -2112,7 +2099,7 @@
                             body: JSON.stringify({
                                 system_instruction: {parts: [{text: systemPrompt}]},
                                 contents: formattedMessages,
-                                generationConfig: { temperature: 0.7, maxOutputTokens: 500}
+                                generationConfig: { temperature: 1.0, maxOutputTokens: 500}
                             })
                         }
                     );
@@ -2141,6 +2128,9 @@
             }
 
             async function handleSendMessage() {
+                const userInput = document.getElementById("user-input")
+                const chatContainer = document.getElementById("chat-container")
+
                 const message = userInput.value.trim();
                 if (!message) return;
 
@@ -2154,67 +2144,106 @@
                 chatHistory = updateChatHistoryState(chatHistory, botResponse, "model");
             }
 
-            async function initializeChat(provider) {
-                const selectedTextElement = document.querySelector(".reference-word");
-                const contextElement = document.querySelector(".sentence:has(.sentence-item.is-selected)");
+            function getSelectedWithContext() {
+                const selectedTextElement = targetSectionHead.querySelector(".reference-word");
+                const contextElement = document.querySelector(".reader-container .sentence:has(.sentence-item.is-selected)");
                 const selectedText = selectedTextElement ? selectedTextElement.textContent.trim() : "";
                 const contextText = contextElement ? contextElement.innerText.trim() : "";
 
-                let initialHistory = [];
-                if (provider === 'openai') {
-                    initialHistory = updateChatHistoryState(initialHistory, systemPrompt, "developer");
-                }
+                return `Input: "${selectedText}"` +  `, Context: "${contextText}"`;
+            }
+
+            async function updateChatWidget(){
+                if (!settings.chatWidget) return;
+                
+                const chatWrapper = createElement("div", { id: "chat-widget", style: "margin: 10px 0;" });
+                const chatContainer = createElement("div", { id: "chat-container" });
+                const inputContainer = createElement("div", { className: "input-container" });
+                const userInput = createElement("input", { type: "text", id: "user-input", placeholder: "Ask anything" });
+                const sendButton = createElement("button", { id: "send-button", textContent: "Send" });
+
+                inputContainer.appendChild(userInput);
+                inputContainer.appendChild(sendButton);
+                chatWrapper.appendChild(chatContainer);
+                chatWrapper.appendChild(inputContainer);
+
+                userInput.addEventListener('keydown', (event) => {
+                    if (event.key === 'Enter' && !event.shiftKey) {
+                        event.preventDefault();
+                        handleSendMessage();
+                    }
+                    event.stopPropagation();
+                }, true);
+                sendButton.addEventListener('click', handleSendMessage);
+
+                if (llmProvider === 'openai') chatHistory = updateChatHistoryState(chatHistory, systemPrompt, "developer");
+
                 if (settings.askSelected) {
-                    let initialUserMessage = `Input: "${selectedText}"`;
-                    if (contextText) {
-                        initialUserMessage += `, Context of the input: "${contextText}"`;
-                    }
-                    userInput.value = initialUserMessage;
-                    chatHistory = initialHistory
-                    handleSendMessage();
+                    const initialUserMessage = getSelectedWithContext();
+
+                    chatHistory = updateChatHistoryState(chatHistory, initialUserMessage, "user");
+                    const botResponse = await getBotResponse(llmProvider, llmApiKey, llmModel, chatHistory);
+                    addMessageToUI(botResponse, false, chatContainer);
+                    chatHistory = updateChatHistoryState(chatHistory, botResponse, "model");
                 }
 
-                if (settings.tts){
-                    let audioData = await openAITTS(`${selectedText}`, settings.ttsApiKey, settings.ttsVoice, 1.0, ttsInstructions);
-                    if (audioData != null) {
-                        const ttsButton = await waitForElement('.is-tts');
-                        if (!ttsButton) {console.log("tts button doesn't exist.")}
-                        const newTtsButton = createElement("button", {id: "playAudio", textContent: "🔊", className: "is-tts"});
-                        newTtsButton.addEventListener('click', async (event) => {
-                            await playAudio(audioData, 1.0);
-                        })
-                        ttsButton.replaceWith(newTtsButton);
-
-                        playAudio(audioData, 1.0);
-                    }
+                const existingChatWidget = document.getElementById('chat-widget');
+                if(existingChatWidget) {
+                    existingChatWidget.replaceWith(chatWrapper);
+                } else {
+                    targetSectionHead.appendChild(chatWrapper);
                 }
             }
 
-            sendButton.addEventListener('click', handleSendMessage);
-            userInput.addEventListener('keydown', (event) => {
-                if (event.key === 'Enter' && !event.shiftKey) {
-                    event.preventDefault();
-                    handleSendMessage();
-                }
-                event.stopPropagation();
-            }, true);
+            async function updateTTS() {
+                if (!settings.tts) return;
 
-            initializeChat(llmProvider, llmApiKey);
-            isSetupInProgress = false;
+                const selectedTextElement = document.querySelector(".reference-word");
+                const selectedText = selectedTextElement ? selectedTextElement.textContent.trim() : "";
+
+                let audioData = await openAITTS(`${selectedText}`, settings.ttsApiKey, settings.ttsVoice, 1.0, ttsInstructions);
+                if (audioData == null) return;
+
+                const ttsButton = await waitForElement('.is-tts');
+                const newTtsButton = createElement("button", {id: "playAudio", textContent: "🔊", className: "is-tts"});
+                newTtsButton.addEventListener('click', async (event) => {
+                    await playAudio(audioData, 1.0);
+                })
+                ttsButton.replaceWith(newTtsButton);
+
+                playAudio(audioData, 1.0);
+            }
+
+            await updateChatWidget();
+            await updateTTS();
+
+            const selectedTextElement = targetSectionHead.querySelector(".reference-word");
+            const observer = new MutationObserver((mutations) => {
+                mutations.forEach((mutation) => {
+                    if (mutation.type !== 'characterData') return;
+                    updateChatWidget();
+                    updateTTS();
+                });
+            });
+            observer.observe(selectedTextElement, {subtree: true, characterData: true});
         }
 
         const lessonReader = document.getElementById('lesson-reader');
 
-        const observerConfig = { childList: true, subtree: true };
+        const observer = new MutationObserver((mutations) => {
+            if (!settings.chatWidget) return;
 
-        const observerInstance = new MutationObserver((mutations, observer) => {
-            console.log(mutations);
-            if (settings.chatWidget){
-                setupChatWidget();
-            }
+            mutations.forEach((mutation) => {
+                mutation.addedNodes.forEach((node) => {
+                    if (node.nodeType !== Node.ELEMENT_NODE) return;
+
+                    if (node.matches(".widget-area")) {
+                        updateWidget();
+                    }
+                });
+            });
         });
-
-        observerInstance.observe(lessonReader, observerConfig);
+        observer.observe(lessonReader, {childList: true});
     }
 
     async function setupCourse() {
@@ -2380,7 +2409,7 @@
             setupYoutubePlayerCustomization();
             changeScrollAmount();
             setupSentenceFocus();
-            setupChatWidgetObserver();
+            setupLLMs();
         }
         if (document.URL.includes("library")) {
             setupCourse();
@@ -2389,3 +2418,5 @@
 
     init();
 })();
+
+// TODO: add the tts toggles for each sentence and word.
