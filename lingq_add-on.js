@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*/learn/*/web/reader/*
 // @match        https://www.lingq.com/*/learn/*/web/library/course/*
 // @exclude      https://www.lingq.com/*/learn/*/web/editor/*
-// @version      5.3.2
+// @version      5.3.3
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @namespace https://greasyfork.org/users/1458847
@@ -1984,6 +1984,9 @@ Assist users in understanding words and sentences, using HTML tags for formattin
   1. Translate the entire sentence into the specified language, fully considering the context for accurate translation.
   2. Identify and explain interesting, difficult, or idiomatic expressions within the user's specified language. Use context whenever needed for clarity.
 
+- **Plain Text Input:**
+  1. Respond to user requests for additional examples or clarifications based on previous discussions, formatted in HTML.
+
 ## Formatting
 
 - Use '<b>', '<p>', '<ul>', '<li>', and '<br>' for formatting.
@@ -2023,6 +2026,15 @@ Assist users in understanding words and sentences, using HTML tags for formattin
  <li>“Interestingly”는 어떤 사실이 대조적이거나 생각할 거리가 있을 때 쓰는 연결어입니다.</li> 
 </ul>
 
+### Example 3: Plain Text Input (User's language code: ko)
+
+**User Input:** "예문 하나 더 만들어줘"
+
+**Assistant Output:**
+<ul>
+  <li><b>추가 예문:</b> The translators were praised for accurately capturing the author's intent.</li>
+  <li><b>번역 예문:</b> 번역가들은 작가의 의도를 정확하게 포착한 것에 대해 칭찬받았습니다.</li>
+</ul>
 
 # Notes
 
@@ -2088,7 +2100,10 @@ Assist users in understanding words and sentences, using HTML tags for formattin
 
             async function getGoogleResponse(apiKey, model, history) {
                 try {
-                    const formattedMessages = history.map(msg => ({ role: msg.role, parts: [{ text: msg.content }] }));
+                    const formattedMessages = history.map(msg => ({
+                        role: msg.role === 'assistant' ? 'model' : msg.role,
+                        parts: [{ text: msg.content }]
+                    }));
 
                     const api_url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
                     const response = await fetch(
@@ -2141,7 +2156,7 @@ Assist users in understanding words and sentences, using HTML tags for formattin
                 chatHistory = updateChatHistoryState(chatHistory, userMessage, "user");
                 const botResponse = await getBotResponse(llmProvider, llmApiKey, llmModel, chatHistory);
                 addMessageToUI(botResponse, false, chatContainer);
-                chatHistory = updateChatHistoryState(chatHistory, botResponse, "model");
+                chatHistory = updateChatHistoryState(chatHistory, botResponse, "assistant");
             }
 
             function getSelectedWithContext() {
@@ -2176,7 +2191,7 @@ Assist users in understanding words and sentences, using HTML tags for formattin
                 }, true);
                 sendButton.addEventListener('click', handleSendMessage);
 
-                if (llmProvider === 'openai') chatHistory = updateChatHistoryState(chatHistory, systemPrompt, "developer");
+                if (llmProvider === 'openai') chatHistory = updateChatHistoryState(chatHistory, systemPrompt, "system");
 
                 if (settings.askSelected) {
                     const initialUserMessage = getSelectedWithContext();
@@ -2184,7 +2199,7 @@ Assist users in understanding words and sentences, using HTML tags for formattin
                     chatHistory = updateChatHistoryState(chatHistory, initialUserMessage, "user");
                     const botResponse = await getBotResponse(llmProvider, llmApiKey, llmModel, chatHistory);
                     addMessageToUI(botResponse, false, chatContainer);
-                    chatHistory = updateChatHistoryState(chatHistory, botResponse, "model");
+                    chatHistory = updateChatHistoryState(chatHistory, botResponse, "assistant");
                 }
 
                 const existingChatWidget = document.getElementById('chat-widget');
