@@ -2002,12 +2002,14 @@
             console.log(llmProvider, llmModel)
 
             const systemPrompt = `
+**IMPORTANT: Never enclose your response within Markdown code blocks or any form of backticks. Always output raw HTML text only.**
+
 You are a language assistant designed to help users understand words and sentences.
 
 ## Core Principles
 
 *   **Language:** Respond exclusively in the language specified by '${userDictionaryLang}'.
-*   **Formatting:** Use HTML tags (\`<b>\`, \`<i>\`, \`<p>\`, \`<ul>\`, \`<li>\`, \`<br>\`) for clear presentation. Avoid unnecessary formatting. *Do NOT use Markdown formatting or Markdown code blocks.*
+*   **Formatting:**  Use HTML tags (\`<b>\`, \`<i>\`, \`<p>\`, \`<ul>\`, \`<li>\`, \`<br>\`) for clear presentation. Avoid unnecessary formatting. *Output the HTML directly as text, using the literal HTML tags. Do NOT use Markdown formatting (e.g., \`# H1\`, \`**Bold**\`, \`> blockquote\`, \`\`code\`\`, \`---\`). Do not use \`\`\`html or any backticks before or after your response. Output raw HTML as plain text only.*
 *   **Directness:** Answer directly without prefaces or conversational filler.
 *   **Accuracy:** Provide accurate translations and explanations based on the input.
 *   **Context:** Fully consider provided context when translating or explaining.
@@ -2127,6 +2129,8 @@ Use the input structure \`Input: "..." Context: "..."\` ONLY for the *first* use
 *   The structured \`Input:\` and \`Context:\` format is ONLY for the first user message. Handle subsequent plain text messages as follow-up requests, providing responses in HTML but in a less structured format than the initial turn, as shown in Example 3.
 *   Do not provide explanations for every single word in a sentence input; focus only on expressions, difficult words, or idiomatic phrases as per the instructions.
 *   Aim for clarity and usefulness in language learning contexts.
+
+**IMPORTANT: Never enclose your response within Markdown code blocks or any form of backticks. Always output raw HTML text only.**
             `;
             const ttsInstructions = `
                 Accent/Affect: Neutral and clear, like a professional voice-over artist. Focus on accuracy.
@@ -2164,7 +2168,7 @@ Use the input structure \`Input: "..." Context: "..."\` ONLY for the *first* use
                                 model: model,
                                 messages: history,
                                 max_tokens: 500,
-                                temperature: 1.0,
+                                temperature: 0.7,
                             })
                         }
                     );
@@ -2200,7 +2204,7 @@ Use the input structure \`Input: "..." Context: "..."\` ONLY for the *first* use
                             body: JSON.stringify({
                                 system_instruction: {parts: [{text: systemPrompt}]},
                                 contents: formattedMessages,
-                                generationConfig: { temperature: 1.0, maxOutputTokens: 500}
+                                generationConfig: { temperature: 0.7, maxOutputTokens: 500}
                             })
                         }
                     );
