@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*/learn/*/web/reader/*
 // @match        https://www.lingq.com/*/learn/*/web/library/course/*
 // @exclude      https://www.lingq.com/*/learn/*/web/editor/*
-// @version      5.3.5
+// @version      5.3.6
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @namespace https://greasyfork.org/users/1458847
@@ -57,6 +57,8 @@
         tts: false,
         ttsApiKey: "",
         ttsVoice: "alloy",
+        ttsWord: false,
+        ttsSentence: false,
     };
 
     const settings = {
@@ -75,6 +77,8 @@
         get tts() { return storage.get("tts", defaults.tts); },
         get ttsApiKey() { return storage.get("ttsApiKey", defaults.ttsApiKey); },
         get ttsVoice() { return storage.get("ttsVoice", defaults.ttsVoice); },
+        get ttsWord() { return storage.get("ttsWord", defaults.ttsWord); },
+        get ttsSentence() { return storage.get("ttsSentence", defaults.ttsSentence); },
     };
 
     const colorSettings = getColorSettings(settings.colorMode);
@@ -289,6 +293,9 @@
             { value: "shimmer", text: "onyx" },
             { value: "verse", text: "verse" },
         ], settings.ttsVoice);
+
+        addCheckbox(ttsSection, "ttsWordCheckbox", "Enable AI-TTS for words", settings.ttsWord);
+        addCheckbox(ttsSection, "ttsSentenceCheckbox", "Enable AI-TTS for sentences", settings.ttsSentence);
 
         llmContainer.appendChild(ttsSection);
 
@@ -682,6 +689,18 @@
             storage.set("ttsVoice", selectedVoice);
         });
 
+        const ttsWordCheckbox = document.getElementById("ttsWordCheckbox");
+        ttsWordCheckbox.addEventListener('change', (event) => {
+            const checked = event.target.checked;
+            storage.set("ttsWord", checked);
+        });
+
+        const ttsSentenceCheckbox = document.getElementById("ttsSentenceCheckbox");
+        ttsSentenceCheckbox.addEventListener('change', (event) => {
+            const checked = event.target.checked;
+            storage.set("ttsSentence", checked);
+        });
+
         document.getElementById("closeSettingsBtn").addEventListener("click", () => {
             settingsPopup.style.display = "none";
         });
@@ -726,6 +745,8 @@
             document.getElementById("ttsCheckbox").value = defaults.tts;
             document.getElementById("ttsApiKeyInput").value = defaults.ttsApiKey;
             document.getElementById("ttsVoiceSelector").value = defaults.ttsVoice;
+            document.getElementById("ttsWordCheckbox").value = defaults.ttsWord;
+            document.getElementById("ttsSentenceCheckbox").value = defaults.ttsSentence;
 
             for (const [key, value] of Object.entries(defaults)) {
                 storage.set(key, value);
@@ -1986,7 +2007,7 @@ You are a language assistant designed to help users understand words and sentenc
 ## Core Principles
 
 *   **Language:** Respond exclusively in the language specified by '${userDictionaryLang}'.
-*   **Formatting:** Use HTML tags (\`<b>\`, \`<i>\`, \`<p>\`, \`<ul>\`, \`<li>\`, \`<br>\`) for clear presentation. Avoid unnecessary formatting.
+*   **Formatting:** Use HTML tags (\`<b>\`, \`<i>\`, \`<p>\`, \`<ul>\`, \`<li>\`, \`<br>\`) for clear presentation. Avoid unnecessary formatting. *Do NOT use Markdown formatting or Markdown code blocks.*
 *   **Directness:** Answer directly without prefaces or conversational filler.
 *   **Accuracy:** Provide accurate translations and explanations based on the input.
 *   **Context:** Fully consider provided context when translating or explaining.
@@ -2235,7 +2256,7 @@ Use the input structure \`Input: "..." Context: "..."\` ONLY for the *first* use
 
             async function updateChatWidget(){
                 if (!settings.chatWidget) return;
-                
+
                 const chatWrapper = createElement("div", { id: "chat-widget", style: "margin: 10px 0;" });
                 const chatContainer = createElement("div", { id: "chat-container" });
                 const inputContainer = createElement("div", { className: "input-container" });
@@ -2278,13 +2299,23 @@ Use the input structure \`Input: "..." Context: "..."\` ONLY for the *first* use
             async function updateTTS() {
                 if (!settings.tts) return;
 
+                const ttsButton = await waitForElement('.is-tts');
+                const isWord = document.querySelector(".reader-container .sentence:has(.sentence-item.is-selected)");
+                if (!settings.ttsSentence && !isWord) {
+                    ttsButton.click();
+                    return;
+                }
+                if (!settings.ttsWord && isWord) {
+                    ttsButton.click();
+                    return;
+                }
+
                 const selectedTextElement = document.querySelector(".reference-word");
                 const selectedText = selectedTextElement ? selectedTextElement.textContent.trim() : "";
 
                 let audioData = await openAITTS(`${selectedText}`, settings.ttsApiKey, settings.ttsVoice, 1.0, ttsInstructions);
                 if (audioData == null) return;
 
-                const ttsButton = await waitForElement('.is-tts');
                 const newTtsButton = createElement("button", {id: "playAudio", textContent: "🔊", className: "is-tts"});
                 newTtsButton.addEventListener('click', async (event) => {
                     await playAudio(audioData, 1.0);
@@ -2498,5 +2529,3 @@ Use the input structure \`Input: "..." Context: "..."\` ONLY for the *first* use
 
     init();
 })();
-
-// TODO: add the tts toggles for each sentence and word.
