@@ -120,7 +120,7 @@
         dragHandle.appendChild(dragHandleTitle);
 
         // popup content
-        const content = createElement("div", {style: `padding: 0 10px;`});
+        const content = createElement("div", {style: `padding: 0 5px;`});
         const popupContentElement = generatePopupContent();
         content.appendChild(popupContentElement);
 
@@ -135,7 +135,7 @@
             const container = createElement("div", {className: "popup-row"});
             container.appendChild(createElement("label", {htmlFor: id, textContent: labelText}));
 
-            const select = createElement("select", {id, style: "width: 100%; margin-top: 5px; padding: 5px;"});
+            const select = createElement("select", {id});
             options.forEach(option => {
                 select.appendChild(createElement("option", {value: option.value, textContent: option.text, selected: selectedValue === option.value}));
             });
@@ -190,7 +190,7 @@
         const popupLayout = createElement("div");
         const columns = createElement("div", {style: "display: flex; flex-direction: row;"});
 
-        const container = createElement("div", {style: "padding: 10px; width: 350px;"});
+        const container = createElement("div", {style: "padding: 5px; width: 350px;"});
 
         addSelect(container, "styleTypeSelector", "Layout Style:", [
             { value: "video", text: "Video" },
@@ -1030,7 +1030,7 @@
             transform: translate(-40%, -40%);
             background-color: var(--background-color, #2a2c2e);
             color: var(--font_color, #e0e0e0);
-            border: 1px solid grey;
+            border: 1px solid rgb(125 125 125 / 30%);
             border-radius: 8px;
             box-shadow: 8px 8px 8px rgba(0, 0, 0, 0.2);
             z-index: 10000;
@@ -1063,13 +1063,14 @@
 
         .popup-button {
             padding: 5px 10px;
-            border: 1px solid;
+            border: 1px solid rgb(125, 125, 125, 50%);
             border-radius: 5px;
             margin: 5px 0;
+            
         }
 
         .popup-section {
-            border: 1px solid var(--font_color);
+            border: 1px solid rgb(125 125 125 / 50%);
             padding: 5px 10px;
             border-radius: 5px;
             margin: 10px 0;
@@ -1077,7 +1078,7 @@
 
         .popup-input {
             flex-grow: 1;
-            border: 1px solid grey;
+            border: 1px solid rgb(125 125 125 / 50%);
             border-radius: 5px;
         }
 
@@ -1103,16 +1104,24 @@
         progress[value]::-webkit-progress-value {
             border-radius: 5px;
         }
+        
+        select {
+            width: 100%; 
+            margin-top: 5px; 
+            padding: 5px; 
+            background: rgb(125 125 125 / 10%) !important;
+        }
 
         /*Chat*/
 
         #chat-container {
             margin-bottom:10px;
-            border: 1px solid grey;
+            border: 1px solid rgb(125 125 125 / 35%);
             border-radius: 5px;
-            height: 200px;
+            height: 180px;
             overflow-y: auto;
             resize: vertical;
+            padding: 5px !important;
         }
 
         .input-container {
@@ -1122,15 +1131,16 @@
 
         #user-input {
             flex-grow: 1;
-            padding: 5px;
+            padding: 5px 10px;
             margin-right: 5px;
-            border: 1px solid grey;
+            border: 1px solid rgb(125 125 125 / 35%);
             border-radius: 5px;
+            font-size: 0.85rem;
         }
 
         #send-button {
             padding: 5px 10px;
-            border: 1px solid grey;
+            border: 1px solid rgb(125 125 125 / 35%);
             border-radius: 5px;
         }
 
@@ -1143,11 +1153,11 @@
         }
 
         .user-message {
-            background-color: var(--readerWidgetBoxBackground);
+            background-color: rgb(125 125 125 / 5%);
         }
 
         .bot-message {
-            background-color: var(--readerGlobalBackground);
+            background-color: rgb(125 125 125 / 10%);
         }
         
         #playAudio {
