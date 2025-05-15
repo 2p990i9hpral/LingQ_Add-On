@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*/learn/*/web/reader/*
 // @match        https://www.lingq.com/*/learn/*/web/library/course/*
 // @exclude      https://www.lingq.com/*/learn/*/web/editor/*
-// @version      5.3.8
+// @version      5.3.9
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @namespace https://greasyfork.org/users/1458847
@@ -1141,10 +1141,11 @@
             margin-bottom:10px;
             border: 1px solid rgb(125 125 125 / 35%);
             border-radius: 5px;
-            height: 180px;
+            height: 200px;
             overflow-y: auto;
             resize: vertical;
             padding: 5px !important;
+            scrollbar-width: none !important;
         }
 
         .input-container {
@@ -1371,7 +1372,7 @@
         /*make prev/next page buttons compact*/
 
         .reader-component {
-            grid-template-columns: 0rem 1fr 0rem !important;
+            grid-template-columns: 0 1fr 0 !important;
             align-items: baseline;
             margin-top: 10px;
         }
@@ -1445,7 +1446,7 @@
         }
 
         .section--player.is-expanded {
-            padding: 5px 0px !important;
+            padding: 5px 0 !important;
             width: 390px !important;
             margin-left: 10px !important;
         }
@@ -2077,7 +2078,6 @@ Input: "마중", Context: "그녀는 역까지 나를 마중 나왔다."
   <li>나는 공항에 친구를 마중 나갔다.</li>
   <li>私は空港に友達を出迎えに行った。</li>
 </ul>
-
 
 ### Example 1: Single Word with Context (Original language: English, User's language: Korean)
 
