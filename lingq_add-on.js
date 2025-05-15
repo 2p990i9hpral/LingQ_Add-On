@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*/learn/*/web/reader/*
 // @match        https://www.lingq.com/*/learn/*/web/library/course/*
 // @exclude      https://www.lingq.com/*/learn/*/web/editor/*
-// @version      5.3.6
+// @version      5.3.7
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @namespace https://greasyfork.org/users/1458847
@@ -51,7 +51,7 @@
         librarySortOption: 0,
         autoFinishing: false,
         chatWidget: false,
-        llmProvider: "openai",
+        llmProviderModel: "openai gpt-4.1-nano",
         llmApiKey: "",
         askSelected: false,
         tts: false,
@@ -71,7 +71,7 @@
         librarySortOption: storage.get("librarySortOption", defaults.librarySortOption),
         get autoFinishing() { return storage.get("autoFinishing", defaults.autoFinishing); },
         get chatWidget() { return storage.get("chatWidget", defaults.chatWidget); },
-        get llmProvider() { return storage.get("llmProvider", defaults.llmProvider); },
+        get llmProviderModel() { return storage.get("llmProviderModel", defaults.llmProviderModel); },
         get llmApiKey() { return storage.get("llmApiKey", defaults.llmApiKey); },
         get askSelected() { return storage.get("askSelected", defaults.askSelected); },
         get tts() { return storage.get("tts", defaults.tts); },
@@ -249,10 +249,12 @@
 
         const llmSection = createElement("div", {id: "llmSection", className: "popup-section", style: `${settings.chatWidget ? "" : "display: none"}`});
 
-        addSelect(llmSection, "llmProviderSelector", "LLM Provider:", [
-            { value: "openai", text: "OpenAI (GPT-4.1 nano)" },
-            { value: "google", text: "Google (Gemini 2.0 Flash)" }
-        ], settings.llmProvider);
+        addSelect(llmSection, "llmProviderModelSelector", "LLM Provider: (Price per 1M tokens)", [
+            { value: "openai gpt-4.1-mini", text: "OpenAI GPT-4.1 mini ($0.4/$1.6)" },
+            { value: "openai gpt-4.1-nano", text: "OpenAI GPT-4.1 nano ($0.1/$0.4)" },
+            { value: "google gemini-2.5-flash-preview-04-17", text: "Google Gemini 2.5 Flash ($0.15/$0.6)" },
+            { value: "google gemini-2.0-flash", text: "Google Gemini 2.0 Flash ($0.1/$0.4)" }
+        ], settings.llmProviderModel);
 
         const apiKeyContainer = createElement("div", {className: "popup-row"});
         apiKeyContainer.appendChild(createElement("label", {htmlFor: "llmApiKeyInput", textContent: "API Key:"}));
@@ -652,10 +654,10 @@
             storage.set("chatWidget", checked);
         });
 
-        const llmProviderSelector = document.getElementById("llmProviderSelector");
-        llmProviderSelector.addEventListener("change", (event) => {
+        const llmProviderModelSelector = document.getElementById("llmProviderModelSelector");
+        llmProviderModelSelector.addEventListener("change", (event) => {
             const selectedProvider = event.target.value;
-            storage.set("llmProvider", selectedProvider);
+            storage.set("llmProviderModel", selectedProvider);
         });
 
         const llmApiKeyInput = document.getElementById("llmApiKeyInput");
@@ -738,7 +740,7 @@
             document.getElementById("autoFinishingCheckbox").checked = defaults.autoFinishing;
 
             document.getElementById("chatWidgetCheckbox").value = defaults.chatWidget;
-            document.getElementById("llmProviderSelector").value = defaults.llmProvider;
+            document.getElementById("llmProviderModelSelector").value = defaults.llmProviderModel;
             document.getElementById("llmApiKeyInput").value = defaults.llmApiKey;
             document.getElementById("askSelectedCheckbox").value = defaults.askSelected;
 
@@ -1679,6 +1681,15 @@
         return await userProfile.dictionary_languages[0];
     }
 
+    async function getDictionaryLocalePairs() {
+        const url = `https://www.lingq.com/api/v2/dictionary-locales/`;
+
+        const response = await fetch(url);
+        const data = await response.json();
+
+        return Object.fromEntries(data.map(item => [item.code, item.title]));
+    }
+
     function getLessonId() {
         const url = document.URL;
         const regex = /https*:\/\/www\.lingq\.com\/\w+\/learn\/\w+\/web\/reader\/(\d+)/;
@@ -1988,149 +1999,198 @@
         }
     }
 
-    function setupLLMs() {
+    async function setupLLMs() {
         async function updateWidget() {
             if (document.getElementById('chatWidget')) return;
 
             const targetSectionHead = document.querySelector("#lesson-reader .widget-area > .reader-widget > .section-widget--head");
             if (!targetSectionHead) return;
 
-            const llmProvider = settings.llmProvider;
+            const [llmProvider, llmModel] = settings.llmProviderModel.split(" ");
             const llmApiKey = settings.llmApiKey;
-            const llmModel = llmProvider === 'openai' ? 'gpt-4.1-nano' : 'gemini-2.0-flash';
-            const userDictionaryLang = await getDictionaryLanguage();
             console.log(llmProvider, llmModel)
 
             const systemPrompt = `
-**IMPORTANT: Never enclose your response within Markdown code blocks or any form of backticks. Always output raw HTML text only.**
-
+Ensure all translations, explanations, definitions, and examples are provided exclusively in '${userLanguage}', regardless of the original input language, using the specified HTML formatting for clarity.
 You are a language assistant designed to help users understand words and sentences.
 
 ## Core Principles
 
-*   **Language:** Respond exclusively in the language specified by '${userDictionaryLang}'.
-*   **Formatting:**  Use HTML tags (\`<b>\`, \`<i>\`, \`<p>\`, \`<ul>\`, \`<li>\`, \`<br>\`) for clear presentation. Avoid unnecessary formatting. *Output the HTML directly as text, using the literal HTML tags. Do NOT use Markdown formatting (e.g., \`# H1\`, \`**Bold**\`, \`> blockquote\`, \`\`code\`\`, \`---\`). Do not use \`\`\`html or any backticks before or after your response. Output raw HTML as plain text only.*
-*   **Directness:** Answer directly without prefaces or conversational filler.
-*   **Accuracy:** Provide accurate translations and explanations based on the input.
-*   **Context:** Fully consider provided context when translating or explaining.
+* **Language:** Respond exclusively in '${userLanguage}'. Avoid using the original language for explanations, all content should be translated into '${userLanguage}'.
+* **Formatting:** Use HTML tags ('<b>', '<i>', '<p>', '<ul>', '<li>', '<br>') for presentation. Output raw HTML as plain text, without Markdown or code blocks.
+* **Directness:** Provide succinct responses without unnecessary prefaces.
+* **Accuracy:** Ensure precise translations and context-specific explanations.
+* **Context:** Integrate context deeply in translations and explanations.
 
 ## Instructions for Different Input Types
 
-Use the input structure \`Input: "..." Context: "..."\` ONLY for the *first* user turn. For all subsequent turns, the user input will be plain text.
+Use the input structure 'Input: "..." Context: "..."' ONLY for the *first* user turn. For all subsequent turns, the user input will be plain text.
 
--   **Single Word Input (Structured Input: \`Input: "word" Context: "sentence"\`):**
-    1.  Focus on the single word provided.
-    2.  Provide a definition and explanation in ${userDictionaryLang}, *specifically considering how the word is used in the provided context*.
-    3.  Create a new clear example sentence demonstrating the word's usage. This example should not directly translate the original context sentence but should help illustrate the word's meaning as explained.
-    4.  Provide the translation of this new example sentence into ${userDictionaryLang}.
-    5.  Use the following HTML structure:
-        \`\`\`html
-        <b>[The word itself]</b> <i>([Part of Speech in ${userDictionaryLang}])</i>
-        <p>[Definition and explanation in ${userDictionaryLang}, factoring in context]</p>
-        <p>Example Sentence:</p>
+-   **Single Word/Phrase Input (Structured Input: 'Input: "word or phrase" Context: "sentence"'):**
+    1. Determine the base form of the word or phrase.
+    2. Address base word or phrase directly, especially for idioms.
+    3. Provide an explanation ***exclusively in ${userLanguage}***, factoring in context, and explaining any idiomatic usage.
+    4.  Provide an explanation in ${userLanguage}, factoring in context, and explaining any idiomatic usage.
+    5.  Generate a distinct example sentence to highlight word/phrase usage. The **example sentence and its translation should appear first in the original input language, then in ${userLanguage}**.
+    6.  Use the following HTML structure. ***All content (definition, explanation, examples and translations) must be provided solely in ${userLanguage}, regardless of the input language.***  
+        <b>[Base form]</b> <i>([Part of Speech])</i>
+        <p><b>Definition:</b> [Definition in ${userLanguage}]</p>
+        <p><b>Explanation:</b> [Contextual explanation in ${userLanguage}]</p>
+        <p><b>Example:</b></p>
         <ul>
-          <li>[New English Example Sentence]</li>
-          <li>[Translation of New English Example Sentence in ${userDictionaryLang}]</li>
+          <li>[New Example Sentence in original language]</li>
+          <li>[Translation in ${userLanguage}]</li>
         </ul>
-        \`\`\`
         *Note: The structure and bolding/italics should convey the information.*
 
--   **Sentence Input (Structured Input: \`Input: "sentence"\`):**
-    1.  Translate the entire sentence into ${userDictionaryLang}.
-    2.  Identify any interesting words, difficult phrases, or idiomatic expressions within the user's sentence that might benefit from explanation.
-    3.  Explain these expressions in ${userDictionaryLang}, using context if necessary.
-    4.  Use the following HTML structure:
-        \`\`\`html
-        <p>[Translated Sentence in ${userDictionaryLang}]</p>
+-   **Sentence Input (Structured Input: 'Input: "sentence", Context ""'):**
+    1. **ALWAYS translate the entire input sentence first** into ${userLanguage}, placing it in a '<p>' tag with bolded "Translation" in ${userLanguage}.
+    2. **DO NOT treat a sentence input as a single word/phrase explanation.** Do NOT output a block using only a single word/phrase explanation/template for sentence input.
+    3. **AFTER the full-sentence translation**, identify any interesting, difficult, or idiomatic words/phrases in the sentence that might benefit from explanation. and explain the expressions in ${userLanguage}.
+    4. For each such word or phrase, provide a concise explanation in ${userLanguage}.
+    5. **Never output only a single word/phrase explanation template for any sentence input**—sentence translation is always required as the first output, followed by a list of explanations of words/phrases as appropriate.
+    6.  Use the following HTML structure:
+        <p><b>Translation:</b> [Translated Sentence in ${userLanguage}]</p>
         <ul>
-          <li><b>[Expression from the original sentence]:</b> [Explanation in ${userDictionaryLang}]</li>
-          <!-- Add more <li> items for other expressions if needed -->
+          <li><b>[Expression]:</b> <i>[Part of speech]</i> - [Explanation in ${userLanguage}]</li>
         </ul>
-        \`\`\`
-        *Note: The first \`<p>\` tag contains the full translation.*
+        *Note: The first '<p>' tag contains the full translation. Never output only a single word/phrase explanation for sentence input; always include the full sentence translation first, and then explanations for multiple relevant expressions if applicable.*
 
 -   **Plain Text Input (Subsequent Turns):**
-    1.  Respond directly to the user's request (e.g., "give another example", "explain that word again") in ${userDictionaryLang}.
-    2.  Format the response using simple HTML (\`<p>\`, \`<ul>\`, \`<li>\`) as appropriate for the information provided (e.g., a list for multiple examples, a paragraph for clarification).
-    3.  Do NOT add structure like \`Input: "..." Context: "..."\` to your output. Respond naturally based on the conversation history while adhering to the requested language and HTML formatting.
+    1. Respond naturally and directly in ${userLanguage}.
+    2. Utilize HTML ('<p>', '<ul>', '<li>').
+    3. Avoid structured outputs; adhere to a conversational context.
 
 ## Examples
 
-### Example 1: Single Word with Context (User's language code: ko)
+### Example 0: Single Word with Context (Original language: Korean, User's language: Japanese)
 
-**User Input:** \`Input: "translators", Context: "However, the ESV translators chose to translate that same word as 'servant,' closing off the potential interpretation that she held any formal position of authority."\`
+**User Input:**  
+Input: "마중", Context: "그녀는 역까지 나를 마중 나왔다."
 
-**Assistant Output:**
-\`\`\`html
-<b>translators</b> <i>(명사)</i>
-<p>번역가, 통역사. 특히 책이나 문서 등 다른 언어로 된 내용을 자국어로 옮기는 사람들을 의미합니다. 제공된 맥락에서는 ESV 성경을 번역한 사람들을 가리킵니다.</p>
-<p>Example Sentence:</p>
+**Assistant Output:**  
+<b>마중</b> <i>(名詞)</i>
+<p><b>Definition:</b> 出迎え</p>
+<p><b>Explanation:</b> 誰かが到着する際に迎えに行くことを意味します。この文脈では、彼女が駅まで私を迎えに来てくれたという意味です。</p>
+<p><b>Example:</b></p>
+<ul>
+  <li>나는 공항에 친구를 마중 나갔다.</li>
+  <li>私は空港に友達を出迎えに行った。</li>
+</ul>
+
+
+### Example 1: Single Word with Context (Original language: English, User's language: Korean)
+
+**User Input:** 
+'Input: "translators", Context: "However, the ESV translators chose to translate that same word as 'servant,' closing off the potential interpretation that she held any formal position of authority."'
+
+**Output:**
+<b>translator</b> <i>(명사)</i>
+<p><b>Definition:</b> 번역가, 통역사</p>
+<p><b>Explanation:</b> This refers to individuals translating foreign content into their own language, as highlighted by the ESV Bible translators in context.</p>
+<p><b>Example:</b></p>
 <ul>
   <li>Many translators work together on complex international projects.</li>
   <li>많은 번역가들이 복잡한 국제 프로젝트에 함께 작업합니다.</li>
 </ul>
-\`\`\`
 
-### Example 2: Sentence Input (User's language code: ko)
+### Example 2: Single Word with Context (Original language: English, User's language: Japanese)
 
-**User Input:** \`Input: "Interestingly, elsewhere in the letters of Paul, the ESV editors translated that exact same word as \"minister\""\`
-
-**Assistant Output:**
-\`\`\`html
-<p>흥미롭게도, 바울의 다른 서신들에서는 ESV 편집자들이 바로 그 같은 단어를 “minister”(일꾼, 봉사자)로 번역했습니다.</p>
-<ul>
- <li><b>Interestingly:</b> 어떤 사실이 예상 밖이거나 주의를 기울일 만큼 흥미로울 때 쓰는 부사입니다. 여기서는 앞선 내용과 대조를 이루는 사실을 도입하고 있습니다.</li>
-</ul>
-\`\`\`
-
-### Example 3: Plain Text Input (User's language code: ko)
-
-**User Input:** " Translators 단어 예문 하나 더 보여줘"
+**User Input:** 
+'Input: "sat", Context: "The cat sat on the mat."'
 
 **Assistant Output:**
-\`\`\`html
-<p>'translators' 단어의 추가 예문입니다:</p>
+<b>sit</b> <i>(動詞の過去形)</i>
+<p><b>Definition:</b> 座った</p>
+<p><b>Explanation:</b> 動詞 'sit (座る)' の過去形です。過去に行われた動作を表します。</p>
+<p><b>Example:</b></p>
 <ul>
-  <li>The translators were praised for accurately capturing the author's intent.</li>
-  <li>번역가들은 작가의 의도를 정확하게 포착한 것에 대해 칭찬받았습니다.</li>
+  <li>He sat quietly in the chair.</li>
+  <li>彼は静かに椅子に座った。</li>
 </ul>
-\`\`\`
 
-### Example 4: Single Word with Context (User's language code: es)
+### Example 3: Single Word with Context (Original Language: Spanish, User Language: English)
 
-**User Input:** \`Input: "run", Context: "He can run fast."\`
+**User Input:** 
+'Input: "lograr", Context: "Debemos lograr nuestros objetivos."'
 
 **Assistant Output:**
-\`\`\`html
-<b>run</b> <i>(verbo)</i>
-<p>Correr, desplazarse rápidamente impulsándose con los pies. En el contexto proporcionado, se refiere a la capacidad de moverse velozmente.</p>
-<p>Example Sentence:</p>
+<b>lograr</b> <i>(verb)</i>
+<p><b>Definition:</b> To achieve, to attain.</p>
+<p><b>Explanation:</b> This means to successfully reach or accomplish a goal. In context, it suggests the necessity to achieve our objectives.</p>
+<p><b>Example:</b></p>
 <ul>
-  <li>The children love to run in the park.</li>
-  <li>A los niños les encanta correr en el parque.</li>
+  <li>They hope to lograr success in the new venture.</li>
+  <li>Ellos esperan lograr el éxito en la nueva empresa.</li>
 </ul>
-\`\`\`
 
-### Example 5: Sentence Input (User's language code: ja)
+### Example 4: Phrase with Context (Original Language: German, User Language: French)
 
-**User Input:** \`Input: "The cat sat on the mat."\`
+**User Input:** 
+'Input: "imstande sein", Context: "Er war imstande, das Problem zu lösen."'
 
 **Assistant Output:**
-\`\`\`html
-<p>猫はマットの上に座りました。</p>
+<b>imstande sein</b> <i>(Redewendung)</i>
+<p><b>Definition:</b> Etre capable de, être en mesure de.</p>
+<p><b>Explanation:</b> Cela signifie être capable ou apte à faire quelque chose. Dans ce contexte, cela indique qu'il avait la capacité de résoudre le problème.</p>
+<p><b>Example:</b></p>
 <ul>
-  <li><b>sat:</b> 動詞 'sit (座る)' の過去形です。過去に行われた動作を表します。</li>
+  <li>Sie war imstande, die schwierige Aufgabe zu bewältigen.</li>
+  <li>Elle était capable de maîtriser la tâche difficile.</li>
 </ul>
-\`\`\`
+
+### Example 5: Sentence Input (Original language: French, User's language: Japanese)
+
+**User Input:** 
+'Input: "Il a réussi à convaincre ses collègues malgré les difficultés.", Context: ""'
+
+**Assistant Output:**
+<p><b>Translation:</b> 彼は困難にもかかわらず同僚たちを説得することに成功した。</p>
+<ul>
+  <li><b>réussi à:</b> <i>(動詞句)</i> - 「～することに成功した」を意味します。</li>
+  <li><b>malgré:</b> <i>(前置詞)</i> - 「～にもかかわらず」を表します。</li>
+</ul>
+
+### Example 6: Sentence Input (Original Language: Italian, User Language: German)
+
+**User Input:** 
+'Input: "Nonostante la pioggia, siamo andati al concerto.", Context: ""'
+
+**Assistant Output:**
+<p><b>Translation:</b> Trotz des Regens sind wir zum Konzert gegangen.</p>
+<ul>
+  <li><b>Nonostante:</b> <i>(Präposition)</i> - Trotz</li>
+  <li><b>siamo andati:</b> <i>(Verb)</i> - Wir sind gegangen (Vergangenheit von "gehen")</li>
+</ul>
+
+### Example 7: Sentence Input (Original language: Japanese, User's language: Italian)
+
+**User Input:** 
+'Input: "彼はいつも時間に正確です。", Context: ""'
+
+**Assistant Output:**
+<p><b>Translation:</b> Lui è sempre puntuale.</p>
+<ul>
+  <li><b>時間に正確:</b> <i>(espressione)</i> - puntuale (essere preciso con l'orario)</li>
+</ul>
+
+### Example 8: Plain Text Input (User Language: Spanish)
+
+**User Input:** 
+"Dame otro ejemplo de 'take on' en una oración."
+
+**Assistant Output:**
+<p>Aquí tienes otro ejemplo de 'take on' en una oración:</p>
+<ul>
+  <li>The company decided to take on a new project to expand its services.</li>
+  <li>La empresa decidió emprender un nuevo proyecto para expandir sus servicios.</li>
+</ul>
 
 ## Notes
 
-*   Always respond in the language specified by '${userDictionaryLang}'.
-*   The structured \`Input:\` and \`Context:\` format is ONLY for the first user message. Handle subsequent plain text messages as follow-up requests, providing responses in HTML but in a less structured format than the initial turn, as shown in Example 3.
-*   Do not provide explanations for every single word in a sentence input; focus only on expressions, difficult words, or idiomatic phrases as per the instructions.
-*   Aim for clarity and usefulness in language learning contexts.
-
-**IMPORTANT: Never enclose your response within Markdown code blocks or any form of backticks. Always output raw HTML text only.**
+*   Prioritize outputting all content in '${userLanguage}' to enhance clarity and learning.
+*   Avoid excessive word explanations in sentences; prioritize challenging parts relevant to context.
+*   Maintain user clarity and effectiveness for learning experiences.
             `;
             const ttsInstructions = `
                 Accent/Affect: Neutral and clear, like a professional voice-over artist. Focus on accuracy.
@@ -2251,7 +2311,7 @@ Use the input structure \`Input: "..." Context: "..."\` ONLY for the *first* use
 
             function getSelectedWithContext() {
                 const selectedTextElement = targetSectionHead.querySelector(".reference-word");
-                const contextElement = document.querySelector(".reader-container .sentence:has(.sentence-item.is-selected)");
+                const contextElement = (document.querySelector("span.selected-text, span.is-selected") || {}).parentElement || null;
                 const selectedText = selectedTextElement ? selectedTextElement.textContent.trim() : "";
                 const contextText = contextElement ? contextElement.innerText.trim() : "";
 
@@ -2304,7 +2364,7 @@ Use the input structure \`Input: "..." Context: "..."\` ONLY for the *first* use
                 if (!settings.tts) return;
 
                 const ttsButton = await waitForElement('.is-tts');
-                const isWord = document.querySelector(".reader-container .sentence:has(.sentence-item.is-selected)");
+                const isWord = document.querySelector("span.selected-text, span.is-selected");
                 if (!settings.ttsSentence && !isWord) {
                     ttsButton.click();
                     return;
@@ -2322,11 +2382,11 @@ Use the input structure \`Input: "..." Context: "..."\` ONLY for the *first* use
 
                 const newTtsButton = createElement("button", {id: "playAudio", textContent: "🔊", className: "is-tts"});
                 newTtsButton.addEventListener('click', async (event) => {
-                    await playAudio(audioData, 1.0);
+                    await playAudio(audioData, 0.7);
                 })
                 ttsButton.replaceWith(newTtsButton);
 
-                playAudio(audioData, 1.0);
+                playAudio(audioData, 0.7);
             }
 
             await updateChatWidget();
@@ -2343,6 +2403,9 @@ Use the input structure \`Input: "..." Context: "..."\` ONLY for the *first* use
             observer.observe(selectedTextElement, {subtree: true, characterData: true});
         }
 
+        const userDictionaryLang = await getDictionaryLanguage();
+        const DictionaryLocalePairs = await getDictionaryLocalePairs()
+        const userLanguage = DictionaryLocalePairs[userDictionaryLang];
         const lessonReader = document.getElementById('lesson-reader');
 
         const observer = new MutationObserver((mutations) => {
