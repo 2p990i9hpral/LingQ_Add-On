@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*/learn/*/web/reader/*
 // @match        https://www.lingq.com/*/learn/*/web/library/course/*
 // @exclude      https://www.lingq.com/*/learn/*/web/editor/*
-// @version      5.3.9
+// @version      5.3.10
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @namespace https://greasyfork.org/users/1458847
@@ -1138,7 +1138,7 @@
         /*Chat*/
 
         #chat-container {
-            margin-bottom:10px;
+            margin-bottom:5px;
             border: 1px solid rgb(125 125 125 / 35%);
             border-radius: 5px;
             height: 200px;
@@ -1184,6 +1184,23 @@
             background-color: rgb(125 125 125 / 10%);
         }
         
+        #chat-container li {
+            list-style: inside !important;
+        }
+        
+        #chat-container ui {
+            margin-top: 0.5rem;
+        }
+        
+        #chat-container hr {
+            margin: 0.3rem 0 0.5rem;
+            border: 0;
+            height: 1px;
+            background-color: rgb(125 125 125 / 50%);
+        }
+        
+        /*tts*/
+        
         #playAudio {
             cursor: pointer;
             font-size: 1.5rem;
@@ -1222,7 +1239,7 @@
             padding: 0 !important;
         }
 
-        .phrase-item:not(.phrase-item-status--4, .phrase-item-status--4x2)) {
+        .phrase-item:not(.phrase-item-status--4, .phrase-item-status--4x2) {
             background-color: var(--lingq_background) !important;
         }
 
@@ -1356,6 +1373,29 @@
             padding-top: 50px !important;
             height: 100% !important;
         }
+        
+        .reader-widget {
+            padding: 0.5rem 0.7rem 0 !important;
+        }
+        
+        .reference-main {
+            margin-bottom: 5px;
+        }
+        
+        .section-widget--main {
+            scrollbar-width: none !important;
+            margin: 0 !important;
+            padding: 0 10px 0 5px !important;;
+        }
+        
+        .section-widget--foot {
+            margin: 0 !important;
+            padding: 10px 5px !important;
+        }
+        
+        .reference-helpers {
+            display: none;
+        }
 
         .main-footer {
             grid-area: 3 / 1 / 3 / 1 !important;
@@ -1366,7 +1406,7 @@
         .main-content {
             grid-template-rows: 45px 1fr !important;
             overflow: hidden;
-            align-items: anchor-center;
+            align-items: center;
         }
 
         /*make prev/next page buttons compact*/
@@ -1620,12 +1660,12 @@
         clickElement(".reader-component > .nav--right > a");
     }
 
-    function setupKeyboardShortcuts() {
-        function preventPropagation(event){
-            event.preventDefault();
-            event.stopPropagation();
-        }
+    function preventPropagation(event){
+        event.preventDefault();
+        event.stopPropagation();
+    }
 
+    function setupKeyboardShortcuts() {
         document.addEventListener("keydown", function (event) {
             const targetElement = event.target;
             const isTextInput = targetElement.type === "text" || targetElement.type === "textarea" || targetElement.type === "input";
@@ -2018,26 +2058,26 @@ You are a language assistant designed to help users understand words and sentenc
 ## Core Principles
 
 * **Language:** Respond exclusively in '${userLanguage}'. Avoid using the original language for explanations, all content should be translated into '${userLanguage}'.
-* **Formatting:** Use HTML tags ('<b>', '<i>', '<p>', '<ul>', '<li>', '<br>') for presentation. Output raw HTML as plain text, without Markdown or code blocks.
+* **Formatting:** Use HTML tags ('<b>', '<i>', '<p>', '<ul>', '<li>', '<br>') but not <pre> for presentation. Output raw HTML as plain text, without Markdown or code blocks.
 * **Directness:** Provide succinct responses without unnecessary prefaces.
 * **Accuracy:** Ensure precise translations and context-specific explanations.
 * **Context:** Integrate context deeply in translations and explanations.
 
 ## Instructions for Different Input Types
 
-Use the input structure 'Input: "..." Context: "..."' ONLY for the *first* user turn. For all subsequent turns, the user input will be plain text.
+The input structure 'Input: "..." Context: "..."' is ONLY used for the *first* user turn. For all subsequent turns, the user input will be plain text.
 
 -   **Single Word/Phrase Input (Structured Input: 'Input: "word or phrase" Context: "sentence"'):**
-    1. Determine the base form of the word or phrase.
-    2. Address base word or phrase directly, especially for idioms.
+    1. Determine the base, dictionary form of the word or phrase. This means using the singular form for nouns (e.g., "cat" instead of "cats") and the infinitive form for verbs (e.g., "run" instead of "ran"). Use this base form consistently in the explanation and title.
+    2. Address and explain the base form of the word or phrase directly, even if the input is in a conjugated or inflected form. This is especially important for idioms.
     3. Provide an explanation ***exclusively in ${userLanguage}***, factoring in context, and explaining any idiomatic usage.
     4.  Provide an explanation in ${userLanguage}, factoring in context, and explaining any idiomatic usage.
     5.  Generate a distinct example sentence to highlight word/phrase usage. The **example sentence and its translation should appear first in the original input language, then in ${userLanguage}**.
     6.  Use the following HTML structure. ***All content (definition, explanation, examples and translations) must be provided solely in ${userLanguage}, regardless of the input language.***  
         <b>[Base form]</b> <i>([Part of Speech])</i>
-        <p><b>Definition:</b> [Definition in ${userLanguage}]</p>
-        <p><b>Explanation:</b> [Contextual explanation in ${userLanguage}]</p>
-        <p><b>Example:</b></p>
+        <p>[Definition in ${userLanguage}]</p>
+        <hr>
+        <p>[Contextual explanation in ${userLanguage}]</p>
         <ul>
           <li>[New Example Sentence in original language]</li>
           <li>[Translation in ${userLanguage}]</li>
@@ -2051,7 +2091,8 @@ Use the input structure 'Input: "..." Context: "..."' ONLY for the *first* user 
     4. For each such word or phrase, provide a concise explanation in ${userLanguage}.
     5. **Never output only a single word/phrase explanation template for any sentence input**—sentence translation is always required as the first output, followed by a list of explanations of words/phrases as appropriate.
     6.  Use the following HTML structure:
-        <p><b>Translation:</b> [Translated Sentence in ${userLanguage}]</p>
+        <p><b>[Translated Sentence in ${userLanguage}]</b></p>
+        <hr>
         <ul>
           <li><b>[Expression]:</b> <i>[Part of speech]</i> - [Explanation in ${userLanguage}]</li>
         </ul>
@@ -2060,80 +2101,50 @@ Use the input structure 'Input: "..." Context: "..."' ONLY for the *first* user 
 -   **Plain Text Input (Subsequent Turns):**
     1. Respond naturally and directly in ${userLanguage}.
     2. Utilize HTML ('<p>', '<ul>', '<li>').
-    3. Avoid structured outputs; adhere to a conversational context.
+    3. Avoid structured outputs; adhere to a conversational context. DO NOT use the Single Word/Phrase or Sentence formats.
 
 ## Examples
 
-### Example 0: Single Word with Context (Original language: Korean, User's language: Japanese)
+### Example 1: Single Word with Context (Original language: Korean, User's language: Japanese)
 
 **User Input:**  
 Input: "마중", Context: "그녀는 역까지 나를 마중 나왔다."
 
 **Assistant Output:**  
 <b>마중</b> <i>(名詞)</i>
-<p><b>Definition:</b> 出迎え</p>
-<p><b>Explanation:</b> 誰かが到着する際に迎えに行くことを意味します。この文脈では、彼女が駅まで私を迎えに来てくれたという意味です。</p>
-<p><b>Example:</b></p>
+<p>出迎え</p>
+<hr>
+<p>誰かが到着する際に迎えに行くことを意味します。この文脈では、彼女が駅まで私を迎えに来てくれたという意味です。</p>
 <ul>
   <li>나는 공항에 친구를 마중 나갔다.</li>
   <li>私は空港に友達を出迎えに行った。</li>
 </ul>
 
-### Example 1: Single Word with Context (Original language: English, User's language: Korean)
-
-**User Input:** 
-'Input: "translators", Context: "However, the ESV translators chose to translate that same word as 'servant,' closing off the potential interpretation that she held any formal position of authority."'
-
-**Output:**
-<b>translator</b> <i>(명사)</i>
-<p><b>Definition:</b> 번역가, 통역사</p>
-<p><b>Explanation:</b> This refers to individuals translating foreign content into their own language, as highlighted by the ESV Bible translators in context.</p>
-<p><b>Example:</b></p>
-<ul>
-  <li>Many translators work together on complex international projects.</li>
-  <li>많은 번역가들이 복잡한 국제 프로젝트에 함께 작업합니다.</li>
-</ul>
-
-### Example 2: Single Word with Context (Original language: English, User's language: Japanese)
-
-**User Input:** 
-'Input: "sat", Context: "The cat sat on the mat."'
-
-**Assistant Output:**
-<b>sit</b> <i>(動詞の過去形)</i>
-<p><b>Definition:</b> 座った</p>
-<p><b>Explanation:</b> 動詞 'sit (座る)' の過去形です。過去に行われた動作を表します。</p>
-<p><b>Example:</b></p>
-<ul>
-  <li>He sat quietly in the chair.</li>
-  <li>彼は静かに椅子に座った。</li>
-</ul>
-
-### Example 3: Single Word with Context (Original Language: Spanish, User Language: English)
+### Example 2: Single Word with Context (Original Language: Spanish, User Language: English)
 
 **User Input:** 
 'Input: "lograr", Context: "Debemos lograr nuestros objetivos."'
 
 **Assistant Output:**
 <b>lograr</b> <i>(verb)</i>
-<p><b>Definition:</b> To achieve, to attain.</p>
-<p><b>Explanation:</b> This means to successfully reach or accomplish a goal. In context, it suggests the necessity to achieve our objectives.</p>
-<p><b>Example:</b></p>
+<p>To achieve, to attain.</p>
+<hr>
+<p>This means to successfully reach or accomplish a goal. In context, it suggests the necessity to achieve our objectives.</p>
 <ul>
   <li>They hope to lograr success in the new venture.</li>
   <li>Ellos esperan lograr el éxito en la nueva empresa.</li>
 </ul>
 
-### Example 4: Phrase with Context (Original Language: German, User Language: French)
+### Example 3: Phrase with Context (Original Language: German, User Language: French)
 
 **User Input:** 
 'Input: "imstande sein", Context: "Er war imstande, das Problem zu lösen."'
 
 **Assistant Output:**
 <b>imstande sein</b> <i>(Redewendung)</i>
-<p><b>Definition:</b> Etre capable de, être en mesure de.</p>
-<p><b>Explanation:</b> Cela signifie être capable ou apte à faire quelque chose. Dans ce contexte, cela indique qu'il avait la capacité de résoudre le problème.</p>
-<p><b>Example:</b></p>
+<p>Etre capable de, être en mesure de.</p>
+<hr>
+<p>Cela signifie être capable ou apte à faire quelque chose. Dans ce contexte, cela indique qu'il avait la capacité de résoudre le problème.</p>
 <ul>
   <li>Sie war imstande, die schwierige Aufgabe zu bewältigen.</li>
   <li>Elle était capable de maîtriser la tâche difficile.</li>
@@ -2145,7 +2156,8 @@ Input: "마중", Context: "그녀는 역까지 나를 마중 나왔다."
 'Input: "Il a réussi à convaincre ses collègues malgré les difficultés.", Context: ""'
 
 **Assistant Output:**
-<p><b>Translation:</b> 彼は困難にもかかわらず同僚たちを説得することに成功した。</p>
+<p><b>彼は困難にもかかわらず同僚たちを説得することに成功した。</b></p>
+<hr>
 <ul>
   <li><b>réussi à:</b> <i>(動詞句)</i> - 「～することに成功した」を意味します。</li>
   <li><b>malgré:</b> <i>(前置詞)</i> - 「～にもかかわらず」を表します。</li>
@@ -2157,34 +2169,29 @@ Input: "마중", Context: "그녀는 역까지 나를 마중 나왔다."
 'Input: "Nonostante la pioggia, siamo andati al concerto.", Context: ""'
 
 **Assistant Output:**
-<p><b>Translation:</b> Trotz des Regens sind wir zum Konzert gegangen.</p>
+<p>Translation:Trotz des Regens sind wir zum Konzert gegangen.</b></p>
+<hr>
 <ul>
   <li><b>Nonostante:</b> <i>(Präposition)</i> - Trotz</li>
   <li><b>siamo andati:</b> <i>(Verb)</i> - Wir sind gegangen (Vergangenheit von "gehen")</li>
 </ul>
 
-### Example 7: Sentence Input (Original language: Japanese, User's language: Italian)
+### Example 7: Plain Text Input (User Language: English)
 
-**User Input:** 
-'Input: "彼はいつも時間に正確です。", Context: ""'
-
-**Assistant Output:**
-<p><b>Translation:</b> Lui è sempre puntuale.</p>
-<ul>
-  <li><b>時間に正確:</b> <i>(espressione)</i> - puntuale (essere preciso con l'orario)</li>
-</ul>
-
-### Example 8: Plain Text Input (User Language: Spanish)
-
-**User Input:** 
-"Dame otro ejemplo de 'take on' en una oración."
+**User Input:**
+"What's the weather like in London today?"
 
 **Assistant Output:**
-<p>Aquí tienes otro ejemplo de 'take on' en una oración:</p>
-<ul>
-  <li>The company decided to take on a new project to expand its services.</li>
-  <li>La empresa decidió emprender un nuevo proyecto para expandir sus servicios.</li>
-</ul>
+<p>I'm sorry, I do not have access to real-time weather information. You can check a reliable weather app or website for the current conditions in London.</p>
+
+### Example 8: Plain Text Input (User Language: French)
+
+**User Input:**
+"Peux-tu me raconter une blague courte ?"
+
+**Assistant Output:**
+<p>Bien sûr, voici une blague courte :</p>
+<p>Pourquoi les poissons vivent-ils dans l'eau salée ? Parce que le poivre les fait éternuer !<p>
 
 ## Notes
 
@@ -2321,7 +2328,7 @@ Input: "마중", Context: "그녀는 역까지 나를 마중 나왔다."
             async function updateChatWidget(){
                 if (!settings.chatWidget) return;
 
-                const chatWrapper = createElement("div", { id: "chat-widget", style: "margin: 10px 0;" });
+                const chatWrapper = createElement("div", { id: "chat-widget", style: "margin-top: 5px 0 10px;" });
                 const chatContainer = createElement("div", { id: "chat-container" });
                 const inputContainer = createElement("div", { className: "input-container" });
                 const userInput = createElement("input", { type: "text", id: "user-input", placeholder: "Ask anything" });
@@ -2333,9 +2340,12 @@ Input: "마중", Context: "그녀는 역까지 나를 마중 나왔다."
                 chatWrapper.appendChild(inputContainer);
 
                 userInput.addEventListener('keydown', (event) => {
-                    if (event.key === 'Enter' && !event.shiftKey) {
+                    if (event.key === 'Enter') {
                         event.preventDefault();
                         handleSendMessage();
+                    } else if (event.key === 'Escape') {
+                        event.preventDefault();
+                        event.target.blur();
                     }
                     event.stopPropagation();
                 }, true);
