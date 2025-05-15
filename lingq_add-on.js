@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*/learn/*/web/reader/*
 // @match        https://www.lingq.com/*/learn/*/web/library/course/*
 // @exclude      https://www.lingq.com/*/learn/*/web/editor/*
-// @version      5.3.7
+// @version      5.3.8
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @namespace https://greasyfork.org/users/1458847
@@ -2264,7 +2264,7 @@ Input: "마중", Context: "그녀는 역까지 나를 마중 나왔다."
                             body: JSON.stringify({
                                 system_instruction: {parts: [{text: systemPrompt}]},
                                 contents: formattedMessages,
-                                generationConfig: { temperature: 0.7, maxOutputTokens: 500}
+                                generationConfig: { temperature: 0.7, maxOutputTokens: 500, ...(model.includes("2.5") ? { thinkingConfig: { thinkingBudget: 0 } } : {})}
                             })
                         }
                     );
