@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*/learn/*/web/reader/*
 // @match        https://www.lingq.com/*/learn/*/web/library/course/*
 // @exclude      https://www.lingq.com/*/learn/*/web/editor/*
-// @version      5.3.10
+// @version      5.3.11
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @namespace https://greasyfork.org/users/1458847
@@ -1141,7 +1141,6 @@
             margin-bottom:5px;
             border: 1px solid rgb(125 125 125 / 35%);
             border-radius: 5px;
-            height: 200px;
             overflow-y: auto;
             resize: vertical;
             padding: 5px !important;
@@ -1370,12 +1369,15 @@
         }
 
         .widget-area {
-            padding-top: 50px !important;
+            padding: 55px 10px 0 !important;
             height: 100% !important;
+            justify-content: center;
+            display: flex;
         }
         
         .reader-widget {
-            padding: 0.5rem 0.7rem 0 !important;
+            padding: 10px !important;
+            max-width: none !important;
         }
         
         .reference-main {
@@ -1685,13 +1687,14 @@
             }
 
             const shortcuts = {
-                'q': () => clickElement(".modal-section > div > button:nth-child(2)"), // video full screen toggle
-                'w': () => clickElement(".audio-player--controllers > div:nth-child(1) > a"), // 5 sec Backward
-                'e': () => clickElement(".audio-player--controllers > div:nth-child(2) > a"), // 5 sec Forward
-                'r': () => document.dispatchEvent(new KeyboardEvent("keydown", { key: "k" })), // Make word Known
-                't': () => clickElement(".dictionary-resources > a:nth-last-child(1)"), // Open Translator
-                '`': () => focusElement(".reference-input-text"), // Move cursor to reference input
-                'd': () => clickElement(".dictionary-resources > a:nth-child(1)"), // Open Dictionary
+                'p': () => clickElement(".modal-section > div > button:nth-child(2)"), // video full screen toggle
+                '`': () => focusElement(".reference-input-text"), // Move cursor to meaning input
+                'q': () => focusElement("#user-input"), // Move cursor to the chat widget
+                'w': () => clickElement(".is-tts"), // Play tts audio
+                'e': () => clickElement(".dictionary-resources > a:nth-last-child(1)"), // Open Translator
+                'a': () => clickElement(".audio-player--controllers > div:nth-child(1) > a"), // 5 sec Backward
+                's': () => clickElement(".audio-player--controllers > div:nth-child(2) > a"), // 5 sec Forward
+                'd': () => document.dispatchEvent(new KeyboardEvent("keydown", { key: "k" })), // Make word Known
                 'f': () => clickElement(".dictionary-resources > a:nth-child(1)"), // Open Dictionary
                 'c': () => copySelectedText() // Copy selected text
             };
@@ -1881,14 +1884,13 @@
         iframeObserver.observe(document.body, {childList: true, subtree: true, attributes: true, attributeFilter: ["src"]});
     }
 
-    async function changeScrollAmount() {
-        const readerContainer = await waitForElement(".reader-container");
+    async function changeScrollAmount(selector, scrollAmount) {
+        const readerContainer = await waitForElement(selector);
 
         if (readerContainer) {
             readerContainer.addEventListener("wheel", (event) => {
                 event.preventDefault();
                 const delta = event.deltaY;
-                const scrollAmount = 0.3;
                 readerContainer.scrollTop += delta * scrollAmount;
             });
         }
@@ -2339,6 +2341,14 @@ Input: "마중", Context: "그녀는 역까지 나를 마중 나왔다."
                 chatWrapper.appendChild(chatContainer);
                 chatWrapper.appendChild(inputContainer);
 
+                const existingChatWidget = document.getElementById('chat-widget');
+                if(existingChatWidget) {
+                    existingChatWidget.replaceWith(chatWrapper);
+                } else {
+                    targetSectionHead.appendChild(chatWrapper);
+                }
+
+                changeScrollAmount("#chat-container", 0.2)
                 userInput.addEventListener('keydown', (event) => {
                     if (event.key === 'Enter') {
                         event.preventDefault();
@@ -2360,13 +2370,6 @@ Input: "마중", Context: "그녀는 역까지 나를 마중 나왔다."
                     const botResponse = await getBotResponse(llmProvider, llmApiKey, llmModel, chatHistory);
                     addMessageToUI(botResponse, false, chatContainer);
                     chatHistory = updateChatHistoryState(chatHistory, botResponse, "assistant");
-                }
-
-                const existingChatWidget = document.getElementById('chat-widget');
-                if(existingChatWidget) {
-                    existingChatWidget.replaceWith(chatWrapper);
-                } else {
-                    targetSectionHead.appendChild(chatWrapper);
                 }
             }
 
@@ -2595,7 +2598,7 @@ Input: "마중", Context: "그녀는 역까지 나를 마중 나왔다."
             applyStyles(settings.styleType, settings.colorMode);
             setupKeyboardShortcuts();
             setupYoutubePlayerCustomization();
-            changeScrollAmount();
+            changeScrollAmount(".reader-container", 0.3);
             setupSentenceFocus();
             setupLLMs();
         }
