@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*/learn/*/web/reader/*
 // @match        https://www.lingq.com/*/learn/*/web/library/course/*
 // @exclude      https://www.lingq.com/*/learn/*/web/editor/*
-// @version      5.3.11
+// @version      5.3.13
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @namespace https://greasyfork.org/users/1458847
@@ -30,6 +30,7 @@
         lineHeight: 1.7,
         heightBig: 400,
         sentenceHeight: 400,
+        widgetWidth: 400,
         darkColors: {
             fontColor: "#e0e0e0",
             lingqBackground: "rgba(109, 89, 44, 0.7)",
@@ -68,6 +69,7 @@
         lineHeight: storage.get("lineHeight", defaults.lineHeight),
         heightBig: storage.get("heightBig", defaults.heightBig),
         sentenceHeight: storage.get("sentenceHeight", defaults.sentenceHeight),
+        widgetWidth: storage.get("widgetWidth", defaults.widgetWidth),
         librarySortOption: storage.get("librarySortOption", defaults.librarySortOption),
         get autoFinishing() { return storage.get("autoFinishing", defaults.autoFinishing); },
         get chatWidget() { return storage.get("chatWidget", defaults.chatWidget); },
@@ -216,6 +218,8 @@
         });
         addSlider(sentenceVideoSettings, "sentenceHeightSlider", "Sentence Video Height:", "sentenceHeightValue", settings.heightBig, "px", 300, 600, 10);
         container.appendChild(sentenceVideoSettings);
+
+        addSlider(container, "widgetWidthSlider", "Widget Width:", "widgetWidthValue", settings.widgetWidth, "px", 300, 500, 10);
 
         addSlider(container, "fontSizeSlider", "Font Size:", "fontSizeValue", settings.fontSize, "rem", 0.8, 1.8, 0.05);
         addSlider(container, "lineHeightSlider", "Line Height:", "lineHeightValue", settings.lineHeight, "", 1.2, 3.0, 0.1);
@@ -524,13 +528,13 @@
                 });
                 document.head.appendChild(pickrScript);
             }).then(() => {
-                setupRGBAPickr('lingqBackgroundPicker', 'lingqBackgroundText', 'lingqBackground', '--lingq_background');
-                setupRGBAPickr('lingqBorderPicker', 'lingqBorderText', 'lingqBorder', '--lingq_border');
-                setupRGBAPickr('lingqBorderLearnedPicker', 'lingqBorderLearnedText', 'lingqBorderLearned', '--lingq_border_learned');
-                setupRGBAPickr('knownBackgroundPicker', 'knownBackgroundText', 'knownBackground', '--known_background');
-                setupRGBAPickr('knownBorderPicker', 'knownBorderText', 'knownBorder', '--known_border');
-                setupRGBAPickr('fontColorPicker', 'fontColorText', 'fontColor', '--font_color');
-                setupRGBAPickr('playingUnderlinePicker', 'playingUnderlineText', 'playingUnderline', '--is_playing_underline');
+                setupRGBAPickr('lingqBackgroundPicker', 'lingqBackgroundText', 'lingqBackground', '--lingq-background');
+                setupRGBAPickr('lingqBorderPicker', 'lingqBorderText', 'lingqBorder', '--lingq-border');
+                setupRGBAPickr('lingqBorderLearnedPicker', 'lingqBorderLearnedText', 'lingqBorderLearned', '--lingq-border-learned');
+                setupRGBAPickr('knownBackgroundPicker', 'knownBackgroundText', 'knownBackground', '--known-background');
+                setupRGBAPickr('knownBorderPicker', 'knownBorderText', 'knownBorder', '--known-border');
+                setupRGBAPickr('fontColorPicker', 'fontColorText', 'fontColor', '--font-color');
+                setupRGBAPickr('playingUnderlinePicker', 'playingUnderlineText', 'playingUnderline', '--is-playing-underline');
             });
         }
 
@@ -587,13 +591,13 @@
         }
 
         function updateCssColorVariables(colorSettings) {
-            document.documentElement.style.setProperty("--font_color", colorSettings.fontColor);
-            document.documentElement.style.setProperty("--lingq_background", colorSettings.lingqBackground);
-            document.documentElement.style.setProperty("--lingq_border", colorSettings.lingqBorder);
-            document.documentElement.style.setProperty("--lingq_border_learned", colorSettings.lingqBorderLearned);
-            document.documentElement.style.setProperty("--known_background", colorSettings.knownBackground);
-            document.documentElement.style.setProperty("--known_border", colorSettings.knownBorder);
-            document.documentElement.style.setProperty("--is_playing_underline", colorSettings.playingUnderline);
+            document.documentElement.style.setProperty("--font-color", colorSettings.fontColor);
+            document.documentElement.style.setProperty("--lingq-background", colorSettings.lingqBackground);
+            document.documentElement.style.setProperty("--lingq-border", colorSettings.lingqBorder);
+            document.documentElement.style.setProperty("--lingq-border-learned", colorSettings.lingqBorderLearned);
+            document.documentElement.style.setProperty("--known-background", colorSettings.knownBackground);
+            document.documentElement.style.setProperty("--known-border", colorSettings.knownBorder);
+            document.documentElement.style.setProperty("--is-playing-underline", colorSettings.playingUnderline);
         }
 
         function updateColorMode(event) {
@@ -636,10 +640,11 @@
             });
         }
 
-        setupSlider("fontSizeSlider", "fontSizeValue", "fontSize", "rem", "--font_size", (val) => `${val}rem`);
-        setupSlider("lineHeightSlider", "lineHeightValue", "lineHeight", "", "--line_height", (val) => val);
-        setupSlider("heightBigSlider", "heightBigValue", "heightBig", "px", "--height_big", (val) => `${val}px`);
-        setupSlider("sentenceHeightSlider", "sentenceHeightValue", "sentenceHeight", "px", "--sentence_height", (val) => `${val}px`);
+        setupSlider("fontSizeSlider", "fontSizeValue", "fontSize", "rem", "--font-size", (val) => `${val}rem`);
+        setupSlider("lineHeightSlider", "lineHeightValue", "lineHeight", "", "--line-height", (val) => val);
+        setupSlider("heightBigSlider", "heightBigValue", "heightBig", "px", "--height-big", (val) => `${val}px`);
+        setupSlider("sentenceHeightSlider", "sentenceHeightValue", "sentenceHeight", "px", "--sentence-height", (val) => `${val}px`);
+        setupSlider("widgetWidthSlider", "widgetWidthValue", "widgetWidth", "px", "--widget-width", (val) => `${val}px`);
 
         const autoFinishingCheckbox = document.getElementById("autoFinishingCheckbox");
         autoFinishingCheckbox.addEventListener('change', (event) => {
@@ -720,6 +725,7 @@
             document.getElementById("lineHeightValue").textContent = defaults.lineHeight;
             document.getElementById("heightBigSlider").value = defaults.heightBig;
             document.getElementById("heightBigValue").textContent = defaults.heightBig;
+            document.getElementById("widgetWidthSlider").value = defaults.widgetWidth;
             document.getElementById("sentenceHeightSlider").value = defaults.sentenceHeight;
             document.getElementById("sentenceHeightValue").textContent = defaults.sentenceHeight;
 
@@ -731,10 +737,11 @@
             document.getElementById("videoSettings").style.display = defaults.styleType === "video" ? "block" : "none";
             document.getElementById("sentenceVideoSettings").style.display = defaults.styleType === "off" ? "block" : "none";
 
-            document.documentElement.style.setProperty("--font_size", `${defaults.fontSize}rem`);
-            document.documentElement.style.setProperty("--line_height", defaults.lineHeight);
-            document.documentElement.style.setProperty("--height_big", `${defaults.heightBig}px`);
-            document.documentElement.style.setProperty("--sentence_height", `${defaults.sentenceHeight}px`);
+            document.documentElement.style.setProperty("--font-size", `${defaults.fontSize}rem`);
+            document.documentElement.style.setProperty("--line-height", defaults.lineHeight);
+            document.documentElement.style.setProperty("--height-big", `${defaults.heightBig}px`);
+            document.documentElement.style.setProperty("--sentence-height", `${defaults.sentenceHeight}px`);
+            document.documentElement.style.setProperty("--widget-width", `${defaults.widgetWidth}px`);
             updateCssColorVariables(defaultColorSettings);
 
             document.getElementById("autoFinishingCheckbox").checked = defaults.autoFinishing;
@@ -1009,16 +1016,16 @@
     function generateBaseCSS(colorSettings, colorMode) {
         return`
         :root {
-            --font_size: ${settings.fontSize}rem;
-            --line_height: ${settings.lineHeight};
+            --font-size: ${settings.fontSize}rem;
+            --line-height: ${settings.lineHeight};
 
-            --font_color: ${colorSettings.fontColor};
-            --lingq_background: ${colorSettings.lingqBackground};
-            --lingq_border: ${colorSettings.lingqBorder};
-            --lingq_border_learned: ${colorSettings.lingqBorderLearned};
-            --known_background: ${colorSettings.knownBackground};
-            --known_border: ${colorSettings.knownBorder};
-            --is_playing_underline: ${colorSettings.playingUnderline};
+            --font-color: ${colorSettings.fontColor};
+            --lingq-background: ${colorSettings.lingqBackground};
+            --lingq-border: ${colorSettings.lingqBorder};
+            --lingq-border-learned: ${colorSettings.lingqBorderLearned};
+            --known-background: ${colorSettings.knownBackground};
+            --known-border: ${colorSettings.knownBorder};
+            --is-playing-underline: ${colorSettings.playingUnderline};
 
             --background-color: ${colorMode === "dark" ? "#2a2c2e" : "#ffffff"}
         }
@@ -1037,13 +1044,13 @@
         }
 
         .pcr-app .pcr-interaction .pcr-result {
-            color: var(--font_color) !important;
+            color: var(--font-color) !important;
         }
 
         /*Popup settings*/
 
         #lingqAddonSettings {
-            color: var(--font_color);
+            color: var(--font-color);
         }
 
         #lingqAddonSettingsPopup, #lingqDownloadWordsPopup {
@@ -1052,7 +1059,7 @@
             left: 40%;
             transform: translate(-40%, -40%);
             background-color: var(--background-color, #2a2c2e);
-            color: var(--font_color, #e0e0e0);
+            color: var(--font-color, #e0e0e0);
             border: 1px solid rgb(125 125 125 / 30%);
             border-radius: 8px;
             box-shadow: 8px 8px 8px rgba(0, 0, 0, 0.2);
@@ -1141,6 +1148,7 @@
             margin-bottom:5px;
             border: 1px solid rgb(125 125 125 / 35%);
             border-radius: 5px;
+            max-height: 400px;
             overflow-y: auto;
             resize: vertical;
             padding: 5px !important;
@@ -1209,8 +1217,8 @@
         /*font settings*/
 
         .reader-container {
-            line-height: var(--line_height) !important;
-            font-size: var(--font_size) !important;
+            line-height: var(--line-height) !important;
+            font-size: var(--font-size) !important;
         }
 
         .sentence-text-head {
@@ -1223,13 +1231,13 @@
 
         .reader-container p span.sentence-item,
         .reader-container p .sentence {
-            color: var(--font_color) !important;
+            color: var(--font-color) !important;
         }
 
         .sentence.is-playing,
         .sentence.is-playing span {
             text-underline-offset: .2em !important;
-            text-decoration-color: var(--is_playing_underline) !important;
+            text-decoration-color: var(--is-playing-underline) !important;
         }
 
         /*highlightings*/
@@ -1239,7 +1247,7 @@
         }
 
         .phrase-item:not(.phrase-item-status--4, .phrase-item-status--4x2) {
-            background-color: var(--lingq_background) !important;
+            background-color: var(--lingq-background) !important;
         }
 
         .phrase-item.phrase-item-status--4,
@@ -1248,27 +1256,27 @@
         }
 
         .phrase-cluster:not(:has(.phrase-item-status--4, .phrase-item-status--4x2)) {
-            border: 1px solid var(--lingq_border) !important;
+            border: 1px solid var(--lingq-border) !important;
             border-radius: .25rem;
         }
 
         .phrase-cluster:has(.phrase-item-status--4, .phrase-item-status--4x2) {
-            border: 1px solid var(--lingq_border_learned) !important;
+            border: 1px solid var(--lingq-border-learned) !important;
             border-radius: .25rem;
         }
 
         .reader-container .sentence .lingq-word:not(.is-learned) {
-            border: 1px solid var(--lingq_border) !important;
-            background-color: var(--lingq_background) !important;
+            border: 1px solid var(--lingq-border) !important;
+            background-color: var(--lingq-background) !important;
         }
 
         .reader-container .sentence .lingq-word.is-learned {
-            border: 1px solid var(--lingq_border_learned) !important;
+            border: 1px solid var(--lingq-border-learned) !important;
         }
 
         .reader-container .sentence .blue-word {
-            border: 1px solid var(--known_border) !important;
-            background-color: var(--known_background) !important;;
+            border: 1px solid var(--known-border) !important;
+            background-color: var(--known-background) !important;;
         }
 
         .phrase-cluster:hover,
@@ -1290,8 +1298,10 @@
     function generateLayoutCSS() {
         return `
         :root {
-            --article_height: calc(var(--app-height) - var(--height_big) - 10px);
-            --grid-layout: var(--article_height) calc(var(--height_big) - 80px) 90px;
+            --article-height: calc(var(--app-height) - var(--height-big) - 10px);
+            --widget-width: 400px;
+            --reader-layout-columns: 1fr var(--widget-width);
+            --reader-layout-rows: var(--article-height) calc(var(--height-big) - 80px) 90px;
         }
 
         /*header settings*/
@@ -1355,13 +1365,14 @@
         /*layout*/
 
         #lesson-reader {
-            grid-template-rows: var(--grid-layout);
+            grid-template-columns: var(--reader-layout-columns);
+            grid-template-rows: var(--reader-layout-rows);
             overflow-y: hidden;
             height: auto !important;
         }
 
         .sentence-text {
-            height: calc(var(--article_height) - 70px) !important;
+            height: calc(var(--article-height) - 70px) !important;
         }
 
         .reader-container-wrapper {
@@ -1369,7 +1380,8 @@
         }
 
         .widget-area {
-            padding: 55px 10px 0 !important;
+            padding: 50px 0 10px !important;
+            margin: 0 10px !important;
             height: 100% !important;
             justify-content: center;
             display: flex;
@@ -1378,6 +1390,9 @@
         .reader-widget {
             padding: 10px !important;
             max-width: none !important;
+            display: flow !important;
+            overflow-y: auto;
+            height: fit-content !important;
         }
         
         .reference-main {
@@ -1385,14 +1400,26 @@
         }
         
         .section-widget--main {
-            scrollbar-width: none !important;
             margin: 0 !important;
-            padding: 0 10px 0 5px !important;;
+            padding: 0 !important;
+        }
+        
+        .appCue-poular-hints {
+            max-height: 350px;
+            overflow-y: auto;
+            scrollbar-width: none !important;
         }
         
         .section-widget--foot {
             margin: 0 !important;
-            padding: 10px 5px !important;
+            padding: 10px 0 0 !important;
+            display: block !important;
+        }
+        
+        .word-status-bar {
+            width: 100%;
+            grid-template-columns: repeat(6, 1fr) !important;
+            grid-gap: 10px !important;
         }
         
         .reference-helpers {
@@ -1402,7 +1429,16 @@
         .main-footer {
             grid-area: 3 / 1 / 3 / 1 !important;
             align-self: end;
-            margin: 10px 0;
+            padding: 5px 10px 10px;
+            height: 100%;
+        }
+        
+        .main-footer > div {
+            height: 100%;
+        }
+        
+        .lesson-bottom > div {
+            position: unset !important;
         }
 
         .main-content {
@@ -1457,8 +1493,8 @@
         }
 
         .video-player > .modal-content {
-            max-width: var(--width_big) !important;
-            margin: var(--video_margin) !important;
+            max-width: var(--width-big) !important;
+            margin: 10px !important;
             border-radius: 0.75rem !important;
         }
 
@@ -1467,7 +1503,7 @@
         }
 
         .video-wrapper {
-            height: var(--height_big) !important;
+            height: var(--height-big) !important;
             overflow: hidden;
             pointer-events: auto;
         }
@@ -1488,9 +1524,9 @@
         }
 
         .section--player.is-expanded {
-            padding: 5px 0 !important;
-            width: 390px !important;
-            margin-left: 10px !important;
+            width: 100% !important;
+            height: 100%;
+            padding: 0 !important;
         }
 
         .sentence-mode-button {
@@ -1505,15 +1541,24 @@
         .audio-player {
             padding: 0 0.5rem !important;
         }
+        
+        .audio-player--controllers a {
+            height: 25px !important;
+            padding: 0 1em !important;
+            margin: 5px 0;
+        }
+        
+        .audio-player--controllers span {
+            height: 25px !important;
+        }
         `;
     }
 
     function generateVideoCSS() {
         return `
         :root {
-            --width_big: calc(100vw - 424px - 10px);
-            --height_big: ${settings.heightBig}px;
-            --video_margin: 0 0 10px 10px !important;
+            --width-big: calc(100vw - var(--widget-width) - 20px);
+            --height-big: ${settings.heightBig}px;
         }
 
         .main-content {
@@ -1534,16 +1579,16 @@
     function generateVideo2CSS() {
         return `
         :root {
-            --width_big: calc(50vw - 217px);
-            --height_big: calc(100vh - 80px);
+            --width-big: calc(50vw - calc(var(--widget-width) / 2) - 10px);
+            --height-big: calc(100vh - 80px);
 
-            --grid-layout: var(--article_height) 90px;
-            --video_margin: 0 10px 10px 10px !important;
-            --article_height: calc(var(--app-height) - 85px);
+            --reader-layout-columns: 1fr var(--widget-width) 1fr;
+            --reader-layout-rows: var(--article-height) 90px;
+            --article-height: calc(var(--app-height) - 85px);
         }
 
-        .page.reader-page.has-widget-fixed:not(.is-edit-mode):not(.workspace-sentence-reviewer) {
-            grid-template-columns: 1fr 424px 1fr;
+        #lesson-reader {
+            grid-template-columns: var(--reader-layout-columns);
         }
 
         .main-content {
@@ -1568,7 +1613,7 @@
     function generateAudioCSS() {
         return `
         :root {
-            --height_big: 60px;
+            --height-big: 60px;
         }
 
         .main-content {
@@ -1584,26 +1629,26 @@
     function generateOffModeCSS() {
         return `
         :root {
-            --width_small: 440px;
-            --height_small: 260px;
-            --sentence_height: ${settings.sentenceHeight}px;
-            --right_pos: 0.5%;
-            --bottom_pos: 5.5%;
+            --width-small: 440px;
+            --height-small: 260px;
+            --sentence-height: ${settings.sentenceHeight}px;
+            --right-pos: 0.5%;
+            --bottom-pos: 5.5%;
         }
 
         /*video player*/
 
         .video-player.is-minimized .video-wrapper,
         .sent-video-player.is-minimized .video-wrapper {
-            height: var(--height_small);
-            width: var(--width_small);
+            height: var(--height-small);
+            width: var(--width-small);
             overflow: auto;
             resize: both;
         }
 
         .video-player.is-minimized .modal-content,
         .sent-video-player.is-minimized .modal-content {
-            max-width: calc(var(--width_small)* 3);
+            max-width: calc(var(--width-small)* 3);
             margin-bottom: 0;
         }
 
@@ -1611,15 +1656,15 @@
         .sent-video-player.is-minimized {
             left: auto;
             top: auto;
-            right: var(--right_pos);
-            bottom: var(--bottom_pos);
+            right: var(--right-pos);
+            bottom: var(--bottom-pos);
             z-index: 99999999;
             overflow: visible
         }
 
         /*sentence mode video player*/
         .loadedContent:has(#sentence-video-player-portal) {
-            grid-template-rows: var(--sentence_height) auto auto 1fr !important;
+            grid-template-rows: var(--sentence-height) auto auto 1fr !important;
         }
 
         #sentence-video-player-portal .video-section {
@@ -2107,7 +2152,22 @@ The input structure 'Input: "..." Context: "..."' is ONLY used for the *first* u
 
 ## Examples
 
-### Example 1: Single Word with Context (Original language: Korean, User's language: Japanese)
+### Example 1: Single Word with Context (Original language: English, User's language: Korean)
+
+**User Input:** 
+'Input: "translators", Context: "However, the ESV translators chose to translate that same word as 'servant,' closing off the potential interpretation that she held any formal position of authority."'
+
+**Output:**
+<b>translator</b> <i>(명사)</i>
+<p>번역가, 통역사</p>
+<hr>
+<p>This refers to individuals translating foreign content into their own language, as highlighted by the ESV Bible translators in context.</p>
+<ul>
+  <li>Many translators work together on complex international projects.</li>
+  <li>많은 번역가들이 복잡한 국제 프로젝트에 함께 작업합니다.</li>
+</ul>
+
+### Example 2: Single Word with Context (Original language: Korean, User's language: Japanese)
 
 **User Input:**  
 Input: "마중", Context: "그녀는 역까지 나를 마중 나왔다."
@@ -2122,7 +2182,7 @@ Input: "마중", Context: "그녀는 역까지 나를 마중 나왔다."
   <li>私は空港に友達を出迎えに行った。</li>
 </ul>
 
-### Example 2: Single Word with Context (Original Language: Spanish, User Language: English)
+### Example 3: Single Word with Context (Original Language: Spanish, User Language: English)
 
 **User Input:** 
 'Input: "lograr", Context: "Debemos lograr nuestros objetivos."'
@@ -2137,7 +2197,7 @@ Input: "마중", Context: "그녀는 역까지 나를 마중 나왔다."
   <li>Ellos esperan lograr el éxito en la nueva empresa.</li>
 </ul>
 
-### Example 3: Phrase with Context (Original Language: German, User Language: French)
+### Example 4: Phrase with Context (Original Language: German, User Language: French)
 
 **User Input:** 
 'Input: "imstande sein", Context: "Er war imstande, das Problem zu lösen."'
