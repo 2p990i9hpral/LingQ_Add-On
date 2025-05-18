@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*/learn/*/web/reader/*
 // @match        https://www.lingq.com/*/learn/*/web/library/course/*
 // @exclude      https://www.lingq.com/*/learn/*/web/editor/*
-// @version      5.5.1
+// @version      5.5.2
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @namespace https://greasyfork.org/users/1458847
@@ -1149,7 +1149,7 @@
             border: 1px solid rgb(125 125 125 / 35%);
             border-radius: 5px;
             min-height: 100px;
-            max-height: 400px;
+            max-height: 300px;
             overflow-y: auto;
             resize: vertical;
             padding: 5px !important;
@@ -1413,19 +1413,22 @@
             justify-content: center;
             display: flex;
         }
-        
-        .reader-widget:not(.reader-widget--resources) {
-            padding: 10px !important;
+
+        .reader-widget {
             display: flow !important;
             overflow-y: auto;
+            width: 100% !important;
             height: fit-content !important;
+            max-width: none !important;
+            scrollbar-width: none !important;
+        }
+
+        .reader-widget:not(.reader-widget--resources) {
+            padding: 10px !important;
         }
         
         .reader-widget.reader-widget--resources {
             padding: 10px 15px !important;
-            display: flow !important;
-            overflow-y: auto;
-            height: fit-content !important;
         }
         
         .reference-main {
@@ -2046,9 +2049,14 @@
 
 
     function stopPlayingAudio(autioContext) {
-        if (autioContext) {
+        if (!autioContext) return;
+
+        try {
             autioContext.close();
             autioContext = null;
+        } catch (error) {
+            console.error("Stop Audio:", error);
+            throw error;
         }
     }
 
