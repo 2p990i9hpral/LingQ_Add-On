@@ -1449,6 +1449,10 @@
             display: block !important;
         }
         
+        .dictionary-resources {
+            width: 100% !important;
+        }
+        
         .word-status-bar {
             width: 100%;
             grid-template-columns: repeat(6, 1fr) !important;
@@ -1456,7 +1460,7 @@
         }
         
         .reference-helpers {
-            display: none;
+            display: none !important;
         }
 
         .main-footer {
@@ -2040,14 +2044,20 @@
         });
     }
 
-    async function playAudio(audioData, volume = 0.5) {
-        if (typeof volume !== 'number' || volume < 0 || volume > 1) {
-            console.warn(`Invalid volume "${volume}". Using default volume 0.5.`);
-            volume = 0.5;
+
+    function stopPlayingAudio(autioContext) {
+        if (autioContext) {
+            autioContext.close();
+            autioContext = null;
         }
+    }
+
+    let audioContext = null;
+    async function playAudio(audioData, volume = 0.5) {
+        stopPlayingAudio(audioContext);
 
         return new Promise((resolve, reject) => {
-            const audioContext = new AudioContext();
+            audioContext = new AudioContext();
             const gainNode = audioContext.createGain();
             gainNode.gain.value = volume;
             gainNode.connect(audioContext.destination);
