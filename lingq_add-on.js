@@ -2051,6 +2051,27 @@
         });
     }
 
+    function getAllLeafNodes(root) {
+        const leaves = [];
+        function traverse(node) {
+            if (node.nodeType === Node.TEXT_NODE) {
+                if (node.textContent.trim() !== "") leaves.push(node);
+                return;
+            }
+            if (node.nodeType === Node.ELEMENT_NODE) {
+                if (node.childNodes.length === 0) {
+                    leaves.push(node);
+                    return;
+                }
+                for (const child of node.childNodes) {
+                    traverse(child);
+                }
+            }
+        }
+        traverse(root);
+        return leaves;
+    }
+
     function extractTextFromDOM(domElement) {
         const textParts = [];
         const sentenceElements = domElement.querySelectorAll('.sentence');
@@ -2058,18 +2079,12 @@
         if (!sentenceElements || sentenceElements.length === 0) return null;
 
         sentenceElements.forEach(sentenceElement => {
-            for (const childNode of sentenceElement.childNodes) {
-                if (childNode.nodeType === Node.TEXT_NODE) {
-                    const text = childNode.textContent.trim();
-                    if (text) textParts.push(text);
-                } else if (childNode.nodeType === Node.ELEMENT_NODE) {
-                    if (!childNode.matches('.sentence-item')) return;
+            for (const childNode of getAllLeafNodes(sentenceElement)) {
+                const text = childNode.textContent.trim();
+                if (text) textParts.push(text);
 
-                    textParts.push(childNode.textContent);
-
-                    if (childNode.matches('.has-end-punctuation-question')) textParts.push('?');
-                    if (childNode.matches('.has-end-punctuation-period')) textParts.push('.');
-                }
+                if (childNode.parentNode.matches('.has-end-punctuation-question')) textParts.push('?');
+                if (childNode.parentNode.matches('.has-end-punctuation-period')) textParts.push('.');
             }
             textParts.push('\n');
         });
@@ -2080,7 +2095,7 @@
     }
 
     function stopPlayingAudio(autioContext) {
-        if (!autioContext) return;
+        if (!autioContext || audioContext.state !== 'running') return;
 
         try {
             autioContext.close();
@@ -2187,16 +2202,6 @@
             if (!targetSectionHead) return;
 
             const isSentence = !document.querySelector(".section-widget--main");
-
-            const selection = window.getSelection();
-            if (selection.rangeCount > 0) {
-                const referenceWord = targetSectionHead.querySelector(".reference-word");
-                const extractedText = extractTextFromDOM(selection.getRangeAt(0).cloneContents());
-                if (referenceWord && extractedText && isSentence) {
-                    referenceWord.textContent = extractedText;
-                    console.log("The referenceWord is changed.");
-                }
-            }
 
             const [llmProvider, llmModel] = settings.llmProviderModel.split(" ");
             const llmApiKey = settings.llmApiKey;
@@ -2372,6 +2377,17 @@ Input: "마중", Context: "그녀는 역까지 나를 마중 나왔다."
                 Pronunciation: Enunciate words with deliberate clarity, focusing on vowel sounds and consonant clusters.
             `;
             let chatHistory = [];
+
+            function updateReferenceWord(){
+                const selection = window.getSelection();
+                if (selection.rangeCount === 0) return;
+
+                const referenceWord = targetSectionHead.querySelector(".reference-word");
+                const extractedText = extractTextFromDOM(selection.getRangeAt(0).cloneContents());
+                if (referenceWord && extractedText && isSentence) {
+                    referenceWord.textContent = extractedText;
+                }
+            }
 
             function updateChatHistoryState(currentHistory, message, role) {
                 return [...currentHistory, { role: role, content: message }];
@@ -2576,14 +2592,16 @@ Input: "마중", Context: "그녀는 역까지 나를 마중 나왔다."
                 playAudio(audioData, 0.7);
             }
 
-            await updateChatWidget();
-            await updateTTS();
+            updateReferenceWord();
+            updateChatWidget();
+            updateTTS();
 
             const selectedTextElement = targetSectionHead.querySelector(".reference-word");
             if (selectedTextElement){
                 const observer = new MutationObserver((mutations) => {
                     mutations.forEach((mutation) => {
                         if (mutation.type !== 'characterData') return;
+                        updateReferenceWord();
                         updateChatWidget();
                         updateTTS();
                     });
