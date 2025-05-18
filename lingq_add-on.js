@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*/learn/*/web/reader/*
 // @match        https://www.lingq.com/*/learn/*/web/library/course/*
 // @exclude      https://www.lingq.com/*/learn/*/web/editor/*
-// @version      5.6
+// @version      5.6.1
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @namespace https://greasyfork.org/users/1458847
@@ -2015,7 +2015,7 @@
                 if (
                     mutation.type === "attributes" &&
                     mutation.attributeName === "class" &&
-                    mutation.target.classList.contains("sentence")
+                    mutation.target.matches(".sentence")
                 ) {
                     focusPlayingSentence();
                 }
@@ -2063,12 +2063,12 @@
                     const text = childNode.textContent.trim();
                     if (text) textParts.push(text);
                 } else if (childNode.nodeType === Node.ELEMENT_NODE) {
-                    if (!childNode.classList.contains('sentence-item')) return;
+                    if (!childNode.matches('.sentence-item')) return;
 
                     textParts.push(childNode.textContent);
 
-                    if (childNode.classList.contains('has-end-punctuation-question')) textParts.push('?');
-                    if (childNode.classList.contains('has-end-punctuation-period')) textParts.push('.');
+                    if (childNode.matches('.has-end-punctuation-question')) textParts.push('?');
+                    if (childNode.matches('.has-end-punctuation-period')) textParts.push('.');
                 }
             }
             textParts.push('\n');
@@ -2192,10 +2192,10 @@
             if (selection.rangeCount > 0) {
                 const referenceWord = targetSectionHead.querySelector(".reference-word");
                 const extractedText = extractTextFromDOM(selection.getRangeAt(0).cloneContents());
-                if (!referenceWord || !extractedText || !isSentence) return;
-
-                referenceWord.textContent = extractedText;
-                console.log("The referenceWord is changed.");
+                if (referenceWord && extractedText && isSentence) {
+                    referenceWord.textContent = extractedText;
+                    console.log("The referenceWord is changed.");
+                }
             }
 
             const [llmProvider, llmModel] = settings.llmProviderModel.split(" ");
@@ -2688,7 +2688,7 @@ Input: "마중", Context: "그녀는 역까지 나를 마중 나왔다."
                 mutations.forEach((mutation) => {
                     if (mutation.type === 'childList' && mutation.addedNodes.length > 0) {
                         mutation.addedNodes.forEach((node) => {
-                            if (node.classList && node.classList.contains('library-item-wrap')) {
+                            if (node.matches('.library-item-wrap')) {
                                 const lessonId = node.id.split("--")[1].split("-")[0];
                                 updateWordIndicatorPercentages(node, lessonId);
                             }
