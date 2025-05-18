@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*/learn/*/web/reader/*
 // @match        https://www.lingq.com/*/learn/*/web/library/course/*
 // @exclude      https://www.lingq.com/*/learn/*/web/editor/*
-// @version      5.3.13
+// @version      5.5
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @namespace https://greasyfork.org/users/1458847
@@ -1148,6 +1148,7 @@
             margin-bottom:5px;
             border: 1px solid rgb(125 125 125 / 35%);
             border-radius: 5px;
+            min-height: 100px;
             max-height: 400px;
             overflow-y: auto;
             resize: vertical;
@@ -1175,11 +1176,11 @@
             border-radius: 5px;
         }
 
-        .user-message, 
-        .bot-message {
-            padding: 3px 7px;
-            margin: 3px 3px 8px 3px !important;
+        .chat-message {
+            padding: 5px;
+            margin-bottom: 5px;
             border-radius: 8px;
+            color: var(--font-color);
             font-size: 0.85rem;
         }
 
@@ -1189,6 +1190,28 @@
 
         .bot-message {
             background-color: rgb(125 125 125 / 10%);
+        }
+        
+        @keyframes gradient-move {
+            0% {
+                background-position: 200% 0;
+            }
+            100% {
+                background-position: -200% 0;
+            }
+        }
+        
+        .loading-message {
+            background: linear-gradient(
+                90deg, 
+                rgb( from var(--font-color) r g b / 0.5) 0%, 
+                var(--font-color) 50%, 
+                rgb( from var(--font-color) r g b / 0.5) 100%
+            );
+            background-size: 200% 200%;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            animation: gradient-move 3s linear infinite;
         }
         
         #chat-container li {
@@ -1219,6 +1242,7 @@
         .reader-container {
             line-height: var(--line-height) !important;
             font-size: var(--font-size) !important;
+            padding: 0 !important;
         }
 
         .sentence-text-head {
@@ -1298,10 +1322,12 @@
     function generateLayoutCSS() {
         return `
         :root {
-            --article-height: calc(var(--app-height) - var(--height-big) - 10px);
+            --article-height: calc(var(--app-height) - var(--height-big));
+            --header-height: 50px;
             --widget-width: 400px;
+            --footer-height: 80px;
             --reader-layout-columns: 1fr var(--widget-width);
-            --reader-layout-rows: var(--article-height) calc(var(--height-big) - 80px) 90px;
+            --reader-layout-rows: var(--article-height) calc(var(--height-big) - var(--footer-height)) var(--footer-height);
         }
 
         /*header settings*/
@@ -1315,11 +1341,11 @@
         }
 
         #main-nav > nav {
-            height: 50px;
+            height: var(--header-height);
         }
 
         #main-nav > nav > div:nth-child(1) {
-            height: 50px;
+            height: var(--header-height);
         }
 
         .main-header {
@@ -1372,7 +1398,8 @@
         }
 
         .sentence-text {
-            height: calc(var(--article-height) - 70px) !important;
+            height: calc(var(--article-height) - var(--header-height)) !important;
+            padding: 0 0 20px !important;
         }
 
         .reader-container-wrapper {
@@ -1380,16 +1407,22 @@
         }
 
         .widget-area {
-            padding: 50px 0 10px !important;
+            padding: var(--header-height) 0 10px !important;
             margin: 0 10px !important;
             height: 100% !important;
             justify-content: center;
             display: flex;
         }
         
-        .reader-widget {
+        .reader-widget:not(.reader-widget--resources) {
             padding: 10px !important;
-            max-width: none !important;
+            display: flow !important;
+            overflow-y: auto;
+            height: fit-content !important;
+        }
+        
+        .reader-widget.reader-widget--resources {
+            padding: 10px 15px !important;
             display: flow !important;
             overflow-y: auto;
             height: fit-content !important;
@@ -1442,7 +1475,7 @@
         }
 
         .main-content {
-            grid-template-rows: 45px 1fr !important;
+            grid-template-rows: var(--header-height) 1fr !important;
             overflow: hidden;
             align-items: center;
         }
@@ -1452,7 +1485,6 @@
         .reader-component {
             grid-template-columns: 0 1fr 0 !important;
             align-items: baseline;
-            margin-top: 10px;
         }
 
         .reader-component > div > a.button > span {
@@ -1465,7 +1497,7 @@
         }
 
         .loadedContent {
-            padding: 0 0 5px 15px !important;;
+            padding: 0 0 0 10px !important;;
         }
 
         /*font settings*/
@@ -1483,7 +1515,6 @@
         .video-player {
             display: flex !important;
             justify-content: flex-end !important;
-            align-items: flex-start !important;
             pointer-events: none;
             z-index: 38 !important;
         }
@@ -1494,7 +1525,7 @@
 
         .video-player > .modal-content {
             max-width: var(--width-big) !important;
-            margin: 10px !important;
+            margin: 0 0 10px 10px !important;
             border-radius: 0.75rem !important;
         }
 
@@ -1540,6 +1571,7 @@
 
         .audio-player {
             padding: 0 0.5rem !important;
+            grid-template-rows: 16px 16px auto !important;
         }
         
         .audio-player--controllers a {
@@ -1557,7 +1589,7 @@
     function generateVideoCSS() {
         return `
         :root {
-            --width-big: calc(100vw - var(--widget-width) - 20px);
+            --width-big: calc(100vw - var(--widget-width) - 10px);
             --height-big: ${settings.heightBig}px;
         }
 
@@ -1573,6 +1605,10 @@
             grid-area: 3 / 2 / 4 / 3 !important;
             align-self: end;
         }
+        
+        .video-player {
+            align-items: flex-start !important;
+        }
         `;
     }
 
@@ -1580,11 +1616,11 @@
         return `
         :root {
             --width-big: calc(50vw - calc(var(--widget-width) / 2) - 10px);
-            --height-big: calc(100vh - 80px);
+            --height-big: calc(100vh - 65px);
 
             --reader-layout-columns: 1fr var(--widget-width) 1fr;
-            --reader-layout-rows: var(--article-height) 90px;
-            --article-height: calc(var(--app-height) - 85px);
+            --reader-layout-rows: var(--article-height) var(--footer-height);
+            --article-height: calc(var(--app-height) - var(--footer-height));
         }
 
         #lesson-reader {
@@ -1604,8 +1640,8 @@
             align-self: end;
         }
 
-        .modal-container .modls {
-            align-items: end;
+        .video-player {
+            align-items: end !important;
         }
         `;
     }
@@ -1613,7 +1649,8 @@
     function generateAudioCSS() {
         return `
         :root {
-            --height-big: 60px;
+            --reader-layout-rows: var(--article-height) var(--footer-height);
+            --article-height: calc(var(--app-height) - var(--footer-height));
         }
 
         .main-content {
@@ -1622,6 +1659,11 @@
 
         .widget-area {
             grid-area: 1 / 2 / 2 / 2 !important;
+        }
+        
+        .main-footer {
+            grid-area: 2 / 1 / 3 / 2 !important;
+            align-self: end;
         }
         `;
     }
@@ -2091,7 +2133,8 @@
         async function updateWidget() {
             if (document.getElementById('chatWidget')) return;
 
-            const targetSectionHead = document.querySelector("#lesson-reader .widget-area > .reader-widget > .section-widget--head");
+            let targetSectionHead = document.querySelector("#lesson-reader .widget-area > .reader-widget > .section-widget--head");
+            targetSectionHead = targetSectionHead ? targetSectionHead : document.querySelector("#lesson-reader .widget-area > .reader-widget");
             if (!targetSectionHead) return;
 
             const [llmProvider, llmModel] = settings.llmProviderModel.split(" ");
@@ -2273,9 +2316,9 @@ Input: "마중", Context: "그녀는 역까지 나를 마중 나왔다."
                 return [...currentHistory, { role: role, content: message }];
             }
 
-            function addMessageToUI(message, isUser, container) {
+            function addMessageToUI(message, messageClass, container) {
                 const messageDiv = createElement("div", {
-                    className: `${isUser ? 'user-message' : 'bot-message'}`,
+                    className: `chat-message ${messageClass}`,
                     innerHTML: message
                 });
                 container.appendChild(messageDiv);
@@ -2371,10 +2414,14 @@ Input: "마중", Context: "그녀는 역까지 나를 마중 나왔다."
                 const userMessage = message;
                 userInput.value = '';
 
-                addMessageToUI(userMessage, true, chatContainer);
+                addMessageToUI(userMessage, 'user-message', chatContainer);
                 chatHistory = updateChatHistoryState(chatHistory, userMessage, "user");
+
+                addMessageToUI("loading ...", 'loading-message', chatContainer);
                 const botResponse = await getBotResponse(llmProvider, llmApiKey, llmModel, chatHistory);
-                addMessageToUI(botResponse, false, chatContainer);
+                chatContainer.removeChild(chatContainer.lastChild);
+
+                addMessageToUI(botResponse, 'bot-message', chatContainer);
                 chatHistory = updateChatHistoryState(chatHistory, botResponse, "assistant");
             }
 
@@ -2405,7 +2452,12 @@ Input: "마중", Context: "그녀는 역까지 나를 마중 나왔다."
                 if(existingChatWidget) {
                     existingChatWidget.replaceWith(chatWrapper);
                 } else {
-                    targetSectionHead.appendChild(chatWrapper);
+                    if (targetSectionHead.matches(".section-widget--head")) {
+                        targetSectionHead.appendChild(chatWrapper);
+                    } else {
+                        targetSectionHead.prepend(chatWrapper);
+                    }
+
                 }
 
                 changeScrollAmount("#chat-container", 0.2)
@@ -2423,12 +2475,13 @@ Input: "마중", Context: "그녀는 역까지 나를 마중 나왔다."
 
                 if (llmProvider === 'openai') chatHistory = updateChatHistoryState(chatHistory, systemPrompt, "system");
 
-                if (settings.askSelected) {
+                if (settings.askSelected && targetSectionHead.matches(".section-widget--head")) {
                     const initialUserMessage = getSelectedWithContext();
-
                     chatHistory = updateChatHistoryState(chatHistory, initialUserMessage, "user");
+                    addMessageToUI("loading...", 'loading-message', chatContainer);
                     const botResponse = await getBotResponse(llmProvider, llmApiKey, llmModel, chatHistory);
-                    addMessageToUI(botResponse, false, chatContainer);
+                    chatContainer.removeChild(chatContainer.lastChild);
+                    addMessageToUI(botResponse, 'bot-message', chatContainer);
                     chatHistory = updateChatHistoryState(chatHistory, botResponse, "assistant");
                 }
             }
@@ -2466,14 +2519,16 @@ Input: "마중", Context: "그녀는 역까지 나를 마중 나왔다."
             await updateTTS();
 
             const selectedTextElement = targetSectionHead.querySelector(".reference-word");
-            const observer = new MutationObserver((mutations) => {
-                mutations.forEach((mutation) => {
-                    if (mutation.type !== 'characterData') return;
-                    updateChatWidget();
-                    updateTTS();
+            if (selectedTextElement){
+                const observer = new MutationObserver((mutations) => {
+                    mutations.forEach((mutation) => {
+                        if (mutation.type !== 'characterData') return;
+                        updateChatWidget();
+                        updateTTS();
+                    });
                 });
-            });
-            observer.observe(selectedTextElement, {subtree: true, characterData: true});
+                observer.observe(selectedTextElement, {subtree: true, characterData: true});
+            }
         }
 
         const userDictionaryLang = await getDictionaryLanguage();
