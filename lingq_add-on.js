@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*/learn/*/web/reader/*
 // @match        https://www.lingq.com/*/learn/*/web/library/course/*
 // @exclude      https://www.lingq.com/*/learn/*/web/editor/*
-// @version      5.5.2
+// @version      5.6
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @namespace https://greasyfork.org/users/1458847
@@ -1435,6 +1435,10 @@
             margin-bottom: 5px;
         }
         
+        .reference-word {
+            white-space: pre-line !important;
+        }
+        
         .section-widget--main {
             margin: 0 !important;
             padding: 0 !important;
@@ -2047,6 +2051,33 @@
         });
     }
 
+    function extractTextFromDOM(domElement) {
+        const textParts = [];
+        const sentenceElements = domElement.querySelectorAll('.sentence');
+
+        if (!sentenceElements || sentenceElements.length === 0) return null;
+
+        sentenceElements.forEach(sentenceElement => {
+            for (const childNode of sentenceElement.childNodes) {
+                if (childNode.nodeType === Node.TEXT_NODE) {
+                    const text = childNode.textContent.trim();
+                    if (text) textParts.push(text);
+                } else if (childNode.nodeType === Node.ELEMENT_NODE) {
+                    if (!childNode.classList.contains('sentence-item')) return;
+
+                    textParts.push(childNode.textContent);
+
+                    if (childNode.classList.contains('has-end-punctuation-question')) textParts.push('?');
+                    if (childNode.classList.contains('has-end-punctuation-period')) textParts.push('.');
+                }
+            }
+            textParts.push('\n');
+        });
+
+        return textParts.slice(0, -1).join(' ')
+            .replace(/[^\S\n]?(\?|\.|\n)[^\S\n]?/g, '$1')
+            .replace(/[^\S\n]?(,)/g, '$1');
+    }
 
     function stopPlayingAudio(autioContext) {
         if (!autioContext) return;
@@ -2154,6 +2185,18 @@
             let targetSectionHead = document.querySelector("#lesson-reader .widget-area > .reader-widget > .section-widget--head");
             targetSectionHead = targetSectionHead ? targetSectionHead : document.querySelector("#lesson-reader .widget-area > .reader-widget");
             if (!targetSectionHead) return;
+
+            const isSentence = !document.querySelector(".section-widget--main");
+
+            const selection = window.getSelection();
+            if (selection.rangeCount > 0) {
+                const referenceWord = targetSectionHead.querySelector(".reference-word");
+                const extractedText = extractTextFromDOM(selection.getRangeAt(0).cloneContents());
+                if (!referenceWord || !extractedText || !isSentence) return;
+
+                referenceWord.textContent = extractedText;
+                console.log("The referenceWord is changed.");
+            }
 
             const [llmProvider, llmModel] = settings.llmProviderModel.split(" ");
             const llmApiKey = settings.llmApiKey;
@@ -2496,7 +2539,7 @@ Input: "마중", Context: "그녀는 역까지 나를 마중 나왔다."
                 if (settings.askSelected && targetSectionHead.matches(".section-widget--head")) {
                     const initialUserMessage = getSelectedWithContext();
                     chatHistory = updateChatHistoryState(chatHistory, initialUserMessage, "user");
-                    addMessageToUI("loading...", 'loading-message', chatContainer);
+                    addMessageToUI("loading ...", 'loading-message', chatContainer);
                     const botResponse = await getBotResponse(llmProvider, llmApiKey, llmModel, chatHistory);
                     chatContainer.removeChild(chatContainer.lastChild);
                     addMessageToUI(botResponse, 'bot-message', chatContainer);
