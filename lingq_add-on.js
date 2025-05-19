@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*/learn/*/web/reader/*
 // @match        https://www.lingq.com/*/learn/*/web/library/course/*
 // @exclude      https://www.lingq.com/*/learn/*/web/editor/*
-// @version      5.6.2
+// @version      5.6.3
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @namespace https://greasyfork.org/users/1458847
@@ -1660,6 +1660,9 @@
     function generateAudioCSS() {
         return `
         :root {
+            --width-big: calc(var(--widget-width) - 20px);
+            --height-big: var(--footer-height);
+            
             --reader-layout-rows: var(--article-height) var(--footer-height);
             --article-height: calc(var(--app-height) - var(--footer-height));
         }
@@ -1675,6 +1678,14 @@
         .main-footer {
             grid-area: 2 / 1 / 3 / 2 !important;
             align-self: end;
+        }
+        
+        .video-player {
+            align-items: end !important;
+        }
+        
+        .video-player > .modal-content {
+            margin: 0 10px 10px !important;
         }
         `;
     }
