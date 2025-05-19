@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*/learn/*/web/reader/*
 // @match        https://www.lingq.com/*/learn/*/web/library/course/*
 // @exclude      https://www.lingq.com/*/learn/*/web/editor/*
-// @version      5.7.1
+// @version      5.7.2
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @namespace https://greasyfork.org/users/1458847
@@ -2355,6 +2355,7 @@ Use this prompt only for the next input.
 <p>[Definition in ${userLanguage}]</p>
 <hr>
 <p>[Contextual explanation in ${userLanguage}]</p>
+<hr>
 <ul>
   <li>[New Example Sentence in original language]</li>
   <li>[Translation in ${userLanguage}]</li>
@@ -2374,6 +2375,7 @@ Use this prompt only for the next input.
 <p>번역가, 통역사</p>
 <hr>
 <p>This refers to individuals translating foreign content into their own language, as highlighted by the ESV Bible translators in context.</p>
+<hr>
 <ul>
   <li>Many translators work together on complex international projects.</li>
   <li>많은 번역가들이 복잡한 국제 프로젝트에 함께 작업합니다.</li>
@@ -2389,6 +2391,7 @@ Use this prompt only for the next input.
 <p>To achieve, to attain.</p>
 <hr>
 <p>This means to successfully reach or accomplish a goal. In context, it suggests the necessity to achieve our objectives.</p>
+<hr>
 <ul>
   <li>They hope to lograr success in the new venture.</li>
   <li>Ellos esperan lograr el éxito en la nueva empresa.</li>
@@ -2404,6 +2407,7 @@ Use this prompt only for the next input.
 <p>Etre capable de, être en mesure de.</p>
 <hr>
 <p>Cela signifie être capable ou apte à faire quelque chose. Dans ce contexte, cela indique qu'il avait la capacité de résoudre le problème.</p>
+<hr>
 <ul>
   <li>Sie war imstande, die schwierige Aufgabe zu bewältigen.</li>
   <li>Elle était capable de maîtriser la tâche difficile.</li>
@@ -2415,14 +2419,16 @@ Use this prompt only for the next input.
 **Sentence Input**
 - Input will be given as: 'Input: "sentence"'
 1. ALWAYS translate the entire input sentence first into ${userLanguage}, placing it in a '<p>' tag with bolded "Translation" in ${userLanguage}.
-2. After the full-sentence translation, identify any interesting, difficult, or idiomatic words/phrases in the sentence that might benefit from explanation. and explain the expressions in ${userLanguage}.
-3. For each such word or phrase, provide a concise explanation in ${userLanguage}.
+2. Identify difficult or idiomatic words in the sentence that might benefit understanding (fewer is better).
+3. For each such word or phrase, provide a meaning in ${userLanguage}.
 4.  Use the following HTML structure:
 
 <p><b>[Translated Sentence in ${userLanguage}]</b></p>
 <hr>
+<p>[Explanation in ${userLanguage}]</p>
+<hr>
 <ul>
-  <li><b>[Expression]:</b> <i>[Part of speech]</i> - [Explanation in ${userLanguage}]</li>
+  <li><b>[Word in original language]:</b> [Meaning in ${userLanguage}]</li>
 </ul>
 
 *Note: Always include the full sentence translation first in the first '<p>' tag, and then explanations for multiple relevant expressions if applicable.*
@@ -2432,27 +2438,32 @@ Use this prompt only for the next input.
 ### Example 1: Sentence Input (Original language: French, User's language: Japanese)
 
 **User Input:** 
-'Input: "Il a réussi à convaincre ses collègues malgré les difficultés.", Context: ""'
+'Input: "Il a réussi à convaincre ses collègues malgré les difficultés."'
 
 **Assistant Output:**
 <p><b>彼は困難にもかかわらず同僚たちを説得することに成功した。</b></p>
 <hr>
+<p>この文は、困難な状況の中でも彼が同僚たちを説得することにうまくいった、ということを表しています。</p>
+<hr>
 <ul>
-  <li><b>réussi à:</b> <i>(動詞句)</i> - 「～することに成功した」を意味します。</li>
-  <li><b>malgré:</b> <i>(前置詞)</i> - 「～にもかかわらず」を表します。</li>
+  <li><b>réussi à:</b> 「～することに成功した」を意味します。</li>
+  <li><b>malgré:</b> 「～にもかかわらず」を表します。</li>
 </ul>
 
 ### Example 2: Sentence Input (Original Language: Italian, User Language: German)
 
 **User Input:** 
-'Input: "Nonostante la pioggia, siamo andati al concerto.", Context: ""'
+'Input: "Nonostante la pioggia, siamo andati al concerto."'
 
 **Assistant Output:**
-<p>Translation:Trotz des Regens sind wir zum Konzert gegangen.</b></p>
+<p><b>Trotz des Regens sind wir zum Konzert gegangen.</b></p>
+<hr>
+<p>Der Satz beschreibt, dass die Sprecher trotz schlechten Wetters (Regen) das Konzert besucht haben.</p>
+<p>Er betont ihre Entschlossenheit oder das Interesse am Konzert.</p>
 <hr>
 <ul>
-  <li><b>Nonostante:</b> <i>(Präposition)</i> - Trotz</li>
-  <li><b>siamo andati:</b> <i>(Verb)</i> - Wir sind gegangen (Vergangenheit von "gehen")</li>
+  <li><b>Nonostante:</b> Trotz</li>
+  <li><b>siamo andati:</b> Wir sind gegangen (Vergangenheit von "gehen")</li>
 </ul>
 Respond understood if you got it.
 `
@@ -2700,6 +2711,7 @@ Respond understood if you got it.
 
                 const selectedTextElement = document.querySelector(".reference-word");
                 const selectedText = selectedTextElement ? selectedTextElement.textContent.trim() : "";
+                if (selectedText.length > 1000) return;
 
                 let audioData = await openAITTS(`${selectedText}`, settings.ttsApiKey, settings.ttsVoice, 1.0, ttsInstructions);
                 if (audioData == null) return;
