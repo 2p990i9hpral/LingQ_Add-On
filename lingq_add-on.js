@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*/learn/*/web/reader/*
 // @match        https://www.lingq.com/*/learn/*/web/library/course/*
 // @exclude      https://www.lingq.com/*/learn/*/web/editor/*
-// @version      5.7
+// @version      5.7.1
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @namespace https://greasyfork.org/users/1458847
@@ -2177,7 +2177,7 @@
                 if (node.textContent.trim() !== "") leaves.push(node);
                 return;
             }
-            if (node.nodeType === Node.ELEMENT_NODE) {
+            if (node.nodeType === Node.ELEMENT_NODE || node.nodeType === Node.DOCUMENT_FRAGMENT_NODE) {
                 if (node.childNodes.length === 0) {
                     leaves.push(node);
                     return;
@@ -2193,17 +2193,18 @@
 
     function extractTextFromDOM(domElement) {
         const textParts = [];
-        const sentenceElements = domElement.querySelectorAll('.sentence');
-
-        if (!sentenceElements || sentenceElements.length === 0) return null;
+        let sentenceElements = domElement.querySelectorAll('.sentence');
+        sentenceElements = sentenceElements.length ? sentenceElements : [domElement];
+        if (domElement.childNodes.length === 0) return null;
 
         sentenceElements.forEach(sentenceElement => {
             for (const childNode of getAllLeafNodes(sentenceElement)) {
                 const text = childNode.textContent.trim();
                 if (text) textParts.push(text);
 
-                if (childNode.parentNode.matches('.has-end-punctuation-question')) textParts.push('?');
-                if (childNode.parentNode.matches('.has-end-punctuation-period')) textParts.push('.');
+                const parentNodeType = childNode.parentNode.nodeType;
+                if (parentNodeType === Node.ELEMENT_NODE && childNode.parentNode.matches('.has-end-punctuation-question')) textParts.push('?');
+                if (parentNodeType === Node.ELEMENT_NODE && childNode.parentNode.matches('.has-end-punctuation-period')) textParts.push('.');
             }
             textParts.push('\n');
         });
@@ -2327,56 +2328,39 @@
             console.log(llmProvider, llmModel)
 
             const systemPrompt = `
+**System Prompt (Formatting & Core Rules):**
 Ensure all translations, explanations, definitions, and examples are provided exclusively in '${userLanguage}', regardless of the original input language, using the specified HTML formatting for clarity.
 You are a language assistant designed to help users understand words and sentences.
 
 ## Core Principles
 
 * **Language:** Respond exclusively in '${userLanguage}'. Avoid using the original language for explanations, all content should be translated into '${userLanguage}'.
-* **Formatting:** Use HTML tags ('<b>', '<i>', '<p>', '<ul>', '<li>', '<br>') but not <pre> for presentation. Output raw HTML as plain text, without Markdown or code blocks.
+* **Formatting:** Use HTML tags ('<b>', '<i>', '<p>', '<ul>', '<li>', '<br>') but not <pre> for presentation. Output raw HTML as plain text, without Markdown tags (e.g., '# H1', '**Bold**', '> blockquote', '---') or code blocks.
 * **Directness:** Provide succinct responses without unnecessary prefaces.
 * **Accuracy:** Ensure precise translations and context-specific explanations.
 * **Context:** Integrate context deeply in translations and explanations.
+`
+            const wordPhrasePrompt = `
+Use this prompt only for the next input.
+**Single Word/Phrase Input**
+- Input will be given as: 'Input: "word or phrase" Context: "sentence including the word or phrase"'
+1. Determine the base, dictionary form of the word or phrase. This means using the singular form for nouns (e.g., "cat" instead of "cats") and the infinitive form for verbs (e.g., "run" instead of "ran"). Use this base form consistently in the explanation and title.
+2. Address and explain the base form of the word or phrase directly, even if the input is in a conjugated or inflected form. This is especially important for idioms.
+3. Provide an explanation exclusively in ${userLanguage}, factoring in context, and explaining any idiomatic usage.
+4. Generate a distinct, new example sentence to highlight word/phrase usage.
+5. The example sentence and its translation should appear first in the original input language, then in ${userLanguage}.
+6. Use this HTML structure (all content in ${userLanguage}): 
 
-## Instructions for Different Input Types
+<b>[Base form]</b> <i>([Part of Speech])</i>
+<p>[Definition in ${userLanguage}]</p>
+<hr>
+<p>[Contextual explanation in ${userLanguage}]</p>
+<ul>
+  <li>[New Example Sentence in original language]</li>
+  <li>[Translation in ${userLanguage}]</li>
+</ul>
 
-The input structure 'Input: "..." Context: "..."' is ONLY used for the *first* user turn. For all subsequent turns, the user input will be plain text.
-
--   **Single Word/Phrase Input (Structured Input: 'Input: "word or phrase" Context: "sentence"'):**
-    1. Determine the base, dictionary form of the word or phrase. This means using the singular form for nouns (e.g., "cat" instead of "cats") and the infinitive form for verbs (e.g., "run" instead of "ran"). Use this base form consistently in the explanation and title.
-    2. Address and explain the base form of the word or phrase directly, even if the input is in a conjugated or inflected form. This is especially important for idioms.
-    3. Provide an explanation ***exclusively in ${userLanguage}***, factoring in context, and explaining any idiomatic usage.
-    4.  Provide an explanation in ${userLanguage}, factoring in context, and explaining any idiomatic usage.
-    5.  Generate a distinct example sentence to highlight word/phrase usage. The **example sentence and its translation should appear first in the original input language, then in ${userLanguage}**.
-    6.  Use the following HTML structure. ***All content (definition, explanation, examples and translations) must be provided solely in ${userLanguage}, regardless of the input language.***  
-        <b>[Base form]</b> <i>([Part of Speech])</i>
-        <p>[Definition in ${userLanguage}]</p>
-        <hr>
-        <p>[Contextual explanation in ${userLanguage}]</p>
-        <ul>
-          <li>[New Example Sentence in original language]</li>
-          <li>[Translation in ${userLanguage}]</li>
-        </ul>
-        *Note: The structure and bolding/italics should convey the information.*
-
--   **Sentence Input (Structured Input: 'Input: "sentence", Context ""'):**
-    1. **ALWAYS translate the entire input sentence first** into ${userLanguage}, placing it in a '<p>' tag with bolded "Translation" in ${userLanguage}.
-    2. **DO NOT treat a sentence input as a single word/phrase explanation.** Do NOT output a block using only a single word/phrase explanation/template for sentence input.
-    3. **AFTER the full-sentence translation**, identify any interesting, difficult, or idiomatic words/phrases in the sentence that might benefit from explanation. and explain the expressions in ${userLanguage}.
-    4. For each such word or phrase, provide a concise explanation in ${userLanguage}.
-    5. **Never output only a single word/phrase explanation template for any sentence input**—sentence translation is always required as the first output, followed by a list of explanations of words/phrases as appropriate.
-    6.  Use the following HTML structure:
-        <p><b>[Translated Sentence in ${userLanguage}]</b></p>
-        <hr>
-        <ul>
-          <li><b>[Expression]:</b> <i>[Part of speech]</i> - [Explanation in ${userLanguage}]</li>
-        </ul>
-        *Note: The first '<p>' tag contains the full translation. Never output only a single word/phrase explanation for sentence input; always include the full sentence translation first, and then explanations for multiple relevant expressions if applicable.*
-
--   **Plain Text Input (Subsequent Turns):**
-    1. Respond naturally and directly in ${userLanguage}.
-    2. Utilize HTML ('<p>', '<ul>', '<li>').
-    3. Avoid structured outputs; adhere to a conversational context. DO NOT use the Single Word/Phrase or Sentence formats.
+*The structure and bolding/italics should convey the information. All content (definition, explanation, examples and translations) must be provided solely in ${userLanguage}, regardless of the input language.*
 
 ## Examples
 
@@ -2395,22 +2379,7 @@ The input structure 'Input: "..." Context: "..."' is ONLY used for the *first* u
   <li>많은 번역가들이 복잡한 국제 프로젝트에 함께 작업합니다.</li>
 </ul>
 
-### Example 2: Single Word with Context (Original language: Korean, User's language: Japanese)
-
-**User Input:**  
-Input: "마중", Context: "그녀는 역까지 나를 마중 나왔다."
-
-**Assistant Output:**  
-<b>마중</b> <i>(名詞)</i>
-<p>出迎え</p>
-<hr>
-<p>誰かが到着する際に迎えに行くことを意味します。この文脈では、彼女が駅まで私を迎えに来てくれたという意味です。</p>
-<ul>
-  <li>나는 공항에 친구를 마중 나갔다.</li>
-  <li>私は空港に友達を出迎えに行った。</li>
-</ul>
-
-### Example 3: Single Word with Context (Original Language: Spanish, User Language: English)
+### Example 2: Single Word with Context (Original Language: Spanish, User Language: English)
 
 **User Input:** 
 'Input: "lograr", Context: "Debemos lograr nuestros objetivos."'
@@ -2425,7 +2394,7 @@ Input: "마중", Context: "그녀는 역까지 나를 마중 나왔다."
   <li>Ellos esperan lograr el éxito en la nueva empresa.</li>
 </ul>
 
-### Example 4: Phrase with Context (Original Language: German, User Language: French)
+### Example 3: Phrase with Context (Original Language: German, User Language: French)
 
 **User Input:** 
 'Input: "imstande sein", Context: "Er war imstande, das Problem zu lösen."'
@@ -2439,8 +2408,28 @@ Input: "마중", Context: "그녀는 역까지 나를 마중 나왔다."
   <li>Sie war imstande, die schwierige Aufgabe zu bewältigen.</li>
   <li>Elle était capable de maîtriser la tâche difficile.</li>
 </ul>
+Respond understood if you got it.
+`
+            const sentencePrompt = `
+Use this prompt only for the next input.
+**Sentence Input**
+- Input will be given as: 'Input: "sentence"'
+1. ALWAYS translate the entire input sentence first into ${userLanguage}, placing it in a '<p>' tag with bolded "Translation" in ${userLanguage}.
+2. After the full-sentence translation, identify any interesting, difficult, or idiomatic words/phrases in the sentence that might benefit from explanation. and explain the expressions in ${userLanguage}.
+3. For each such word or phrase, provide a concise explanation in ${userLanguage}.
+4.  Use the following HTML structure:
 
-### Example 5: Sentence Input (Original language: French, User's language: Japanese)
+<p><b>[Translated Sentence in ${userLanguage}]</b></p>
+<hr>
+<ul>
+  <li><b>[Expression]:</b> <i>[Part of speech]</i> - [Explanation in ${userLanguage}]</li>
+</ul>
+
+*Note: Always include the full sentence translation first in the first '<p>' tag, and then explanations for multiple relevant expressions if applicable.*
+
+## Examples
+
+### Example 1: Sentence Input (Original language: French, User's language: Japanese)
 
 **User Input:** 
 'Input: "Il a réussi à convaincre ses collègues malgré les difficultés.", Context: ""'
@@ -2453,7 +2442,7 @@ Input: "마중", Context: "그녀는 역까지 나를 마중 나왔다."
   <li><b>malgré:</b> <i>(前置詞)</i> - 「～にもかかわらず」を表します。</li>
 </ul>
 
-### Example 6: Sentence Input (Original Language: Italian, User Language: German)
+### Example 2: Sentence Input (Original Language: Italian, User Language: German)
 
 **User Input:** 
 'Input: "Nonostante la pioggia, siamo andati al concerto.", Context: ""'
@@ -2465,8 +2454,19 @@ Input: "마중", Context: "그녀는 역까지 나를 마중 나왔다."
   <li><b>Nonostante:</b> <i>(Präposition)</i> - Trotz</li>
   <li><b>siamo andati:</b> <i>(Verb)</i> - Wir sind gegangen (Vergangenheit von "gehen")</li>
 </ul>
+Respond understood if you got it.
+`
+            const plainTextPrompt = `
+Do not use the prompt previously given. For all subsequent turns, the user input will be plain text.
+- Input will be given as: 'Plain text input'.
+**Plain Text Input (Conversational/Freetext)**
+- Respond naturally and directly in ${userLanguage}.
+- Avoid structured outputs; adhere to a conversational context.
+- DO NOT use the Single Word/Phrase or Sentence formats.
 
-### Example 7: Plain Text Input (User Language: English)
+## Examples
+
+### Example 1: Plain Text Input (User Language: English)
 
 **User Input:**
 "What's the weather like in London today?"
@@ -2474,7 +2474,7 @@ Input: "마중", Context: "그녀는 역까지 나를 마중 나왔다."
 **Assistant Output:**
 <p>I'm sorry, I do not have access to real-time weather information. You can check a reliable weather app or website for the current conditions in London.</p>
 
-### Example 8: Plain Text Input (User Language: French)
+### Example 2: Plain Text Input (User Language: French)
 
 **User Input:**
 "Peux-tu me raconter une blague courte ?"
@@ -2482,13 +2482,9 @@ Input: "마중", Context: "그녀는 역까지 나를 마중 나왔다."
 **Assistant Output:**
 <p>Bien sûr, voici une blague courte :</p>
 <p>Pourquoi les poissons vivent-ils dans l'eau salée ? Parce que le poivre les fait éternuer !<p>
+Respond understood if you got it.
+`
 
-## Notes
-
-*   Prioritize outputting all content in '${userLanguage}' to enhance clarity and learning.
-*   Avoid excessive word explanations in sentences; prioritize challenging parts relevant to context.
-*   Maintain user clarity and effectiveness for learning experiences.
-            `;
             const ttsInstructions = `
                 Accent/Affect: Neutral and clear, like a professional voice-over artist. Focus on accuracy.
                 Tone: Objective and methodical. Maintain a slightly formal tone without emotion.
@@ -2627,7 +2623,7 @@ Input: "마중", Context: "그녀는 역까지 나를 마중 나왔다."
                 const selectedText = selectedTextElement ? selectedTextElement.textContent.trim() : "";
                 const contextText = contextElement ? contextElement.innerText.trim() : "";
 
-                return `Input: "${selectedText}"` +  `, Context: "${contextText}"`;
+                return `Input: "${selectedText}"` +  (!isSentence ? `, Context: "${contextText}"` : ``);
             }
 
             async function updateChatWidget(){
@@ -2673,12 +2669,18 @@ Input: "마중", Context: "그녀는 역까지 나를 마중 나왔다."
 
                 if (settings.askSelected && targetSectionHead.matches(".section-widget--head")) {
                     const initialUserMessage = getSelectedWithContext();
+                    chatHistory = updateChatHistoryState(chatHistory, !isSentence ? wordPhrasePrompt: sentencePrompt, "user");
+                    chatHistory = updateChatHistoryState(chatHistory, "Understood.", "assistant");
+
                     chatHistory = updateChatHistoryState(chatHistory, initialUserMessage, "user");
                     addMessageToUI("loading ...", 'loading-message', chatContainer);
                     const botResponse = await getBotResponse(llmProvider, llmApiKey, llmModel, chatHistory);
                     chatContainer.removeChild(chatContainer.lastChild);
                     addMessageToUI(botResponse, 'bot-message', chatContainer);
                     chatHistory = updateChatHistoryState(chatHistory, botResponse, "assistant");
+
+                    chatHistory = updateChatHistoryState(chatHistory, plainTextPrompt, "user");
+                    chatHistory = updateChatHistoryState(chatHistory, "Understood.", "assistant");
                 }
             }
 
