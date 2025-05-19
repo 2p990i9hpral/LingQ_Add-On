@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*/learn/*/web/reader/*
 // @match        https://www.lingq.com/*/learn/*/web/library/course/*
 // @exclude      https://www.lingq.com/*/learn/*/web/editor/*
-// @version      5.6.3
+// @version      5.7
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @namespace https://greasyfork.org/users/1458847
@@ -25,12 +25,13 @@
     
     const defaults = {
         styleType: "video",
-        colorMode: "dark",
-        fontSize: 1.1,
-        lineHeight: 1.7,
         heightBig: 400,
         sentenceHeight: 400,
         widgetWidth: 400,
+        fontSize: 1.1,
+        lineHeight: 1.7,
+
+        colorMode: "dark",
         darkColors: {
             fontColor: "#e0e0e0",
             lingqBackground: "rgba(109, 89, 44, 0.7)",
@@ -49,38 +50,67 @@
             knownBorder: "rgba(0, 111, 255, 0.3)",
             playingUnderline: "#000000"
         },
+
         librarySortOption: 0,
         autoFinishing: false,
+
         chatWidget: false,
         llmProviderModel: "openai gpt-4.1-nano",
         llmApiKey: "",
         askSelected: false,
+
         tts: false,
         ttsApiKey: "",
         ttsVoice: "alloy",
         ttsWord: false,
         ttsSentence: false,
+
+        shortcutVideoFullscreen: 'p',
+        shortcutBackward5s: 'a',
+        shortcutForward5s: 's',
+        shortcutTTSPlay: 'w',
+        shortcutTranslator: 'e',
+        shortcutMakeKnown: 'd',
+        shortcutDictionary: 'f',
+        shortcutCopySelected: 'c',
+        shortcutMeaningInput: '`',
+        shortcutChatInput: 'q'
     };
 
     const settings = {
         styleType: storage.get("styleType", defaults.styleType),
-        colorMode: storage.get("colorMode", defaults.colorMode),
-        fontSize: storage.get("fontSize", defaults.fontSize),
-        lineHeight: storage.get("lineHeight", defaults.lineHeight),
         heightBig: storage.get("heightBig", defaults.heightBig),
         sentenceHeight: storage.get("sentenceHeight", defaults.sentenceHeight),
         widgetWidth: storage.get("widgetWidth", defaults.widgetWidth),
+        fontSize: storage.get("fontSize", defaults.fontSize),
+        lineHeight: storage.get("lineHeight", defaults.lineHeight),
+
+        colorMode: storage.get("colorMode", defaults.colorMode),
+
         librarySortOption: storage.get("librarySortOption", defaults.librarySortOption),
         get autoFinishing() { return storage.get("autoFinishing", defaults.autoFinishing); },
+
         get chatWidget() { return storage.get("chatWidget", defaults.chatWidget); },
         get llmProviderModel() { return storage.get("llmProviderModel", defaults.llmProviderModel); },
         get llmApiKey() { return storage.get("llmApiKey", defaults.llmApiKey); },
         get askSelected() { return storage.get("askSelected", defaults.askSelected); },
+
         get tts() { return storage.get("tts", defaults.tts); },
         get ttsApiKey() { return storage.get("ttsApiKey", defaults.ttsApiKey); },
         get ttsVoice() { return storage.get("ttsVoice", defaults.ttsVoice); },
         get ttsWord() { return storage.get("ttsWord", defaults.ttsWord); },
         get ttsSentence() { return storage.get("ttsSentence", defaults.ttsSentence); },
+
+        get shortcutVideoFullscreen() { return storage.get("shortcutVideoFullscreen", defaults.shortcutVideoFullscreen); },
+        get shortcutBackward5s() { return storage.get("shortcutBackward5s", defaults.shortcutBackward5s); },
+        get shortcutForward5s() { return storage.get("shortcutForward5s", defaults.shortcutForward5s); },
+        get shortcutTTSPlay() { return storage.get("shortcutTTSPlay", defaults.shortcutTTSPlay); },
+        get shortcutTranslator() { return storage.get("shortcutTranslator", defaults.shortcutTranslator); },
+        get shortcutMakeKnown() { return storage.get("shortcutMakeKnown", defaults.shortcutMakeKnown); },
+        get shortcutDictionary() { return storage.get("shortcutDictionary", defaults.shortcutDictionary); },
+        get shortcutCopySelected() { return storage.get("shortcutCopySelected", defaults.shortcutCopySelected); },
+        get shortcutMeaningInput() { return storage.get("shortcutMeaningInput", defaults.shortcutMeaningInput); },
+        get shortcutChatInput() { return storage.get("shortcutChatInput", defaults.shortcutChatInput); }
     };
 
     const colorSettings = getColorSettings(settings.colorMode);
@@ -193,12 +223,30 @@
             return container;
         }
 
+        function addShortcutInput(parent, id, labelText, value) {
+            const container = createElement("div", {className: "popup-row", style: "display: flex; justify-content: space-between;"});
+
+            container.appendChild(createElement("label", {htmlFor: id, textContent: labelText}));
+
+            const input = createElement("input", {
+                type: "text",
+                id,
+                value,
+                maxLength: 1, // Restrict to single character
+                className: "popup-input",
+                style: "width: 30px; text-transform: lowercase; flex-grow: unset; text-align: center;"
+            });
+            container.appendChild(input);
+            parent.appendChild(container);
+            return container;
+        }
+
         const popupLayout = createElement("div");
         const columns = createElement("div", {style: "display: flex; flex-direction: row;"});
 
-        const container = createElement("div", {style: "padding: 5px; width: 350px;"});
+        const container1 = createElement("div", {style: "padding: 5px; width: 350px;"});
 
-        addSelect(container, "styleTypeSelector", "Layout Style:", [
+        addSelect(container1, "styleTypeSelector", "Layout Style:", [
             { value: "video", text: "Video" },
             { value: "video2", text: "Video2" },
             { value: "audio", text: "Audio" },
@@ -210,19 +258,19 @@
             style: `${settings.styleType === "video" ? "" : "display: none"}`
         });
         addSlider(videoSettings, "heightBigSlider", "Video Height:", "heightBigValue", settings.heightBig, "px", 300, 800, 10);
-        container.appendChild(videoSettings);
+        container1.appendChild(videoSettings);
 
         const sentenceVideoSettings = createElement("div", {
             id: "sentenceVideoSettings",
             style: `${settings.styleType === "off" ? "" : "display: none"}`
         });
-        addSlider(sentenceVideoSettings, "sentenceHeightSlider", "Sentence Video Height:", "sentenceHeightValue", settings.heightBig, "px", 300, 600, 10);
-        container.appendChild(sentenceVideoSettings);
+        addSlider(sentenceVideoSettings, "sentenceHeightSlider", "Sentence Video Height:", "sentenceHeightValue", settings.sentenceHeight, "px", 300, 600, 10);
+        container1.appendChild(sentenceVideoSettings);
 
-        addSlider(container, "widgetWidthSlider", "Widget Width:", "widgetWidthValue", settings.widgetWidth, "px", 300, 500, 10);
+        addSlider(container1, "widgetWidthSlider", "Widget Width:", "widgetWidthValue", settings.widgetWidth, "px", 300, 500, 10);
 
-        addSlider(container, "fontSizeSlider", "Font Size:", "fontSizeValue", settings.fontSize, "rem", 0.8, 1.8, 0.05);
-        addSlider(container, "lineHeightSlider", "Line Height:", "lineHeightValue", settings.lineHeight, "", 1.2, 3.0, 0.1);
+        addSlider(container1, "fontSizeSlider", "Font Size:", "fontSizeValue", settings.fontSize, "rem", 0.8, 1.8, 0.05);
+        addSlider(container1, "lineHeightSlider", "Line Height:", "lineHeightValue", settings.lineHeight, "", 1.2, 3.0, 0.1);
 
         const colorSection = createElement("div", {className: "popup-section"});
 
@@ -241,19 +289,35 @@
             { id: "playingUnderline", label: "Playing Underline:", value: colorSettings.playingUnderline }
         ].forEach(config => addColorPicker(colorSection, config.id, config.label, config.value));
 
-        container.appendChild(colorSection);
+        container1.appendChild(colorSection);
 
-        addCheckbox(container, "autoFinishingCheckbox", "Finish Lesson Automatically", settings.autoFinishing);
+        addCheckbox(container1, "autoFinishingCheckbox", "Finish Lesson Automatically", settings.autoFinishing);
 
-        columns.appendChild(container);
+        columns.appendChild(container1);
 
-        const llmContainer = createElement("div", {style: "padding: 10px; width: 350px;"});
+        const container2 = createElement("div", {style: "padding: 10px; width: 350px;"});
 
-        addCheckbox(llmContainer, "chatWidgetCheckbox", "Enable the Chat Widget", settings.chatWidget);
+        const shortcutSection = createElement("div", {className: "popup-section"});
 
-        const llmSection = createElement("div", {id: "llmSection", className: "popup-section", style: `${settings.chatWidget ? "" : "display: none"}`});
+        shortcutSection.appendChild(createElement("h4", {textContent: "Keyboard Shortcuts"}));
+        addShortcutInput(shortcutSection, "shortcutVideoFullscreenInput", "Video Fullscreen Toggle:", settings.shortcutVideoFullscreen);
+        addShortcutInput(shortcutSection, "shortcutBackward5sInput", "5 Sec Backward:", settings.shortcutBackward5s);
+        addShortcutInput(shortcutSection, "shortcutForward5sInput", "5 Sec Forward:", settings.shortcutForward5s);
+        addShortcutInput(shortcutSection, "shortcutTTSPlayInput", "Play TTS Audio:", settings.shortcutTTSPlay);
+        addShortcutInput(shortcutSection, "shortcutTranslatorOpenInput", "Open Translator:", settings.shortcutTranslator);
+        addShortcutInput(shortcutSection, "shortcutMakeKnownInput", "Make Word Known:", settings.shortcutMakeKnown);
+        addShortcutInput(shortcutSection, "shortcutDictionaryOpenInput", "Open Dictionary:", settings.shortcutDictionary);
+        addShortcutInput(shortcutSection, "shortcutCopySelectedInput", "Copy Selected Text:", settings.shortcutCopySelected);
+        addShortcutInput(shortcutSection, "shortcutMeaningInputInput", "Meaning Input Focus:", settings.shortcutMeaningInput);
+        addShortcutInput(shortcutSection, "shortcutChatInputInput", "Chat Input Focus:", settings.shortcutChatInput);
 
-        addSelect(llmSection, "llmProviderModelSelector", "LLM Provider: (Price per 1M tokens)", [
+        container2.appendChild(shortcutSection);
+
+        addCheckbox(container2, "chatWidgetCheckbox", "Enable the Chat Widget", settings.chatWidget);
+
+        const chatWidgetSection = createElement("div", {id: "chatWidgetSection", className: "popup-section", style: `${settings.chatWidget ? "" : "display: none"}`});
+
+        addSelect(chatWidgetSection, "llmProviderModelSelector", "LLM Provider: (Price per 1M tokens)", [
             { value: "openai gpt-4.1-mini", text: "OpenAI GPT-4.1 mini ($0.4/$1.6)" },
             { value: "openai gpt-4.1-nano", text: "OpenAI GPT-4.1 nano ($0.1/$0.4)" },
             { value: "google gemini-2.5-flash-preview-04-17", text: "Google Gemini 2.5 Flash ($0.15/$0.6)" },
@@ -267,13 +331,13 @@
         const apiKeyInput= createElement("input", {type: "password", id: "llmApiKeyInput", value: settings.llmApiKey, className: "popup-input"});
         apiKeyFlexContainer.appendChild(apiKeyInput)
         apiKeyContainer.appendChild(apiKeyFlexContainer);
-        llmSection.appendChild(apiKeyContainer);
+        chatWidgetSection.appendChild(apiKeyContainer);
 
-        addCheckbox(llmSection, "askSelectedCheckbox", "Enable asking with selected text", settings.askSelected);
+        addCheckbox(chatWidgetSection, "askSelectedCheckbox", "Enable asking with selected text", settings.askSelected);
 
-        llmContainer.appendChild(llmSection);
+        container2.appendChild(chatWidgetSection);
 
-        addCheckbox(llmContainer, "ttsCheckbox", "Enable AI-TTS", settings.tts);
+        addCheckbox(container2, "ttsCheckbox", "Enable AI-TTS", settings.tts);
 
         const ttsSection = createElement("div", {id: "ttsSection", className: "popup-section", style: `${settings.tts ? "" : "display: none"}`});
 
@@ -303,9 +367,9 @@
         addCheckbox(ttsSection, "ttsWordCheckbox", "Enable AI-TTS for words", settings.ttsWord);
         addCheckbox(ttsSection, "ttsSentenceCheckbox", "Enable AI-TTS for sentences", settings.ttsSentence);
 
-        llmContainer.appendChild(ttsSection);
+        container2.appendChild(ttsSection);
 
-        columns.appendChild(llmContainer);
+        columns.appendChild(container2);
 
         const buttonContainer = createElement("div", {style: "display: flex; justify-content: space-between;", className: "popup-row"});
         [
@@ -708,6 +772,41 @@
             storage.set("ttsSentence", checked);
         });
 
+        function setupShortcutInput(inputId, settingKey) {
+            const input = document.getElementById(inputId);
+            if (!input) return;
+
+            input.addEventListener("input", function() {
+                const allowedPattern = /^[a-z0-9`~!@#$%^&*()_+=-]*$/;
+
+                let value = this.value.toLowerCase();
+
+                if (!allowedPattern.test(value)) {
+                    this.value = "";
+                    return;
+                }
+
+                if (value.length > 1) {
+                    value = value[0];
+                    this.value = value;
+                }
+
+                storage.set(settingKey, value);
+                settings[settingKey] = value;
+            });
+        }
+
+        setupShortcutInput("shortcutVideoFullscreenInput", "shortcutVideoFullscreen");
+        setupShortcutInput("shortcutBackward5sInput", "shortcutBackward5s");
+        setupShortcutInput("shortcutForward5sInput", "shortcutForward5s");
+        setupShortcutInput("shortcutTTSPlayInput", "shortcutTTSPlay");
+        setupShortcutInput("shortcutTranslatorOpenInput", "shortcutTranslator");
+        setupShortcutInput("shortcutMakeKnownInput", "shortcutMakeKnown");
+        setupShortcutInput("shortcutDictionaryOpenInput", "shortcutDictionary");
+        setupShortcutInput("shortcutCopySelectedInput", "shortcutCopySelected");
+        setupShortcutInput("shortcutMeaningInputInput", "shortcutMeaningInput");
+        setupShortcutInput("shortcutChatInputInput", "shortcutChatInput");
+
         document.getElementById("closeSettingsBtn").addEventListener("click", () => {
             settingsPopup.style.display = "none";
         });
@@ -756,6 +855,17 @@
             document.getElementById("ttsVoiceSelector").value = defaults.ttsVoice;
             document.getElementById("ttsWordCheckbox").value = defaults.ttsWord;
             document.getElementById("ttsSentenceCheckbox").value = defaults.ttsSentence;
+
+            document.getElementById("shortcutVideoFullscreenInput").value = defaults.shortcutVideoFullscreen;
+            document.getElementById("shortcutBackward5sInput").value = defaults.shortcutBackward5s;
+            document.getElementById("shortcutForward5sInput").value = defaults.shortcutForward5s;
+            document.getElementById("shortcutTTSPlayInput").value = defaults.shortcutTTSPlay;
+            document.getElementById("shortcutTranslatorOpenInput").value = defaults.shortcutTranslator;
+            document.getElementById("shortcutMakeKnownInput").value = defaults.shortcutMakeKnown;
+            document.getElementById("shortcutDictionaryOpenInput").value = defaults.shortcutDictionary;
+            document.getElementById("shortcutCopySelectedInput").value = defaults.shortcutCopySelected;
+            document.getElementById("shortcutMeaningInputInput").value = defaults.shortcutMeaningInput;
+            document.getElementById("shortcutChatInputInput").value = defaults.shortcutChatInput;
 
             for (const [key, value] of Object.entries(defaults)) {
                 storage.set(key, value);
@@ -1661,7 +1771,7 @@
         return `
         :root {
             --width-big: calc(var(--widget-width) - 20px);
-            --height-big: var(--footer-height);
+            --height-big: cald(var(--footer-height) - 10px);
             
             --reader-layout-rows: var(--article-height) var(--footer-height);
             --article-height: calc(var(--app-height) - var(--footer-height));
@@ -1779,33 +1889,31 @@
     function setupKeyboardShortcuts() {
         document.addEventListener("keydown", function (event) {
             const targetElement = event.target;
-            const isTextInput = targetElement.type === "text" || targetElement.type === "textarea" || targetElement.type === "input";
+            const isTextInput = targetElement.localName === "text" || targetElement.localName === "textarea" || targetElement.localName === "input";
             const withoutModifierKeys = !event.ctrlKey && !event.shiftKey && !event.altKey;
             const eventKey = event.key.toLowerCase();
             if (isTextInput) {
-                if (targetElement.id == "user-input") {
-                    return;
-                }
-
-                if ((eventKey == 'enter' || eventKey == 'escape') && withoutModifierKeys) {
+                if (targetElement.id === "user-input") return;
+                if ((eventKey === 'enter' || eventKey === 'escape') && withoutModifierKeys) {
                     preventPropagation(event);
-                    event.target.blur();
+                    event.target.blur()
                 } else {
+                    event.stopPropagation();
                     return;
                 }
             }
 
             const shortcuts = {
-                'p': () => clickElement(".modal-section > div > button:nth-child(2)"), // video full screen toggle
-                '`': () => focusElement(".reference-input-text"), // Move cursor to meaning input
-                'q': () => focusElement("#user-input"), // Move cursor to the chat widget
-                'w': () => clickElement(".is-tts"), // Play tts audio
-                'e': () => clickElement(".dictionary-resources > a:nth-last-child(1)"), // Open Translator
-                'a': () => clickElement(".audio-player--controllers > div:nth-child(1) > a"), // 5 sec Backward
-                's': () => clickElement(".audio-player--controllers > div:nth-child(2) > a"), // 5 sec Forward
-                'd': () => document.dispatchEvent(new KeyboardEvent("keydown", { key: "k" })), // Make word Known
-                'f': () => clickElement(".dictionary-resources > a:nth-child(1)"), // Open Dictionary
-                'c': () => copySelectedText() // Copy selected text
+                [settings.shortcutVideoFullscreen]: () => clickElement(".modal-section > div > button:nth-child(2)"), // video full screen toggle
+                [settings.shortcutMeaningInput]: () => focusElement(".reference-input-text"), // Move cursor to meaning input
+                [settings.shortcutChatInput]: () => focusElement("#user-input"), // Move cursor to the chat widget input
+                [settings.shortcutTTSPlay]: () => clickElement(".is-tts"), // Play tts audio
+                [settings.shortcutTranslator]: () => clickElement(".dictionary-resources > a:nth-last-child(1)"), // Open Translator
+                [settings.shortcutBackward5s]: () => clickElement(".audio-player--controllers > div:nth-child(1) > a"), // 5 sec Backward
+                [settings.shortcutForward5s]: () => clickElement(".audio-player--controllers > div:nth-child(2) > a"), // 5 sec Forward
+                [settings.shortcutMakeKnown]: () => document.dispatchEvent(new KeyboardEvent("keydown", { key: "k" })), // Simulate original 'k' for Make Word Known
+                [settings.shortcutDictionary]: () => clickElement(".dictionary-resources > a:nth-child(1)"), // Open Dictionary
+                [settings.shortcutCopySelected]: () => copySelectedText() // Copy selected text
             };
 
             if (shortcuts[eventKey] && withoutModifierKeys) {
