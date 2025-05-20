@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*/learn/*/web/reader/*
 // @match        https://www.lingq.com/*/learn/*/web/library/course/*
 // @exclude      https://www.lingq.com/*/learn/*/web/editor/*
-// @version      5.8.2
+// @version      5.8.3
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @namespace https://greasyfork.org/users/1458847
@@ -65,6 +65,7 @@
         ttsWord: false,
         ttsSentence: false,
 
+        keyboardShortcut: false,
         shortcutVideoFullscreen: 'p',
         shortcutBackward5s: 'a',
         shortcutForward5s: 's',
@@ -88,29 +89,30 @@
         colorMode: storage.get("colorMode", defaults.colorMode),
 
         librarySortOption: storage.get("librarySortOption", defaults.librarySortOption),
-        get autoFinishing() { return storage.get("autoFinishing", defaults.autoFinishing); },
+        autoFinishing: storage.get("autoFinishing", defaults.autoFinishing),
 
-        get chatWidget() { return storage.get("chatWidget", defaults.chatWidget); },
-        get llmProviderModel() { return storage.get("llmProviderModel", defaults.llmProviderModel); },
-        get llmApiKey() { return storage.get("llmApiKey", defaults.llmApiKey); },
-        get askSelected() { return storage.get("askSelected", defaults.askSelected); },
+        chatWidget: storage.get("chatWidget", defaults.chatWidget),
+        llmProviderModel: storage.get("llmProviderModel", defaults.llmProviderModel),
+        llmApiKey: storage.get("llmApiKey", defaults.llmApiKey),
+        askSelected: storage.get("askSelected", defaults.askSelected),
 
-        get tts() { return storage.get("tts", defaults.tts); },
-        get ttsApiKey() { return storage.get("ttsApiKey", defaults.ttsApiKey); },
-        get ttsVoice() { return storage.get("ttsVoice", defaults.ttsVoice); },
-        get ttsWord() { return storage.get("ttsWord", defaults.ttsWord); },
-        get ttsSentence() { return storage.get("ttsSentence", defaults.ttsSentence); },
+        tts: storage.get("tts", defaults.tts),
+        ttsApiKey: storage.get("ttsApiKey", defaults.ttsApiKey),
+        ttsVoice: storage.get("ttsVoice", defaults.ttsVoice),
+        ttsWord: storage.get("ttsWord", defaults.ttsWord),
+        ttsSentence: storage.get("ttsSentence", defaults.ttsSentence),
 
-        get shortcutVideoFullscreen() { return storage.get("shortcutVideoFullscreen", defaults.shortcutVideoFullscreen); },
-        get shortcutBackward5s() { return storage.get("shortcutBackward5s", defaults.shortcutBackward5s); },
-        get shortcutForward5s() { return storage.get("shortcutForward5s", defaults.shortcutForward5s); },
-        get shortcutTTSPlay() { return storage.get("shortcutTTSPlay", defaults.shortcutTTSPlay); },
-        get shortcutTranslator() { return storage.get("shortcutTranslator", defaults.shortcutTranslator); },
-        get shortcutMakeKnown() { return storage.get("shortcutMakeKnown", defaults.shortcutMakeKnown); },
-        get shortcutDictionary() { return storage.get("shortcutDictionary", defaults.shortcutDictionary); },
-        get shortcutCopySelected() { return storage.get("shortcutCopySelected", defaults.shortcutCopySelected); },
-        get shortcutMeaningInput() { return storage.get("shortcutMeaningInput", defaults.shortcutMeaningInput); },
-        get shortcutChatInput() { return storage.get("shortcutChatInput", defaults.shortcutChatInput); }
+        keyboardShortcut: storage.get("keyboardShortcut", defaults.keyboardShortcut),
+        shortcutVideoFullscreen: storage.get("shortcutVideoFullscreen", defaults.shortcutVideoFullscreen),
+        shortcutBackward5s: storage.get("shortcutBackward5s", defaults.shortcutBackward5s),
+        shortcutForward5s: storage.get("shortcutForward5s", defaults.shortcutForward5s),
+        shortcutTTSPlay: storage.get("shortcutTTSPlay", defaults.shortcutTTSPlay),
+        shortcutTranslator: storage.get("shortcutTranslator", defaults.shortcutTranslator),
+        shortcutMakeKnown: storage.get("shortcutMakeKnown", defaults.shortcutMakeKnown),
+        shortcutDictionary: storage.get("shortcutDictionary", defaults.shortcutDictionary),
+        shortcutCopySelected: storage.get("shortcutCopySelected", defaults.shortcutCopySelected),
+        shortcutMeaningInput: storage.get("shortcutMeaningInput", defaults.shortcutMeaningInput),
+        shortcutChatInput: storage.get("shortcutChatInput", defaults.shortcutChatInput)
     };
 
     const colorSettings = getColorSettings(settings.colorMode);
@@ -297,9 +299,10 @@
 
         const container2 = createElement("div", {style: "padding: 10px; width: 350px;"});
 
-        const shortcutSection = createElement("div", {className: "popup-section"});
+        addCheckbox(container2, "keyboardShortcutCheckbox", "Enable the Keyboard Shortcuts", settings.keyboardShortcut);
 
-        shortcutSection.appendChild(createElement("h4", {textContent: "Keyboard Shortcuts"}));
+        const shortcutSection = createElement("div", {id: "keyboardShortcutSection", className: "popup-section", style: `${settings.keyboardShortcut ? "" : "display: none"}`});
+
         addShortcutInput(shortcutSection, "shortcutVideoFullscreenInput", "Video Fullscreen Toggle:", settings.shortcutVideoFullscreen);
         addShortcutInput(shortcutSection, "shortcutBackward5sInput", "5 Sec Backward:", settings.shortcutBackward5s);
         addShortcutInput(shortcutSection, "shortcutForward5sInput", "5 Sec Forward:", settings.shortcutForward5s);
@@ -714,31 +717,36 @@
         autoFinishingCheckbox.addEventListener('change', (event) => {
             const checked = event.target.checked;
             storage.set("autoFinishing", checked);
+            settings.autoFinishing = checked;
         });
 
         const chatWidgetCheckbox = document.getElementById("chatWidgetCheckbox");
         chatWidgetCheckbox.addEventListener('change', (event) => {
             const checked = event.target.checked;
-            document.getElementById("llmSection").style.display = checked ? "block" : "none";
+            document.getElementById("chatWidgetSection").style.display = checked ? "block" : "none";
             storage.set("chatWidget", checked);
+            settings.chatWidget = checked;
         });
 
         const llmProviderModelSelector = document.getElementById("llmProviderModelSelector");
         llmProviderModelSelector.addEventListener("change", (event) => {
             const selectedProvider = event.target.value;
             storage.set("llmProviderModel", selectedProvider);
+            settings.llmProviderModel = selectedProvider;
         });
 
         const llmApiKeyInput = document.getElementById("llmApiKeyInput");
         llmApiKeyInput.addEventListener("change", (event) => {
             const apiKey = event.target.value;
             storage.set("llmApiKey", apiKey);
+            settings.llmApiKey = apiKey;
         });
 
         const askSelectedCheckbox = document.getElementById("askSelectedCheckbox");
         askSelectedCheckbox.addEventListener('change', (event) => {
             const checked = event.target.checked;
             storage.set("askSelected", checked);
+            settings.askSelected = checked;
         });
 
         const ttsCheckbox = document.getElementById("ttsCheckbox");
@@ -746,30 +754,35 @@
             const checked = event.target.checked;
             document.getElementById("ttsSection").style.display = checked ? "block" : "none";
             storage.set("tts", checked);
+            settings.tts = checked;
         });
 
         const ttsApiKeyInput = document.getElementById("ttsApiKeyInput");
         ttsApiKeyInput.addEventListener("change", (event) => {
             const apiKey = event.target.value;
             storage.set("ttsApiKey", apiKey);
+            settings.ttsApiKey = apiKey;
         });
 
         const ttsVoiceSelector = document.getElementById("ttsVoiceSelector");
         ttsVoiceSelector.addEventListener("change", (event) => {
             const selectedVoice = event.target.value;
             storage.set("ttsVoice", selectedVoice);
+            settings.ttsVoice = selectedVoice;
         });
 
         const ttsWordCheckbox = document.getElementById("ttsWordCheckbox");
         ttsWordCheckbox.addEventListener('change', (event) => {
             const checked = event.target.checked;
             storage.set("ttsWord", checked);
+            settings.ttsWord = checked;
         });
 
         const ttsSentenceCheckbox = document.getElementById("ttsSentenceCheckbox");
         ttsSentenceCheckbox.addEventListener('change', (event) => {
             const checked = event.target.checked;
             storage.set("ttsSentence", checked);
+            settings.ttsSentence = checked;
         });
 
         function setupShortcutInput(inputId, settingKey) {
@@ -795,6 +808,14 @@
                 settings[settingKey] = value;
             });
         }
+
+        const keyboardShortcutCheckbox = document.getElementById("keyboardShortcutCheckbox");
+        keyboardShortcutCheckbox.addEventListener('change', (event) => {
+            const checked = event.target.checked;
+            document.getElementById("keyboardShortcutSection").style.display = checked ? "block" : "none";
+            storage.set("keyboardShortcut", checked);
+            settings.keyboardShortcut = checked;
+        });
 
         setupShortcutInput("shortcutVideoFullscreenInput", "shortcutVideoFullscreen");
         setupShortcutInput("shortcutBackward5sInput", "shortcutBackward5s");
@@ -856,6 +877,7 @@
             document.getElementById("ttsWordCheckbox").value = defaults.ttsWord;
             document.getElementById("ttsSentenceCheckbox").value = defaults.ttsSentence;
 
+            document.getElementById("keyboardShortcutCheckbox").value = defaults.keyboardShortcut;
             document.getElementById("shortcutVideoFullscreenInput").value = defaults.shortcutVideoFullscreen;
             document.getElementById("shortcutBackward5sInput").value = defaults.shortcutBackward5s;
             document.getElementById("shortcutForward5sInput").value = defaults.shortcutForward5s;
@@ -1250,6 +1272,10 @@
             margin-top: 5px; 
             padding: 5px; 
             background: rgb(125 125 125 / 10%) !important;
+        }
+        
+        option {
+            background: var(--background-color) !important;
         }
 
         /*Chat*/
@@ -1904,6 +1930,8 @@
 
     function setupKeyboardShortcuts() {
         document.addEventListener("keydown", function (event) {
+            if (!settings.keyboardShortcut) return;
+
             const targetElement = event.target;
             const isTextInput = targetElement.localName === "text" || targetElement.localName === "textarea" || targetElement.localName === "input";
             const withoutModifierKeys = !event.ctrlKey && !event.shiftKey && !event.altKey;
@@ -2350,11 +2378,17 @@
 
     async function setupLLMs() {
         async function updateWidget() {
-            if (document.getElementById('chatWidget')) return;
+            if (document.getElementById('chatWidget')) {
+                console.debug('chatWidget already exists.')
+                return;
+            }
 
             let targetSectionHead = document.querySelector("#lesson-reader .widget-area > .reader-widget > .section-widget--head");
             targetSectionHead = targetSectionHead ? targetSectionHead : document.querySelector("#lesson-reader .widget-area > .reader-widget");
-            if (!targetSectionHead) return;
+            if (!targetSectionHead) {
+                console.debug("targetSectionHead doesn't exists.")
+                return;
+            }
 
             const isSentence = !document.querySelector(".section-widget--main");
 
@@ -2387,7 +2421,7 @@ Use this prompt only for the next input.
 6. Use this HTML structure (all content in ${userLanguage}): 
 
 <b>[Base form]</b> <i>([Part of Speech])</i>
-<p>[Definition in ${userLanguage}]</p>
+<p>Definition of the word used in the context, ${userLanguage}]</p>
 <hr>
 <p>[Contextual explanation in ${userLanguage}]</p>
 <hr>
@@ -2407,7 +2441,7 @@ Use this prompt only for the next input.
 
 **Output:**
 <b>translator</b> <i>(명사)</i>
-<p>번역가, 통역사</p>
+<p>번역가</p>
 <hr>
 <p>This refers to individuals translating foreign content into their own language, as highlighted by the ESV Bible translators in context.</p>
 <hr>
@@ -2454,7 +2488,7 @@ Use this prompt only for the next input.
 **Sentence Input**
 - Input will be given as: 'Input: "sentence"'
 1. ALWAYS translate the entire input sentence first into ${userLanguage}, placing it in a '<p>' tag with bolded "Translation" in ${userLanguage}.
-2. Identify difficult or idiomatic words in the sentence that might benefit understanding (fewer is better).
+2. Identify difficult or idiomatic words in the sentence that might benefit understanding with care. Do not pick out too many words or expressions.
 3. For each such word or phrase, provide a meaning in ${userLanguage}.
 4. Use the following HTML structure:
 
@@ -2503,7 +2537,8 @@ Use this prompt only for the next input.
 Respond understood if you got it.
 `
             const plainTextPrompt = `
-Do not use the word/sentence prompt previously given. For all subsequent turns, the user input will be plain text. But don't forget the given input (Input: "", Context: "").
+Do not use the word/sentence prompt previously given. For all subsequent turns, the user input will be plain text. 
+Do not forget the previously given input, format of (Input: "", Context: "").
 **Plain Text Input (Conversational/Freetext)**
 - Input will be given as: 'Plain text input'.
 - Respond naturally and directly in ${userLanguage}. 
@@ -2541,7 +2576,10 @@ Pronunciation: Enunciate words with deliberate clarity, focusing on vowel sounds
 
             function updateReferenceWord(){
                 const selection = window.getSelection();
-                if (selection.rangeCount === 0) return;
+                if (selection.rangeCount === 0) {
+                    console.debug('rangeCount is zero.')
+                    return;
+                }
 
                 const referenceWord = targetSectionHead.querySelector(".reference-word");
                 const extractedText = extractTextFromDOM(selection.getRangeAt(0).cloneContents());
@@ -2647,7 +2685,10 @@ Pronunciation: Enunciate words with deliberate clarity, focusing on vowel sounds
                 const chatContainer = document.getElementById("chat-container")
 
                 const message = userInput.value.trim();
-                if (!message) return;
+                if (!message) {
+                    console.debug('Message is empty.')
+                    return;
+                }
 
                 const userMessage = message;
                 userInput.value = '';
@@ -2730,7 +2771,8 @@ Pronunciation: Enunciate words with deliberate clarity, focusing on vowel sounds
 
                     const meaning = document.querySelector("#chat-container > .bot-message > p");
                     if (meaning) {
-                        const hasMeaning = document.querySelector(".reference-input-text").value;
+                        const meaningElement = document.querySelector(".reference-input-text");
+                        const hasMeaning = meaningElement ? meaningElement.value : false;
                         navigator.clipboard.writeText((hasMeaning ? '\n': '') + meaning.textContent);
                         showToast("Meaning Copied!");
                     }
@@ -2753,10 +2795,16 @@ Pronunciation: Enunciate words with deliberate clarity, focusing on vowel sounds
 
                 const selectedTextElement = document.querySelector(".reference-word");
                 const selectedText = selectedTextElement ? selectedTextElement.textContent.trim() : "";
-                if (selectedText.length > 1000) return;
+                if (selectedText.length > 1000) {
+                    console.debug("The length of the selected text exceeds 1,000.")
+                    return;
+                }
 
                 let audioData = await openAITTS(`${selectedText}`, settings.ttsApiKey, settings.ttsVoice, 1.0, ttsInstructions);
-                if (audioData == null) return;
+                if (audioData == null) {
+                    console.debug("audioData can't be got.")
+                    return;
+                }
 
                 const newTtsButton = createElement("button", {id: "playAudio", textContent: "🔊", className: "is-tts"});
                 newTtsButton.addEventListener('click', async (event) => {
@@ -2868,7 +2916,7 @@ Pronunciation: Enunciate words with deliberate clarity, focusing on vowel sounds
                 const lessonInfo = await getLessonInfo(lessonId);
 
                 const wordIndicatorItems = lessonElement.querySelector(".word-indicator--item");
-                if (!wordIndicatorItems) { return; }
+                if (!wordIndicatorItems) return;
 
                 const lingqsPercentage = Math.round((lessonInfo.cardsCount / lessonInfo.uniqueWordsCount) * 100);
                 const lingqsElement = lessonElement.querySelector('.word-indicator--item[title="LingQs"] > span > span');
@@ -2925,7 +2973,7 @@ Pronunciation: Enunciate words with deliberate clarity, focusing on vowel sounds
 
                 const allLessons = await getAllLessons(languageCode, collectionId);
                 const confirmed = confirm(`Reset all ${allLessons.length} lessons to their starting positions?`);
-                if (!confirmed) { return; }
+                if (!confirmed) return;
 
                 for (const lesson of allLessons) {
                     await setLessonProgress(lesson.id, 0);
