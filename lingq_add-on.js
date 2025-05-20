@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*/learn/*/web/reader/*
 // @match        https://www.lingq.com/*/learn/*/web/library/course/*
 // @exclude      https://www.lingq.com/*/learn/*/web/editor/*
-// @version      5.7.2
+// @version      5.8
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @namespace https://greasyfork.org/users/1458847
@@ -2692,6 +2692,9 @@ Respond understood if you got it.
 
                     chatHistory = updateChatHistoryState(chatHistory, plainTextPrompt, "user");
                     chatHistory = updateChatHistoryState(chatHistory, "Understood.", "assistant");
+
+                    const meaning = document.querySelector("#chat-container > .bot-message > p");
+                    if (meaning) navigator.clipboard.writeText('\n' + meaning.textContent);
                 }
             }
 
