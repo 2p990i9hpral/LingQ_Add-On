@@ -1,10 +1,12 @@
 # LingQ Addon
 
+### Reader Layout
 <img src="images/layout.png" width=800></br>
 
+### Course Page
 <img src="images/course.png" width=800></br>
 
-A GreaseMonkey/Tampermonkey UserScript that enhances the LingQ language learning platform.
+A GreaseMonkey/Tampermonkey UserScript that enhances the LingQ language learning platform, adding features like customizable layouts, appearance settings, vocabulary downloading, a chat widget, AI-based TTS, and workflow improvements.
 
 ## Features
 
@@ -16,28 +18,29 @@ A GreaseMonkey/Tampermonkey UserScript that enhances the LingQ language learning
 
 *   **Appearance Customization:**
     *   Adjustable font size and line height for improved readability.
-    *   Dark and Light color themes, with customizable color palette.
+    *   Dark and Light color themes, with customizable color palette, including the background color for known words.
 *   **Vocabulary Downloading:**
     *   Download known and unknown words and phrases from the LingQ interface in CSV format.
 *   **Workflow Enhancements:**
-    *   Keyboard controls for common tasks (marking words as known, enabling/disabling full screen for video, moving video time, copying selected vocab, or inputing meaning for vocab.
+    *   Keyboard controls for common tasks such as marking words as known, enabling/disabling full screen for video, moving video time, or copying selected vocab.
     *   Optional automatic lesson completion upon audio or video completion.
     *   Improved sentence focus ensures sentence being played is automatically moved to the center of the screen.
-    *  Reset course to first position button.
-    *  Known words indicator on the library page with percentage detail.
-    *  Default course sorting option.
-*   Enhanced YouTube player compatibility:
-    *   Enables keyboard control on the player.
+    *   Reset course to first position button.
+    *   Known words indicator on the library page with percentage detail.
+    *   Default course sorting option.
+*   **Chat Widget:**
+    *   An AI-powered chat widget for interacting with the lesson content.
+    *   An AI-based TTS model that substitutes original one.
+*   Enhanced YouTube player:
     *   Turns on caption default.
     *   Disables the player controller.
     *   Adds a video progress indicator synced with the audio player's progress.
-*   Smooth scrolling for better reading flow.
 
 ## Installation
 
 1.  Install a userscript manager like [Tampermonkey](https://www.tampermonkey.net/) or [GreaseMonkey](https://addons.mozilla.org/en-US/firefox/addon/greasemonkey/).
-3.  Install the script from https://greasyfork.org/en/scripts/533096-lingq-addon.
-4.  Visit LingQ, and the addon features will be active on reader pages.
+2.  Install the script from [Project page](https://greasyfork.org/en/scripts/533096-lingq-addon).
+3.  Visit [LingQ](https://lingq.com/), and the addon features will be active on reader pages.
 
 ## Usage
 
@@ -45,16 +48,34 @@ Once installed, an "⚙️" (settings), "💾" (download words) and a "✔" (com
 
 ### Settings
 
+<img src="images/setting_popup.png"></br>
+
 Click the "⚙️" icon to open the settings popup.  From there, you can adjust:
 
 *   **Layout style**: Select preset reader layouts.
 *   **Font Settings**: Adjust font size and line height.
 *   **Color Mode**: Select light or dark color mode and customize colors, including font, LingQ background and border, and underlining.
-*  **Auto Finishing**: automatically complete the lesson after finishing
+*   **Auto Finishing**: automatically complete the lesson after finishing
+*   **Keyboard Shortcuts**: Assign new shortcuts for actions.
+*   **Chat widget**: Select LLM Model.
+*   **AI-TTS**: Select TTS voice.
+
+### Chat Widget (Word / Sentence)
+
+<img src="images/chat-widget.png"></br>
+
+The add-on provides a chat widget that uses AI to enhance your learning experience:
+
+*   **Access:** The chat widget can be enabled/disabled in the settings popup.
+*   **Models:**  Choose from various language models (LLMs) in the settings.
+*   **Output:** The chat widget provides structured and informative output.
+*   **Keyboard Shortcut**: Press `Esc` to focus on the chat widget input field.
 
 ### Downloading Words
 
-Click the "💾" icon to export LingQ, after clicking a popup will open.  Use the buttons to download the following:
+<img src="images/download_popup.png"></br>
+
+Click the "💾" icon to export LingQs, after clicking a popup will open.  Use the buttons to download the following:
 
 *   **Download Unknown LingQs:** Exports LingQs (words + phrases) with statuses 1, 2, 3, and 4 as a CSV file.
 *   **Download Unknown LingQ Words:** Exports words with status 1, 2, 3, and 4
@@ -63,27 +84,16 @@ Click the "💾" icon to export LingQ, after clicking a popup will open.  Use th
 *   **Download Known Words:** Exports known words as a CSV file.
 
 ### Completing Lesson
+
 Click the "✔" icon to complete the lesson.
 
 ### Reset Course
 
-Library courses will have an option to reset lessons to thier first position.
+Library courses will have an option to reset lessons to their first position.
 
 ### Known Words Indicator
-Library Lessons are enhanced with and indicator for known words.
 
-### Keyboard Shortcuts
-
-The following keyboard shortcuts are available:
-
-*   `q`: Toggle video full screen
-*   `w`: move back video by 5 seconds
-*   `e`: move forward video by 5 seconds
-*   `r`: Make word Known
-*   `t`: Open Translator
-*   `` ` ``: Move cursor to reference input
-*   `d` or `f`: Open dictionary
-*   `c`: Copy selected text
+Library Lessons are enhanced with an indicator for known words.
 
 ## Contributing
 
