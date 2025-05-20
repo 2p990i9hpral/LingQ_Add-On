@@ -1,12 +1,13 @@
 # LingQ Addon
 
+A userscript for Tampermonkey/GreaseMonkey that significantly enhances the LingQ language learning experience. <br>
+It offers customizable layouts, appearance settings, vocabulary downloading tools, an AI-powered chat widget, AI-based TTS, and workflow improvements, all aimed at streamlining your study process.
+
 ### Reader Layout
 <img src="images/layout.png" width=800></br>
 
 ### Course Page
 <img src="images/course.png" width=800></br>
-
-A GreaseMonkey/Tampermonkey UserScript that enhances the LingQ language learning platform, adding features like customizable layouts, appearance settings, vocabulary downloading, a chat widget, AI-based TTS, and workflow improvements.
 
 ## Features
 
@@ -15,7 +16,6 @@ A GreaseMonkey/Tampermonkey UserScript that enhances the LingQ language learning
     *   Video 2 layout: Displays the video on the right side, with the text to the left. Optimized for wide screens.
     *   Audio layout: Optimized for lessons with audio.
     *   Off layout: Disables layout changes and focuses on the sentence mode. Provides a movable, resizable video.
-
 *   **Appearance Customization:**
     *   Adjustable font size and line height for improved readability.
     *   Dark and Light color themes, with customizable color palette, including the background color for known words.
@@ -23,7 +23,7 @@ A GreaseMonkey/Tampermonkey UserScript that enhances the LingQ language learning
     *   Download known and unknown words and phrases from the LingQ interface in CSV format.
 *   **Workflow Enhancements:**
     *   Keyboard controls for common tasks such as marking words as known, enabling/disabling full screen for video, moving video time, or copying selected vocab.
-    *   Optional automatic lesson completion upon audio or video completion.
+    *   Optional automatic lesson completion upon audio/video completion.
     *   Improved sentence focus ensures sentence being played is automatically moved to the center of the screen.
     *   Reset course to first position button.
     *   Known words indicator on the library page with percentage detail.
@@ -68,8 +68,8 @@ The add-on provides a chat widget that uses AI to enhance your learning experien
 
 *   **Access:** The chat widget can be enabled/disabled in the settings popup.
 *   **Models:**  Choose from various language models (LLMs) in the settings.
-*   **Output:** The chat widget provides structured and informative output.
-*   **Keyboard Shortcut**: Press `Esc` to focus on the chat widget input field.
+*   **Input**: There is an Ask Selected option to ask using the selected text automatically or for the model to follow free form text input.
+*   **Output:** The chat widget can provide structured and informative output like definitions, translations, and explanations.
 
 ### Downloading Words
 
@@ -101,4 +101,4 @@ Feel free to contribute to the project by submitting pull requests or opening is
 
 ## License
 
-[MIT License](LICENSE) (Choose the appropriate license)
+[MIT License](LICENSE)
