@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*/learn/*/web/reader/*
 // @match        https://www.lingq.com/*/learn/*/web/library/course/*
 // @exclude      https://www.lingq.com/*/learn/*/web/editor/*
-// @version      5.8
+// @version      5.8.2
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @namespace https://greasyfork.org/users/1458847
@@ -22,7 +22,7 @@
         },
         set: (key, value) => GM_setValue(key, value)
     };
-    
+
     const defaults = {
         styleType: "video",
         heightBig: 400,
@@ -1579,7 +1579,23 @@
         .reference-helpers {
             display: none !important;
         }
-
+        
+        .userToast {
+            position: fixed;
+            top: 60px;
+            right: 20px;
+            background-color: var(--background-color);
+            color: ${settings.colorMode === "dark" ? "white" : "#ffffff"};
+            padding: 5px 10px;
+            border-radius: 10px;
+            z-index: 9999;
+            opacity: 0;
+            transition: opacity 0.5s ease-in-out;
+            font-size: 0.8rem;
+            font-weight: lighter;
+            pointer-events: none;
+        }
+        
         .main-footer {
             grid-area: 3 / 1 / 3 / 1 !important;
             align-self: end;
@@ -2214,6 +2230,25 @@
             .replace(/[^\S\n]?(,)/g, '$1');
     }
 
+    function showToast(inputMessage) {
+        const toast = createElement("div", {
+            className: 'userToast',
+            textContent: inputMessage
+        });
+        document.body.appendChild(toast);
+
+        setTimeout(() => {
+            toast.style.opacity = '1';
+        }, 10);
+
+        setTimeout(() => {
+            toast.style.opacity = '0';
+            setTimeout(() => {
+                toast.remove();
+            }, 1000);
+        }, 1500);
+    }
+
     function stopPlayingAudio(autioContext) {
         if (!autioContext || audioContext.state !== 'running') return;
 
@@ -2421,7 +2456,7 @@ Use this prompt only for the next input.
 1. ALWAYS translate the entire input sentence first into ${userLanguage}, placing it in a '<p>' tag with bolded "Translation" in ${userLanguage}.
 2. Identify difficult or idiomatic words in the sentence that might benefit understanding (fewer is better).
 3. For each such word or phrase, provide a meaning in ${userLanguage}.
-4.  Use the following HTML structure:
+4. Use the following HTML structure:
 
 <p><b>[Translated Sentence in ${userLanguage}]</b></p>
 <hr>
@@ -2468,12 +2503,12 @@ Use this prompt only for the next input.
 Respond understood if you got it.
 `
             const plainTextPrompt = `
-Do not use the prompt previously given. For all subsequent turns, the user input will be plain text.
-- Input will be given as: 'Plain text input'.
+Do not use the word/sentence prompt previously given. For all subsequent turns, the user input will be plain text. But don't forget the given input (Input: "", Context: "").
 **Plain Text Input (Conversational/Freetext)**
-- Respond naturally and directly in ${userLanguage}.
-- Avoid structured outputs; adhere to a conversational context.
-- DO NOT use the Single Word/Phrase or Sentence formats.
+- Input will be given as: 'Plain text input'.
+- Respond naturally and directly in ${userLanguage}. 
+- Avoid structured outputs; adhere to a conversational context. Do not use the Word/Phrase or Sentence formats.
+- Use HTML tags not markdown tags.
 
 ## Examples
 
@@ -2497,10 +2532,10 @@ Respond understood if you got it.
 `
 
             const ttsInstructions = `
-                Accent/Affect: Neutral and clear, like a professional voice-over artist. Focus on accuracy.
-                Tone: Objective and methodical. Maintain a slightly formal tone without emotion.
-                Pacing: Use distinct pauses between words and phrases to demonstrate pronunciation nuances. Emphasize syllabic clarity.
-                Pronunciation: Enunciate words with deliberate clarity, focusing on vowel sounds and consonant clusters.
+Accent/Affect: Neutral and clear, like a professional voice-over artist. Focus on accuracy.
+Tone: Objective and methodical. Maintain a slightly formal tone without emotion.
+Pacing: Use distinct pauses between words and phrases to demonstrate pronunciation nuances. Emphasize syllabic clarity.
+Pronunciation: Enunciate words with deliberate clarity, focusing on vowel sounds and consonant clusters.
             `;
             let chatHistory = [];
 
@@ -2631,8 +2666,8 @@ Respond understood if you got it.
             function getSelectedWithContext() {
                 const selectedTextElement = targetSectionHead.querySelector(".reference-word");
                 const contextElement = (document.querySelector("span.selected-text, span.is-selected") || {}).parentElement || null;
-                const selectedText = selectedTextElement ? selectedTextElement.textContent.trim() : "";
-                const contextText = contextElement ? contextElement.innerText.trim() : "";
+                const selectedText = selectedTextElement ? extractTextFromDOM(selectedTextElement).trim() : "";
+                const contextText = contextElement ? extractTextFromDOM(contextElement).trim() : "";
 
                 return `Input: "${selectedText}"` +  (!isSentence ? `, Context: "${contextText}"` : ``);
             }
@@ -2694,7 +2729,11 @@ Respond understood if you got it.
                     chatHistory = updateChatHistoryState(chatHistory, "Understood.", "assistant");
 
                     const meaning = document.querySelector("#chat-container > .bot-message > p");
-                    if (meaning) navigator.clipboard.writeText('\n' + meaning.textContent);
+                    if (meaning) {
+                        const hasMeaning = document.querySelector(".reference-input-text").value;
+                        navigator.clipboard.writeText((hasMeaning ? '\n': '') + meaning.textContent);
+                        showToast("Meaning Copied!");
+                    }
                 }
             }
 
