@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*/learn/*/web/reader/*
 // @match        https://www.lingq.com/*/learn/*/web/library/course/*
 // @exclude      https://www.lingq.com/*/learn/*/web/editor/*
-// @version      5.9
+// @version      5.9.1
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @namespace https://greasyfork.org/users/1458847
@@ -50,17 +50,6 @@
         librarySortOption: 0,
         autoFinishing: false,
 
-        chatWidget: false,
-        llmProviderModel: "openai gpt-4.1-nano",
-        llmApiKey: "",
-        askSelected: false,
-
-        tts: false,
-        ttsApiKey: "",
-        ttsVoice: "alloy",
-        ttsWord: false,
-        ttsSentence: false,
-
         keyboardShortcut: false,
         shortcutVideoFullscreen: 'p',
         shortcutBackward5s: 'a',
@@ -71,7 +60,18 @@
         shortcutDictionary: 'f',
         shortcutCopySelected: 'c',
         shortcutMeaningInput: '`',
-        shortcutChatInput: 'q'
+        shortcutChatInput: 'q',
+
+        chatWidget: false,
+        llmProviderModel: "openai gpt-4.1-nano",
+        llmApiKey: "",
+        askSelected: false,
+
+        tts: false,
+        ttsApiKey: "",
+        ttsVoice: "alloy",
+        ttsWord: false,
+        ttsSentence: false,
     };
 
     const settings = new Proxy({}, {
@@ -87,6 +87,12 @@
         }
     });
 
+    const colorSettings = getColorSettings(settings.colorMode);
+
+    let styleElement = null;
+
+    /* UI Setup */
+
     function getColorSettings(colorMode) {
         const prefix = colorMode === "dark" ? "dark_" : "white_";
 
@@ -100,12 +106,6 @@
             playingUnderline: settings[prefix + "playingUnderline"],
         };
     }
-
-    const colorSettings = getColorSettings(settings.colorMode);
-
-    let styleElement = null;
-
-    /* UI Setup */
 
     function createSettingsPopup() {
         const popup = createElement("div", {id: "lingqAddonSettingsPopup"});
@@ -1821,13 +1821,28 @@
 
     async function waitForElement(selector) {
         return new Promise(resolve => {
-            if (document.querySelector(selector)) return resolve(document.querySelector(selector));
+            const element = document.querySelector(selector);
+            if (element) return resolve(element);
 
-            const observer = new MutationObserver(() => {
-                if (document.querySelector(selector)) {
-                    resolve(document.querySelector(selector));
-                    observer.disconnect();
-                }
+            const observer = new MutationObserver((mutations) => {
+                mutations.forEach((mutation) => {
+                    for (const node of mutation.addedNodes) {
+                        if (node.nodeType !== Node.ELEMENT_NODE) continue;
+
+                        if (node.matches(selector)) {
+                            resolve(node);
+                            observer.disconnect();
+                            return;
+                        }
+
+                        const foundElement = node.querySelector(selector);
+                        if (foundElement) {
+                            resolve(foundElement);
+                            observer.disconnect();
+                            return;
+                        }
+                    }
+                });
             });
 
             observer.observe(document.documentElement, {childList: true, subtree: true});
@@ -2078,7 +2093,7 @@
                 const flooredProgressPercentage = Math.floor(progressPercentage / progressUpdatePeriod) * progressUpdatePeriod;
 
                 if (flooredProgressPercentage > lastCompletedPercentage) {
-                    console.log(`progress percentage: ${flooredProgressPercentage}. Updated`);
+                    console.log(`progress percentage: ${flooredProgressPercentage}`);
                     const wordIndex = Math.floor(lessonInfo["totalWordsCount"] * (flooredProgressPercentage / 100));
                     setLessonProgress(lessonId, wordIndex);
                     return flooredProgressPercentage;
@@ -2096,7 +2111,8 @@
                         lastCompletedPercentage = updateLessonProgress(lessonId, lessonInfo, progressPercentage, lastCompletedPercentage);
                         const isLessonFinished = progressPercentage >= 99.5;
                         if (isLessonFinished && settings.autoFinishing) {
-                            setTimeout(finishLesson, 3000);
+                            console.log('lesson finished.')
+                            setTimeout(finishLesson, 1000);
                         }
                     }
                 }
@@ -2352,14 +2368,14 @@ Respond understood if you got it.
 `
             const sentencePrompt = `
 Use this prompt only for the next input.
-**Sentence Input**
-- Input will be given as: 'Input: "sentence"'
-1. ALWAYS translate the entire input sentence first into ${userLanguage}, placing it in a '<p>' tag with bolded "Translation" in ${userLanguage}.
-2. Identify difficult or idiomatic words in the sentence that might benefit understanding with care. Do not pick out too many words or expressions.
+**Sentence(s) Input**
+- Input will be given as: 'Input: "sentence(s)"'
+1. ALWAYS translate the entire input sentence(s) first into ${userLanguage}, placing it in a '<p>' tag with bolded "Translation" in ${userLanguage}.
+2. Identify difficult or idiomatic words in the sentence(s) that might benefit understanding with care. Do not pick out too many words or expressions.
 3. For each such word or phrase, provide a meaning in ${userLanguage}.
 4. Use the following HTML structure:
 
-<p><b>[Translated Sentence in ${userLanguage}]</b></p>
+<p><b>[Translated Sentence(s) in ${userLanguage}]</b></p>
 <hr>
 <p>[Explanation in ${userLanguage}]</p>
 <hr>
@@ -2367,7 +2383,7 @@ Use this prompt only for the next input.
   <li><b>[Word in original language]:</b> [Meaning in ${userLanguage}]</li>
 </ul>
 
-*Note: Always include the full sentence translation first in the first '<p>' tag, and then explanations for multiple relevant expressions if applicable.*
+*Note: Always include the full sentence(s) translation first in the first '<p>' tag, and then explanations for multiple relevant expressions if applicable.*
 
 ## Examples
 
