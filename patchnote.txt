@@ -1,0 +1,43 @@
+- 1.3: Article is displayed on a single page.
+- 1.4: Now the sentence playing is located at the center of the screen. You don’t need to scrol acording to the playing video.
+- 1.5: Provide new hotkeys: Move the cursor to the reference input (`), Open Dictionary (d or f), Open Translator (t), and Copy selected text (c)
+- 1.6: Now, LingQ uses “youtube.com” player, not “youtube-nocookie.com 1”. Some code is updated for that change.
+
+- 2.3 Provide three layout options: Video, Video(wide), Audio, off.
+- 2.4: Provide video(wide) layout options
+- 2.6: Fixed some hotkeys-related glitches.
+- 2.7: Added a toggle for dark/white background theme.
+- 2.8: The video player in the “off” setting is resizable and movable. Removed the “course sorting”
+- 2.9: The video player is automatically expanded.
+- 2.10: Whenever you change the dark/white theme setting, LingQ’s theme also changes automatically.
+
+- 3.0: You can set the options according to your preference in the options pop-up.
+- 3.1: Changed the location of the reset button. Fix some unit-related problems.
+- 3.2: Changed color pickers and default values.
+- 3.3: Changed video layout and unit of scroll bars. Updated some trivial UI elements.
+- 3.4: Added the complete lesson button.
+- 3.5: Added the sentence mode video size setting.
+- 3.6: Refactored the code. Fixed a bug related to the sentence view.
+- 3.7: Updated header-related UI elements. Fixed the scroll-related issue
+- 3.8: The lesson sort option is maintained
+- 3.9: Added a progress bar under the video.
+- 3.10: Fixed the glitch that the Enter key doesn't work sometimes when typing the meaning of a word.
+- 3.11: The lesson is finished automatically when the video/audio ends.
+
+- 4.0: Added the download words popup. You can download every known word.
+- 4.1: You can download every known/unknown word/LingQs.
+- 4.2: Added a progress bar for the downloaders.
+- 4.3: The lesson's progress is updated according to the progress of the video.
+- 4.4: Added a button that resets lessons to their starting positions.
+- 4.5: Provide the ratio of both LingQ and KnownWords of a lesson.
+
+- 5.0: Provide a chatbot widget.
+- 5.1: Changed the default model. Made the "off mode" also affected by the style settings.
+- 5.2: Refactored the ChatWidget code. Added the checkbox for enabling/disabling the chat widget.
+- 5.3: Added an AI-based TTS option.
+- 5.4: Added widgetWidth slider.
+- 5.5: Added chat widget for all widgets. Added a loading message while a bot message is loading.
+- 5.6: Fixed the issue where the characters (`.`, `,`, `?`, and `\n`) were omitted from the selected text.
+- 5.7: Add customizable keyboard shortcuts.
+- 5.8: 	Meaning of the selected word/sentence is copyed to clipboard.
+- 5.9: Huge code refactoring for performance and clean code reasons.
