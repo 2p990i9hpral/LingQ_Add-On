@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*/learn/*/web/reader/*
 // @match        https://www.lingq.com/*/learn/*/web/library/course/*
 // @exclude      https://www.lingq.com/*/learn/*/web/editor/*
-// @version      5.8.3
+// @version      5.9
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @namespace https://greasyfork.org/users/1458847
@@ -32,24 +32,20 @@
         lineHeight: 1.7,
 
         colorMode: "dark",
-        darkColors: {
-            fontColor: "#e0e0e0",
-            lingqBackground: "rgba(109, 89, 44, 0.7)",
-            lingqBorder: "rgba(254, 203, 72, 0.3)",
-            lingqBorderLearned: "rgba(254, 203, 72, 0.5)",
-            knownBackground: "rgba(37, 57, 82, 0.7)",
-            knownBorder: "rgba(72, 154, 254, 0.5)",
-            playingUnderline: "#ffffff"
-        },
-        whiteColors: {
-            fontColor: "#000000",
-            lingqBackground: "rgba(255, 200, 0, 0.4)",
-            lingqBorder: "rgba(255, 200, 0, 0.3)",
-            lingqBorderLearned: "rgba(255, 200, 0, 1)",
-            knownBackground: "rgba(198, 223, 255, 0.7)",
-            knownBorder: "rgba(0, 111, 255, 0.3)",
-            playingUnderline: "#000000"
-        },
+        dark_fontColor: "#e0e0e0",
+        dark_lingqBackground: "rgba(109, 89, 44, 0.7)",
+        dark_lingqBorder: "rgba(254, 203, 72, 0.3)",
+        dark_lingqBorderLearned: "rgba(254, 203, 72, 0.5)",
+        dark_knownBackground: "rgba(37, 57, 82, 0.7)",
+        dark_knownBorder: "rgba(72, 154, 254, 0.5)",
+        dark_playingUnderline: "#ffffff",
+        white_fontColor: "#000000",
+        white_lingqBackground: "rgba(255, 200, 0, 0.4)",
+        white_lingqBorder: "rgba(255, 200, 0, 0.3)",
+        white_lingqBorderLearned: "rgba(255, 200, 0, 1)",
+        white_knownBackground: "rgba(198, 223, 255, 0.7)",
+        white_knownBorder: "rgba(0, 111, 255, 0.3)",
+        white_playingUnderline: "#000000",
 
         librarySortOption: 0,
         autoFinishing: false,
@@ -78,86 +74,47 @@
         shortcutChatInput: 'q'
     };
 
-    const settings = {
-        styleType: storage.get("styleType", defaults.styleType),
-        heightBig: storage.get("heightBig", defaults.heightBig),
-        sentenceHeight: storage.get("sentenceHeight", defaults.sentenceHeight),
-        widgetWidth: storage.get("widgetWidth", defaults.widgetWidth),
-        fontSize: storage.get("fontSize", defaults.fontSize),
-        lineHeight: storage.get("lineHeight", defaults.lineHeight),
+    const settings = new Proxy({}, {
+        get: (target, key) => {
+            if (key in target) return target[key];
 
-        colorMode: storage.get("colorMode", defaults.colorMode),
+            return storage.get(key, defaults[key]);
+        },
+        set: (target, key, value) => {
+            storage.set(key, value);
+            target[key] = value;
+            return true;
+        }
+    });
 
-        librarySortOption: storage.get("librarySortOption", defaults.librarySortOption),
-        autoFinishing: storage.get("autoFinishing", defaults.autoFinishing),
+    function getColorSettings(colorMode) {
+        const prefix = colorMode === "dark" ? "dark_" : "white_";
 
-        chatWidget: storage.get("chatWidget", defaults.chatWidget),
-        llmProviderModel: storage.get("llmProviderModel", defaults.llmProviderModel),
-        llmApiKey: storage.get("llmApiKey", defaults.llmApiKey),
-        askSelected: storage.get("askSelected", defaults.askSelected),
-
-        tts: storage.get("tts", defaults.tts),
-        ttsApiKey: storage.get("ttsApiKey", defaults.ttsApiKey),
-        ttsVoice: storage.get("ttsVoice", defaults.ttsVoice),
-        ttsWord: storage.get("ttsWord", defaults.ttsWord),
-        ttsSentence: storage.get("ttsSentence", defaults.ttsSentence),
-
-        keyboardShortcut: storage.get("keyboardShortcut", defaults.keyboardShortcut),
-        shortcutVideoFullscreen: storage.get("shortcutVideoFullscreen", defaults.shortcutVideoFullscreen),
-        shortcutBackward5s: storage.get("shortcutBackward5s", defaults.shortcutBackward5s),
-        shortcutForward5s: storage.get("shortcutForward5s", defaults.shortcutForward5s),
-        shortcutTTSPlay: storage.get("shortcutTTSPlay", defaults.shortcutTTSPlay),
-        shortcutTranslator: storage.get("shortcutTranslator", defaults.shortcutTranslator),
-        shortcutMakeKnown: storage.get("shortcutMakeKnown", defaults.shortcutMakeKnown),
-        shortcutDictionary: storage.get("shortcutDictionary", defaults.shortcutDictionary),
-        shortcutCopySelected: storage.get("shortcutCopySelected", defaults.shortcutCopySelected),
-        shortcutMeaningInput: storage.get("shortcutMeaningInput", defaults.shortcutMeaningInput),
-        shortcutChatInput: storage.get("shortcutChatInput", defaults.shortcutChatInput)
-    };
+        return {
+            fontColor: settings[prefix + "fontColor"],
+            lingqBackground: settings[prefix + "lingqBackground"],
+            lingqBorder: settings[prefix + "lingqBorder"],
+            lingqBorderLearned: settings[prefix + "lingqBorderLearned"],
+            knownBackground: settings[prefix + "knownBackground"],
+            knownBorder: settings[prefix + "knownBorder"],
+            playingUnderline: settings[prefix + "playingUnderline"],
+        };
+    }
 
     const colorSettings = getColorSettings(settings.colorMode);
 
     let styleElement = null;
 
-    function getColorSettings(colorMode) {
-        const prefix = colorMode === "dark" ? "dark_" : "white_";
-        const defaultColors = colorMode === "dark" ? defaults.darkColors : defaults.whiteColors;
-
-        return {
-            fontColor: storage.get(prefix + "fontColor", defaultColors.fontColor),
-            lingqBackground: storage.get(prefix + "lingqBackground", defaultColors.lingqBackground),
-            lingqBorder: storage.get(prefix + "lingqBorder", defaultColors.lingqBorder),
-            lingqBorderLearned: storage.get(prefix + "lingqBorderLearned", defaultColors.lingqBorderLearned),
-            knownBackground: storage.get(prefix + "knownBackground", defaultColors.knownBackground),
-            knownBorder: storage.get(prefix + "knownBorder", defaultColors.knownBorder),
-            playingUnderline: storage.get(prefix + "playingUnderline", defaultColors.playingUnderline)
-        };
-    }
-
-    function createElement(tag, props = {}) {
-        const element = document.createElement(tag);
-        Object.entries(props).forEach(([key, value]) => {
-            if (key === "style" && typeof value === "string") {
-                element.style.cssText = value;
-            } else if (key === "textContent") {
-                element.textContent = value;
-            } else {
-                element[key] = value;
-            }
-        });
-        return element;
-    }
+    /* UI Setup */
 
     function createSettingsPopup() {
         const popup = createElement("div", {id: "lingqAddonSettingsPopup"});
 
-        // drag handle
         const dragHandle = createElement("div", {id: "lingqAddonSettingsDragHandle"});
 
         const dragHandleTitle = createElement("h3", {textContent: "LingQ Addon Settings"});
         dragHandle.appendChild(dragHandleTitle);
 
-        // popup content
         const content = createElement("div", {style: `padding: 0 5px;`});
         const popupContentElement = generatePopupContent();
         content.appendChild(popupContentElement);
@@ -390,7 +347,6 @@
     function createDownloadWordsPopup() {
         const popup = createElement("div", {id: "lingqDownloadWordsPopup"});
 
-        // drag handle
         const dragHandle = createElement("div", {id: "lingqDownloadWordsDragHandle"});
 
         const dragHandleTitle = createElement("h3", {textContent: "Download Words"});
@@ -410,7 +366,6 @@
             content.appendChild(rowContainer);
         });
 
-        // Progress Bar Elements
         const progressContainer = createElement("div", {id: "downloadProgressContainer", className: "popup-row"});
         const progressText = createElement("div", {id: "downloadProgressText"});
         const progressBar = createElement("progress", {id: "downloadProgressBar", value: "0", max: "100"});
@@ -431,7 +386,6 @@
     }
 
     function createUI() {
-        // Create settings button
         const settingsButton = createElement("button", {
             id: "lingqAddonSettings",
             textContent: "⚙️",
@@ -439,7 +393,6 @@
             className: "nav-button"
         });
 
-        // Create lesson complete button
         const completeLessonButton = createElement("button", {
             id: "lingqLessonComplete",
             textContent: "✔",
@@ -447,7 +400,6 @@
             className: "nav-button"
         });
 
-        // Create download words button
         const downloadWordsButton = createElement("button", {
             id: "lingqDownloadWords",
             textContent: "💾",
@@ -455,7 +407,6 @@
             className: "nav-button"
         });
 
-        // Find the #main-nav element
         let mainNav = document.querySelector("#main-nav > nav > div:nth-child(2) > div:nth-child(1)");
 
         if (mainNav) {
@@ -466,15 +417,12 @@
             console.error("#main-nav element not found. Buttons not inserted.");
         }
 
-        // Create settings popup
         const settingsPopup = createSettingsPopup();
         document.body.appendChild(settingsPopup);
 
-        // Create download words popup
         const downloadWordsPopup = createDownloadWordsPopup();
         document.body.appendChild(downloadWordsPopup);
 
-        // Add event listeners
         setupSettingEventListeners(settingsButton, settingsPopup);
         setupDownloadWordsEventListeners(downloadWordsButton, downloadWordsPopup);
         setupEventListeners()
@@ -532,7 +480,7 @@
                 function saveColorSetting(key, value) {
                     const currentColorMode = document.getElementById("colorModeSelector").value;
                     const prefix = currentColorMode === "dark" ? "dark_" : "white_";
-                    storage.set(prefix + key, value);
+                    settings[prefix + key] = value;
                 }
 
                 const pickerElement = document.getElementById(pickerId);
@@ -605,23 +553,6 @@
             });
         }
 
-        settingsButton.addEventListener("click", () => {
-            settingsPopup.style.display = "block";
-            initializePickrs();
-
-            const dragHandle = document.getElementById("lingqAddonSettingsDragHandle");
-            makeDraggable(settingsPopup, dragHandle);
-        });
-
-        const styleTypeSelector = document.getElementById("styleTypeSelector");
-        styleTypeSelector.addEventListener("change", (event) => {
-            const selectedStyleType = event.target.value;
-            storage.set("styleType", selectedStyleType);
-            document.getElementById("videoSettings").style.display = selectedStyleType === "video" ? "block" : "none";
-            document.getElementById("sentenceVideoSettings").style.display = selectedStyleType === "off" ? "block" : "none";
-            applyStyles(selectedStyleType, document.getElementById("colorModeSelector").value);
-        });
-
         function updateColorInputs(colorSettings) {
             document.getElementById("fontColorText").value = colorSettings.fontColor;
             document.getElementById("lingqBackgroundText").value = colorSettings.lingqBackground;
@@ -671,27 +602,17 @@
             event.stopPropagation();
 
             const selectedColorMode = this.value;
-            const settingsPopup = document.getElementById("lingqAddonSettingsPopup");
-            settingsPopup.style.backgroundColor = selectedColorMode === "dark" ? "#2a2c2e" : "#ffffff";
 
-            storage.set("colorMode", selectedColorMode);
+            settings.colorMode = selectedColorMode;
+            document.documentElement.style.setProperty("--background-color", selectedColorMode === "dark" ? "#2a2c2e" : "#ffffff");
 
             const colorSettings = getColorSettings(selectedColorMode);
 
             updateColorInputs(colorSettings);
-
-            document.documentElement.style.setProperty(
-                "--background-color",
-                selectedColorMode === "dark" ? "#2a2c2e" : "#ffffff"
-            );
             updateCssColorVariables(colorSettings);
-
-            applyStyles(document.getElementById("styleTypeSelector").value, selectedColorMode);
-
             updateColorPickerBackgrounds(colorSettings);
+            applyStyles(document.getElementById("styleTypeSelector").value, selectedColorMode);
         }
-
-        document.getElementById("colorModeSelector").addEventListener("change", updateColorMode);
 
         function setupSlider(sliderId, valueId, settingKey, unit, cssVar, valueTransform) {
             const slider = document.getElementById(sliderId);
@@ -702,88 +623,38 @@
                 const transformedValue = valueTransform(value);
 
                 valueDisplay.textContent = transformedValue.toString().replace(unit, '');
-                storage.set(settingKey, value);
+                settings[settingKey] = value;
                 document.documentElement.style.setProperty(cssVar, transformedValue);
             });
         }
 
-        setupSlider("fontSizeSlider", "fontSizeValue", "fontSize", "rem", "--font-size", (val) => `${val}rem`);
-        setupSlider("lineHeightSlider", "lineHeightValue", "lineHeight", "", "--line-height", (val) => val);
+        settingsButton.addEventListener("click", () => {
+            settingsPopup.style.display = "block";
+            initializePickrs();
+
+            const dragHandle = document.getElementById("lingqAddonSettingsDragHandle");
+            makeDraggable(settingsPopup, dragHandle);
+        });
+
+        const styleTypeSelector = document.getElementById("styleTypeSelector");
+        styleTypeSelector.addEventListener("change", (event) => {
+            const selectedStyleType = event.target.value;
+            settings.styleType = selectedStyleType;
+            document.getElementById("videoSettings").style.display = selectedStyleType === "video" ? "block" : "none";
+            document.getElementById("sentenceVideoSettings").style.display = selectedStyleType === "off" ? "block" : "none";
+            applyStyles(selectedStyleType, document.getElementById("colorModeSelector").value);
+        });
+
         setupSlider("heightBigSlider", "heightBigValue", "heightBig", "px", "--height-big", (val) => `${val}px`);
         setupSlider("sentenceHeightSlider", "sentenceHeightValue", "sentenceHeight", "px", "--sentence-height", (val) => `${val}px`);
         setupSlider("widgetWidthSlider", "widgetWidthValue", "widgetWidth", "px", "--widget-width", (val) => `${val}px`);
+        setupSlider("fontSizeSlider", "fontSizeValue", "fontSize", "rem", "--font-size", (val) => `${val}rem`);
+        setupSlider("lineHeightSlider", "lineHeightValue", "lineHeight", "", "--line-height", (val) => val);
+
+        document.getElementById("colorModeSelector").addEventListener("change", updateColorMode);
 
         const autoFinishingCheckbox = document.getElementById("autoFinishingCheckbox");
-        autoFinishingCheckbox.addEventListener('change', (event) => {
-            const checked = event.target.checked;
-            storage.set("autoFinishing", checked);
-            settings.autoFinishing = checked;
-        });
-
-        const chatWidgetCheckbox = document.getElementById("chatWidgetCheckbox");
-        chatWidgetCheckbox.addEventListener('change', (event) => {
-            const checked = event.target.checked;
-            document.getElementById("chatWidgetSection").style.display = checked ? "block" : "none";
-            storage.set("chatWidget", checked);
-            settings.chatWidget = checked;
-        });
-
-        const llmProviderModelSelector = document.getElementById("llmProviderModelSelector");
-        llmProviderModelSelector.addEventListener("change", (event) => {
-            const selectedProvider = event.target.value;
-            storage.set("llmProviderModel", selectedProvider);
-            settings.llmProviderModel = selectedProvider;
-        });
-
-        const llmApiKeyInput = document.getElementById("llmApiKeyInput");
-        llmApiKeyInput.addEventListener("change", (event) => {
-            const apiKey = event.target.value;
-            storage.set("llmApiKey", apiKey);
-            settings.llmApiKey = apiKey;
-        });
-
-        const askSelectedCheckbox = document.getElementById("askSelectedCheckbox");
-        askSelectedCheckbox.addEventListener('change', (event) => {
-            const checked = event.target.checked;
-            storage.set("askSelected", checked);
-            settings.askSelected = checked;
-        });
-
-        const ttsCheckbox = document.getElementById("ttsCheckbox");
-        ttsCheckbox.addEventListener('change', (event) => {
-            const checked = event.target.checked;
-            document.getElementById("ttsSection").style.display = checked ? "block" : "none";
-            storage.set("tts", checked);
-            settings.tts = checked;
-        });
-
-        const ttsApiKeyInput = document.getElementById("ttsApiKeyInput");
-        ttsApiKeyInput.addEventListener("change", (event) => {
-            const apiKey = event.target.value;
-            storage.set("ttsApiKey", apiKey);
-            settings.ttsApiKey = apiKey;
-        });
-
-        const ttsVoiceSelector = document.getElementById("ttsVoiceSelector");
-        ttsVoiceSelector.addEventListener("change", (event) => {
-            const selectedVoice = event.target.value;
-            storage.set("ttsVoice", selectedVoice);
-            settings.ttsVoice = selectedVoice;
-        });
-
-        const ttsWordCheckbox = document.getElementById("ttsWordCheckbox");
-        ttsWordCheckbox.addEventListener('change', (event) => {
-            const checked = event.target.checked;
-            storage.set("ttsWord", checked);
-            settings.ttsWord = checked;
-        });
-
-        const ttsSentenceCheckbox = document.getElementById("ttsSentenceCheckbox");
-        ttsSentenceCheckbox.addEventListener('change', (event) => {
-            const checked = event.target.checked;
-            storage.set("ttsSentence", checked);
-            settings.ttsSentence = checked;
-        });
+        autoFinishingCheckbox.addEventListener('change', (event) => {settings.autoFinishing = event.target.checked});
 
         function setupShortcutInput(inputId, settingKey) {
             const input = document.getElementById(inputId);
@@ -800,11 +671,10 @@
                 }
 
                 if (value.length > 1) {
-                    value = value[0];
+                    value = value.at(-1);
                     this.value = value;
                 }
 
-                storage.set(settingKey, value);
                 settings[settingKey] = value;
             });
         }
@@ -813,7 +683,6 @@
         keyboardShortcutCheckbox.addEventListener('change', (event) => {
             const checked = event.target.checked;
             document.getElementById("keyboardShortcutSection").style.display = checked ? "block" : "none";
-            storage.set("keyboardShortcut", checked);
             settings.keyboardShortcut = checked;
         });
 
@@ -828,30 +697,61 @@
         setupShortcutInput("shortcutMeaningInputInput", "shortcutMeaningInput");
         setupShortcutInput("shortcutChatInputInput", "shortcutChatInput");
 
-        document.getElementById("closeSettingsBtn").addEventListener("click", () => {
-            settingsPopup.style.display = "none";
+        const chatWidgetCheckbox = document.getElementById("chatWidgetCheckbox");
+        chatWidgetCheckbox.addEventListener('change', (event) => {
+            const checked = event.target.checked;
+            document.getElementById("chatWidgetSection").style.display = checked ? "block" : "none";
+            settings.chatWidget = checked;
         });
+
+        const llmProviderModelSelector = document.getElementById("llmProviderModelSelector");
+        llmProviderModelSelector.addEventListener("change", (event) => {settings.llmProviderModel = event.target.value});
+
+        const llmApiKeyInput = document.getElementById("llmApiKeyInput");
+        llmApiKeyInput.addEventListener("change", (event) => {settings.llmApiKey = event.target.value});
+
+        const askSelectedCheckbox = document.getElementById("askSelectedCheckbox");
+        askSelectedCheckbox.addEventListener('change', (event) => {settings.askSelected = event.target.checked});
+
+        const ttsCheckbox = document.getElementById("ttsCheckbox");
+        ttsCheckbox.addEventListener('change', (event) => {
+            const checked = event.target.checked;
+            document.getElementById("ttsSection").style.display = checked ? "block" : "none";
+            settings.tts = checked;
+        });
+
+        const ttsApiKeyInput = document.getElementById("ttsApiKeyInput");
+        ttsApiKeyInput.addEventListener("change", (event) => {settings.ttsApiKey = event.target.value});
+
+        const ttsVoiceSelector = document.getElementById("ttsVoiceSelector");
+        ttsVoiceSelector.addEventListener("change", (event) => {settings.ttsVoice = event.target.value});
+
+        const ttsWordCheckbox = document.getElementById("ttsWordCheckbox");
+        ttsWordCheckbox.addEventListener('change', (event) => {settings.ttsWord = event.target.checked});
+
+        const ttsSentenceCheckbox = document.getElementById("ttsSentenceCheckbox");
+        ttsSentenceCheckbox.addEventListener('change', (event) => {settings.ttsSentence = event.target.checked});
 
         function resetSettings() {
             if (!confirm("Reset all settings to default?")) return;
 
             const currentColorMode = document.getElementById("colorModeSelector").value;
-            const defaultColorSettings = currentColorMode === "dark" ? defaults.darkColors : defaults.whiteColors;
+            const defaultColorSettings = getColorSettings(currentColorMode);
 
             document.getElementById("styleTypeSelector").value = defaults.styleType;
+            document.getElementById("heightBigSlider").value = defaults.heightBig;
+            document.getElementById("heightBigValue").textContent = defaults.heightBig;
+            document.getElementById("sentenceHeightSlider").value = defaults.sentenceHeight;
+            document.getElementById("sentenceHeightValue").textContent = defaults.sentenceHeight;
+            document.getElementById("widgetWidthSlider").value = defaults.widgetWidth;
+            document.getElementById("widgetWidthValue").value = defaults.widgetWidth;
             document.getElementById("fontSizeSlider").value = defaults.fontSize;
             document.getElementById("fontSizeValue").textContent = defaults.fontSize;
             document.getElementById("lineHeightSlider").value = defaults.lineHeight;
             document.getElementById("lineHeightValue").textContent = defaults.lineHeight;
-            document.getElementById("heightBigSlider").value = defaults.heightBig;
-            document.getElementById("heightBigValue").textContent = defaults.heightBig;
-            document.getElementById("widgetWidthSlider").value = defaults.widgetWidth;
-            document.getElementById("sentenceHeightSlider").value = defaults.sentenceHeight;
-            document.getElementById("sentenceHeightValue").textContent = defaults.sentenceHeight;
 
             updateColorInputs(defaultColorSettings);
             updateColorPickerBackgrounds(defaultColorSettings);
-
             applyStyles(defaults.styleType, currentColorMode);
 
             document.getElementById("videoSettings").style.display = defaults.styleType === "video" ? "block" : "none";
@@ -866,17 +766,6 @@
 
             document.getElementById("autoFinishingCheckbox").checked = defaults.autoFinishing;
 
-            document.getElementById("chatWidgetCheckbox").value = defaults.chatWidget;
-            document.getElementById("llmProviderModelSelector").value = defaults.llmProviderModel;
-            document.getElementById("llmApiKeyInput").value = defaults.llmApiKey;
-            document.getElementById("askSelectedCheckbox").value = defaults.askSelected;
-
-            document.getElementById("ttsCheckbox").value = defaults.tts;
-            document.getElementById("ttsApiKeyInput").value = defaults.ttsApiKey;
-            document.getElementById("ttsVoiceSelector").value = defaults.ttsVoice;
-            document.getElementById("ttsWordCheckbox").value = defaults.ttsWord;
-            document.getElementById("ttsSentenceCheckbox").value = defaults.ttsSentence;
-
             document.getElementById("keyboardShortcutCheckbox").value = defaults.keyboardShortcut;
             document.getElementById("shortcutVideoFullscreenInput").value = defaults.shortcutVideoFullscreen;
             document.getElementById("shortcutBackward5sInput").value = defaults.shortcutBackward5s;
@@ -889,17 +778,25 @@
             document.getElementById("shortcutMeaningInputInput").value = defaults.shortcutMeaningInput;
             document.getElementById("shortcutChatInputInput").value = defaults.shortcutChatInput;
 
-            for (const [key, value] of Object.entries(defaults)) {
-                storage.set(key, value);
-            }
+            document.getElementById("chatWidgetCheckbox").value = defaults.chatWidget;
+            document.getElementById("llmProviderModelSelector").value = defaults.llmProviderModel;
+            document.getElementById("llmApiKeyInput").value = defaults.llmApiKey;
+            document.getElementById("askSelectedCheckbox").value = defaults.askSelected;
 
-            const prefix = currentColorMode === "dark" ? "dark_" : "white_";
-            for (const [key, value] of Object.entries(defaultColorSettings)) {
-                storage.set(prefix + key, value);
+            document.getElementById("ttsCheckbox").value = defaults.tts;
+            document.getElementById("ttsApiKeyInput").value = defaults.ttsApiKey;
+            document.getElementById("ttsVoiceSelector").value = defaults.ttsVoice;
+            document.getElementById("ttsWordCheckbox").value = defaults.ttsWord;
+            document.getElementById("ttsSentenceCheckbox").value = defaults.ttsSentence;
+
+            for (const [key, value] of Object.entries(defaults)) {
+                settings[key] = value
             }
         }
 
         document.getElementById("resetSettingsBtn").addEventListener("click", resetSettings);
+
+        document.getElementById("closeSettingsBtn").addEventListener("click", () => {settingsPopup.style.display = "none"});
     }
 
     async function setupDownloadWordsEventListeners(downloadWordsButton, downloadWordsPopup) {
@@ -1066,32 +963,26 @@
             }
         };
 
-        // Download Unknown LingQs button
         document.getElementById("downloadUnknownLingqsBtn").addEventListener("click", async () => {
             await handleDownloadButtonClick(`https://www.lingq.com/api/v3/${languageCode}/cards/`, "unknown_lingqs.csv", 'lingq', '&status=0&status=1&status=2&status=3');
         });
 
-        // Download Unknown LingQ Words button
         document.getElementById("downloadUnknownLingqWordsBtn").addEventListener("click", async () => {
             await handleDownloadButtonClick(`https://www.lingq.com/api/v3/${languageCode}/cards/`, "unknown_lingq_words.csv", 'lingq', '&status=0&status=1&status=2&status=3&phrases=false');
         });
 
-        // Download Unknown LingQ phrases button
         document.getElementById("downloadUnknownLingqPhrasesBtn").addEventListener("click", async () => {
             await handleDownloadButtonClick(`https://www.lingq.com/api/v3/${languageCode}/cards/`, "unknown_lingq_phrases.csv", 'lingq', '&status=0&status=1&status=2&status=3&phrases=True');
         });
 
-        // Download Known LingQs button
         document.getElementById("downloadKnownLingqsBtn").addEventListener("click", async () => {
             await handleDownloadButtonClick(`https://www.lingq.com/api/v3/${languageCode}/cards/`, "known_lingqs.csv", 'lingq', '&status=4');
         });
 
-        // Download known words button
         document.getElementById("downloadKnownWordsBtn").addEventListener("click", async () => {
             await handleDownloadButtonClick(`https://www.lingq.com/api/v2/${languageCode}/known-words/`, "known_words.csv", "known");
         });
 
-        // Close button
         document.getElementById("closeDownloadWordsBtn").addEventListener("click", () => {
             downloadWordsPopup.style.display = "none";
         });
@@ -1899,6 +1790,22 @@
         `;
     }
 
+    /* Utils */
+
+    function createElement(tag, props = {}) {
+        const element = document.createElement(tag);
+        Object.entries(props).forEach(([key, value]) => {
+            if (key === "style" && typeof value === "string") {
+                element.style.cssText = value;
+            } else if (key === "textContent") {
+                element.textContent = value;
+            } else {
+                element[key] = value;
+            }
+        });
+        return element;
+    }
+
     function clickElement(selector) {
         const element = document.querySelector(selector);
         if (element) element.click();
@@ -1912,11 +1819,85 @@
         }
     }
 
+    async function waitForElement(selector) {
+        return new Promise(resolve => {
+            if (document.querySelector(selector)) return resolve(document.querySelector(selector));
+
+            const observer = new MutationObserver(() => {
+                if (document.querySelector(selector)) {
+                    resolve(document.querySelector(selector));
+                    observer.disconnect();
+                }
+            });
+
+            observer.observe(document.documentElement, {childList: true, subtree: true});
+        });
+    }
+
     function copySelectedText() {
         const selected_text = document.querySelector(".reference-word");
         if (selected_text) {
             navigator.clipboard.writeText(selected_text.textContent);
         }
+    }
+
+    function extractTextFromDOM(domElement) {
+        function getAllLeafNodes(root) {
+            const leaves = [];
+            function traverse(node) {
+                if (node.nodeType === Node.TEXT_NODE) {
+                    if (node.textContent.trim() !== "") leaves.push(node);
+                    return;
+                }
+                if (node.nodeType === Node.ELEMENT_NODE || node.nodeType === Node.DOCUMENT_FRAGMENT_NODE) {
+                    if (node.childNodes.length === 0) {
+                        leaves.push(node);
+                        return;
+                    }
+                    for (const child of node.childNodes) {
+                        traverse(child);
+                    }
+                }
+            }
+            traverse(root);
+            return leaves;
+        }
+
+        const textParts = [];
+        let sentenceElements = domElement.querySelectorAll('.sentence');
+        sentenceElements = sentenceElements.length ? sentenceElements : [domElement];
+        if (domElement.childNodes.length === 0) return null;
+
+        sentenceElements.forEach(sentenceElement => {
+            for (const childNode of getAllLeafNodes(sentenceElement)) {
+                const text = childNode.textContent.trim();
+                if (text) textParts.push(text);
+
+                const parentNodeType = childNode.parentNode.nodeType;
+                if (parentNodeType === Node.ELEMENT_NODE && childNode.parentNode.matches('.has-end-punctuation-question')) textParts.push('?');
+                if (parentNodeType === Node.ELEMENT_NODE && childNode.parentNode.matches('.has-end-punctuation-period')) textParts.push('.');
+            }
+            textParts.push('\n');
+        });
+
+        return textParts.slice(0, -1).join(' ')
+            .replace(/[^\S\n]?(\?|\.|\n)[^\S\n]?/g, '$1')
+            .replace(/[^\S\n]?(,)/g, '$1');
+    }
+
+    function showToast(inputMessage) {
+        const toast = createElement("div", {
+            className: 'userToast',
+            textContent: inputMessage
+        });
+        document.body.appendChild(toast);
+
+        setTimeout(() => {toast.style.opacity = '1'}, 10);
+
+        setTimeout(() => {
+            toast.style.opacity = '0';
+            setTimeout(toast.remove, 1000);
+        }, 1500);
     }
 
     function finishLesson(){
@@ -1928,44 +1909,23 @@
         event.stopPropagation();
     }
 
-    function setupKeyboardShortcuts() {
-        document.addEventListener("keydown", function (event) {
-            if (!settings.keyboardShortcut) return;
+    function getLessonId() {
+        const url = document.URL;
+        const regex = /https*:\/\/www\.lingq\.com\/\w+\/learn\/\w+\/web\/reader\/(\d+)/;
+        const match = url.match(regex);
 
-            const targetElement = event.target;
-            const isTextInput = targetElement.localName === "text" || targetElement.localName === "textarea" || targetElement.localName === "input";
-            const withoutModifierKeys = !event.ctrlKey && !event.shiftKey && !event.altKey;
-            const eventKey = event.key.toLowerCase();
-            if (isTextInput) {
-                if (targetElement.id === "user-input") return;
-                if ((eventKey === 'enter' || eventKey === 'escape') && withoutModifierKeys) {
-                    preventPropagation(event);
-                    event.target.blur()
-                } else {
-                    event.stopPropagation();
-                    return;
-                }
-            }
-
-            const shortcuts = {
-                [settings.shortcutVideoFullscreen]: () => clickElement(".modal-section > div > button:nth-child(2)"), // video full screen toggle
-                [settings.shortcutMeaningInput]: () => focusElement(".reference-input-text"), // Move cursor to meaning input
-                [settings.shortcutChatInput]: () => focusElement("#user-input"), // Move cursor to the chat widget input
-                [settings.shortcutTTSPlay]: () => clickElement(".is-tts"), // Play tts audio
-                [settings.shortcutTranslator]: () => clickElement(".dictionary-resources > a:nth-last-child(1)"), // Open Translator
-                [settings.shortcutBackward5s]: () => clickElement(".audio-player--controllers > div:nth-child(1) > a"), // 5 sec Backward
-                [settings.shortcutForward5s]: () => clickElement(".audio-player--controllers > div:nth-child(2) > a"), // 5 sec Forward
-                [settings.shortcutMakeKnown]: () => document.dispatchEvent(new KeyboardEvent("keydown", { key: "k" })), // Simulate original 'k' for Make Word Known
-                [settings.shortcutDictionary]: () => clickElement(".dictionary-resources > a:nth-child(1)"), // Open Dictionary
-                [settings.shortcutCopySelected]: () => copySelectedText() // Copy selected text
-            };
-
-            if (shortcuts[eventKey] && withoutModifierKeys) {
-                preventPropagation(event);
-                shortcuts[eventKey]();
-            }
-        }, true);
+        return match[1];
     }
+
+    function getCollectionId() {
+        const url = document.URL;
+        const regex = /https*:\/\/www\.lingq\.com\/\w+\/learn\/\w+\/web\/library\/course\/(\d+)/;
+        const match = url.match(regex);
+
+        return match[1];
+    }
+
+    /* LingQ Server Requests */
 
     async function getUserProfile() {
         const url = `https://www.lingq.com/api/v3/profiles/`;
@@ -1993,22 +1953,6 @@
         const data = await response.json();
 
         return Object.fromEntries(data.map(item => [item.code, item.title]));
-    }
-
-    function getLessonId() {
-        const url = document.URL;
-        const regex = /https*:\/\/www\.lingq\.com\/\w+\/learn\/\w+\/web\/reader\/(\d+)/;
-        const match = url.match(regex);
-
-        return match[1];
-    }
-
-    async function getCollectionId() {
-        const url = document.URL;
-        const regex = /https*:\/\/www\.lingq\.com\/\w+\/learn\/\w+\/web\/library\/course\/(\d+)/;
-        const match = url.match(regex);
-
-        return match[1];
     }
 
     async function getLessonInfo(lessonId) {
@@ -2056,20 +2000,67 @@
         });
     }
 
-    function setupYoutubePlayerCustomization() {
-        function replaceNoCookie() {
-            document.querySelectorAll("iframe").forEach(function (iframe) {
-                let src = iframe.getAttribute("src");
-                if (src && src.includes("disablekb=1")) {
-                    src = src.replace("disablekb=1", "disablekb=0"); // keyboard controls are enabled
-                    src = src + "&cc_load_policy=1"; // caption is shown by default
-                    src = src + "&controls=0"; // player controls do not display in the player
-                    iframe.setAttribute("src", src);
+    /* Features */
+
+    function setupKeyboardShortcuts() {
+        document.addEventListener("keydown", function (event) {
+            if (!settings.keyboardShortcut) return;
+
+            const targetElement = event.target;
+            const isTextInput = targetElement.localName === "text" || targetElement.localName === "textarea" || targetElement.localName === "input";
+            const withoutModifierKeys = !event.ctrlKey && !event.shiftKey && !event.altKey;
+            const eventKey = event.key.toLowerCase();
+            if (isTextInput) {
+                if (targetElement.id === "user-input") return;
+                if ((eventKey === 'enter' || eventKey === 'escape') && withoutModifierKeys) {
+                    preventPropagation(event);
+                    event.target.blur()
+                } else {
+                    event.stopPropagation();
+                    return;
                 }
-            });
+            }
+
+            const shortcuts = {
+                [settings.shortcutVideoFullscreen]: () => clickElement(".modal-section > div > button:nth-child(2)"), // video full screen toggle
+                [settings.shortcutMeaningInput]: () => focusElement(".reference-input-text"), // Move cursor to meaning input
+                [settings.shortcutChatInput]: () => focusElement("#user-input"), // Move cursor to the chat widget input
+                [settings.shortcutTTSPlay]: () => clickElement(".is-tts"), // Play tts audio
+                [settings.shortcutTranslator]: () => clickElement(".dictionary-resources > a:nth-last-child(1)"), // Open Translator
+                [settings.shortcutBackward5s]: () => clickElement(".audio-player--controllers > div:nth-child(1) > a"), // 5 sec Backward
+                [settings.shortcutForward5s]: () => clickElement(".audio-player--controllers > div:nth-child(2) > a"), // 5 sec Forward
+                [settings.shortcutMakeKnown]: () => document.dispatchEvent(new KeyboardEvent("keydown", { key: "k" })), // Simulate original 'k' for Make Word Known
+                [settings.shortcutDictionary]: () => clickElement(".dictionary-resources > a:nth-child(1)"), // Open Dictionary
+                [settings.shortcutCopySelected]: () => copySelectedText() // Copy selected text
+            };
+
+            if (shortcuts[eventKey] && withoutModifierKeys) {
+                preventPropagation(event);
+                shortcuts[eventKey]();
+            }
+        }, true);
+    }
+
+    function setupYoutubePlayerCustomization() {
+        async function changeVideoPlayerSettings() {
+            const iframe = await waitForElement('.modal-container iframe');
+            let src = iframe.getAttribute("src");
+            src = src.replace("disablekb=1", "disablekb=0");
+            src = src + "&cc_load_policy=1";
+            src = src + "&controls=0";
+            iframe.setAttribute("src", src);
         }
 
         async function setupSliderObserver() {
+            function createSliderElements() {
+                const sliderContainer = createElement("div", {className: "rc-slider rc-slider-horizontal"});
+                const sliderRail = createElement("div", {className: "rc-slider-rail"});
+                const sliderTrack = createElement("div", {className: "rc-slider-track"});
+                sliderContainer.appendChild(sliderRail);
+                sliderContainer.appendChild(sliderTrack);
+                return sliderContainer;
+            }
+
             const lessonId = getLessonId();
             const lessonInfo = await getLessonInfo(lessonId);
             let lastCompletedPercentage = lessonInfo["progress"];
@@ -2077,14 +2068,10 @@
 
             const sliderTrack = document.querySelector('.audio-player--progress .rc-slider-track');
 
-            const sliderContainer = createSliderElements();
             const videoContainer = document.querySelector(".modal-content > div");
-            videoContainer.appendChild(sliderContainer);
+            const sliderContainer = createSliderElements();
             const videoSliderTrack = sliderContainer.querySelector(".rc-slider-track");
-
-            const syncVideoSliderTrack = (videoSliderTrack, sliderTrack) => {
-                videoSliderTrack.style.cssText = sliderTrack.style.cssText;
-            };
+            videoContainer.appendChild(sliderContainer);
 
             const updateLessonProgress = (lessonId, lessonInfo, progressPercentage, lastCompletedPercentage) => {
                 const progressUpdatePeriod = 5;
@@ -2102,7 +2089,7 @@
             const sliderObserver = new MutationObserver(function (mutationsList) {
                 for (const mutation of mutationsList) {
                     if (mutation.type === 'attributes' && mutation.attributeName === 'style') {
-                        syncVideoSliderTrack(videoSliderTrack, sliderTrack);
+                        videoSliderTrack.style.cssText = sliderTrack.style.cssText;
 
                         const progressPercentage = parseFloat(sliderTrack.style.width);
 
@@ -2119,30 +2106,21 @@
             console.log('Observer started for rc-slider-track');
         }
 
-        function createSliderElements() {
-            const sliderContainer = createElement("div", {className: "rc-slider rc-slider-horizontal"});
-            const sliderRail = createElement("div", {className: "rc-slider-rail"});
-            const sliderTrack = createElement("div", {className: "rc-slider-track"});
-            sliderContainer.appendChild(sliderRail);
-            sliderContainer.appendChild(sliderTrack);
-            return sliderContainer;
-        }
+        const iframeObserver = new MutationObserver(function (mutations) {
+            mutations.forEach((mutation) => {
+                mutation.addedNodes.forEach((node) => {
+                    if (node.nodeType !== Node.ELEMENT_NODE) return;
 
-        const iframeObserver = new MutationObserver(function (mutationsList) {
-            for (const mutation of mutationsList) {
-                if (mutation.type === "childList" && mutation.addedNodes.length > 0) {
-                    mutation.addedNodes.forEach((node) => {
-                        if (node.nodeName === "IFRAME") {
-                            replaceNoCookie();
-                            clickElement('.modal-section.modal-section--head button[title="Expand"]');
-                            setupSliderObserver();
-                        }
-                    });
-                }
-            }
+                    if (node.matches(".modal-container")) {
+                        changeVideoPlayerSettings();
+                        clickElement('.modal-section  button:nth-child(2)[title="Expand"]');
+                        setupSliderObserver();
+                    }
+                });
+            });
         });
 
-        iframeObserver.observe(document.body, {childList: true, subtree: true, attributes: true, attributeFilter: ["src"]});
+        iframeObserver.observe(document.body, {childList: true});
     }
 
     async function changeScrollAmount(selector, scrollAmount) {
@@ -2157,16 +2135,10 @@
         }
     }
 
-    function setupSentenceFocus() {
+    async function setupSentenceFocus() {
         function focusPlayingSentence() {
             const playingSentence = document.querySelector(".sentence.is-playing");
             if (playingSentence) {
-                /*
-                playingSentence.scrollIntoView({
-                    behavior: "smooth",
-                    block: "center"
-                });
-                */
                 const scrolling_div = document.querySelector(".reader-container")
                 scrolling_div.scrollTop = playingSentence.offsetTop + Math.floor(playingSentence.offsetHeight / 2) - Math.floor(scrolling_div.offsetHeight / 2);
 
@@ -2175,106 +2147,12 @@
 
         const observer = new MutationObserver((mutations) => {
             mutations.forEach((mutation) => {
-                if (
-                    mutation.type === "attributes" &&
-                    mutation.attributeName === "class" &&
-                    mutation.target.matches(".sentence")
-                ) {
-                    focusPlayingSentence();
-                }
+                if (mutation.target.matches(".sentence")) focusPlayingSentence();
             });
         });
 
-        const container = document.querySelector(".sentence-text");
-        if (container) {
-            observer.observe(container, {
-                attributes: true,
-                subtree: true
-            });
-        }
-    }
-
-    async function waitForElement(selector) {
-        return new Promise(resolve => {
-            if (document.querySelector(selector)) {
-                return resolve(document.querySelector(selector));
-            }
-
-            const observer = new MutationObserver(() => {
-                if (document.querySelector(selector)) {
-                    resolve(document.querySelector(selector));
-                    observer.disconnect();
-                }
-            });
-
-            observer.observe(document.documentElement, {
-                childList: true,
-                subtree: true
-            });
-        });
-    }
-
-    function getAllLeafNodes(root) {
-        const leaves = [];
-        function traverse(node) {
-            if (node.nodeType === Node.TEXT_NODE) {
-                if (node.textContent.trim() !== "") leaves.push(node);
-                return;
-            }
-            if (node.nodeType === Node.ELEMENT_NODE || node.nodeType === Node.DOCUMENT_FRAGMENT_NODE) {
-                if (node.childNodes.length === 0) {
-                    leaves.push(node);
-                    return;
-                }
-                for (const child of node.childNodes) {
-                    traverse(child);
-                }
-            }
-        }
-        traverse(root);
-        return leaves;
-    }
-
-    function extractTextFromDOM(domElement) {
-        const textParts = [];
-        let sentenceElements = domElement.querySelectorAll('.sentence');
-        sentenceElements = sentenceElements.length ? sentenceElements : [domElement];
-        if (domElement.childNodes.length === 0) return null;
-
-        sentenceElements.forEach(sentenceElement => {
-            for (const childNode of getAllLeafNodes(sentenceElement)) {
-                const text = childNode.textContent.trim();
-                if (text) textParts.push(text);
-
-                const parentNodeType = childNode.parentNode.nodeType;
-                if (parentNodeType === Node.ELEMENT_NODE && childNode.parentNode.matches('.has-end-punctuation-question')) textParts.push('?');
-                if (parentNodeType === Node.ELEMENT_NODE && childNode.parentNode.matches('.has-end-punctuation-period')) textParts.push('.');
-            }
-            textParts.push('\n');
-        });
-
-        return textParts.slice(0, -1).join(' ')
-            .replace(/[^\S\n]?(\?|\.|\n)[^\S\n]?/g, '$1')
-            .replace(/[^\S\n]?(,)/g, '$1');
-    }
-
-    function showToast(inputMessage) {
-        const toast = createElement("div", {
-            className: 'userToast',
-            textContent: inputMessage
-        });
-        document.body.appendChild(toast);
-
-        setTimeout(() => {
-            toast.style.opacity = '1';
-        }, 10);
-
-        setTimeout(() => {
-            toast.style.opacity = '0';
-            setTimeout(() => {
-                toast.remove();
-            }, 1000);
-        }, 1500);
+        const readerContainer = await waitForElement(".reader-container");
+        observer.observe(readerContainer, {attributes: true, subtree: true});
     }
 
     function stopPlayingAudio(autioContext) {
@@ -2326,19 +2204,7 @@
         const modelId = "gpt-4o-mini-tts";
         const apiUrl = "https://api.openai.com/v1/audio/speech";
 
-        if (!API_KEY) {
-            throw new Error("Invalid or missing OpenAI API key.  Please set the API_KEY");
-        }
-
-        if (!["nova", "onyx", "alloy", "echo", "fable", "shimmer"].includes(voice)) {
-            console.warn(`Invalid voice "${voice}".  Using default voice "nova".`);
-            voice = "nova";
-        }
-
-        if (typeof playbackRate !== 'number' || playbackRate < 0.5 || playbackRate > 1.5) {
-            console.warn(`Invalid playback rate "${playbackRate}". Using default rate 1.`);
-            playbackRate = 1;
-        }
+        if (!API_KEY) throw new Error("Invalid or missing OpenAI API key. Please set the API_KEY");
 
         try {
             const response = await fetch(apiUrl, {
@@ -2413,15 +2279,16 @@ You are a language assistant designed to help users understand words and sentenc
 Use this prompt only for the next input.
 **Single Word/Phrase Input**
 - Input will be given as: 'Input: "word or phrase" Context: "sentence including the word or phrase"'
-1. Determine the base, dictionary form of the word or phrase. This means using the singular form for nouns (e.g., "cat" instead of "cats") and the infinitive form for verbs (e.g., "run" instead of "ran"). Use this base form consistently in the explanation and title.
+1. Determine the base, dictionary form of the word or phrase. This means using the singular form for nouns (e.g., "cat" instead of "cats") and the infinitive form for verbs (e.g., "run" instead of "ran").
 2. Address and explain the base form of the word or phrase directly, even if the input is in a conjugated or inflected form. This is especially important for idioms.
-3. Provide an explanation exclusively in ${userLanguage}, factoring in context, and explaining any idiomatic usage.
-4. Generate a distinct, new example sentence to highlight word/phrase usage.
-5. The example sentence and its translation should appear first in the original input language, then in ${userLanguage}.
-6. Use this HTML structure (all content in ${userLanguage}): 
+3. Provide a concise dictionary definition of the word as it is used within the given context in ${userLanguage}. 
+4. Explain the contextual meaning of the word/phrase with more details, and explain any idiomatic usages in ${userLanguage}.
+5. Generate a distinct, new example sentence to highlight word/phrase usage.
+6. The example sentence and its translation should appear first in the original input language, then in ${userLanguage}.
+7. Use this HTML structure (all content in ${userLanguage}): 
 
 <b>[Base form]</b> <i>([Part of Speech])</i>
-<p>Definition of the word used in the context, ${userLanguage}]</p>
+<p>Brief dictionary definition of the word used in teh context, in ${userLanguage}]</p>
 <hr>
 <p>[Contextual explanation in ${userLanguage}]</p>
 <hr>
@@ -2927,21 +2794,19 @@ Pronunciation: Enunciate words with deliberate clarity, focusing on vowel sounds
 
             const observer = new MutationObserver((mutations) => {
                 mutations.forEach((mutation) => {
-                    if (mutation.type === 'childList' && mutation.addedNodes.length > 0) {
-                        mutation.addedNodes.forEach((node) => {
-                            if (node.matches('.library-item-wrap')) {
-                                const lessonId = node.id.split("--")[1].split("-")[0];
-                                updateWordIndicatorPercentages(node, lessonId);
-                            }
-                        });
-                    }
+                    mutation.addedNodes.forEach((node) => {
+                        if (node.nodeType !== Node.ELEMENT_NODE) return;
+
+                        if (node.matches('.library-item-wrap')) {
+                            const lessonId = /l-search--(\d*)-horizontal/.exec(node.id)[1];
+                            updateWordIndicatorPercentages(node, lessonId);
+                        }
+                    });
                 });
             });
 
-            const targetNode = document.querySelector('.library-section .library-list');
-            console.log(targetNode);
-            const config = { childList: true, subtree: true };
-            observer.observe(targetNode, config);
+            const targetNode = document.querySelector('.library-section .library-list > .grid-layout');
+            observer.observe(targetNode, {childList: true});
         }
 
         function enableCourseSorting() {
@@ -2951,7 +2816,6 @@ Pronunciation: Enunciate words with deliberate clarity, focusing on vowel sounds
                 dropdownItems.forEach((item, index) => {
                     item.addEventListener('click', () => {
                         console.log(`Clicked sort option: ${index}`);
-                        storage.set('librarySortOption', index);
                         settings.librarySortOption = index;
                     });
                 });
@@ -2994,7 +2858,7 @@ Pronunciation: Enunciate words with deliberate clarity, focusing on vowel sounds
     }
 
     function fixBugs() {
-        const resizeToast = () => {
+        function resizeToast() {
             const css = `
             .toasts {
                 height: fit-content;
