@@ -41,3 +41,4 @@
 - 5.7: Add customizable keyboard shortcuts.
 - 5.8: 	Meaning of the selected word/sentence is copyed to clipboard.
 - 5.9: Huge code refactoring for performance and clean code reasons.
+- 5.10: Fixed the issues occurring when moving between the lessons without refreshing. The existing TTS will be replaced with AI TTS when clicked.
