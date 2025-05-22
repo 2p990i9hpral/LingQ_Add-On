@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*/learn/*/web/reader/*
 // @match        https://www.lingq.com/*/learn/*/web/library/course/*
 // @exclude      https://www.lingq.com/*/learn/*/web/editor/*
-// @version      5.10.3
+// @version      5.10.4
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @namespace https://greasyfork.org/users/1458847
@@ -1921,7 +1921,7 @@
             });
         }
 
-        const libraryHeader = await waitForElement('.library-section > .list-header');
+        const libraryHeader = await waitForElement('.library-section > .list-header', 5000);
         createCourseUI();
         setupCourseStyles();
 
@@ -1959,9 +1959,8 @@
         }
     }
 
-    function waitForElement(selector) {
+    function waitForElement(selector, timeout=1000) {
         return new Promise((resolve, reject) => {
-            const timeout = 5000;
             const element = document.querySelector(selector);
             if (element) return resolve(element);
 
@@ -2206,7 +2205,7 @@
 
     function setupYoutubePlayerCustomization() {
         async function changeVideoPlayerSettings() {
-            const iframe = await waitForElement('.modal-container iframe');
+            const iframe = await waitForElement('.modal-container iframe', 1000);
             let src = iframe.getAttribute("src");
             src = src.replace("disablekb=1", "disablekb=0");
             src = src + "&cc_load_policy=1";
@@ -2287,7 +2286,7 @@
     }
 
     async function changeScrollAmount(selector, scrollAmount) {
-        const readerContainer = await waitForElement(selector);
+        const readerContainer = await waitForElement(selector, 1000);
 
         if (readerContainer) {
             readerContainer.addEventListener("wheel", (event) => {
@@ -2332,7 +2331,7 @@
             });
         });
 
-        const sentenceText = await waitForElement('.sentence-text');
+        const sentenceText = await waitForElement('.sentence-text', 1000);
         observer.observe(sentenceText, {childList: true});
     }
 
@@ -2426,6 +2425,21 @@
 
     async function setupLLMs() {
         async function updateWidget() {
+            function getSectionHead() {
+                let targetSectionHead = document.querySelector("#lesson-reader .widget-area > .reader-widget > .section-widget--head");
+                targetSectionHead = targetSectionHead ? targetSectionHead : document.querySelector("#lesson-reader .widget-area > .reader-widget");
+                return targetSectionHead;
+            }
+
+            function getSelectedWithContext() {
+                const selectedTextElement = document.querySelector(".reference-word");
+                const contextElement = (document.querySelector("span.selected-text, span.is-selected") || {}).parentElement || null;
+                const selectedText = selectedTextElement ? extractTextFromDOM(selectedTextElement).trim() : "";
+                const contextText = contextElement ? extractTextFromDOM(contextElement).trim() : "";
+
+                return `Input: "${selectedText}"` +  (!isSentence ? `, Context: "${contextText}"` : ``);
+            }
+
             function updateReferenceWord(){
                 const selection = window.getSelection();
                 if (selection.rangeCount === 0) {
@@ -2433,7 +2447,7 @@
                     return;
                 }
 
-                const referenceWord = targetSectionHead.querySelector(".reference-word");
+                const referenceWord = document.querySelector(".reference-word");
                 const extractedText = extractTextFromDOM(selection.getRangeAt(0).cloneContents());
                 if (referenceWord && extractedText && isSentence) {
                     referenceWord.textContent = extractedText;
@@ -2558,15 +2572,6 @@
                 chatHistory = updateChatHistoryState(chatHistory, botResponse, "assistant");
             }
 
-            function getSelectedWithContext() {
-                const selectedTextElement = targetSectionHead.querySelector(".reference-word");
-                const contextElement = (document.querySelector("span.selected-text, span.is-selected") || {}).parentElement || null;
-                const selectedText = selectedTextElement ? extractTextFromDOM(selectedTextElement).trim() : "";
-                const contextText = contextElement ? extractTextFromDOM(contextElement).trim() : "";
-
-                return `Input: "${selectedText}"` +  (!isSentence ? `, Context: "${contextText}"` : ``);
-            }
-
             async function updateChatWidget(){
                 if (!settings.chatWidget) return;
 
@@ -2581,16 +2586,14 @@
                 chatWrapper.appendChild(chatContainer);
                 chatWrapper.appendChild(inputContainer);
 
+                const sectionHead = getSectionHead();
                 const existingChatWidget = document.getElementById('chat-widget');
                 if(existingChatWidget) {
                     existingChatWidget.replaceWith(chatWrapper);
+                } else if (sectionHead.matches(".section-widget--head")) {
+                    sectionHead.appendChild(chatWrapper);
                 } else {
-                    if (targetSectionHead.matches(".section-widget--head")) {
-                        targetSectionHead.appendChild(chatWrapper);
-                    } else {
-                        targetSectionHead.prepend(chatWrapper);
-                    }
-
+                    sectionHead.prepend(chatWrapper);
                 }
 
                 changeScrollAmount("#chat-container", 0.2)
@@ -2608,7 +2611,7 @@
 
                 if (llmProvider === 'openai') chatHistory = updateChatHistoryState(chatHistory, systemPrompt, "system");
 
-                if (settings.askSelected && targetSectionHead.matches(".section-widget--head")) {
+                if (settings.askSelected && sectionHead.matches(".section-widget--head")) {
                     const initialUserMessage = getSelectedWithContext();
                     chatHistory = updateChatHistoryState(chatHistory, !isSentence ? wordPhrasePrompt: sentencePrompt, "user");
                     chatHistory = updateChatHistoryState(chatHistory, "Understood.", "assistant");
@@ -2661,7 +2664,7 @@
 
                 if (!settings.tts) return;
 
-                const ttsButton = await waitForElement('.is-tts');
+                const ttsButton = await waitForElement('.is-tts', 1000);
                 if (!ttsButton) return;
 
                 const isWord = document.querySelector("span.selected-text, span.is-selected");
@@ -2671,27 +2674,23 @@
 
                 if (ttsWordOffCondition || ttsSentenceOffCondition) {
                     ttsButton.click();
+
+                    let ttsHandled = false;
                     ttsButton.addEventListener('click', (event) => {
-                        console.debug('TTS', `tts button click event.`);
+                        if (ttsHandled) return;
+                        ttsHandled = true;
+
                         preventPropagation(event);
                         replaceTTSButton();
                         ttsButton.disabled = true;
                     }, {once: true})
-                    return;
+                } else {
+                    replaceTTSButton();
                 }
-
-                replaceTTSButton();
             }
 
             if (document.getElementById('chatWidget')) {
                 console.debug('chatWidget already exists.')
-                return;
-            }
-
-            let targetSectionHead = document.querySelector("#lesson-reader .widget-area > .reader-widget > .section-widget--head");
-            targetSectionHead = targetSectionHead ? targetSectionHead : document.querySelector("#lesson-reader .widget-area > .reader-widget");
-            if (!targetSectionHead) {
-                console.debug("targetSectionHead doesn't exists.")
                 return;
             }
 
@@ -2880,21 +2879,36 @@ Pronunciation: Enunciate words with deliberate clarity, focusing on vowel sounds
             let chatHistory = [];
 
             updateReferenceWord();
-            updateChatWidget();
-            updateTTS();
+            await updateChatWidget();
+            await updateTTS();
 
-            const selectedTextElement = targetSectionHead.querySelector(".reference-word");
+            const selectedTextElement = document.querySelector(".reference-word");
+            const widgetArea = document.querySelector("#lesson-reader .widget-area");
             if (selectedTextElement){
                 const observer = new MutationObserver((mutations) => {
-                    mutations.forEach((mutation) => {
-                        console.debug('Observer:', `Widget changed. ${mutation.type}, ${mutation.attributeName}`);
+                    mutations.forEach(async (mutation) => {
+                        console.debug('Observer:', `Widget changed from word/sentence. ${mutation.type}, ${mutation.attributeName}`);
                         if (mutation.type !== 'characterData') return;
                         updateReferenceWord();
-                        updateChatWidget();
-                        updateTTS();
+                        await updateChatWidget();
+                        await updateTTS();
                     });
                 });
                 observer.observe(selectedTextElement, {subtree: true, characterData: true});
+            } else if (widgetArea){
+                const observer = new MutationObserver((mutations) => {
+                    mutations.forEach((mutation) => {
+                        mutation.addedNodes.forEach(async(node) => {
+                            if (node.nodeType !== Node.ELEMENT_NODE) return;
+                            if (!node.matches(".reader-widget")) return;
+                            console.debug('Observer:', `Widget changed from resource. ${mutation.type}, ${mutation.addedNodes}`);
+                            updateReferenceWord();
+                            await updateChatWidget();
+                            await updateTTS();
+                        });
+                    });
+                });
+                observer.observe(widgetArea, {childList: true});
             }
         }
 
