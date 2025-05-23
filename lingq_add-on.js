@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*/learn/*/web/reader/*
 // @match        https://www.lingq.com/*/learn/*/web/library/course/*
 // @exclude      https://www.lingq.com/*/learn/*/web/editor/*
-// @version      5.10.4
+// @version      5.10.5
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @namespace https://greasyfork.org/users/1458847
@@ -777,7 +777,7 @@
                         if (isFirstCall) {
                             isFirstCall = false;
                             totalPages = Math.ceil(data.count / pageSize);
-                            console.debug(`total pages: ${totalPages}`);
+                            console.log(`total pages: ${totalPages}`);
                         }
 
                         progressCallback(currentPage, totalPages, false, null, data.count);
@@ -798,9 +798,9 @@
                         nextUrl = data.next;
 
                         if (nextUrl) {
-                            console.debug("Fetched page. Next URL:", nextUrl);
+                            console.log("Fetched page. Next URL:", nextUrl);
                         } else {
-                            console.debug("Finished fetching all pages");
+                            console.log("Finished fetching all pages");
                             progressCallback(currentPage, totalPages, true, null, data.count);
                         }
                     } catch (error) {
@@ -873,7 +873,7 @@
                     }
 
                     downloadBlob(blob, fileName);
-                    console.debug("Export completed.");
+                    console.log("Export completed.");
                 } catch (error) {
                     console.error('Error:', error);
                 }
@@ -1889,7 +1889,7 @@
             if (dropdownItems.length) {
                 dropdownItems.forEach((item, index) => {
                     item.addEventListener('click', () => {
-                        console.debug(`Clicked sort option: ${index}`);
+                        console.log(`Clicked sort option: ${index}`);
                         settings.librarySortOption = index;
                     });
                 });
@@ -1914,7 +1914,7 @@
 
                 for (const lesson of allLessons) {
                     await setLessonProgress(lesson.id, 0);
-                    console.debug(`Reset lesson ID: ${lesson.id} to the first page`);
+                    console.log(`Reset lesson ID: ${lesson.id} to the first page`);
                 }
 
                 alert(`Successfully reset ${allLessons.length} lessons to their starting positions.`);
@@ -1991,7 +1991,7 @@
             timeoutId = setTimeout(() => {
                 resolve(null);
                 observer.disconnect();
-                console.debug(`Element with selector "${selector}" not found`);
+                console.log('Wait', `"${selector}" not found`);
             }, timeout);
         });
     }
@@ -2047,10 +2047,11 @@
             .replace(/[^\S\n]?(,)/g, '$1');
     }
 
-    function showToast(inputMessage) {
+    function showToast(inputMessage, success=true) {
         const toast = createElement("div", {
             className: 'userToast',
-            textContent: inputMessage
+            textContent: inputMessage,
+            style: `box-shadow: 0 0 10px 0 ${success ? 'rgb(76, 175, 80)': 'rgb(175, 76, 80)'}`
         });
         document.body.appendChild(toast);
 
@@ -2226,7 +2227,7 @@
             const lessonId = getLessonId();
             const lessonInfo = await getLessonInfo(lessonId);
             let lastCompletedPercentage = lessonInfo["progress"];
-            console.debug(`last progress: ${lastCompletedPercentage}`);
+            console.log(`last progress: ${lastCompletedPercentage}`);
 
             const sliderTrack = document.querySelector('.audio-player--progress .rc-slider-track');
 
@@ -2240,7 +2241,7 @@
                 const flooredProgressPercentage = Math.floor(progressPercentage / progressUpdatePeriod) * progressUpdatePeriod;
 
                 if (flooredProgressPercentage > lastCompletedPercentage) {
-                    console.debug(`progress percentage: ${flooredProgressPercentage}`);
+                    console.log('Slider', `progress percentage: ${flooredProgressPercentage}`);
                     const wordIndex = Math.floor(lessonInfo["totalWordsCount"] * (flooredProgressPercentage / 100));
                     setLessonProgress(lessonId, wordIndex);
                     return flooredProgressPercentage;
@@ -2258,7 +2259,7 @@
 
                     const isLessonFinished = progressPercentage >= 99.5;
                     if (isLessonFinished && settings.autoFinishing) {
-                        console.debug('lesson finished.')
+                        console.log('Slider', 'lesson finished.')
                         setTimeout(finishLesson, 1000);
                         sliderObserver.disconnect();
                     }
@@ -2381,9 +2382,9 @@
     }
 
     async function openAITTS(text, API_KEY, voice = "nova", playbackRate = 1, instructions) {
-        console.debug('TTS:', voice, text)
         const modelId = "gpt-4o-mini-tts";
         const apiUrl = "https://api.openai.com/v1/audio/speech";
+        console.log('TTS', modelId, voice, text)
 
         if (!API_KEY) throw new Error("Invalid or missing OpenAI API key. Please set the API_KEY");
 
@@ -2443,7 +2444,7 @@
             function updateReferenceWord(){
                 const selection = window.getSelection();
                 if (selection.rangeCount === 0) {
-                    console.debug('rangeCount is zero.')
+                    console.log('Selection rangeCount is zero.')
                     return;
                 }
 
@@ -2464,7 +2465,7 @@
                     innerHTML: message
                 });
                 container.appendChild(messageDiv);
-                container.scrollTop = container.scrollHeight;
+                messageDiv.scrollIntoView({behavior: "smooth"});
             }
 
             async function getOpenAIResponse(apiKey, model, history) {
@@ -2494,7 +2495,7 @@
                     }
 
                     const data = await response.json();
-                    console.debug('Chat', `${model}, ${data.usage.total_tokens}`)
+                    console.log('Chat', `${model}, token usage: ${data.usage.total_tokens}`)
                     return data.choices[0]?.message?.content || "Sorry, could not get a response.";
 
                 } catch (error) {
@@ -2532,7 +2533,7 @@
                     }
 
                     const data = await response.json();
-                    console.debug('Chat', `${model}, ${data.usageMetadata.totalTokenCount}`)
+                    console.log('Chat', `${model}, token usage: ${data.usageMetadata.totalTokenCount}`)
                     return data.candidates[0].content.parts[0].text;
                 } catch (error) {
                     console.error('Google Gemini API call failed:', error);
@@ -2554,7 +2555,7 @@
 
                 const message = userInput.value.trim();
                 if (!message) {
-                    console.debug('Message is empty.')
+                    console.log('Message is empty.')
                     return;
                 }
 
@@ -2630,8 +2631,15 @@
                     if (meaning) {
                         const meaningElement = document.querySelector(".reference-input-text");
                         const hasMeaning = meaningElement ? meaningElement.value : false;
-                        navigator.clipboard.writeText((hasMeaning ? '\n': '') + meaning.textContent);
-                        showToast("Meaning Copied!");
+                        const textToCopy = (hasMeaning ? '\n': '') + meaning.textContent;
+
+                        navigator.clipboard.writeText(textToCopy)
+                            .then(() => {
+                                showToast("Meaning Copied!", true);
+                            })
+                            .catch(() => {
+                                showToast("Failed to copy meaning.", false);
+                            });
                     }
                 }
             }
@@ -2643,13 +2651,13 @@
                     if (!selectedText) return;
 
                     if (selectedText.length > 1000) {
-                        console.debug("The length of the selected text exceeds 1,000.")
+                        console.log("The length of the selected text exceeds 1,000.")
                         return;
                     }
 
                     let audioData = await openAITTS(`${selectedText}`, settings.ttsApiKey, settings.ttsVoice, 1.0, ttsInstructions);
                     if (audioData == null) {
-                        console.debug("audioData can't be got.")
+                        console.log("audioData can't be got.")
                         return;
                     }
 
@@ -2658,7 +2666,7 @@
                         await playAudio(audioData, 0.7);
                     })
                     ttsButton.replaceWith(newTtsButton);
-                    showToast("TTS Replaced");
+                    showToast("TTS Replaced", true);
                     playAudio(audioData, 0.7);
                 }
 
@@ -2673,24 +2681,23 @@
                 const ttsSentenceOffCondition = !settings.ttsSentence && !isWord;
 
                 if (ttsWordOffCondition || ttsSentenceOffCondition) {
+                    if (ttsButton.matches('.tts-event')) return;
                     ttsButton.click();
 
-                    let ttsHandled = false;
                     ttsButton.addEventListener('click', (event) => {
-                        if (ttsHandled) return;
-                        ttsHandled = true;
-
                         preventPropagation(event);
                         replaceTTSButton();
                         ttsButton.disabled = true;
                     }, {once: true})
+
+                    ttsButton.classList.add('tts-event');
                 } else {
                     replaceTTSButton();
                 }
             }
 
             if (document.getElementById('chatWidget')) {
-                console.debug('chatWidget already exists.')
+                console.log('chatWidget already exists.')
                 return;
             }
 
@@ -2887,8 +2894,8 @@ Pronunciation: Enunciate words with deliberate clarity, focusing on vowel sounds
             if (selectedTextElement){
                 const observer = new MutationObserver((mutations) => {
                     mutations.forEach(async (mutation) => {
-                        console.debug('Observer:', `Widget changed from word/sentence. ${mutation.type}, ${mutation.attributeName}`);
                         if (mutation.type !== 'characterData') return;
+                        console.debug('Observer:', `Widget changed from word/sentence. ${mutation.type}, ${mutation.attributeName}`);
                         updateReferenceWord();
                         await updateChatWidget();
                         await updateTTS();
