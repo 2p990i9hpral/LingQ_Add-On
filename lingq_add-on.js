@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*/learn/*/web/reader/*
 // @match        https://www.lingq.com/*/learn/*/web/library/course/*
 // @exclude      https://www.lingq.com/*/learn/*/web/editor/*
-// @version      5.10.5
+// @version      5.10.6
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @namespace https://greasyfork.org/users/1458847
@@ -277,7 +277,7 @@
             addSelect(chatWidgetSection, "llmProviderModelSelector", "LLM Provider: (Price per 1M tokens)", [
                 { value: "openai gpt-4.1-mini", text: "OpenAI GPT-4.1 mini ($0.4/$1.6)" },
                 { value: "openai gpt-4.1-nano", text: "OpenAI GPT-4.1 nano ($0.1/$0.4)" },
-                { value: "google gemini-2.5-flash-preview-04-17", text: "Google Gemini 2.5 Flash ($0.15/$0.6)" },
+                { value: "google gemini-2.5-flash-preview-05-20", text: "Google Gemini 2.5 Flash ($0.15/$0.6)" },
                 { value: "google gemini-2.0-flash", text: "Google Gemini 2.0 Flash ($0.1/$0.4)" }
             ], settings.llmProviderModel);
 
@@ -1153,7 +1153,7 @@
                     margin-right: 5px;
                     border: 1px solid rgb(125 125 125 / 35%);
                     border-radius: 5px;
-                    font-size: 0.85rem;
+                    font-size: 0.9rem;
                 }
         
                 #send-button {
@@ -1167,7 +1167,8 @@
                     margin-bottom: 5px;
                     border-radius: 8px;
                     color: var(--font-color);
-                    font-size: 0.85rem;
+                    font-size: 0.9rem;
+                    line-height: 1.2;
                 }
         
                 .user-message {
@@ -1229,6 +1230,7 @@
                     line-height: var(--line-height) !important;
                     font-size: var(--font-size) !important;
                     padding: 0 !important;
+                    scroll-behavior: smooth ;
                 }
         
                 .sentence-text-head {
@@ -1340,7 +1342,7 @@
 
         .main-header > div {
             grid-template-columns: 1fr 150px !important;
-            padding-left: 400px !important;
+            padding: 0 40px 0 420px !important;
         }
 
         .main-header section:nth-child(1) {
@@ -1433,6 +1435,11 @@
         .appCue-poular-hints {
             max-height: 350px;
             overflow-y: auto;
+            scrollbar-width: none !important;
+        }
+        
+        .reference-input-text {
+            font-size: 0.9rem !important;
             scrollbar-width: none !important;
         }
         
@@ -2434,14 +2441,16 @@
 
             function getSelectedWithContext() {
                 const selectedTextElement = document.querySelector(".reference-word");
-                const contextElement = (document.querySelector("span.selected-text, span.is-selected") || {}).parentElement || null;
+                const contextElement = document.querySelector("span.selected-text, span.is-selected")?.closest('.sentence');
                 const selectedText = selectedTextElement ? extractTextFromDOM(selectedTextElement).trim() : "";
                 const contextText = contextElement ? extractTextFromDOM(contextElement).trim() : "";
 
                 return `Input: "${selectedText}"` +  (!isSentence ? `, Context: "${contextText}"` : ``);
             }
 
+            let isProgrammaticReferenceWordUpdate = false;
             function updateReferenceWord(){
+                isProgrammaticReferenceWordUpdate = true;
                 const selection = window.getSelection();
                 if (selection.rangeCount === 0) {
                     console.log('Selection rangeCount is zero.')
@@ -2453,6 +2462,7 @@
                 if (referenceWord && extractedText && isSentence) {
                     referenceWord.textContent = extractedText;
                 }
+                isProgrammaticReferenceWordUpdate = false;
             }
 
             function updateChatHistoryState(currentHistory, message, role) {
@@ -2495,7 +2505,7 @@
                     }
 
                     const data = await response.json();
-                    console.log('Chat', `${model}, token usage: ${data.usage.total_tokens}`)
+                    console.log('Chat', `${model}, token: ${data.usage.total_tokens}`)
                     return data.choices[0]?.message?.content || "Sorry, could not get a response.";
 
                 } catch (error) {
@@ -2533,7 +2543,7 @@
                     }
 
                     const data = await response.json();
-                    console.log('Chat', `${model}, token usage: ${data.usageMetadata.totalTokenCount}`)
+                    console.log('Chat', `${model}, token: ${data.usageMetadata.totalTokenCount}`)
                     return data.candidates[0].content.parts[0].text;
                 } catch (error) {
                     console.error('Google Gemini API call failed:', error);
@@ -2661,7 +2671,7 @@
                         return;
                     }
 
-                    const newTtsButton = createElement("button", {id: "playAudio", textContent: "🔊", className: "is-tts"});
+                    const newTtsButton = createElement("button", {id: "playAudio", textContent: "🔊", className: "is-tts tts-event"});
                     newTtsButton.addEventListener('click', async (event) => {
                         await playAudio(audioData, 0.7);
                     })
@@ -2681,15 +2691,15 @@
                 const ttsSentenceOffCondition = !settings.ttsSentence && !isWord;
 
                 if (ttsWordOffCondition || ttsSentenceOffCondition) {
-                    if (ttsButton.matches('.tts-event')) return;
-                    ttsButton.click();
+                    if (!ttsButton.matches('.tts-event')) {
+                        ttsButton.click();
+                    }
 
                     ttsButton.addEventListener('click', (event) => {
                         preventPropagation(event);
-                        replaceTTSButton();
                         ttsButton.disabled = true;
+                        replaceTTSButton();
                     }, {once: true})
-
                     ttsButton.classList.add('tts-event');
                 } else {
                     replaceTTSButton();
@@ -2886,37 +2896,41 @@ Pronunciation: Enunciate words with deliberate clarity, focusing on vowel sounds
             let chatHistory = [];
 
             updateReferenceWord();
-            await updateChatWidget();
-            await updateTTS();
+            updateChatWidget();
+            stopPlayingAudio(audioContext);
+            updateTTS();
 
             const selectedTextElement = document.querySelector(".reference-word");
-            const widgetArea = document.querySelector("#lesson-reader .widget-area");
             if (selectedTextElement){
                 const observer = new MutationObserver((mutations) => {
+                    if (isProgrammaticReferenceWordUpdate) return;
                     mutations.forEach(async (mutation) => {
                         if (mutation.type !== 'characterData') return;
                         console.debug('Observer:', `Widget changed from word/sentence. ${mutation.type}, ${mutation.attributeName}`);
                         updateReferenceWord();
-                        await updateChatWidget();
-                        await updateTTS();
+                        updateChatWidget();
+                        stopPlayingAudio(audioContext);
+                        updateTTS();
                     });
                 });
                 observer.observe(selectedTextElement, {subtree: true, characterData: true});
-            } else if (widgetArea){
-                const observer = new MutationObserver((mutations) => {
-                    mutations.forEach((mutation) => {
-                        mutation.addedNodes.forEach(async(node) => {
-                            if (node.nodeType !== Node.ELEMENT_NODE) return;
-                            if (!node.matches(".reader-widget")) return;
-                            console.debug('Observer:', `Widget changed from resource. ${mutation.type}, ${mutation.addedNodes}`);
-                            updateReferenceWord();
-                            await updateChatWidget();
-                            await updateTTS();
-                        });
+            }
+
+            const widgetArea = document.querySelector("#lesson-reader .widget-area");
+            const observer = new MutationObserver((mutations) => {
+                mutations.forEach((mutation) => {
+                    mutation.addedNodes.forEach(async(node) => {
+                        if (node.nodeType !== Node.ELEMENT_NODE) return;
+                        if (!node.matches(".reader-widget")) return;
+                        console.debug('Observer:', `Widget changed from resource. ${mutation.type}, ${mutation.addedNodes}`);
+                        updateReferenceWord();
+                        updateChatWidget();
+                        stopPlayingAudio(audioContext);
+                        updateTTS();
                     });
                 });
-                observer.observe(widgetArea, {childList: true});
-            }
+            });
+            observer.observe(widgetArea, {childList: true});
         }
 
         const userDictionaryLang = await getDictionaryLanguage();
