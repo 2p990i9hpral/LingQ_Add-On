@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*/learn/*/web/reader/*
 // @match        https://www.lingq.com/*/learn/*/web/library/course/*
 // @exclude      https://www.lingq.com/*/learn/*/web/editor/*
-// @version      5.10.7
+// @version      5.10.8
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @namespace https://greasyfork.org/users/1458847
@@ -31,21 +31,21 @@
         fontSize: 1.1,
         lineHeight: 1.7,
 
-        colorMode: "dark",
-        dark_fontColor: "#e0e0e0",
-        dark_lingqBackground: "rgba(109, 89, 44, 0.7)",
-        dark_lingqBorder: "rgba(254, 203, 72, 0.3)",
-        dark_lingqBorderLearned: "rgba(254, 203, 72, 0.5)",
-        dark_knownBackground: "rgba(37, 57, 82, 0.7)",
-        dark_knownBorder: "rgba(72, 154, 254, 0.5)",
-        dark_playingUnderline: "#ffffff",
-        white_fontColor: "#000000",
-        white_lingqBackground: "rgba(255, 200, 0, 0.4)",
-        white_lingqBorder: "rgba(255, 200, 0, 0.3)",
-        white_lingqBorderLearned: "rgba(255, 200, 0, 1)",
-        white_knownBackground: "rgba(198, 223, 255, 0.7)",
-        white_knownBorder: "rgba(0, 111, 255, 0.3)",
-        white_playingUnderline: "#000000",
+        colorMode: "white",
+        white_fontColor: "rgb(0, 0, 0)",
+        white_lingqBackground: "rgba(255, 232, 149, 1)",
+        white_lingqBorder: "rgba(255, 200, 0, 0)",
+        white_lingqBorderLearned: "rgba(255, 200, 0, 0)",
+        white_unknownBackground: "rgba(198, 223, 255, 1)",
+        white_unknownBorder: "rgba(0, 111, 255, 0)",
+        white_playingUnderline: "rgb(0, 0, 0)",
+        dark_fontColor: "rgb(255, 255, 255)",
+        dark_lingqBackground: "rgba(108, 87, 43, 1)",
+        dark_lingqBorder: "rgba(254, 203, 72, 0)",
+        dark_lingqBorderLearned: "rgba(254, 203, 72, 0)",
+        dark_unknownBackground: "rgba(37, 57, 82, 1)",
+        dark_unknownBorder: "rgba(72, 154, 254, 0)",
+        dark_playingUnderline: "rgb(255, 255, 255)",
 
         librarySortOption: 0,
         autoFinishing: false,
@@ -98,8 +98,8 @@
                 lingqBackground: settings[prefix + "lingqBackground"],
                 lingqBorder: settings[prefix + "lingqBorder"],
                 lingqBorderLearned: settings[prefix + "lingqBorderLearned"],
-                knownBackground: settings[prefix + "knownBackground"],
-                knownBorder: settings[prefix + "knownBorder"],
+                unknownBackground: settings[prefix + "unknownBackground"],
+                unknownBorder: settings[prefix + "unknownBorder"],
                 playingUnderline: settings[prefix + "playingUnderline"],
             };
         }
@@ -231,8 +231,8 @@
             const colorSection = createElement("div", {className: "popup-section"});
 
             addSelect(colorSection, "colorModeSelector", "Color Mode:", [
-                { value: "dark", text: "Dark" },
-                { value: "white", text: "White" }
+                { value: "white", text: "White" },
+                { value: "dark", text: "Dark" }
             ], settings.colorMode);
 
             [
@@ -240,8 +240,8 @@
                 { id: "lingqBackground", label: "LingQ Background:", value: colorSettings.lingqBackground },
                 { id: "lingqBorder", label: "LingQ Border:", value: colorSettings.lingqBorder },
                 { id: "lingqBorderLearned", label: "LingQ Border Learned:", value: colorSettings.lingqBorderLearned },
-                { id: "knownBackground", label: "Known Background:", value: colorSettings.knownBackground },
-                { id: "knownBorder", label: "Known Border:", value: colorSettings.knownBorder },
+                { id: "unknownBackground", label: "Unknown Background:", value: colorSettings.unknownBackground },
+                { id: "unknownBorder", label: "Unknown Border:", value: colorSettings.unknownBorder },
                 { id: "playingUnderline", label: "Playing Underline:", value: colorSettings.playingUnderline }
             ].forEach(config => addColorPicker(colorSection, config.id, config.label, config.value));
 
@@ -500,8 +500,8 @@
                     setupRGBAPickr('lingqBackgroundPicker', 'lingqBackgroundText', 'lingqBackground', '--lingq-background');
                     setupRGBAPickr('lingqBorderPicker', 'lingqBorderText', 'lingqBorder', '--lingq-border');
                     setupRGBAPickr('lingqBorderLearnedPicker', 'lingqBorderLearnedText', 'lingqBorderLearned', '--lingq-border-learned');
-                    setupRGBAPickr('knownBackgroundPicker', 'knownBackgroundText', 'knownBackground', '--known-background');
-                    setupRGBAPickr('knownBorderPicker', 'knownBorderText', 'knownBorder', '--known-border');
+                    setupRGBAPickr('unknownBackgroundPicker', 'unknownBackgroundText', 'unknownBackground', '--unknown-background');
+                    setupRGBAPickr('unknownBorderPicker', 'unknownBorderText', 'unknownBorder', '--unknown-border');
                     setupRGBAPickr('fontColorPicker', 'fontColorText', 'fontColor', '--font-color');
                     setupRGBAPickr('playingUnderlinePicker', 'playingUnderlineText', 'playingUnderline', '--is-playing-underline');
                 });
@@ -512,8 +512,8 @@
                 document.getElementById("lingqBackgroundText").value = colorSettings.lingqBackground;
                 document.getElementById("lingqBorderText").value = colorSettings.lingqBorder;
                 document.getElementById("lingqBorderLearnedText").value = colorSettings.lingqBorderLearned;
-                document.getElementById("knownBackgroundText").value = colorSettings.knownBackground;
-                document.getElementById("knownBorderText").value = colorSettings.knownBorder;
+                document.getElementById("unknownBackgroundText").value = colorSettings.unknownBackground;
+                document.getElementById("unknownBorderText").value = colorSettings.unknownBorder;
                 document.getElementById("playingUnderlineText").value = colorSettings.playingUnderline;
 
                 const fontColorPicker = document.getElementById("fontColorPicker");
@@ -528,8 +528,8 @@
                     { id: "lingqBackgroundPicker", color: colorSettings.lingqBackground },
                     { id: "lingqBorderPicker", color: colorSettings.lingqBorder },
                     { id: "lingqBorderLearnedPicker", color: colorSettings.lingqBorderLearned },
-                    { id: "knownBackgroundPicker", color: colorSettings.knownBackground },
-                    { id: "knownBorderPicker", color: colorSettings.knownBorder },
+                    { id: "unknownBackgroundPicker", color: colorSettings.unknownBackground },
+                    { id: "unknownBorderPicker", color: colorSettings.unknownBorder },
                     { id: "fontColorPicker", color: colorSettings.fontColor },
                     { id: "playingUnderlinePicker", color: colorSettings.playingUnderline }
                 ];
@@ -547,8 +547,8 @@
                 document.documentElement.style.setProperty("--lingq-background", colorSettings.lingqBackground);
                 document.documentElement.style.setProperty("--lingq-border", colorSettings.lingqBorder);
                 document.documentElement.style.setProperty("--lingq-border-learned", colorSettings.lingqBorderLearned);
-                document.documentElement.style.setProperty("--known-background", colorSettings.knownBackground);
-                document.documentElement.style.setProperty("--known-border", colorSettings.knownBorder);
+                document.documentElement.style.setProperty("--unknown-background", colorSettings.unknownBackground);
+                document.documentElement.style.setProperty("--unknown-border", colorSettings.unknownBorder);
                 document.documentElement.style.setProperty("--is-playing-underline", colorSettings.playingUnderline);
             }
 
@@ -959,11 +959,11 @@
             let specificCSS = "";
 
             switch (settings.colorMode) {
-                case "dark":
-                    clickElement(".reader-themes-component > button:nth-child(5)");
-                    break;
                 case "white":
                     clickElement(".reader-themes-component > button:nth-child(1)");
+                    break;
+                case "dark":
+                    clickElement(".reader-themes-component > button:nth-child(5)");
                     break;
             }
 
@@ -1005,8 +1005,8 @@
                     --lingq-background: ${colorSettings.lingqBackground};
                     --lingq-border: ${colorSettings.lingqBorder};
                     --lingq-border-learned: ${colorSettings.lingqBorderLearned};
-                    --known-background: ${colorSettings.knownBackground};
-                    --known-border: ${colorSettings.knownBorder};
+                    --unknown-background: ${colorSettings.unknownBackground};
+                    --unknown-border: ${colorSettings.unknownBorder};
                     --is-playing-underline: ${colorSettings.playingUnderline};
         
                     --background-color: ${settings.colorMode === "dark" ? "#2a2c2e" : "#ffffff"}
@@ -1019,6 +1019,7 @@
                     height: 15px;
                     border-radius: 4px;
                     cursor: pointer;
+                    border: 1px solid rgba(125, 125, 125, 30%);
                 }
         
                 .pcr-app {
@@ -1286,8 +1287,8 @@
                 }
         
                 .reader-container .sentence .blue-word {
-                    border: 1px solid var(--known-border) !important;
-                    background-color: var(--known-background) !important;;
+                    border: 1px solid var(--unknown-border) !important;
+                    background-color: var(--unknown-background) !important;;
                 }
         
                 .phrase-cluster:hover,
@@ -1940,6 +1941,97 @@
         setupLessonResetButton();
     }
 
+    /* Get LingQ Data */
+
+    function getLessonId() {
+        const url = document.URL;
+        const regex = /https*:\/\/www\.lingq\.com\/\w+\/learn\/\w+\/web\/reader\/(\d+)/;
+        const match = url.match(regex);
+
+        return match[1];
+    }
+
+    function getCollectionId() {
+        const url = document.URL;
+        const regex = /https*:\/\/www\.lingq\.com\/\w+\/learn\/\w+\/web\/library\/course\/(\d+)/;
+        const match = url.match(regex);
+
+        return match[1];
+    }
+
+    async function getUserProfile() {
+        const url = `https://www.lingq.com/api/v3/profiles/`;
+
+        const response = await fetch(url);
+        const data = await response.json();
+
+        return data.results[0]
+    }
+
+    async function getLanguageCode() {
+        const userProfile = await getUserProfile();
+        return userProfile.active_language;
+    }
+
+    async function getDictionaryLanguage() {
+        const userProfile = await getUserProfile();
+        return await userProfile.dictionary_languages[0];
+    }
+
+    async function getDictionaryLocalePairs() {
+        const url = `https://www.lingq.com/api/v2/dictionary-locales/`;
+
+        const response = await fetch(url);
+        const data = await response.json();
+
+        return Object.fromEntries(data.map(item => [item.code, item.title]));
+    }
+
+    async function getLessonInfo(lessonId) {
+        const languageCode = await getLanguageCode();
+        const url = `https://www.lingq.com/api/v3/${languageCode}/lessons/counters/?lesson=${lessonId}`;
+
+        const response = await fetch(url);
+        const data = await response.json();
+
+        return data[lessonId];
+    }
+
+    async function getAllLessons(languageCode, collectionId) {
+        let allLessons = [];
+        let nextUrl = `https://www.lingq.com/api/v3/${languageCode}/search/?page=1&page_size=1000&collection=${collectionId}`;
+
+        while (nextUrl) {
+            try {
+                const response = await fetch(nextUrl);
+                if (!response.ok) {
+                    throw new Error(`HTTP error! Status: ${response.status}`);
+                }
+
+                const data = await response.json();
+                allLessons = allLessons.concat(data.results);
+                nextUrl = data.next;
+            } catch (error) {
+                console.error('Error fetching lessons:', error);
+                break;
+            }
+        }
+
+        return allLessons;
+    }
+
+    async function setLessonProgress(lessonId, wordIndex) {
+        const languageCode = await getLanguageCode();
+        const url = `https://www.lingq.com/api/v3/${languageCode}/lessons/${lessonId}/bookmark/`;
+        const payload = { wordIndex: wordIndex, completedWordIndex: wordIndex, client: 'web' };
+
+        fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+    }
+
     /* Utils */
 
     function createElement(tag, props = {}) {
@@ -2122,97 +2214,6 @@
         requestAnimationFrame(animateScroll);
     }
 
-    /* Get LingQ Data */
-
-    function getLessonId() {
-        const url = document.URL;
-        const regex = /https*:\/\/www\.lingq\.com\/\w+\/learn\/\w+\/web\/reader\/(\d+)/;
-        const match = url.match(regex);
-
-        return match[1];
-    }
-
-    function getCollectionId() {
-        const url = document.URL;
-        const regex = /https*:\/\/www\.lingq\.com\/\w+\/learn\/\w+\/web\/library\/course\/(\d+)/;
-        const match = url.match(regex);
-
-        return match[1];
-    }
-
-    async function getUserProfile() {
-        const url = `https://www.lingq.com/api/v3/profiles/`;
-
-        const response = await fetch(url);
-        const data = await response.json();
-
-        return data.results[0]
-    }
-
-    async function getLanguageCode() {
-        const userProfile = await getUserProfile();
-        return userProfile.active_language;
-    }
-
-    async function getDictionaryLanguage() {
-        const userProfile = await getUserProfile();
-        return await userProfile.dictionary_languages[0];
-    }
-
-    async function getDictionaryLocalePairs() {
-        const url = `https://www.lingq.com/api/v2/dictionary-locales/`;
-
-        const response = await fetch(url);
-        const data = await response.json();
-
-        return Object.fromEntries(data.map(item => [item.code, item.title]));
-    }
-
-    async function getLessonInfo(lessonId) {
-        const languageCode = await getLanguageCode();
-        const url = `https://www.lingq.com/api/v3/${languageCode}/lessons/counters/?lesson=${lessonId}`;
-
-        const response = await fetch(url);
-        const data = await response.json();
-
-        return data[lessonId];
-    }
-
-    async function getAllLessons(languageCode, collectionId) {
-        let allLessons = [];
-        let nextUrl = `https://www.lingq.com/api/v3/${languageCode}/search/?page=1&page_size=1000&collection=${collectionId}`;
-
-        while (nextUrl) {
-            try {
-                const response = await fetch(nextUrl);
-                if (!response.ok) {
-                    throw new Error(`HTTP error! Status: ${response.status}`);
-                }
-
-                const data = await response.json();
-                allLessons = allLessons.concat(data.results);
-                nextUrl = data.next;
-            } catch (error) {
-                console.error('Error fetching lessons:', error);
-                break;
-            }
-        }
-
-        return allLessons;
-    }
-
-    async function setLessonProgress(lessonId, wordIndex) {
-        const languageCode = await getLanguageCode();
-        const url = `https://www.lingq.com/api/v3/${languageCode}/lessons/${lessonId}/bookmark/`;
-        const payload = { wordIndex: wordIndex, completedWordIndex: wordIndex, client: 'web' };
-
-        fetch(url, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload)
-        });
-    }
-
     /* Features */
 
     function setupKeyboardShortcuts() {
@@ -2343,7 +2344,7 @@
                 if (playingSentence) {
                     const scrolling_div = document.querySelector(".reader-container")
                     const targetScrollTop = playingSentence.offsetTop + Math.floor(playingSentence.offsetHeight / 2) - Math.floor(scrolling_div.offsetHeight / 2);
-                    smoothScrollTo(scrolling_div, targetScrollTop, 500);
+                    smoothScrollTo(scrolling_div, targetScrollTop, 300);
                 }
             }
 
@@ -2506,7 +2507,7 @@
                     innerHTML: message
                 });
                 container.appendChild(messageDiv);
-                smoothScrollTo(container, container.scrollHeight, 500);
+                smoothScrollTo(container, container.scrollHeight, 300);
             }
 
             async function getOpenAIResponse(apiKey, model, history) {
@@ -2969,6 +2970,7 @@ Pronunciation: Enunciate words with deliberate clarity, focusing on vowel sounds
         const userLanguage = DictionaryLocalePairs[userDictionaryLang];
         const lessonReader = document.getElementById('lesson-reader');
 
+        if (settings.chatWidget) updateWidget();
         const observer = new MutationObserver((mutations) => {
             if (!settings.chatWidget) return;
 
