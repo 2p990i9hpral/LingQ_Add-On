@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*/learn/*/web/reader/*
 // @match        https://www.lingq.com/*/learn/*/web/library/course/*
 // @exclude      https://www.lingq.com/*/learn/*/web/editor/*
-// @version      5.10.6
+// @version      5.10.7
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @namespace https://greasyfork.org/users/1458847
@@ -223,7 +223,7 @@
             addSlider(sentenceVideoSettings, "sentenceHeightSlider", "Sentence Video Height:", "sentenceHeightValue", settings.sentenceHeight, "px", 300, 600, 10);
             container1.appendChild(sentenceVideoSettings);
 
-            addSlider(container1, "widgetWidthSlider", "Widget Width:", "widgetWidthValue", settings.widgetWidth, "px", 300, 500, 10);
+            addSlider(container1, "widgetWidthSlider", "Widget Width:", "widgetWidthValue", settings.widgetWidth, "px", 330, 500, 10);
 
             addSlider(container1, "fontSizeSlider", "Font Size:", "fontSizeValue", settings.fontSize, "rem", 0.8, 1.8, 0.05);
             addSlider(container1, "lineHeightSlider", "Line Height:", "lineHeightValue", settings.lineHeight, "", 1.2, 3.0, 0.1);
@@ -1230,7 +1230,6 @@
                     line-height: var(--line-height) !important;
                     font-size: var(--font-size) !important;
                     padding: 0 !important;
-                    scroll-behavior: smooth ;
                 }
         
                 .sentence-text-head {
@@ -1312,7 +1311,7 @@
         :root {
             --article-height: calc(var(--app-height) - var(--height-big));
             --header-height: 50px;
-            --widget-width: 400px;
+            --widget-width: ${settings.widgetWidth}px;
             --footer-height: 80px;
             --reader-layout-columns: 1fr var(--widget-width);
             --reader-layout-rows: var(--article-height) calc(var(--height-big) - var(--footer-height)) var(--footer-height);
@@ -1342,7 +1341,7 @@
 
         .main-header > div {
             grid-template-columns: 1fr 150px !important;
-            padding: 0 40px 0 420px !important;
+            padding: 0 100px 0 420px !important;
         }
 
         .main-header section:nth-child(1) {
@@ -1381,7 +1380,7 @@
         #lesson-reader {
             grid-template-columns: var(--reader-layout-columns);
             grid-template-rows: var(--reader-layout-rows);
-            overflow-y: hidden;
+            overflow: hidden;
             height: auto !important;
         }
 
@@ -1593,7 +1592,11 @@
             padding: 0 0.5rem !important;
             grid-template-rows: 16px 16px auto !important;
         }
-        
+
+        .audio-player--controllers {
+            grid-gap: unset !important;
+        }
+
         .audio-player--controllers a {
             height: 25px !important;
             padding: 0 1em !important;
@@ -2079,6 +2082,48 @@
         event.stopPropagation();
     }
 
+    async function changeScrollAmount(selector, scrollAmount) {
+        const readerContainer = await waitForElement(selector, 1000);
+
+        if (readerContainer) {
+            readerContainer.addEventListener("wheel", (event) => {
+                event.preventDefault();
+                const delta = event.deltaY;
+                readerContainer.scrollTop += delta * scrollAmount;
+            });
+        }
+    }
+
+    function smoothScrollTo(element, to, duration) {
+        const start = element.scrollTop;
+        const change = to - start;
+        const startTime = performance.now();
+
+        function easeInOutCubic(t) {
+            t *= 2;
+            if (t < 1) return 0.5 * t * t * t;
+            t -= 2;
+            return 0.5 * (t * t * t + 2);
+        }
+
+        function animateScroll(currentTime) {
+            const elapsedTime = currentTime - startTime;
+            const progress = Math.min(elapsedTime / duration, 1);
+            const easedProgress = easeInOutCubic(progress);
+
+            element.scrollTop = start + change * easedProgress;
+
+            if (elapsedTime < duration) {
+                requestAnimationFrame(animateScroll);
+            } else {
+                element.scrollTop = to;
+            }
+        }
+        requestAnimationFrame(animateScroll);
+    }
+
+    /* Get LingQ Data */
+
     function getLessonId() {
         const url = document.URL;
         const regex = /https*:\/\/www\.lingq\.com\/\w+\/learn\/\w+\/web\/reader\/(\d+)/;
@@ -2094,8 +2139,6 @@
 
         return match[1];
     }
-
-    /* LingQ Server Requests */
 
     async function getUserProfile() {
         const url = `https://www.lingq.com/api/v3/profiles/`;
@@ -2293,26 +2336,14 @@
         observer.observe(document.body, {childList: true});
     }
 
-    async function changeScrollAmount(selector, scrollAmount) {
-        const readerContainer = await waitForElement(selector, 1000);
-
-        if (readerContainer) {
-            readerContainer.addEventListener("wheel", (event) => {
-                event.preventDefault();
-                const delta = event.deltaY;
-                readerContainer.scrollTop += delta * scrollAmount;
-            });
-        }
-    }
-
     async function setupReaderContainer() {
         async function setupSentenceFocus(readerContainer) {
             function focusPlayingSentence() {
                 const playingSentence = document.querySelector(".sentence.is-playing");
                 if (playingSentence) {
                     const scrolling_div = document.querySelector(".reader-container")
-                    scrolling_div.scrollTop = playingSentence.offsetTop + Math.floor(playingSentence.offsetHeight / 2) - Math.floor(scrolling_div.offsetHeight / 2);
-
+                    const targetScrollTop = playingSentence.offsetTop + Math.floor(playingSentence.offsetHeight / 2) - Math.floor(scrolling_div.offsetHeight / 2);
+                    smoothScrollTo(scrolling_div, targetScrollTop, 500);
                 }
             }
 
@@ -2475,7 +2506,7 @@
                     innerHTML: message
                 });
                 container.appendChild(messageDiv);
-                messageDiv.scrollIntoView({behavior: "smooth"});
+                smoothScrollTo(container, container.scrollHeight, 500);
             }
 
             async function getOpenAIResponse(apiKey, model, history) {
