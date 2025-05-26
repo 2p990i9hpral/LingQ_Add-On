@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*/learn/*/web/reader/*
 // @match        https://www.lingq.com/*/learn/*/web/library/course/*
 // @exclude      https://www.lingq.com/*/learn/*/web/editor/*
-// @version      5.10.9
+// @version      5.11
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @namespace https://greasyfork.org/users/1458847
@@ -69,7 +69,7 @@
 
         tts: false,
         ttsApiKey: "",
-        ttsVoice: "alloy",
+        ttsVoice: "openai alloy",
         ttsWord: false,
         ttsSentence: false,
     };
@@ -299,7 +299,7 @@
             const ttsSection = createElement("div", {id: "ttsSection", className: "popup-section", style: `${settings.tts ? "" : "display: none"}`});
 
             const ttsApiKeyContainer = createElement("div", {className: "popup-row"});
-            ttsApiKeyContainer.appendChild(createElement("label", {htmlFor: "ttsApiKeyInput", textContent: "OpenAI API Key:"}));
+            ttsApiKeyContainer.appendChild(createElement("label", {htmlFor: "ttsApiKeyInput", textContent: "TTS API Key:"}));
 
             const ttsApiKeyFlexContainer = createElement("div", {style: "display: flex; align-items: center;"});
             const ttsApiKeyInput= createElement("input", {type: "password", id: "ttsApiKeyInput", value: settings.ttsApiKey, className: "popup-input"});
@@ -308,17 +308,47 @@
             ttsSection.appendChild(ttsApiKeyContainer);
 
             addSelect(ttsSection, "ttsVoiceSelector", "TTS Voice:", [
-                { value: "alloy", text: "alloy" },
-                { value: "ash", text: "ash" },
-                { value: "ballad", text: "ballad" },
-                { value: "coral", text: "coral" },
-                { value: "echo", text: "echo" },
-                { value: "fable", text: "fable" },
-                { value: "onyx", text: "onyx" },
-                { value: "nova", text: "nova" },
-                { value: "sage", text: "sage" },
-                { value: "shimmer", text: "shimmer" },
-                { value: "verse", text: "verse" },
+                { value: "openai alloy", text: "OpenAI alloy" },
+                { value: "openai ash", text: "OpenAI ash" },
+                { value: "openai ballad", text: "OpenAI ballad" },
+                { value: "openai coral", text: "OpenAI coral" },
+                { value: "openai echo", text: "OpenAI echo" },
+                { value: "openai fable", text: "OpenAI fable" },
+                { value: "openai onyx", text: "OpenAI onyx" },
+                { value: "openai nova", text: "OpenAI nova" },
+                { value: "openai sage", text: "OpenAI sage" },
+                { value: "openai shimmer", text: "OpenAI shimmer" },
+                { value: "openai verse", text: "OpenAI verse" },
+                { value: "google Zephyr", text: "Google Zephyr (Bright)" },
+                { value: "google Puck", text: "Google Puck (Upbeat)" },
+                { value: "google Charon", text: "Google Charon (Informative)" },
+                { value: "google Kore", text: "Google Kore (Firm)" },
+                { value: "google Fenrir", text: "Google Fenrir (Excitable)" },
+                { value: "google Leda", text: "Google Leda (Youthful)" },
+                { value: "google Orus", text: "Google Orus (Firm)" },
+                { value: "google Aoede", text: "Google Aoede (Breezy)" },
+                { value: "google Callirrhoe", text: "Google Callirrhoe (Easy-going)" },
+                { value: "google Autonoe", text: "Google Autonoe (Bright)" },
+                { value: "google Enceladus", text: "Google Enceladus (Breathy)" },
+                { value: "google Iapetus", text: "Google Iapetus (Clear)" },
+                { value: "google Umbriel", text: "Google Umbriel (Easy-going)" },
+                { value: "google Algieba", text: "Google Algieba (Smooth)" },
+                { value: "google Despina", text: "Google Despina (Smooth)" },
+                { value: "google Erinome", text: "Google Erinome (Clear)" },
+                { value: "google Algenib", text: "Google Algenib (Gravelly)" },
+                { value: "google Rasalgethi", text: "Google Rasalgethi (Informative)" },
+                { value: "google Laomedeia", text: "Google Laomedeia (Upbeat)" },
+                { value: "google Achernar", text: "Google Achernar (Soft)" },
+                { value: "google Alnilam", text: "Google Alnilam (Firm)" },
+                { value: "google Schedar", text: "Google Schedar (Even)" },
+                { value: "google Gacrux", text: "Google Gacrux (Mature)" },
+                { value: "google Pulcherrima", text: "Google Pulcherrima (Forward)" },
+                { value: "google Achird", text: "Google Achird (Friendly)" },
+                { value: "google Zubenelgenubi", text: "Google Zubenelgenubi (Casual)" },
+                { value: "google Vindemiatrix", text: "Google Vindemiatrix (Gentle)" },
+                { value: "google Sadachbia", text: "Google Sadachbia (Lively)" },
+                { value: "google Sadaltager", text: "Google Sadaltager (Knowledgeable)" },
+                { value: "google Sulafat", text: "Google Sulafat (Warm)" }
             ], settings.ttsVoice);
 
             addCheckbox(ttsSection, "ttsWordCheckbox", "Enable AI-TTS for words", settings.ttsWord);
@@ -2392,13 +2422,12 @@
         stopPlayingAudio(audioContext);
 
         return new Promise((resolve, reject) => {
-            audioContext = new AudioContext();
+            const audioContext = new (window.AudioContext || window.webkitAudioContext)();
             const gainNode = audioContext.createGain();
             gainNode.gain.value = volume;
             gainNode.connect(audioContext.destination);
 
             const audioDataCopy = audioData.slice(0);
-
             audioContext.decodeAudioData(audioDataCopy)
                 .then(buffer => {
                     const source = audioContext.createBufferSource();
@@ -2420,10 +2449,11 @@
         });
     }
 
-    async function openAITTS(text, API_KEY, voice = "nova", playbackRate = 1, instructions) {
+    async function openAITTS(text, API_KEY, voice = "nova", instructions) {
         const modelId = "gpt-4o-mini-tts";
         const apiUrl = "https://api.openai.com/v1/audio/speech";
-        console.log('TTS', modelId, voice, text)
+
+        console.log('TTS', `${modelId}, ${voice}`);
 
         if (!API_KEY) throw new Error("Invalid or missing OpenAI API key. Please set the API_KEY");
 
@@ -2440,7 +2470,6 @@
                     model: modelId,
                     voice: voice,
                     instructions: instructions,
-                    speed: playbackRate
                 })
             });
 
@@ -2459,6 +2488,115 @@
 
         } catch (error) {
             console.error("Error during OpenAI TTS request:", error);
+            throw error;
+        }
+    }
+
+    async function googleTTS(text, API_KEY, voice = "Zephyr", ttsInstructions) {
+        function createWavHeader(dataLength) {
+            const sampleRate = 24000;
+            const numChannels = 1;
+            const bitsPerSample = 16;
+
+            const headerLength = 44;
+            const view = new DataView(new ArrayBuffer(headerLength));
+
+            function writeString(view, offset, s) {
+                for (let i = 0; i < s.length; i++) {
+                    view.setUint8(offset + i, s.charCodeAt(i));
+                }
+            }
+
+            // RIFF chunk
+            writeString(view, 0, 'RIFF');
+            view.setUint32(4, 36 + dataLength, true); // ChunkSize
+            writeString(view, 8, 'WAVE');
+
+            // fmt sub-chunk
+            writeString(view, 12, 'fmt ');
+            view.setUint32(16, 16, true);             // Subchunk1Size
+            view.setUint16(20, 1, true);              // AudioFormat (1 = PCM)
+            view.setUint16(22, numChannels, true);    // NumChannels
+            view.setUint32(24, sampleRate, true);     // SampleRate
+            view.setUint32(28, sampleRate * numChannels * (bitsPerSample / 8), true); // ByteRate
+            view.setUint16(32, numChannels * (bitsPerSample / 8), true); // BlockAlign
+            view.setUint16(34, bitsPerSample, true); // BitsPerSample
+
+            // data sub-chunk
+            writeString(view, 36, 'data'); // Subchunk2ID
+            view.setUint32(40, dataLength, true); // Subchunk2Size (실제 오디오 데이터 크기)
+
+            return view.buffer;
+        }
+
+        const modelId = "gemini-2.5-flash-preview-tts";
+        const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${modelId}:generateContent?key=${API_KEY}`;
+
+        if (!API_KEY) throw new Error("Invalid or missing Google API key. Please set the API_KEY");
+
+        try {
+            const response = await fetch(apiUrl, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    contents: [{
+                        parts: [{ text: ttsInstructions + text }]
+                    }],
+                    generationConfig: {
+                        speechConfig: {
+                            voiceConfig: {
+                                prebuiltVoiceConfig: { voiceName: voice }
+                            }
+                        },
+                        responseModalities: ["AUDIO"]
+                    }
+                })
+            });
+
+            if (!response.ok) {
+                let errorMessage = `HTTP error! Status: ${response.status}`;
+                try {
+                    const errorBody = await response.json();
+                    errorMessage += ` - Google Error: ${errorBody?.error?.message || JSON.stringify(errorBody)}`;
+                } catch (parseError) {
+                    errorMessage += ` - Failed to parse error response.`;
+                }
+                throw new Error(errorMessage);
+            }
+
+            const data = await response.json();
+            const audioDataBase64 = data.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
+
+            if (!audioDataBase64) {
+                console.error("Google TTS response:", data);
+                throw new Error("No audio data found in Google TTS response.");
+            }
+
+            const inputTokens = data.usageMetadata.promptTokenCount;
+            const outputTokens = data.usageMetadata.candidatesTokenCount;
+            const approxCost = inputTokens * 0.5/1000000 + outputTokens * 10/1000000;
+            console.log('TTS', `${modelId}, ${voice}, tokens: (${inputTokens}/${outputTokens}) cost: $${approxCost.toFixed(6)}`);
+
+            const binaryString = atob(audioDataBase64);
+            const len = binaryString.length;
+            const bytes = new Uint8Array(len);
+
+            for (let i = 0; i < len; i++) {
+                bytes[i] = binaryString.charCodeAt(i);
+            }
+
+            const wavHeader = createWavHeader(bytes.length);
+
+            const completeBuffer = new Uint8Array(wavHeader.byteLength + bytes.byteLength);
+            completeBuffer.set(new Uint8Array(wavHeader), 0);
+            completeBuffer.set(bytes, wavHeader.byteLength);
+
+            return completeBuffer.buffer; // 완성된 WAV 형식의 ArrayBuffer 반환
+
+        } catch (error) {
+            console.error("Error during Google TTS request:", error);
             throw error;
         }
     }
@@ -2611,6 +2749,21 @@
                 }
             }
 
+            async function getTTSResponse(provider, apiKey, voice, text) {
+                if (provider === 'openai') {
+                    const ttsInstructions = `
+Accent/Affect: Neutral and clear, like a professional voice-over artist. Focus on accuracy.
+Tone: Objective and methodical. Maintain a slightly formal tone without emotion.
+Pacing: Use distinct pauses between words and phrases to demonstrate pronunciation nuances. Emphasize syllabic clarity.
+Pronunciation: Enunciate words with deliberate clarity, focusing on vowel sounds and consonant clusters.
+            `;
+                    return await openAITTS(text, apiKey, voice, ttsInstructions);
+                } else if (provider === 'google') {
+                    const ttsInstructions = `Neutral and clear: `;
+                    return await googleTTS(text, apiKey, voice, ttsInstructions);
+                }
+            }
+
             async function handleSendMessage() {
                 const userInput = document.getElementById("user-input")
                 const chatContainer = document.getElementById("chat-container")
@@ -2717,7 +2870,7 @@
                         return;
                     }
 
-                    let audioData = await openAITTS(`${selectedText}`, settings.ttsApiKey, settings.ttsVoice, 1.0, ttsInstructions);
+                    let audioData = await getTTSResponse(ttsProvider, settings.ttsApiKey, ttsVoice, selectedText);
                     if (audioData == null) {
                         console.log("audioData can't be got.")
                         return;
@@ -2766,6 +2919,7 @@
             const isSentence = !document.querySelector(".section-widget--main");
 
             const [llmProvider, llmModel] = settings.llmProviderModel.split(" ");
+            const [ttsProvider, ttsVoice] = settings.ttsVoice.split(" ");
             const llmApiKey = settings.llmApiKey;
 
             const systemPrompt = `
@@ -2876,17 +3030,17 @@ Respond understood if you got it.
 `
             const sentencePrompt = `
 Use this prompt only for the next input.
-**Sentence(s) Input**
-- Input will be given as: 'Input: "sentence(s)"'
+**Sentences Input**
+- Input will be given as: 'Input: "sentences"'
 
-1.  ALWAYS translate the entire input sentence(s) first into ${userLanguage}. This entire translated sentence (or sentences, if multiple are input) should be placed within a single '<p>' tag and be bolded using '<b>' tags around the entire translation.
-2.  After the translated sentence(s) and an '<hr>' separator, provide a comprehensive explanation of the overall meaning of the input sentence(s) in ${userLanguage}. This explanation should:
-    *   Clarify the main message or purpose of the sentence(s).
+1.  ALWAYS translate **all** input sentences first into ${userLanguage}. **If multiple sentences are provided in the input, ensure every single one of them is translated and concatenated together to form one continuous block of text.** This entire translated block should be placed within a single '<p>' tag and be bolded using '<b>' tags around the entire translation.
+2.  After the translated sentences and an '<hr>' separator, provide a comprehensive explanation of the overall meaning of the input sentences in ${userLanguage}. This explanation should:
+    *   Clarify the main message or purpose of the sentences.
     *   Highlight any important contextual details that affect understanding.
     *   Explain any subtle nuances, implications, or underlying tones.
     *   Briefly touch upon significant grammatical structures if they are key to understanding the sentence's construction or meaning (but do not turn this into a full grammar lesson).
     *   This explanation should be enclosed in one or more '<p>' tags as needed for clarity and aim to provide a holistic understanding beyond a literal translation.
-3.  After another '<hr>' separator, identify a few (typically 2-4, depending on sentence complexity and length) key words or phrases from the *original* sentence(s). Focus on:
+3.  After another '<hr>' separator, identify a few (typically 2-4, depending on sentence complexity and length) key words or phrases from the *original* sentences. Focus on:
     *   Idiomatic expressions or phrases with non-literal meanings.
     *   Vocabulary that might be challenging for a learner of the original language.
     *   Terms that are crucial for a deep and accurate understanding of the sentence's core message.
@@ -2896,7 +3050,7 @@ Use this prompt only for the next input.
     *   Provide a concise meaning or explanation in ${userLanguage}, relevant to its use in the given context.
 5.  Use the following HTML structure for the entire response:
 
-<p><b>[The entire translated sentence(s) in ${userLanguage}, bolded]</b></p>
+<p><b>[The entire translated sentences in ${userLanguage}]</b></p>
 <hr>
 <p>[Comprehensive explanation in ${userLanguage} as per instruction #2. This may use multiple paragraphs.]</p>
 <hr>
@@ -2906,7 +3060,7 @@ Use this prompt only for the next input.
   <!-- Repeat <li> for other identified words/phrases -->
 </ul>
 
-*Note: Always include the full sentence(s) translation first. The selection of words/phrases should be judicious and aim to genuinely aid understanding. All content, including the meanings of words/phrases, must be in ${userLanguage}.*
+*Note: Always include the full sentences translation first. The selection of words/phrases should be judicious and aim to genuinely aid understanding. All content, including the meanings of words/phrases, must be in ${userLanguage}.*
 
 ## Examples
 
@@ -3006,12 +3160,6 @@ Do not use the formatting rules from the word/sentence prompts previously given 
 Respond understood if you got it.
 `
 
-            const ttsInstructions = `
-Accent/Affect: Neutral and clear, like a professional voice-over artist. Focus on accuracy.
-Tone: Objective and methodical. Maintain a slightly formal tone without emotion.
-Pacing: Use distinct pauses between words and phrases to demonstrate pronunciation nuances. Emphasize syllabic clarity.
-Pronunciation: Enunciate words with deliberate clarity, focusing on vowel sounds and consonant clusters.
-            `;
             let chatHistory = [];
 
             updateReferenceWord();
