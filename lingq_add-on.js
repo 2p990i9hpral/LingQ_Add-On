@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*/learn/*/web/reader/*
 // @match        https://www.lingq.com/*/learn/*/web/library/course/*
 // @exclude      https://www.lingq.com/*/learn/*/web/editor/*
-// @version      5.11.1
+// @version      5.11.2
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @namespace https://greasyfork.org/users/1458847
@@ -3221,10 +3221,8 @@ Respond understood if you got it.
         const userLanguage = DictionaryLocalePairs[userDictionaryLang];
         const lessonReader = document.getElementById('lesson-reader');
 
-        if (settings.chatWidget) updateWidget();
+        updateWidget();
         const observer = new MutationObserver((mutations) => {
-            if (!settings.chatWidget) return;
-
             mutations.forEach((mutation) => {
                 mutation.addedNodes.forEach((node) => {
                     if (node.nodeType !== Node.ELEMENT_NODE) return;
