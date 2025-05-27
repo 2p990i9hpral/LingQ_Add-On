@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*/learn/*/web/reader/*
 // @match        https://www.lingq.com/*/learn/*/web/library/course/*
 // @exclude      https://www.lingq.com/*/learn/*/web/editor/*
-// @version      5.11
+// @version      5.11.1
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @namespace https://greasyfork.org/users/1458847
@@ -308,17 +308,19 @@
             ttsSection.appendChild(ttsApiKeyContainer);
 
             addSelect(ttsSection, "ttsVoiceSelector", "TTS Voice:", [
-                { value: "openai alloy", text: "OpenAI alloy" },
-                { value: "openai ash", text: "OpenAI ash" },
-                { value: "openai ballad", text: "OpenAI ballad" },
-                { value: "openai coral", text: "OpenAI coral" },
-                { value: "openai echo", text: "OpenAI echo" },
-                { value: "openai fable", text: "OpenAI fable" },
-                { value: "openai onyx", text: "OpenAI onyx" },
-                { value: "openai nova", text: "OpenAI nova" },
-                { value: "openai sage", text: "OpenAI sage" },
-                { value: "openai shimmer", text: "OpenAI shimmer" },
-                { value: "openai verse", text: "OpenAI verse" },
+                { value: "openai random", text: "OpenAI Random" },
+                { value: "openai alloy", text: "OpenAI Alloy" },
+                { value: "openai ash", text: "OpenAI Ash" },
+                { value: "openai ballad", text: "OpenAI Ballad" },
+                { value: "openai coral", text: "OpenAI Coral" },
+                { value: "openai echo", text: "OpenAI Echo" },
+                { value: "openai fable", text: "OpenAI Fable" },
+                { value: "openai onyx", text: "OpenAI Onyx" },
+                { value: "openai nova", text: "OpenAI Nova" },
+                { value: "openai sage", text: "OpenAI Sage" },
+                { value: "openai shimmer", text: "OpenAI Shimmer" },
+                { value: "openai verse", text: "OpenAI Verse" },
+                { value: "google random", text: "Google Random" },
                 { value: "google Zephyr", text: "Google Zephyr (Bright)" },
                 { value: "google Puck", text: "Google Puck (Upbeat)" },
                 { value: "google Charon", text: "Google Charon (Informative)" },
@@ -2244,6 +2246,11 @@
         requestAnimationFrame(animateScroll);
     }
 
+    function getRandomElement(arr) {
+        const randomIndex = Math.floor(Math.random() * arr.length);
+        return arr?.[randomIndex];
+    }
+
     /* Features */
 
     function setupKeyboardShortcuts() {
@@ -2570,7 +2577,7 @@
             const audioDataBase64 = data.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
 
             if (!audioDataBase64) {
-                console.error("Google TTS response:", data);
+                console.error("Google TTS response:", data.candidates?.[0]);
                 throw new Error("No audio data found in Google TTS response.");
             }
 
@@ -2687,7 +2694,7 @@
                     const cachedTokens = data.usage.prompt_tokens_details.cached_tokens;
                     const outputTokens = data.usage.completion_tokens;
                     const approxCost = (inputTokens - cachedTokens) * inputPrice + cachedTokens * (inputPrice/4) + outputTokens * outputPrice;
-                    console.log('Chat', `${model}, token: (${inputTokens-cachedTokens}/${cachedTokens}/${outputTokens}), cost: $${approxCost.toFixed(6)}`);
+                    console.log('Chat', `${model}, tokens: (${inputTokens-cachedTokens}/${cachedTokens}/${outputTokens}), cost: $${approxCost.toFixed(6)}`);
 
                     return data.choices[0]?.message?.content || "Sorry, could not get a response.";
 
@@ -2732,7 +2739,7 @@
                     const cachedTokens = data.usageMetadata?.cachedContentTokenCount ?? 0;
                     const outputTokens = data.usageMetadata.candidatesTokenCount;
                     const approxCost = (inputTokens - cachedTokens) * inputPrice + cachedTokens * (inputPrice/4) + outputTokens * outputPrice;
-                    console.log('Chat', `${model}, token: (${inputTokens-cachedTokens}/${cachedTokens}/${outputTokens}), cost: $${approxCost.toFixed(6)}`);
+                    console.log('Chat', `${model}, tokens: (${inputTokens-cachedTokens}/${cachedTokens}/${outputTokens}), cost: $${approxCost.toFixed(6)}`);
 
                     return data.candidates[0].content.parts[0].text;
                 } catch (error) {
@@ -2750,6 +2757,15 @@
             }
 
             async function getTTSResponse(provider, apiKey, voice, text) {
+                const voices = Array.from(document.querySelector("#ttsVoiceSelector").options)
+                    .filter(option => option.value.startsWith(provider))
+                    .map(option => option.value)
+                    .slice(1);
+
+                if (voice === "random") {
+                    voice = getRandomElement(voices).split(" ")[1];
+                }
+
                 if (provider === 'openai') {
                     const ttsInstructions = `
 Accent/Affect: Neutral and clear, like a professional voice-over artist. Focus on accuracy.
@@ -2759,7 +2775,7 @@ Pronunciation: Enunciate words with deliberate clarity, focusing on vowel sounds
             `;
                     return await openAITTS(text, apiKey, voice, ttsInstructions);
                 } else if (provider === 'google') {
-                    const ttsInstructions = `Neutral and clear: `;
+                    const ttsInstructions = `Read the text in a realistic, genuine, neutral, and clear manner. vary your rhythm and pace naturally, like a professional voice actor: `;
                     return await googleTTS(text, apiKey, voice, ttsInstructions);
                 }
             }
@@ -3210,10 +3226,10 @@ Respond understood if you got it.
             if (!settings.chatWidget) return;
 
             mutations.forEach((mutation) => {
-                console.debug('Observer:', `Widget added. ${mutation.type}`, mutation.addedNodes);
                 mutation.addedNodes.forEach((node) => {
                     if (node.nodeType !== Node.ELEMENT_NODE) return;
-                    if (!node.matches(".widget-area")) return;
+                    if (!node.matches(".widget-area.is-fixed")) return;
+                    console.debug('Observer:', `Widget added. ${mutation.type}`, mutation.addedNodes);
                     updateWidget();
                 });
             });
