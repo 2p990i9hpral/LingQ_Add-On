@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*/learn/*/web/reader/*
 // @match        https://www.lingq.com/*/learn/*/web/library/course/*
 // @exclude      https://www.lingq.com/*/learn/*/web/editor/*
-// @version      5.11.2
+// @version      5.11.3
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @namespace https://greasyfork.org/users/1458847
@@ -275,6 +275,7 @@
             const chatWidgetSection = createElement("div", {id: "chatWidgetSection", className: "popup-section", style: `${settings.chatWidget ? "" : "display: none"}`});
 
             addSelect(chatWidgetSection, "llmProviderModelSelector", "LLM Provider: (Price per 1M tokens)", [
+                { value: "openai gpt-4.1", text: "OpenAI GPT-4.1 ($2.0/$8.0)" },
                 { value: "openai gpt-4.1-mini", text: "OpenAI GPT-4.1 mini ($0.4/$1.6)" },
                 { value: "openai gpt-4.1-nano", text: "OpenAI GPT-4.1 nano ($0.1/$0.4)" },
                 { value: "google gemini-2.5-flash-preview-05-20", text: "Google Gemini 2.5 Flash ($0.15/$0.6)" },
@@ -1212,6 +1213,11 @@
                     background-color: rgb(125 125 125 / 10%);
                 }
                 
+                #chat-container .bot-message:nth-child(1) b:nth-child(1), 
+                #chat-container .bot-message:nth-child(1) span:nth-child(2) {
+                    font-size: 1.0rem;
+                }
+                
                 @keyframes gradient-move {
                     0% {
                         background-position: 200% 0;
@@ -1243,7 +1249,7 @@
                 }
                 
                 #chat-container hr {
-                    margin: 0.3rem 0 0.5rem;
+                    margin: 0.3rem 0 0.4rem;
                     border: 0;
                     height: 1px;
                     background-color: rgb(125 125 125 / 50%);
@@ -1252,9 +1258,6 @@
                 /*tts*/
                 
                 #playAudio {
-                    cursor: pointer;
-                    font-size: 1.5rem;
-                    padding: 5px;
                 }
         
                 /*font settings*/
@@ -1977,18 +1980,26 @@
 
     function getLessonId() {
         const url = document.URL;
-        const regex = /https*:\/\/www\.lingq\.com\/\w+\/learn\/\w+\/web\/reader\/(\d+)/;
+        const regex = /(http|https):\/\/www\.lingq\.com\/\w+\/learn\/\w+\/web\/reader\/(\d+)/;
         const match = url.match(regex);
 
-        return match[1];
+        return match[2];
     }
 
     function getCollectionId() {
         const url = document.URL;
-        const regex = /https*:\/\/www\.lingq\.com\/\w+\/learn\/\w+\/web\/library\/course\/(\d+)/;
+        const regex = /(http|https):\/\/www\.lingq\.com\/\w+\/learn\/\w+\/web\/library\/course\/(\d+)/;
         const match = url.match(regex);
 
-        return match[1];
+        return match[2];
+    }
+
+    function getLessonLanguage() {
+        const url = document.URL;
+        const regex = /(http|https)*:\/\/www\.lingq\.com\/\w+\/learn\/(\w+)\/web\/reader\/\d+/;
+        const match = url.match(regex);
+
+        return match[2];
     }
 
     async function getUserProfile() {
@@ -2429,7 +2440,7 @@
         stopPlayingAudio(audioContext);
 
         return new Promise((resolve, reject) => {
-            const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            audioContext = new (window.AudioContext || window.webkitAudioContext)();
             const gainNode = audioContext.createGain();
             gainNode.gain.value = volume;
             gainNode.connect(audioContext.destination);
@@ -2541,70 +2552,71 @@
 
         if (!API_KEY) throw new Error("Invalid or missing Google API key. Please set the API_KEY");
 
-        try {
-            const response = await fetch(apiUrl, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                    contents: [{
-                        parts: [{ text: ttsInstructions + text }]
-                    }],
-                    generationConfig: {
-                        speechConfig: {
-                            voiceConfig: {
-                                prebuiltVoiceConfig: { voiceName: voice }
-                            }
-                        },
-                        responseModalities: ["AUDIO"]
+        const maxRetries = 3;
+        for (let attempt = 0; attempt < maxRetries; attempt++) {
+            try {
+                const response = await fetch(apiUrl, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        contents: [{
+                            parts: [{ text: ttsInstructions + text }]
+                        }],
+                        generationConfig: {
+                            speechConfig: {
+                                voiceConfig: {
+                                    prebuiltVoiceConfig: { voiceName: voice }
+                                }
+                            },
+                            responseModalities: ["AUDIO"]
+                        }
+                    })
+                });
+
+                if (!response.ok) {
+                    let errorMessage = `HTTP error! Status: ${response.status}`;
+                    try {
+                        const errorBody = await response.json();
+                        errorMessage += ` - Google Error: ${errorBody?.error?.message || JSON.stringify(errorBody)}`;
+                    } catch (parseError) {
+                        errorMessage += ` - Failed to parse error response.`;
                     }
-                })
-            });
-
-            if (!response.ok) {
-                let errorMessage = `HTTP error! Status: ${response.status}`;
-                try {
-                    const errorBody = await response.json();
-                    errorMessage += ` - Google Error: ${errorBody?.error?.message || JSON.stringify(errorBody)}`;
-                } catch (parseError) {
-                    errorMessage += ` - Failed to parse error response.`;
+                    throw new Error(errorMessage);
                 }
-                throw new Error(errorMessage);
+
+                const data = await response.json();
+                const audioDataBase64 = data.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
+
+                if (audioDataBase64) {
+                    const inputTokens = data.usageMetadata.promptTokenCount;
+                    const outputTokens = data.usageMetadata.candidatesTokenCount;
+                    const approxCost = inputTokens * 0.5/1000000 + outputTokens * 10/1000000;
+                    console.log('TTS', `${modelId}, ${voice}, tokens: (${inputTokens}/${outputTokens}) cost: $${approxCost.toFixed(6)}`);
+
+                    const binaryString = atob(audioDataBase64);
+                    const len = binaryString.length;
+                    const bytes = new Uint8Array(len);
+
+                    for (let i = 0; i < len; i++) {
+                        bytes[i] = binaryString.charCodeAt(i);
+                    }
+
+                    const wavHeader = createWavHeader(bytes.length);
+
+                    const completeBuffer = new Uint8Array(wavHeader.byteLength + bytes.byteLength);
+                    completeBuffer.set(new Uint8Array(wavHeader), 0);
+                    completeBuffer.set(bytes, wavHeader.byteLength);
+
+                    return completeBuffer.buffer;
+                } else {
+                    console.warn(`Google TTS Warning (Attempt ${attempt + 1}/${maxRetries})`, data.candidates?.[0]);
+                }
+            } catch (error) {
+                console.error("Error during Google TTS request:", error);
+                throw error;
             }
-
-            const data = await response.json();
-            const audioDataBase64 = data.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
-
-            if (!audioDataBase64) {
-                console.error("Google TTS response:", data.candidates?.[0]);
-                throw new Error("No audio data found in Google TTS response.");
-            }
-
-            const inputTokens = data.usageMetadata.promptTokenCount;
-            const outputTokens = data.usageMetadata.candidatesTokenCount;
-            const approxCost = inputTokens * 0.5/1000000 + outputTokens * 10/1000000;
-            console.log('TTS', `${modelId}, ${voice}, tokens: (${inputTokens}/${outputTokens}) cost: $${approxCost.toFixed(6)}`);
-
-            const binaryString = atob(audioDataBase64);
-            const len = binaryString.length;
-            const bytes = new Uint8Array(len);
-
-            for (let i = 0; i < len; i++) {
-                bytes[i] = binaryString.charCodeAt(i);
-            }
-
-            const wavHeader = createWavHeader(bytes.length);
-
-            const completeBuffer = new Uint8Array(wavHeader.byteLength + bytes.byteLength);
-            completeBuffer.set(new Uint8Array(wavHeader), 0);
-            completeBuffer.set(bytes, wavHeader.byteLength);
-
-            return completeBuffer.buffer; // 완성된 WAV 형식의 ArrayBuffer 반환
-
-        } catch (error) {
-            console.error("Error during Google TTS request:", error);
-            throw error;
         }
     }
 
@@ -2652,7 +2664,8 @@
                     innerHTML: message
                 });
                 container.appendChild(messageDiv);
-                smoothScrollTo(container, container.scrollHeight, 300);
+
+                if (container.childElementCount > 1) smoothScrollTo(container, container.scrollHeight, 300);
             }
 
             function getLLMPricing(llmProviderModel) {
@@ -2684,7 +2697,7 @@
                     if (!response.ok) {
                         const errorData = await response.json();
                         console.error('OpenAI API error:', errorData);
-                        throw new Error(`OpenAI API error: ${response.status} - ${response.statusText}`);
+                        return errorData.error.message;
                     }
 
                     const data = await response.json();
@@ -2728,8 +2741,7 @@
                     if (!response.ok) {
                         const errorData = await response.json();
                         console.error('Google Gemini API error:', errorData);
-                        const message = errorData?.error?.message || `Google Gemini API error: ${response.status} - ${response.statusText}`;
-                        throw new Error(message);
+                        return errorData.error.message;
                     }
 
                     const data = await response.json();
@@ -2741,10 +2753,10 @@
                     const approxCost = (inputTokens - cachedTokens) * inputPrice + cachedTokens * (inputPrice/4) + outputTokens * outputPrice;
                     console.log('Chat', `${model}, tokens: (${inputTokens-cachedTokens}/${cachedTokens}/${outputTokens}), cost: $${approxCost.toFixed(6)}`);
 
-                    return data.candidates[0].content.parts[0].text;
+                    return data.candidates[0].content.parts[0].text || "Sorry, could not get a response.";
                 } catch (error) {
                     console.error('Google Gemini API call failed:', error);
-                    return `Sorry, something went wrong communicating with Google. ${error.message || ''}`;
+                    return "Sorry, something went wrong communicating with Google.";
                 }
             }
 
@@ -2757,25 +2769,18 @@
             }
 
             async function getTTSResponse(provider, apiKey, voice, text) {
+                const ttsInstructions = `Read the text in a realistic, genuine, neutral, and clear manner. vary your rhythm and pace naturally, like a professional voice actor: `;
+
                 const voices = Array.from(document.querySelector("#ttsVoiceSelector").options)
                     .filter(option => option.value.startsWith(provider))
                     .map(option => option.value)
                     .slice(1);
 
-                if (voice === "random") {
-                    voice = getRandomElement(voices).split(" ")[1];
-                }
+                if (voice === "random") voice = getRandomElement(voices).split(" ")[1];
 
                 if (provider === 'openai') {
-                    const ttsInstructions = `
-Accent/Affect: Neutral and clear, like a professional voice-over artist. Focus on accuracy.
-Tone: Objective and methodical. Maintain a slightly formal tone without emotion.
-Pacing: Use distinct pauses between words and phrases to demonstrate pronunciation nuances. Emphasize syllabic clarity.
-Pronunciation: Enunciate words with deliberate clarity, focusing on vowel sounds and consonant clusters.
-            `;
                     return await openAITTS(text, apiKey, voice, ttsInstructions);
                 } else if (provider === 'google') {
-                    const ttsInstructions = `Read the text in a realistic, genuine, neutral, and clear manner. vary your rhythm and pace naturally, like a professional voice actor: `;
                     return await googleTTS(text, apiKey, voice, ttsInstructions);
                 }
             }
@@ -2875,7 +2880,7 @@ Pronunciation: Enunciate words with deliberate clarity, focusing on vowel sounds
                 }
             }
 
-            async function updateTTS() {
+            async function updateTTS(click=true) {
                 async function replaceTTSButton() {
                     const selectedTextElement = document.querySelector(".reference-word");
                     const selectedText = selectedTextElement ? selectedTextElement.textContent.trim() : "";
@@ -2886,17 +2891,20 @@ Pronunciation: Enunciate words with deliberate clarity, focusing on vowel sounds
                         return;
                     }
 
+                    ttsButton.disabled = true;
                     let audioData = await getTTSResponse(ttsProvider, settings.ttsApiKey, ttsVoice, selectedText);
                     if (audioData == null) {
                         console.log("audioData can't be got.")
                         return;
                     }
+                    ttsButton.disabled = false;
 
-                    const newTtsButton = createElement("button", {id: "playAudio", textContent: "🔊", className: "is-tts tts-event"});
-                    newTtsButton.addEventListener('click', async (event) => {
+                    const newTTSButton = ttsButton.cloneNode(true);
+                    newTTSButton.id = "playAudio";
+                    newTTSButton.addEventListener('click', async (event) => {
                         await playAudio(audioData, 0.7);
                     })
-                    ttsButton.replaceWith(newTtsButton);
+                    ttsButton.replaceWith(newTTSButton);
                     showToast("TTS Replaced", true);
                     playAudio(audioData, 0.7);
                 }
@@ -2912,16 +2920,12 @@ Pronunciation: Enunciate words with deliberate clarity, focusing on vowel sounds
                 const ttsSentenceOffCondition = !settings.ttsSentence && !isWord;
 
                 if (ttsWordOffCondition || ttsSentenceOffCondition) {
-                    if (!ttsButton.matches('.tts-event')) {
-                        ttsButton.click();
-                    }
+                    if (click) ttsButton.click();
 
                     ttsButton.addEventListener('click', (event) => {
-                        preventPropagation(event);
-                        ttsButton.disabled = true;
+                        event.stopImmediatePropagation();
                         replaceTTSButton();
-                    }, {once: true})
-                    ttsButton.classList.add('tts-event');
+                    }, true);
                 } else {
                     replaceTTSButton();
                 }
@@ -2940,13 +2944,13 @@ Pronunciation: Enunciate words with deliberate clarity, focusing on vowel sounds
 
             const systemPrompt = `
 **System Prompt (Formatting & Core Rules):**
-Your primary function is to serve as a language assistant. Your responses must meticulously adhere to the following guidelines to ensure clarity, accuracy, and consistency. All output, including translations, explanations, definitions, and examples, must be exclusively in '${userLanguage}' and formatted using the specified HTML.
+Your primary function is to serve as a language assistant. Your responses must meticulously adhere to the following guidelines to ensure clarity, accuracy, and consistency.
 
 ## Core Principles
 
-*   **Exclusive Language Use:** All generated content, without exception (this includes part-of-speech labels, definitions, explanations, example sentences, and their translations), must be in '${userLanguage}'. Do not revert to the original input language for any explanatory text, comments, or labels. The entirety of your response visible to the user must be in '${userLanguage}'.
+*   **Language Use:** Your primary response language for all explanatory text, definitions, part-of-speech labels, and translations of examples is '${userLanguage}'. Content specifically designated to be in the language of the original input (e.g., original example sentences before their translation) should be presented in '${lessonLanguage}'. The vast majority of your response visible to the user must be in '${userLanguage}'.
 *   **Strict HTML Formatting:**
-    *   Utilize *only* the following HTML tags for presentation: '<b>' (for bolding key terms like the base form), '<i>' (for part of speech or emphasizing specific words within explanations), '<p>' (for paragraphs of text like definitions and explanations), '<ul>' (for unordered lists, primarily for examples), '<li>' (for list items within '<ul>').
+    *   Utilize *only* the following HTML tags for presentation: '<b>' (for bolding key terms like the base form or selected sentence elements), '<i>' (for part of speech or emphasizing specific words within explanations), '<p>' (for paragraphs of text like definitions and explanations), '<ul>' (for unordered lists, primarily for examples or key elements), '<li>' (for list items within '<ul>').
     *   Use '<br>' tags *sparingly* and only for intentional line breaks within a block element (e.g., within an '<li>' if a single example and its translation need to be on separate lines but are conceptually one item, though separate '<li>' tags are generally preferred for distinct items). Avoid using '<br>' for paragraph spacing; use new '<p>' tags instead.
     *   Output *raw HTML as plain text*. This means your entire response should be a string of HTML. Do not use Markdown syntax (e.g., '# H1', '**Bold**', '*Italic*', '> blockquote', '---'), do not wrap your HTML in Markdown code blocks (e.g., \`\`\`html ... \`\`\`), and do not use any other formatting conventions like XML declarations. Do not use the '<pre>' tag.
 *   **Utmost Directness & Conciseness:**
@@ -2966,31 +2970,31 @@ Your primary function is to serve as a language assistant. Your responses must m
 *   **Completeness & Adherence to Structure:**
     *   Ensure all requested components, as defined by subsequent specific prompts (e.g., the 'wordPhrasePrompt'), are included in the response and follow the specified order and HTML structure precisely.
     *   Pay close attention to the formatting details within the specified HTML structure (e.g., placement of bold tags, italics, spans, and punctuation).
-`
+`;
             const wordPhrasePrompt = `
 Use this prompt only for the next input.
 **Single Word/Phrase Input**
 - Input will be given as: 'Input: "word or phrase" Context: "sentence including the word or phrase"'
-1. Determine the base, dictionary form of the word or phrase. This means using the singular form for nouns (e.g., "cat" instead of "cats") and the infinitive form for verbs (e.g., "run" instead of "ran").
+1. Determine the base, dictionary form of the word or phrase. This means using the singular form for nouns (e.g., "cat" instead of "cats") and the infinitive form for verbs (e.g., "run" instead of "ran"). For phrases, use the standard dictionary form.
 2. Address and explain the base form of the word or phrase directly, even if the input is in a conjugated or inflected form. This is especially important for idioms.
 3. Provide the IPA pronunciation for the base form of the word or phrase. The IPA should be enclosed in square brackets (e.g., [prəˌnʌnsiˈeɪʃən]).
-4. Provide a concise dictionary definition of the word as it is used within the given context in ${userLanguage}. This definition should be very brief, akin to a quick lookup in a dictionary (e.g., for a verb: '달리다', '성취하다'; for a noun: '사과', '번역가'), typically just a few words or a short phrase, not a full explanatory sentence.
+4. Provide a concise dictionary definition of the word/phrase as it is used within the given context in ${userLanguage}. This definition should be very brief, akin to a quick lookup in a dictionary (e.g., for a verb: '달리다', '성취하다'; for a noun: '사과', '번역가'), typically just a few words or a short phrase, not a full explanatory sentence.
 5. Explain the contextual meaning of the word/phrase with more details, and explain any idiomatic usages in ${userLanguage}.
-6. Generate a distinct, new example sentence to highlight word/phrase usage.
-7. The example sentence and its translation should appear first in the original input language, then in ${userLanguage}.
-8. Use this HTML structure (all content in ${userLanguage}): 
+6. Generate a distinct, new example sentence in ${lessonLanguage} to highlight word/phrase usage.
+7. The example sentence should first appear in ${lessonLanguage}, then its translation in ${userLanguage}.
+8. Use this HTML structure (Part of Speech, definition, explanation, and translation of example sentence in ${userLanguage}; base form, and original example sentence in ${lessonLanguage} or as appropriate):
 
-<b>[Base form]</b> <span>/[IPA Pronunciation]/</span> <i>([Part of Speech in ${userLanguage}])</i>
-<p>Brief dictionary definition of the word used in the context, in ${userLanguage}]</p>
+<b>[Base form in ${lessonLanguage}]</b> <span>/[IPA Pronunciation]/</span> <i>([Part of Speech in ${userLanguage}])</i>
+<p>[Brief dictionary definition of the word/phrase used in the context, in ${userLanguage}]</p>
 <hr>
 <p>[Contextual explanation in ${userLanguage}]</p>
 <hr>
 <ul>
-  <li>[New Example Sentence in original language]</li>
-  <li>[Translation in ${userLanguage}]</li>
+  <li>[New Example Sentence in ${lessonLanguage}]</li>
+  <li>[Translation of the New Example Sentence in ${userLanguage}]</li>
 </ul>
 
-*The structure and bolding/italics should convey the information. All content (Part of Speech, definition, explanation, examples and translations) must be provided solely in ${userLanguage}, regardless of the input language.*
+*The structure and bolding/italics should convey the information. Explanatory content (Part of Speech, definition, explanation) and translations must be in '${userLanguage}'. The base form and original example sentence should be in '${lessonLanguage}'.*
 
 ## Examples
 
@@ -3010,7 +3014,7 @@ Use this prompt only for the next input.
   <li>많은 번역가들이 복잡한 국제 프로젝트에 함께 작업합니다.</li>
 </ul>
 
-### Example 2: Single Word with Context (Original Language: Spanish, User Language: English)
+### Example 2: Single Word with Context (Original language: Spanish, User Language: English)
 
 **User Input:** 
 'Input: "lograr", Context: "Debemos lograr nuestros objetivos."'
@@ -3026,7 +3030,7 @@ Use this prompt only for the next input.
   <li>I hope to achieve all my goals this year.</li>
 </ul>
 
-### Example 3: Phrase with Context (Original Language: German, User Language: French)
+### Example 3: Phrase with Context (Original language: German, User Language: French)
 
 **User Input:** 
 'Input: "imstande sein", Context: "Er war imstande, das Problem zu lösen."'
@@ -3043,27 +3047,40 @@ Use this prompt only for the next input.
 </ul>
 
 Respond understood if you got it.
-`
+`;
             const sentencePrompt = `
 Use this prompt only for the next input.
-**Sentences Input**
+Sentences Input
 - Input will be given as: 'Input: "sentences"'
 
-1.  ALWAYS translate **all** input sentences first into ${userLanguage}. **If multiple sentences are provided in the input, ensure every single one of them is translated and concatenated together to form one continuous block of text.** This entire translated block should be placed within a single '<p>' tag and be bolded using '<b>' tags around the entire translation.
+1.  ALWAYS translate all input sentences first into ${userLanguage}. If multiple sentences are provided in the input, ensure every single one of them is translated and concatenated together to form one continuous block of text in ${userLanguage}. This entire translated block should be placed within a single '<p>' tag and be bolded using '<b>' tags around the entire translation.
 2.  After the translated sentences and an '<hr>' separator, provide a comprehensive explanation of the overall meaning of the input sentences in ${userLanguage}. This explanation should:
     *   Clarify the main message or purpose of the sentences.
     *   Highlight any important contextual details that affect understanding.
     *   Explain any subtle nuances, implications, or underlying tones.
-    *   Briefly touch upon significant grammatical structures if they are key to understanding the sentence's construction or meaning (but do not turn this into a full grammar lesson).
+    *   Briefly touch upon significant grammatical structures or word choices if they are key to understanding the sentence's construction or meaning (but do not turn this into a full grammar lesson).
     *   This explanation should be enclosed in one or more '<p>' tags as needed for clarity and aim to provide a holistic understanding beyond a literal translation.
-3.  After another '<hr>' separator, identify a few (typically 2-4, depending on sentence complexity and length) key words or phrases from the *original* sentences. Focus on:
-    *   Idiomatic expressions or phrases with non-literal meanings.
-    *   Vocabulary that might be challenging for a learner of the original language.
-    *   Terms that are crucial for a deep and accurate understanding of the sentence's core message.
-    *   Avoid selecting overly simple or common words unless their specific usage in the context is unusual or noteworthy.
-4.  For each identified word or phrase:
-    *   State the word/phrase exactly as it appears in the original input.
-    *   Provide a concise meaning or explanation in ${userLanguage}, relevant to its use in the given context.
+3.  After another '<hr>' separator, identify a few (typically 2-4, but fewer if not many truly distinctive elements exist that meet the criteria below) genuinely distinctive or challenging key elements from the original ${lessonLanguage} sentences.
+    These elements should be:
+    *   **Specific words:** Especially advanced, nuanced, or polysemous ones whose specific meaning in context is crucial and might not be fully captured by a general translation (e.g., 'ephemeral', 'ubiquitous').
+    *   **Established collocations or fixed expressions:** These are word pairings or groups that frequently occur together and often carry a specific meaning that might be more than the sum of their parts (e.g., "foregone conclusion," "take into account," "collective consciousness"). They should be relatively stable and recognized units.
+    *   **Idiomatic phrases:** Expressions whose meaning is not deducible from the literal meanings of the words (e.g., "kick the bucket," "spill the beans," "it's not rocket science").
+    *   **Very short, meaningful linguistic units (generally 1-3 words):** These are not just any short phrases, but rather dense expressions that carry significant non-obvious meaning, represent a particular linguistic challenge for a learner, or are highly characteristic of the language.
+
+    **Crucially, when selecting these elements, focus on:**
+    *   Linguistic units that are self-contained and function as a distinct lexical item or a highly cohesive semantic unit.
+    *   Elements that provide insight into nuances, idiomatic usage, or structural complexities not immediately obvious from the full translation. The goal is to offer learning value beyond simply understanding the individual words if they were looked up separately.
+    *   What makes the original ${lessonLanguage} expression noteworthy, difficult, or particularly expressive.
+
+    **Avoid selecting:**
+    *   Elements whose meaning is perfectly self-evident from the provided full translation and context.
+    *   Overly simple common words used in their most basic sense (e.g., 'big', 'go', 'and').
+    *   Common, literal, and grammatically straightforward combinations of words like simple adjective + noun (e.g., 'red car' — unless 'red' has a highly specific, non-obvious symbolic meaning in context, like 'red tape'), adverb + verb (e.g., 'run quickly'), or verb + object (e.g., 'eat food'), unless these combinations form part of a recognized idiom or a highly specific, non-obvious fixed expression.
+    *   Arbitrary sequences of words that are merely descriptive segments of the sentence and do not form a cohesive, recognized linguistic unit (e.g., avoid selecting "instruments of power" if it's just a literal description of tools used for power, and not a specific, established term or a recognized collocation with a meaning beyond its parts).
+    *   Long clauses or entire phrases that are not concise linguistic items of interest. The selected elements should generally be 1-5 words, with a preference for shorter, denser units if they meet the other criteria.
+    *   Common proper nouns unless their usage is idiomatic, symbolic, or particularly illustrative of a linguistic point beyond just naming.
+4.  For each identified key element:
+    *   State the element (word, short phrase, or idiom) exactly as it appears in the original ${lessonLanguage} input.
 5.  Use the following HTML structure for the entire response:
 
 <p><b>[The entire translated sentences in ${userLanguage}]</b></p>
@@ -3071,88 +3088,86 @@ Use this prompt only for the next input.
 <p>[Comprehensive explanation in ${userLanguage} as per instruction #2. This may use multiple paragraphs.]</p>
 <hr>
 <ul>
-  <li><b>[Word/Phrase 1 in original language]:</b> [Meaning/Explanation in ${userLanguage}]</li>
-  <li><b>[Word/Phrase 2 in original language]:</b> [Meaning/Explanation in ${userLanguage}]</li>
-  <!-- Repeat <li> for other identified words/phrases -->
+  <li><b>[Key Element 1 from original ${lessonLanguage} sentence - word, short phrase, or idiom]:</b> [Direct meaning or concise definition of this element in ${userLanguage}, focusing on its specific meaning as that unit, especially if idiomatic or nuanced, as per instruction #4]</li>
+  <li><b>[Key Element 2 from original ${lessonLanguage} sentence - word, short phrase, or idiom]:</b> [Direct meaning or concise definition of this element in ${userLanguage}, focusing on its specific meaning as that unit, especially if idiomatic or nuanced, as per instruction #4]</li>
+  <!-- Repeat <li> for other identified key elements -->
 </ul>
 
-*Note: Always include the full sentences translation first. The selection of words/phrases should be judicious and aim to genuinely aid understanding. All content, including the meanings of words/phrases, must be in ${userLanguage}.*
+*Note: Always include the full sentences translation first. The selection of key elements should be judicious and aim to genuinely aid understanding by focusing on aspects not fully captured by the translation itself. All explanatory content, including the meanings of the key elements, must be in ${userLanguage}. The key elements themselves are quoted from the ${lessonLanguage} input.*
 
 ## Examples
 
 ### Example 1: Sentence Input (Original language: French, User's language: Japanese)
 
-**User Input:**
+User Input:
 'Input: "Il a réussi à convaincre ses collègues malgré les difficultés."'
 
-**Assistant Output:**
+Assistant Output:
 <p><b>彼は困難にもかかわらず同僚たちを説得することに成功した。</b></p>
 <hr>
 <p>この文は、彼が直面したであろう障害や困難な状況があったにもかかわらず、最終的に同僚たちを自分の意見や提案に同意させることに成功したという事実を伝えています。「malgré les difficultés」という部分が、その成功が容易ではなかったことを示唆しています。</p>
 <hr>
 <ul>
-  <li><b>réussi à:</b> 「～することに成功した」、「うまく～できた」という意味の表現です。動詞「réussir」（成功する）の過去形に前置詞「à」が続いています。</li>
-  <li><b>convaincre:</b> 「説得する」、「納得させる」という意味の動詞です。</li>
-  <li><b>malgré:</b> 「～にもかかわらず」という意味の前置詞で、反対の状況や困難が存在する中で何かが起こったことを示します。</li>
+  <li><b>réussi à convaincre:</b> 「説得することに成功した」、「うまく説得した」。</li>
+  <li><b>malgré:</b> 「～にもかかわらず」。</li>
 </ul>
 
-### Example 2: Sentence Input (Original Language: Italian, User Language: German)
+### Example 2: Sentence Input (Original language: Italian, User Language: German)
 
-**User Input:**
+User Input:
 'Input: "Nonostante la pioggia, siamo andati al concerto."'
 
-**Assistant Output:**
+Assistant Output:
 <p><b>Trotz des Regens sind wir zum Konzert gegangen.</b></p>
 <hr>
 <p>Dieser Satz drückt aus, dass die Sprecher das Konzert besucht haben, obwohl es geregnet hat. Das Wort "Nonostante" (Trotz) leitet einen Nebensatz ein, der einen Gegensatz oder ein Hindernis zum Hauptgeschehen darstellt. Es unterstreicht die Entschlossenheit der Sprecher oder ihr großes Interesse am Konzert, das sie auch schlechtes Wetter nicht davon abgehalten hat hinzugehen.</p>
 <hr>
 <ul>
-  <li><b>Nonostante:</b> Trotz. Diese Präposition drückt einen Gegensatz aus.</li>
-  <li><b>la pioggia:</b> der Regen.</li>
-  <li><b>siamo andati:</b> wir sind gegangen (Perfekt von "andare" - gehen, 1. Person Plural).</li>
+  <li><b>Nonostante:</b> Trotz; obwohl.</li>
+  <li><b>siamo andati:</b> wir sind gegangen.</li>
 </ul>
 
-### Example 3: Idiomatic Sentence Input (Original Language: English, User's Language: Korean)
+### Example 3: Idiomatic Sentence Input (Original language: English, User's Language: Korean)
 
-**User Input:**
+User Input:
 'Input: "Don't worry, it's not rocket science, you'll figure it out quickly."'
 
-**Assistant Output:**
+Assistant Output:
 <p><b>걱정 마세요, 그렇게 어려운 일이 아니니까 금방 이해하게 될 거예요.</b></p>
 <hr>
 <p>이 문장은 상대방을 안심시키려는 의도로 사용됩니다. "it's not rocket science"라는 관용적 표현은 어떤 것이 생각보다 복잡하거나 어렵지 않다는 것을 강조하며, 따라서 상대방이 해당 과제나 문제를 빠르게 파악하고 해결할 수 있을 것이라는 격려의 메시지를 전달합니다.</p>
 <hr>
 <ul>
-  <li><b>it's not rocket science:</b> (관용구) '그것은 로켓 과학이 아니다'라는 직역보다는 '그렇게 복잡하거나 어려운 일이 아니다', '누구나 할 수 있는 간단한 일이다'라는 의미로 사용됩니다.</li>
-  <li><b>figure it out:</b> (구동사) '이해하다', '알아내다', '해결 방법을 찾다'라는 의미입니다. 문맥상 어떤 문제나 상황을 파악하게 될 것이라는 뜻입니다.</li>
+  <li><b>it's not rocket science:</b> '그렇게 어려운 일이 아니다', '아주 쉬운 일이다'.</li>
+  <li><b>figure it out:</b> '이해하다', '알아내다', '해결하다'.</li>
 </ul>
 
-### Example 4: Multiple Sentences Input (Original Language: Spanish, User's Language: French)
+### Example 4: Multiple Sentences Input (Original language: Spanish, User's Language: French)
 
-**User Input:**
+User Input:
 'Input: "El sol brillaba con fuerza. Los pájaros cantaban en los árboles." '
 
-**Assistant Output:**
+Assistant Output:
 <p><b>Le soleil brillait fort. Les oiseaux chantaient dans les arbres.</b></p>
 <hr>
 <p>Ces deux phrases décrivent une scène matinale ou diurne paisible et agréable. La première phrase établit une condition météorologique claire et lumineuse. La seconde ajoute un élément auditif qui renforce l'atmosphère de tranquillité et de nature. Ensemble, elles peignent une image vivante d'un environnement serein.</p>
 <hr>
 <ul>
-  <li><b>brillaba con fuerza:</b> brillait fort, brillait intensément. Indique une forte luminosité du soleil.</li>
-  <li><b>cantaban:</b> chantaient (imparfait de l'indicatif de "cantar" - chanter, 3ème personne du pluriel). Décrit une action continue ou habituelle dans le passé.</li>
+  <li><b>con fuerza:</b> avec force; intensément.</li>
+  <li><b>cantaban:</b> ils chantaient.</li>
 </ul>
 Respond understood if you got it.
-`
+`;
             const plainTextPrompt = `
 Do not use the formatting rules from the word/sentence prompts previously given for your responses in this mode. For all subsequent turns, the user input will be plain text.
-**Crucially, you MUST remember the initial \`Input: "word or phrase" Context: "sentence..."\` or \`Input: "sentence(s)"\` that was processed right before this plain text mode started. This initial input and its associated context are vital for understanding follow-up questions in this conversational phase.**
+Crucially, you MUST remember the initial \`Input: "word or phrase" Context: "sentence..."\` or \`Input: "sentence(s)"\` that was processed right before this plain text mode started. This initial input and its associated context are vital for understanding follow-up questions in this conversational phase.
 
 **Plain Text Input (Conversational/Freetext)**
 - Input will be given as: 'Plain text input'.
 - Respond naturally and directly in ${userLanguage}. 
 - Avoid structured outputs (like those in word/phrase/sentence prompts); adhere to a conversational context. Use HTML tags ('<b>', '<i>', '<p>', '<ul>', '<li>', '<br>') but not <pre> or Markdown for presentation.
-- **If a user's plain text query refers to a word, phrase, concept, or asks a question that seems related to the **initial structured input (the one with "Input:" and/or "Context:")**, you MUST assume they are referring back to that specific initial input and its context, even if they don't explicitly state "in the previous context," "about the word we just discussed," or similar phrases. Use your knowledge of that initial input to provide a relevant and contextual answer.**
-- For general queries clearly not related to the initial input, answer as a general language assistant.
+- If a user's plain text query refers to a word, phrase, concept, or asks a question that seems related to the initial structured input (the one with "Input:" and/or "Context:"), you MUST assume they are referring back to that specific initial input and its context, even if they don't explicitly state "in the previous context," "about the word we just discussed," or similar phrases. Use your knowledge of that initial input to provide a relevant and contextual answer in ${userLanguage}.
+- For general queries clearly not related to the initial input, answer as a general language assistant in ${userLanguage}.
 
 ## Examples
 
@@ -3174,14 +3189,14 @@ Do not use the formatting rules from the word/sentence prompts previously given 
 <p>앞서 논의된 문맥에서 '번역가들(translators)'이라는 단어는 ESV 성경 번역가들이 특정 단어를 '종(servant)'으로 번역하기로 선택한 상황을 가리킵니다. 이는 그들이 특정 해석을 선호하여 해당 여성이 공식적인 권위의 직책을 가졌을 가능성을 배제했음을 시사합니다. 따라서 문맥상 '번역가들'은 단순히 언어를 옮기는 사람을 넘어, 특정 신학적 또는 해석적 관점을 가진 번역 주체를 의미할 수 있습니다.</p>
 
 Respond understood if you got it.
-`
+`;
 
             let chatHistory = [];
 
             updateReferenceWord();
             updateChatWidget();
             stopPlayingAudio(audioContext);
-            updateTTS();
+            updateTTS(true);
 
             const selectedTextElement = document.querySelector(".reference-word");
             if (selectedTextElement){
@@ -3193,7 +3208,7 @@ Respond understood if you got it.
                         updateReferenceWord();
                         updateChatWidget();
                         stopPlayingAudio(audioContext);
-                        updateTTS();
+                        updateTTS(false);
                     });
                 });
                 observer.observe(selectedTextElement, {subtree: true, characterData: true});
@@ -3209,7 +3224,7 @@ Respond understood if you got it.
                         updateReferenceWord();
                         updateChatWidget();
                         stopPlayingAudio(audioContext);
-                        updateTTS();
+                        updateTTS(true);
                     });
                 });
             });
@@ -3218,6 +3233,7 @@ Respond understood if you got it.
 
         const userDictionaryLang = await getDictionaryLanguage();
         const DictionaryLocalePairs = await getDictionaryLocalePairs()
+        const lessonLanguage = DictionaryLocalePairs[getLessonLanguage()];
         const userLanguage = DictionaryLocalePairs[userDictionaryLang];
         const lessonReader = document.getElementById('lesson-reader');
 
