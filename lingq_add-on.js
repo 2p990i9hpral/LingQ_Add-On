@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*/learn/*/web/reader/*
 // @match        https://www.lingq.com/*/learn/*/web/library/course/*
 // @exclude      https://www.lingq.com/*/learn/*/web/editor/*
-// @version      5.11.3
+// @version      5.11.4
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @namespace https://greasyfork.org/users/1458847
@@ -274,7 +274,7 @@
 
             const chatWidgetSection = createElement("div", {id: "chatWidgetSection", className: "popup-section", style: `${settings.chatWidget ? "" : "display: none"}`});
 
-            addSelect(chatWidgetSection, "llmProviderModelSelector", "LLM Provider: (Price per 1M tokens)", [
+            addSelect(chatWidgetSection, "llmProviderModelSelector", "Chat Provider: (Price per 1M tokens)", [
                 { value: "openai gpt-4.1", text: "OpenAI GPT-4.1 ($2.0/$8.0)" },
                 { value: "openai gpt-4.1-mini", text: "OpenAI GPT-4.1 mini ($0.4/$1.6)" },
                 { value: "openai gpt-4.1-nano", text: "OpenAI GPT-4.1 nano ($0.1/$0.4)" },
@@ -283,7 +283,7 @@
             ], settings.llmProviderModel);
 
             const apiKeyContainer = createElement("div", {className: "popup-row"});
-            apiKeyContainer.appendChild(createElement("label", {htmlFor: "llmApiKeyInput", textContent: "API Key:"}));
+            apiKeyContainer.appendChild(createElement("label", {htmlFor: "llmApiKeyInput", textContent: "Chat API Key:"}));
 
             const apiKeyFlexContainer = createElement("div", {style: "display: flex; align-items: center;"});
             const apiKeyInput= createElement("input", {type: "password", id: "llmApiKeyInput", value: settings.llmApiKey, className: "popup-input"});
@@ -300,7 +300,7 @@
             const ttsSection = createElement("div", {id: "ttsSection", className: "popup-section", style: `${settings.tts ? "" : "display: none"}`});
 
             const ttsApiKeyContainer = createElement("div", {className: "popup-row"});
-            ttsApiKeyContainer.appendChild(createElement("label", {htmlFor: "ttsApiKeyInput", textContent: "TTS API Key:"}));
+            ttsApiKeyContainer.appendChild(createElement("label", {htmlFor: "ttsApiKeyInput", textContent: "TTS API Key: ("}));
 
             const ttsApiKeyFlexContainer = createElement("div", {style: "display: flex; align-items: center;"});
             const ttsApiKeyInput= createElement("input", {type: "password", id: "ttsApiKeyInput", value: settings.ttsApiKey, className: "popup-input"});
@@ -2262,166 +2262,7 @@
         return arr?.[randomIndex];
     }
 
-    /* Features */
-
-    function setupKeyboardShortcuts() {
-        document.addEventListener("keydown", function (event) {
-            if (!settings.keyboardShortcut) return;
-
-            const targetElement = event.target;
-            const isTextInput = targetElement.localName === "text" || targetElement.localName === "textarea" || targetElement.localName === "input";
-            const withoutModifierKeys = !event.ctrlKey && !event.shiftKey && !event.altKey;
-            const eventKey = event.key.toLowerCase();
-            if (isTextInput) {
-                if (targetElement.id === "user-input") return;
-                if ((eventKey === 'enter' || eventKey === 'escape') && withoutModifierKeys) {
-                    preventPropagation(event);
-                    event.target.blur()
-                } else {
-                    event.stopPropagation();
-                    return;
-                }
-            }
-
-            const shortcuts = {
-                [settings.shortcutVideoFullscreen]: () => clickElement(".modal-section > div > button:nth-child(2)"), // video full screen toggle
-                [settings.shortcutMeaningInput]: () => focusElement(".reference-input-text"), // Move cursor to meaning input
-                [settings.shortcutChatInput]: () => focusElement("#user-input"), // Move cursor to the chat widget input
-                [settings.shortcutTTSPlay]: () => clickElement(".is-tts"), // Play tts audio
-                [settings.shortcutTranslator]: () => clickElement(".dictionary-resources > a:nth-last-child(1)"), // Open Translator
-                [settings.shortcutBackward5s]: () => clickElement(".audio-player--controllers > div:nth-child(1) > a"), // 5 sec Backward
-                [settings.shortcutForward5s]: () => clickElement(".audio-player--controllers > div:nth-child(2) > a"), // 5 sec Forward
-                [settings.shortcutMakeKnown]: () => document.dispatchEvent(new KeyboardEvent("keydown", { key: "k" })), // Simulate original 'k' for Make Word Known
-                [settings.shortcutDictionary]: () => clickElement(".dictionary-resources > a:nth-child(1)"), // Open Dictionary
-                [settings.shortcutCopySelected]: () => copySelectedText() // Copy selected text
-            };
-
-            if (shortcuts[eventKey] && withoutModifierKeys) {
-                preventPropagation(event);
-                shortcuts[eventKey]();
-            }
-        }, true);
-    }
-
-    function setupYoutubePlayerCustomization() {
-        async function changeVideoPlayerSettings() {
-            const iframe = await waitForElement('.modal-container iframe', 1000);
-            let src = iframe.getAttribute("src");
-            src = src.replace("disablekb=1", "disablekb=0");
-            src = src + "&cc_load_policy=1";
-            src = src + "&controls=0";
-            iframe.setAttribute("src", src);
-        }
-
-        async function setupSliderObserver() {
-            function createSliderElements() {
-                const sliderContainer = createElement("div", {className: "rc-slider rc-slider-horizontal"});
-                const sliderRail = createElement("div", {className: "rc-slider-rail"});
-                const sliderTrack = createElement("div", {className: "rc-slider-track"});
-                sliderContainer.appendChild(sliderRail);
-                sliderContainer.appendChild(sliderTrack);
-                return sliderContainer;
-            }
-
-            const lessonId = getLessonId();
-            const lessonInfo = await getLessonInfo(lessonId);
-            let lastCompletedPercentage = lessonInfo["progress"];
-            console.log(`last progress: ${lastCompletedPercentage}`);
-
-            const sliderTrack = document.querySelector('.audio-player--progress .rc-slider-track');
-
-            const videoContainer = document.querySelector(".modal-content > div");
-            const sliderContainer = createSliderElements();
-            const videoSliderTrack = sliderContainer.querySelector(".rc-slider-track");
-            videoContainer.appendChild(sliderContainer);
-
-            const updateLessonProgress = (lessonId, lessonInfo, progressPercentage, lastCompletedPercentage) => {
-                const progressUpdatePeriod = 5;
-                const flooredProgressPercentage = Math.floor(progressPercentage / progressUpdatePeriod) * progressUpdatePeriod;
-
-                if (flooredProgressPercentage > lastCompletedPercentage) {
-                    console.log('Slider', `progress percentage: ${flooredProgressPercentage}`);
-                    const wordIndex = Math.floor(lessonInfo["totalWordsCount"] * (flooredProgressPercentage / 100));
-                    setLessonProgress(lessonId, wordIndex);
-                    return flooredProgressPercentage;
-                }
-                return lastCompletedPercentage;
-            };
-
-            const sliderObserver = new MutationObserver(function (mutations) {
-                for (const mutation of mutations) {
-                    console.debug('Observer:', `Slider Changed. ${mutation.type}, ${mutation.attributeName}`);
-                    videoSliderTrack.style.cssText = sliderTrack.style.cssText;
-
-                    const progressPercentage = parseFloat(sliderTrack.style.width);
-                    lastCompletedPercentage = updateLessonProgress(lessonId, lessonInfo, progressPercentage, lastCompletedPercentage);
-
-                    const isLessonFinished = progressPercentage >= 99.5;
-                    if (isLessonFinished && settings.autoFinishing) {
-                        console.log('Slider', 'lesson finished.')
-                        setTimeout(finishLesson, 1000);
-                        sliderObserver.disconnect();
-                    }
-                }
-            });
-
-            sliderObserver.observe(sliderTrack, {attributes: true, attributeFilter: ['style']});
-        }
-
-        const observer = new MutationObserver(function (mutations) {
-            mutations.forEach((mutation) => {
-                console.debug('Observer:', `Modal container created. ${mutation.type}`, mutation.addedNodes)
-                mutation.addedNodes.forEach((node) => {
-                    if (node.nodeType !== Node.ELEMENT_NODE) return;
-
-                    if (!node.matches(".modal-container")) return;
-                    changeVideoPlayerSettings();
-                    clickElement('.modal-section  button:nth-child(2)[title="Expand"]');
-                    setupSliderObserver();
-                });
-            });
-        });
-
-        observer.observe(document.body, {childList: true});
-    }
-
-    async function setupReaderContainer() {
-        async function setupSentenceFocus(readerContainer) {
-            function focusPlayingSentence() {
-                const playingSentence = document.querySelector(".sentence.is-playing");
-                if (playingSentence) {
-                    const scrolling_div = document.querySelector(".reader-container")
-                    const targetScrollTop = playingSentence.offsetTop + Math.floor(playingSentence.offsetHeight / 2) - Math.floor(scrolling_div.offsetHeight / 2);
-                    smoothScrollTo(scrolling_div, targetScrollTop, 300);
-                }
-            }
-
-            const observer = new MutationObserver((mutations) => {
-                mutations.forEach((mutation) => {
-                    console.debug('Observer:', `Reader container subtree attribute change. ${mutation.type}, ${mutation.attributeName}`)
-                    if (!mutation.target.matches(".sentence")) return;
-                    focusPlayingSentence();
-                });
-            });
-            observer.observe(readerContainer, {attributes: true, subtree: true, attributeFilter: ['class']});
-        }
-
-        const observer = new MutationObserver(function (mutations) {
-            mutations.forEach((mutation) => {
-                console.debug('Observer:', `Sentence text child created. ${mutation.type}`, mutation.addedNodes);
-                mutation.addedNodes.forEach((node) => {
-                    if (node.nodeType !== Node.ELEMENT_NODE) return;
-                    if (!node.matches(".loadedContent")) return;
-
-                    changeScrollAmount(".reader-container", 0.3);
-                    setupSentenceFocus(node);
-                });
-            });
-        });
-
-        const sentenceText = await waitForElement('.sentence-text', 1000);
-        observer.observe(sentenceText, {childList: true});
-    }
+    /* Modules */
 
     function stopPlayingAudio(autioContext) {
         if (!autioContext || audioContext.state !== 'running') return;
@@ -2542,7 +2383,7 @@
 
             // data sub-chunk
             writeString(view, 36, 'data'); // Subchunk2ID
-            view.setUint32(40, dataLength, true); // Subchunk2Size (실제 오디오 데이터 크기)
+            view.setUint32(40, dataLength, true); // Subchunk2Size
 
             return view.buffer;
         }
@@ -2618,6 +2459,167 @@
                 throw error;
             }
         }
+    }
+
+    /* Features */
+
+    function setupKeyboardShortcuts() {
+        document.addEventListener("keydown", function (event) {
+            if (!settings.keyboardShortcut) return;
+
+            const targetElement = event.target;
+            const isTextInput = targetElement.localName === "text" || targetElement.localName === "textarea" || targetElement.localName === "input";
+            const withoutModifierKeys = !event.ctrlKey && !event.shiftKey && !event.altKey;
+            const eventKey = event.key.toLowerCase();
+            if (isTextInput) {
+                if (targetElement.id === "user-input") return;
+                if ((eventKey === 'enter' || eventKey === 'escape') && withoutModifierKeys) {
+                    preventPropagation(event);
+                    event.target.blur()
+                } else {
+                    event.stopPropagation();
+                    return;
+                }
+            }
+
+            const shortcuts = {
+                [settings.shortcutVideoFullscreen]: () => clickElement(".modal-section > div > button:nth-child(2)"), // video full screen toggle
+                [settings.shortcutMeaningInput]: () => focusElement(".reference-input-text"), // Move cursor to meaning input
+                [settings.shortcutChatInput]: () => focusElement("#user-input"), // Move cursor to the chat widget input
+                [settings.shortcutTTSPlay]: () => clickElement(".is-tts"), // Play tts audio
+                [settings.shortcutTranslator]: () => clickElement(".dictionary-resources > a:nth-last-child(1)"), // Open Translator
+                [settings.shortcutBackward5s]: () => clickElement(".audio-player--controllers > div:nth-child(1) > a"), // 5 sec Backward
+                [settings.shortcutForward5s]: () => clickElement(".audio-player--controllers > div:nth-child(2) > a"), // 5 sec Forward
+                [settings.shortcutMakeKnown]: () => document.dispatchEvent(new KeyboardEvent("keydown", { key: "k" })), // Simulate original 'k' for Make Word Known
+                [settings.shortcutDictionary]: () => clickElement(".dictionary-resources > a:nth-child(1)"), // Open Dictionary
+                [settings.shortcutCopySelected]: () => copySelectedText() // Copy selected text
+            };
+
+            if (shortcuts[eventKey] && withoutModifierKeys) {
+                preventPropagation(event);
+                shortcuts[eventKey]();
+            }
+        }, true);
+    }
+
+    function setupYoutubePlayerCustomization() {
+        async function changeVideoPlayerSettings() {
+            const iframe = await waitForElement('.modal-container iframe', 1000);
+            let src = iframe.getAttribute("src");
+            src = src.replace("disablekb=1", "disablekb=0");
+            src = src + "&cc_load_policy=1";
+            src = src + "&controls=0";
+            iframe.setAttribute("src", src);
+        }
+
+        async function setupSliderObserver() {
+            function createSliderElements() {
+                const sliderContainer = createElement("div", {className: "rc-slider rc-slider-horizontal"});
+                const sliderRail = createElement("div", {className: "rc-slider-rail"});
+                const sliderTrack = createElement("div", {className: "rc-slider-track"});
+                sliderContainer.appendChild(sliderRail);
+                sliderContainer.appendChild(sliderTrack);
+                return sliderContainer;
+            }
+
+            function updateLessonProgress(lessonId, lessonInfo, progressPercentage, lastCompletedPercentage) {
+                const progressUpdatePeriod = 5;
+                const flooredProgressPercentage = Math.floor(progressPercentage / progressUpdatePeriod) * progressUpdatePeriod;
+
+                if (flooredProgressPercentage > lastCompletedPercentage) {
+                    console.log('Slider', `progress percentage: ${flooredProgressPercentage}`);
+                    const wordIndex = Math.floor(lessonInfo["totalWordsCount"] * (flooredProgressPercentage / 100));
+                    setLessonProgress(lessonId, wordIndex);
+                    return flooredProgressPercentage;
+                }
+                return lastCompletedPercentage;
+            }
+
+            const lessonId = getLessonId();
+            const lessonInfo = await getLessonInfo(lessonId);
+            let lastCompletedPercentage = lessonInfo["progress"];
+            console.log(`last progress: ${lastCompletedPercentage}`);
+
+            const sliderTrack = document.querySelector('.audio-player--progress .rc-slider-track');
+
+            const videoContainer = document.querySelector(".modal-content > div");
+            const sliderContainer = createSliderElements();
+            const videoSliderTrack = sliderContainer.querySelector(".rc-slider-track");
+            videoContainer.appendChild(sliderContainer);
+
+            const sliderObserver = new MutationObserver(function (mutations) {
+                for (const mutation of mutations) {
+                    videoSliderTrack.style.cssText = sliderTrack.style.cssText;
+
+                    const progressPercentage = parseFloat(sliderTrack.style.width);
+                    lastCompletedPercentage = updateLessonProgress(lessonId, lessonInfo, progressPercentage, lastCompletedPercentage);
+                    console.debug('Observer:', `Slider Changed. Progress: ${progressPercentage}`);
+
+                    const isLessonFinished = progressPercentage >= 100;
+                    if (isLessonFinished && settings.autoFinishing) {
+                        console.log('Slider', 'lesson finished.')
+                        setTimeout(finishLesson, 1000);
+                        sliderObserver.disconnect();
+                    }
+                }
+            });
+
+            sliderObserver.observe(sliderTrack, {attributes: true, attributeFilter: ['style']});
+        }
+
+        const observer = new MutationObserver(function (mutations) {
+            mutations.forEach((mutation) => {
+                console.debug('Observer:', `Modal container created. ${mutation.type}`, mutation.addedNodes)
+                mutation.addedNodes.forEach((node) => {
+                    if (node.nodeType !== Node.ELEMENT_NODE) return;
+
+                    if (!node.matches(".modal-container")) return;
+                    changeVideoPlayerSettings();
+                    clickElement('.modal-section  button:nth-child(2)[title="Expand"]');
+                    setupSliderObserver();
+                });
+            });
+        });
+
+        observer.observe(document.body, {childList: true});
+    }
+
+    async function setupReaderContainer() {
+        async function setupSentenceFocus(readerContainer) {
+            function focusPlayingSentence() {
+                const playingSentence = document.querySelector(".sentence.is-playing");
+                if (playingSentence) {
+                    const scrolling_div = document.querySelector(".reader-container")
+                    const targetScrollTop = playingSentence.offsetTop + Math.floor(playingSentence.offsetHeight / 2) - Math.floor(scrolling_div.offsetHeight / 2);
+                    smoothScrollTo(scrolling_div, targetScrollTop, 300);
+                }
+            }
+
+            const observer = new MutationObserver((mutations) => {
+                mutations.forEach((mutation) => {
+                    console.debug('Observer:', `Reader container subtree attribute change. ${mutation.type}, ${mutation.attributeName}`)
+                    if (!mutation.target.matches(".sentence")) return;
+                    focusPlayingSentence();
+                });
+            });
+            observer.observe(readerContainer, {attributes: true, subtree: true, attributeFilter: ['class']});
+        }
+
+        const observer = new MutationObserver(function (mutations) {
+            mutations.forEach((mutation) => {
+                console.debug('Observer:', `Sentence text child created. ${mutation.type}`, mutation.addedNodes);
+                mutation.addedNodes.forEach((node) => {
+                    if (node.nodeType !== Node.ELEMENT_NODE) return;
+                    if (!node.matches(".loadedContent")) return;
+
+                    changeScrollAmount(".reader-container", 0.3);
+                    setupSentenceFocus(node);
+                });
+            });
+        });
+
+        const sentenceText = await waitForElement('.sentence-text', 1000);
+        observer.observe(sentenceText, {childList: true});
     }
 
     async function setupLLMs() {
