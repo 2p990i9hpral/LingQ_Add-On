@@ -3,8 +3,9 @@
 // @description  Provides custom LingQ layouts
 // @match        https://www.lingq.com/*/learn/*/web/reader/*
 // @match        https://www.lingq.com/*/learn/*/web/library/course/*
-// @exclude      https://www.lingq.com/*/learn/*/web/editor/*
-// @version      5.11.4
+// @match        https://www.youtube-nocookie.com/*
+// @match        https://www.youtube.com/embed/*
+// @version      5.12
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @namespace https://greasyfork.org/users/1458847
@@ -1019,11 +1020,7 @@
             baseCSS += layoutCSS;
             baseCSS += specificCSS;
 
-            if (styleElement) {
-                styleElement.remove();
-                styleElement = null;
-            }
-
+            if (styleElement) styleElement.remove();
             styleElement = createElement("style", {textContent: baseCSS});
             document.querySelector("head").appendChild(styleElement);
         }
@@ -1878,8 +1875,7 @@
                 border-color: rgb(255 255 255);
             }
             `;
-            const styleElement = createElement("style", { textContent: css });
-            document.querySelector("head").appendChild(styleElement);
+            applyCSS(css);
         }
 
         function enrichLessonDetails() {
@@ -2260,6 +2256,11 @@
     function getRandomElement(arr) {
         const randomIndex = Math.floor(Math.random() * arr.length);
         return arr?.[randomIndex];
+    }
+
+    function applyCSS(css) {
+        const cssElement = createElement("style", {textContent: css});
+        document.querySelector("head").appendChild(cssElement);
     }
 
     /* Modules */
@@ -3260,25 +3261,46 @@ Respond understood if you got it.
                 height: fit-content;
             }
             `;
-            const cssElement = createElement("style", {textContent: css});
-            document.querySelector("head").appendChild(cssElement);
+            applyCSS(css);
         }
 
         resizeToast();
     }
 
+    function simplifyYoutubeEmbeddedPlayer() {
+        const css = `
+            .ytp-pause-overlay-container{
+                display: none !important;
+            }
+        
+            .ytp-watermark{
+                display: none !important;
+            }
+        
+            .ytp-paid-content-overlay{
+                display: none !important;
+            }
+        
+            .caption-window {
+                display: unset !important;
+            }
+            `;
+        applyCSS(css);
+    }
+
     function init() {
         fixBugs();
 
-        if (document.URL.includes("reader")) {
+        if (document.URL.includes("/reader")) {
             setupReader();
             setupKeyboardShortcuts();
             setupYoutubePlayerCustomization();
             setupReaderContainer();
             setupLLMs();
-        }
-        if (document.URL.includes("library")) {
+        } else if (document.URL.includes("/library")) {
             setupCourse();
+        } else if (document.URL.includes("youtube")) {
+            simplifyYoutubeEmbeddedPlayer();
         }
     }
 
