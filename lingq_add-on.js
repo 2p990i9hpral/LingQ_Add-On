@@ -5,7 +5,7 @@
 // @match        https://www.lingq.com/*/learn/*/web/library/course/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      5.12
+// @version      5.12.1
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @namespace https://greasyfork.org/users/1458847
@@ -1207,11 +1207,10 @@
                 }
         
                 .bot-message {
-                    background-color: rgb(125 125 125 / 10%);
+                    background-color: rgb(125 125 125 / 15%);
                 }
                 
-                #chat-container .bot-message:nth-child(1) b:nth-child(1), 
-                #chat-container .bot-message:nth-child(1) span:nth-child(2) {
+                #chat-container .word-message :is(b:nth-child(1), span:nth-child(2)) {
                     font-size: 1.0rem;
                 }
                 
@@ -2860,7 +2859,8 @@
                     addMessageToUI("loading ...", 'loading-message', chatContainer);
                     const botResponse = await getBotResponse(llmProvider, llmApiKey, llmModel, chatHistory);
                     chatContainer.removeChild(chatContainer.lastChild);
-                    addMessageToUI(botResponse, 'bot-message', chatContainer);
+                    const messageType = isSentence ? "sentence-message" : "word-message"
+                    addMessageToUI(botResponse, `bot-message ${messageType}`, chatContainer);
                     chatHistory = updateChatHistoryState(chatHistory, botResponse, "assistant");
 
                     chatHistory = updateChatHistoryState(chatHistory, plainTextPrompt, "user");
@@ -3245,7 +3245,7 @@ Respond understood if you got it.
             mutations.forEach((mutation) => {
                 mutation.addedNodes.forEach((node) => {
                     if (node.nodeType !== Node.ELEMENT_NODE) return;
-                    if (!node.matches(".widget-area.is-fixed")) return;
+                    if (!node.matches(".widget-area")) return;
                     console.debug('Observer:', `Widget added. ${mutation.type}`, mutation.addedNodes);
                     updateWidget();
                 });
