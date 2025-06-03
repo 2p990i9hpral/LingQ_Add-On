@@ -26,7 +26,7 @@
 
 - 4.0: Added the download words popup. You can download every known word.
 - 4.1: You can download every known/unknown word/LingQs.
-- 4.2: Added a progress bar for the downloaders.
+- 4.2: Added a progress bar for downloaders.
 - 4.3: The lesson's progress is updated according to the progress of the video.
 - 4.4: Added a button that resets lessons to their starting positions.
 - 4.5: Provide the ratio of both LingQ and KnownWords of a lesson.
@@ -39,6 +39,8 @@
 - 5.5: Added chat widget for all widgets. Added a loading message while a bot message is loading.
 - 5.6: Fixed the issue where the characters (`.`, `,`, `?`, and `\n`) were omitted from the selected text.
 - 5.7: Add customizable keyboard shortcuts.
-- 5.8: 	Meaning of the selected word/sentence is copyed to clipboard.
+- 5.8: Meaning of the selected word/sentence is copyed to clipboard.
 - 5.9: Huge code refactoring for performance and clean code reasons.
 - 5.10: Fixed the issues occurring when moving between the lessons without refreshing. The existing TTS will be replaced with AI TTS when clicked.
+- 5.11: Add Google TTS option.
+- 5.12: Integrated the youtube player simplification script into the code (Automatically collapse More videos popup in the player).

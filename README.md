@@ -35,12 +35,14 @@ It offers customizable layouts, appearance settings, vocabulary downloading tool
     *   Turns on caption default.
     *   Disables the player controller.
     *   Adds a video progress indicator synced with the audio player's progress.
+    *   Remove the more videos pop-up and youtube logo in the player, so you can read the subtitle while the video is paused.
 
 ## Installation
 
 1.  Install a userscript manager like [Tampermonkey](https://www.tampermonkey.net/) or [GreaseMonkey](https://addons.mozilla.org/en-US/firefox/addon/greasemonkey/).
 2.  Install the script from [Project page](https://greasyfork.org/en/scripts/533096-lingq-addon).
 3.  Visit [LingQ](https://lingq.com/), and the addon features will be active on reader pages.
+4.  If you want to use AI features (Chat, TTS), you need to make an API key. Refer to this tutorial video: [Get OpenAI GPT API](https://youtu.be/SzPE_AE0eEo), [Get Google Gemini API](https://youtu.be/6BRyynZkvf0).
 
 ## Usage
 

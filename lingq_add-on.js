@@ -5,7 +5,7 @@
 // @match        https://www.lingq.com/*/learn/*/web/library/course/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      5.12.1
+// @version      5.12.2
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @namespace https://greasyfork.org/users/1458847
@@ -301,7 +301,7 @@
             const ttsSection = createElement("div", {id: "ttsSection", className: "popup-section", style: `${settings.tts ? "" : "display: none"}`});
 
             const ttsApiKeyContainer = createElement("div", {className: "popup-row"});
-            ttsApiKeyContainer.appendChild(createElement("label", {htmlFor: "ttsApiKeyInput", textContent: "TTS API Key: ("}));
+            ttsApiKeyContainer.appendChild(createElement("label", {htmlFor: "ttsApiKeyInput", textContent: "TTS API Key:"}));
 
             const ttsApiKeyFlexContainer = createElement("div", {style: "display: flex; align-items: center;"});
             const ttsApiKeyInput= createElement("input", {type: "password", id: "ttsApiKeyInput", value: settings.ttsApiKey, className: "popup-input"});
@@ -1211,7 +1211,7 @@
                 }
                 
                 #chat-container .word-message :is(b:nth-child(1), span:nth-child(2)) {
-                    font-size: 1.0rem;
+                    font-size: 1.05rem;
                 }
                 
                 @keyframes gradient-move {
@@ -1373,7 +1373,7 @@
 
         .main-header > div {
             grid-template-columns: 1fr 150px !important;
-            padding: 0 100px 0 420px !important;
+            padding: 0 0 0 420px !important;
         }
 
         .main-header section:nth-child(1) {
@@ -1464,7 +1464,7 @@
         }
         
         .appCue-poular-hints {
-            max-height: 350px;
+            max-height: 250px;
             overflow-y: auto;
             scrollbar-width: none !important;
         }
@@ -2555,7 +2555,7 @@
                     lastCompletedPercentage = updateLessonProgress(lessonId, lessonInfo, progressPercentage, lastCompletedPercentage);
                     console.debug('Observer:', `Slider Changed. Progress: ${progressPercentage}`);
 
-                    const isLessonFinished = progressPercentage >= 100;
+                    const isLessonFinished = progressPercentage >= 99.9;
                     if (isLessonFinished && settings.autoFinishing) {
                         console.log('Slider', 'lesson finished.')
                         setTimeout(finishLesson, 1000);
@@ -2914,7 +2914,7 @@
 
                 if (!settings.tts) return;
 
-                const ttsButton = await waitForElement('.is-tts', 1000);
+                const ttsButton = await waitForElement('.is-tts', 100);
                 if (!ttsButton) return;
 
                 const isWord = document.querySelector("span.selected-text, span.is-selected");
@@ -2946,47 +2946,54 @@
             const llmApiKey = settings.llmApiKey;
 
             const systemPrompt = `
-**System Prompt (Formatting & Core Rules):**
+System Prompt (Formatting & Core Rules):
 Your primary function is to serve as a language assistant. Your responses must meticulously adhere to the following guidelines to ensure clarity, accuracy, and consistency.
 
-## Core Principles
+# Core Principles
 
-*   **Language Use:** Your primary response language for all explanatory text, definitions, part-of-speech labels, and translations of examples is '${userLanguage}'. Content specifically designated to be in the language of the original input (e.g., original example sentences before their translation) should be presented in '${lessonLanguage}'. The vast majority of your response visible to the user must be in '${userLanguage}'.
-*   **Strict HTML Formatting:**
-    *   Utilize *only* the following HTML tags for presentation: '<b>' (for bolding key terms like the base form or selected sentence elements), '<i>' (for part of speech or emphasizing specific words within explanations), '<p>' (for paragraphs of text like definitions and explanations), '<ul>' (for unordered lists, primarily for examples or key elements), '<li>' (for list items within '<ul>').
-    *   Use '<br>' tags *sparingly* and only for intentional line breaks within a block element (e.g., within an '<li>' if a single example and its translation need to be on separate lines but are conceptually one item, though separate '<li>' tags are generally preferred for distinct items). Avoid using '<br>' for paragraph spacing; use new '<p>' tags instead.
-    *   Output *raw HTML as plain text*. This means your entire response should be a string of HTML. Do not use Markdown syntax (e.g., '# H1', '**Bold**', '*Italic*', '> blockquote', '---'), do not wrap your HTML in Markdown code blocks (e.g., \`\`\`html ... \`\`\`), and do not use any other formatting conventions like XML declarations. Do not use the '<pre>' tag.
-*   **Utmost Directness & Conciseness:**
-    *   Provide responses that are concise and directly address the user's query. Get straight to the point.
-    *   Avoid unnecessary prefaces, introductory phrases (e.g., "Certainly, I can help with that!", "Here is the information you requested:", "You want to know about..."), apologies, or conversational filler.
-    *   Do not include self-referential statements (e.g., "As a language model, I...", "I will now provide...").
-    *   Do not ask clarifying questions back to the user; assume the provided input is sufficient and proceed with the task.
-*   **Unwavering Accuracy & Precision:**
-    *   Ensure all translations are precise, natural-sounding in '${userLanguage}', and reflect intended nuances from the original.
-    *   Definitions must be accurate, dictionary-like, and specifically tailored to the word's usage in the given context.
-    *   Explanations should be clear, correct, and contextually relevant.
-    *   Grammar, spelling, and punctuation in '${userLanguage}' must be impeccable.
-*   **Deep Contextual Integration:**
-    *   Thoroughly analyze the provided 'Context' sentence or situation to understand the specific meaning and usage of the input word or phrase.
-    *   Your explanation must clearly articulate how the context influences the meaning, especially for words with multiple senses or for idiomatic expressions.
-    *   Do not provide generic definitions if the context narrows the meaning.
-*   **Completeness & Adherence to Structure:**
-    *   Ensure all requested components, as defined by subsequent specific prompts (e.g., the 'wordPhrasePrompt'), are included in the response and follow the specified order and HTML structure precisely.
-    *   Pay close attention to the formatting details within the specified HTML structure (e.g., placement of bold tags, italics, spans, and punctuation).
+## Language Use
+Your primary response language for all explanatory text, definitions, part-of-speech labels, and translations of examples is '${userLanguage}'. Content specifically designated to be in the language of the original input (e.g., original example sentences before their translation) should be presented in '${lessonLanguage}'. The vast majority of your response visible to the user must be in '${userLanguage}'.
+
+## Strict HTML Formatting:
+- Utilize the HTML tags for presentation: '<b>' (for bolding key terms like the base form or selected sentence elements), '<i>' (for part of speech or emphasizing specific words within explanations), '<p>' (for paragraphs of text like definitions and explanations), '<ul>' (for unordered lists, primarily for examples or key elements), '<li>' (for list items within '<ul>'). 
+- Do not use the '<pre>' tag.
+- Use '<br>' tags sparingly and only for intentional line breaks within a block element. Avoid using '<br>' for paragraph spacing; use new '<p>' tags instead.
+- Output *raw HTML as plain text*. This means your entire response should be a string of HTML. Do not use Markdown syntax (e.g., '# H1', '**Bold**', '*Italic*', '> blockquote', '---'), do not wrap your HTML in Markdown code blocks (e.g., \`\`\`html ... \`\`\`), and do not use any other formatting conventions like XML declarations.
+
+## Utmost Directness & Conciseness:
+- Provide responses that are concise and directly address the user's query. Get straight to the point.
+- Avoid unnecessary prefaces, introductory phrases (e.g., "Certainly, I can help with that!", "Here is the information you requested:", "You want to know about..."), apologies, or conversational filler.
+- Do not include self-referential statements (e.g., "As a language model, I...", "I will now provide...").
+- Do not ask clarifying questions back to the user; assume the provided input is sufficient and proceed with the task.
+
+## Unwavering Accuracy & Precision:
+- Ensure all translations are precise, natural-sounding in '${userLanguage}', and reflect intended nuances from the original.
+- Definitions must be accurate, dictionary-like, and specifically tailored to the word's usage in the given context.
+- Explanations should be clear, correct, and contextually relevant.
+- Grammar, spelling, and punctuation in '${userLanguage}' must be impeccable.
+
+## Deep Contextual Integration:
+- Thoroughly analyze the provided 'Context' sentence or situation to understand the specific meaning and usage of the input word or phrase.
+- Your explanation must clearly articulate how the context influences the meaning, especially for words with multiple senses or for idiomatic expressions.
+- Do not provide generic definitions if the context narrows the meaning.
 `;
             const wordPhrasePrompt = `
-Use this prompt only for the next input.
-**Single Word/Phrase Input**
-- Input will be given as: 'Input: "word or phrase" Context: "sentence including the word or phrase"'
-1. Determine the base, dictionary form of the word or phrase. This means using the singular form for nouns (e.g., "cat" instead of "cats") and the infinitive form for verbs (e.g., "run" instead of "ran"). For phrases, use the standard dictionary form.
-2. Address and explain the base form of the word or phrase directly, even if the input is in a conjugated or inflected form. This is especially important for idioms.
-3. Provide the IPA pronunciation for the base form of the word or phrase. The IPA should be enclosed in square brackets (e.g., [prəˌnʌnsiˈeɪʃən]).
-4. Provide a concise dictionary definition of the word/phrase as it is used within the given context in ${userLanguage}. This definition should be very brief, akin to a quick lookup in a dictionary (e.g., for a verb: '달리다', '성취하다'; for a noun: '사과', '번역가'), typically just a few words or a short phrase, not a full explanatory sentence.
-5. Explain the contextual meaning of the word/phrase with more details, and explain any idiomatic usages in ${userLanguage}.
-6. Generate a distinct, new example sentence in ${lessonLanguage} to highlight word/phrase usage.
-7. The example sentence should first appear in ${lessonLanguage}, then its translation in ${userLanguage}.
-8. Use this HTML structure (Part of Speech, definition, explanation, and translation of example sentence in ${userLanguage}; base form, and original example sentence in ${lessonLanguage} or as appropriate):
+Use this prompt only for the right next input.
 
+# Single Word/Phrase Input
+
+## Instructions
+
+Input will be given as: 'Input: "word or phrase" Context: "sentence including the word or phrase"'
+
+1. Determine the base, dictionary form of the word or phrase. This means using the singular form for nouns (e.g., "cat" instead of "cats") and the infinitive form for verbs (e.g., "run" instead of "ran"). For phrases, use the standard dictionary form. Address and explain the base form of the word or phrase directly, even if the input is in a conjugated or inflected form. This is especially important for idioms.
+2. Provide the IPA pronunciation for the base form of the word or phrase. The IPA should be enclosed in square brackets (e.g., [prəˌnʌnsiˈeɪʃən]).
+3. Provide a concise dictionary definition of the word/phrase as it is used within the given context in ${userLanguage}. This definition should be very brief, akin to a quick lookup in a dictionary (e.g., for a verb: '달리다', '성취하다'; for a noun: '사과', '번역가'), typically just a few words or a short phrase, **not a full explanatory sentence**.
+4. Explain the contextual meaning of the word/phrase with more details in ${userLanguage}.
+5. Generate a penetrating example sentence in ${lessonLanguage} to highlight word/phrase usage. The example sentence should first appear in ${lessonLanguage}, then its translation in ${userLanguage}.
+6. Use the following HTML structure (Part of Speech, definition, explanation, and translation of example sentence in ${userLanguage}; base form, and original example sentence in ${lessonLanguage} or as appropriate):
+
+\`\`\`
 <b>[Base form in ${lessonLanguage}]</b> <span>/[IPA Pronunciation]/</span> <i>([Part of Speech in ${userLanguage}])</i>
 <p>[Brief dictionary definition of the word/phrase used in the context, in ${userLanguage}]</p>
 <hr>
@@ -2996,17 +3003,16 @@ Use this prompt only for the next input.
   <li>[New Example Sentence in ${lessonLanguage}]</li>
   <li>[Translation of the New Example Sentence in ${userLanguage}]</li>
 </ul>
-
-*The structure and bolding/italics should convey the information. Explanatory content (Part of Speech, definition, explanation) and translations must be in '${userLanguage}'. The base form and original example sentence should be in '${lessonLanguage}'.*
+\`\`\`
 
 ## Examples
 
 ### Example 1: Single Word with Context (Original language: English, User's language: Korean)
 
-**User Input:** 
-'Input: "translators", Context: "However, the ESV translators chose to translate that same word as 'servant,' closing off the potential interpretation that she held any formal position of authority."'
+User Input: 'Input: "translators", Context: "However, the ESV translators chose to translate that same word as 'servant,' closing off the potential interpretation that she held any formal position of authority."'
 
-**Output:**
+Assistant Output:
+\`\`\`
 <b>translator</b> <span>[trænsˈleɪtər]</span> <i>(명사)</i>
 <p>번역가</p>
 <hr>
@@ -3016,13 +3022,14 @@ Use this prompt only for the next input.
   <li>Many translators work together on complex international projects.</li>
   <li>많은 번역가들이 복잡한 국제 프로젝트에 함께 작업합니다.</li>
 </ul>
+\`\`\`
 
 ### Example 2: Single Word with Context (Original language: Spanish, User Language: English)
 
-**User Input:** 
-'Input: "lograr", Context: "Debemos lograr nuestros objetivos."'
+User Input:  'Input: "lograr", Context: "Debemos lograr nuestros objetivos."'
 
-**Assistant Output:**
+Assistant Output:
+\`\`\`
 <b>lograr</b> <span>[loˈɣɾaɾ]</span> <i>(verb)</i>
 <p>To achieve, to attain.</p>
 <hr>
@@ -3032,13 +3039,14 @@ Use this prompt only for the next input.
   <li>Espero lograr todas mis metas este año.</li>
   <li>I hope to achieve all my goals this year.</li>
 </ul>
+\`\`\`
 
 ### Example 3: Phrase with Context (Original language: German, User Language: French)
 
-**User Input:** 
-'Input: "imstande sein", Context: "Er war imstande, das Problem zu lösen."'
+User Input: 'Input: "imstande sein", Context: "Er war imstande, das Problem zu lösen."'
 
-**Assistant Output:**
+Assistant Output:
+\`\`\`
 <b>imstande sein</b> <span>[ɪmˈʃtandə zaɪ̯n]</span> <i>(expression)</i>
 <p>Être capable de, être en mesure de.</p>
 <hr>
@@ -3048,64 +3056,62 @@ Use this prompt only for the next input.
   <li>Sie war imstande, die schwierige Aufgabe zu bewältigen.</li>
   <li>Elle était capable de maîtriser la tâche difficile.</li>
 </ul>
+\`\`\`
 
 Respond understood if you got it.
 `;
             const sentencePrompt = `
-Use this prompt only for the next input.
-Sentences Input
+Use this prompt only for the right next input.
+
+# Sentences Input
+
+## Instructions
+
 - Input will be given as: 'Input: "sentences"'
 
-1.  ALWAYS translate all input sentences first into ${userLanguage}. If multiple sentences are provided in the input, ensure every single one of them is translated and concatenated together to form one continuous block of text in ${userLanguage}. This entire translated block should be placed within a single '<p>' tag and be bolded using '<b>' tags around the entire translation.
-2.  After the translated sentences and an '<hr>' separator, provide a comprehensive explanation of the overall meaning of the input sentences in ${userLanguage}. This explanation should:
-    *   Clarify the main message or purpose of the sentences.
-    *   Highlight any important contextual details that affect understanding.
-    *   Explain any subtle nuances, implications, or underlying tones.
-    *   Briefly touch upon significant grammatical structures or word choices if they are key to understanding the sentence's construction or meaning (but do not turn this into a full grammar lesson).
-    *   This explanation should be enclosed in one or more '<p>' tags as needed for clarity and aim to provide a holistic understanding beyond a literal translation.
-3.  After another '<hr>' separator, identify a few (typically 2-4, but fewer if not many truly distinctive elements exist that meet the criteria below) genuinely distinctive or challenging key elements from the original ${lessonLanguage} sentences.
-    These elements should be:
-    *   **Specific words:** Especially advanced, nuanced, or polysemous ones whose specific meaning in context is crucial and might not be fully captured by a general translation (e.g., 'ephemeral', 'ubiquitous').
-    *   **Established collocations or fixed expressions:** These are word pairings or groups that frequently occur together and often carry a specific meaning that might be more than the sum of their parts (e.g., "foregone conclusion," "take into account," "collective consciousness"). They should be relatively stable and recognized units.
-    *   **Idiomatic phrases:** Expressions whose meaning is not deducible from the literal meanings of the words (e.g., "kick the bucket," "spill the beans," "it's not rocket science").
-    *   **Very short, meaningful linguistic units (generally 1-3 words):** These are not just any short phrases, but rather dense expressions that carry significant non-obvious meaning, represent a particular linguistic challenge for a learner, or are highly characteristic of the language.
-
-    **Crucially, when selecting these elements, focus on:**
-    *   Linguistic units that are self-contained and function as a distinct lexical item or a highly cohesive semantic unit.
-    *   Elements that provide insight into nuances, idiomatic usage, or structural complexities not immediately obvious from the full translation. The goal is to offer learning value beyond simply understanding the individual words if they were looked up separately.
-    *   What makes the original ${lessonLanguage} expression noteworthy, difficult, or particularly expressive.
-
-    **Avoid selecting:**
-    *   Elements whose meaning is perfectly self-evident from the provided full translation and context.
-    *   Overly simple common words used in their most basic sense (e.g., 'big', 'go', 'and').
-    *   Common, literal, and grammatically straightforward combinations of words like simple adjective + noun (e.g., 'red car' — unless 'red' has a highly specific, non-obvious symbolic meaning in context, like 'red tape'), adverb + verb (e.g., 'run quickly'), or verb + object (e.g., 'eat food'), unless these combinations form part of a recognized idiom or a highly specific, non-obvious fixed expression.
-    *   Arbitrary sequences of words that are merely descriptive segments of the sentence and do not form a cohesive, recognized linguistic unit (e.g., avoid selecting "instruments of power" if it's just a literal description of tools used for power, and not a specific, established term or a recognized collocation with a meaning beyond its parts).
-    *   Long clauses or entire phrases that are not concise linguistic items of interest. The selected elements should generally be 1-5 words, with a preference for shorter, denser units if they meet the other criteria.
-    *   Common proper nouns unless their usage is idiomatic, symbolic, or particularly illustrative of a linguistic point beyond just naming.
+1. ALWAYS translate all input sentences first into ${userLanguage}. If multiple sentences are provided in the input, ensure every single one of them is translated and concatenated together to form one continuous block of text in ${userLanguage}. This entire translated block should be placed within a single '<p><b>' tag.
+2. After the translated sentences and an '<hr>' separator, provide a comprehensive explanation of the overall meaning of the input sentences in ${userLanguage}. This explanation should:
+ -  Clarify the main message or purpose of the sentences.
+ -  Highlight any important contextual details that affect understanding.
+ -  Explain any subtle nuances, implications, or underlying tones.
+ -  Briefly touch upon significant grammatical structures or word choices if they are key to understanding the sentence's construction or meaning (but do not turn this into a full grammar lesson).
+ -  This explanation should be enclosed in one or more '<p>' tags as needed for clarity, aims to provide a holistic understanding that can not be achieved by the translation only.
+3.  After another '<hr>' separator, identify a few (typically 2-4) genuinely distinctive or challenging key elements from the original ${lessonLanguage} sentences. 
+    - These elements should be:
+        -  Specific words: Especially advanced, nuanced, or polysemous ones whose specific meaning in context is crucial and might not be fully captured by a general translation.
+        -  Established collocations or fixed expressions: These are word pairings or groups that frequently occur together and often carry a specific meaning that might be more than the sum of their parts (e.g., "foregone conclusion," "take into account," "collective consciousness").
+        -  Idiomatic phrases: Expressions whose meaning is not deducible from the literal meanings of the words (e.g., "kick the bucket," "spill the beans," "it's not rocket science").
+    - Avoid selecting:
+        -  Elements whose meaning is perfectly self-evident from the provided full translation and context.
+        -  Overly simple common words used in their most basic sense.
+        -  Common, literal, and grammatically straightforward combinations of words.
+        -  Arbitrary sequences of words that are merely descriptive segments of the sentence and do not form a cohesive, recognized linguistic unit.
+        -  Long clauses or entire phrases that are not concise linguistic items of interest.
+        -  Common proper nouns unless their usage is idiomatic, symbolic, or particularly illustrative of a linguistic point beyond just naming.
 4.  For each identified key element:
-    *   State the element (word, short phrase, or idiom) exactly as it appears in the original ${lessonLanguage} input.
+    - 4.1.State the element (word, short phrase, or idiom) in the original ${lessonLanguage}.
+    - 4.2.Provide a direct meaning or concise definition for each element in ${userLanguage}, focusing on its specific meaning as that unit, especially if idiomatic or nuanced.
 5.  Use the following HTML structure for the entire response:
-
+\`\`\`
 <p><b>[The entire translated sentences in ${userLanguage}]</b></p>
 <hr>
 <p>[Comprehensive explanation in ${userLanguage} as per instruction #2. This may use multiple paragraphs.]</p>
 <hr>
 <ul>
-  <li><b>[Key Element 1 from original ${lessonLanguage} sentence - word, short phrase, or idiom]:</b> [Direct meaning or concise definition of this element in ${userLanguage}, focusing on its specific meaning as that unit, especially if idiomatic or nuanced, as per instruction #4]</li>
-  <li><b>[Key Element 2 from original ${lessonLanguage} sentence - word, short phrase, or idiom]:</b> [Direct meaning or concise definition of this element in ${userLanguage}, focusing on its specific meaning as that unit, especially if idiomatic or nuanced, as per instruction #4]</li>
+  <li><b>[Key Element 1 from original ${lessonLanguage} sentence - word, short phrase, or idiom]:</b> [Direct meaning or concise definition of this element in ${userLanguage}]</li>
+  <li><b>[Key Element 2 from original ${lessonLanguage} sentence - word, short phrase, or idiom]:</b> [Direct meaning or concise definition of this element in ${userLanguage}]</li>
   <!-- Repeat <li> for other identified key elements -->
 </ul>
-
-*Note: Always include the full sentences translation first. The selection of key elements should be judicious and aim to genuinely aid understanding by focusing on aspects not fully captured by the translation itself. All explanatory content, including the meanings of the key elements, must be in ${userLanguage}. The key elements themselves are quoted from the ${lessonLanguage} input.*
+\`\`\`
 
 ## Examples
 
 ### Example 1: Sentence Input (Original language: French, User's language: Japanese)
 
-User Input:
-'Input: "Il a réussi à convaincre ses collègues malgré les difficultés."'
+User Input: 'Input: "Il a réussi à convaincre ses collègues malgré les difficultés."'
 
 Assistant Output:
+\`\`\`
 <p><b>彼は困難にもかかわらず同僚たちを説得することに成功した。</b></p>
 <hr>
 <p>この文は、彼が直面したであろう障害や困難な状況があったにもかかわらず、最終的に同僚たちを自分の意見や提案に同意させることに成功したという事実を伝えています。「malgré les difficultés」という部分が、その成功が容易ではなかったことを示唆しています。</p>
@@ -3114,13 +3120,14 @@ Assistant Output:
   <li><b>réussi à convaincre:</b> 「説得することに成功した」、「うまく説得した」。</li>
   <li><b>malgré:</b> 「～にもかかわらず」。</li>
 </ul>
+\`\`\`
 
 ### Example 2: Sentence Input (Original language: Italian, User Language: German)
 
-User Input:
-'Input: "Nonostante la pioggia, siamo andati al concerto."'
+User Input: 'Input: "Nonostante la pioggia, siamo andati al concerto."'
 
 Assistant Output:
+\`\`\`
 <p><b>Trotz des Regens sind wir zum Konzert gegangen.</b></p>
 <hr>
 <p>Dieser Satz drückt aus, dass die Sprecher das Konzert besucht haben, obwohl es geregnet hat. Das Wort "Nonostante" (Trotz) leitet einen Nebensatz ein, der einen Gegensatz oder ein Hindernis zum Hauptgeschehen darstellt. Es unterstreicht die Entschlossenheit der Sprecher oder ihr großes Interesse am Konzert, das sie auch schlechtes Wetter nicht davon abgehalten hat hinzugehen.</p>
@@ -3129,12 +3136,13 @@ Assistant Output:
   <li><b>Nonostante:</b> Trotz; obwohl.</li>
   <li><b>siamo andati:</b> wir sind gegangen.</li>
 </ul>
+\`\`\`
 
 ### Example 3: Idiomatic Sentence Input (Original language: English, User's Language: Korean)
 
-User Input:
-'Input: "Don't worry, it's not rocket science, you'll figure it out quickly."'
+User Input: 'Input: "Don't worry, it's not rocket science, you'll figure it out quickly."'
 
+\`\`\`
 Assistant Output:
 <p><b>걱정 마세요, 그렇게 어려운 일이 아니니까 금방 이해하게 될 거예요.</b></p>
 <hr>
@@ -3144,13 +3152,14 @@ Assistant Output:
   <li><b>it's not rocket science:</b> '그렇게 어려운 일이 아니다', '아주 쉬운 일이다'.</li>
   <li><b>figure it out:</b> '이해하다', '알아내다', '해결하다'.</li>
 </ul>
+\`\`\`
 
 ### Example 4: Multiple Sentences Input (Original language: Spanish, User's Language: French)
 
-User Input:
-'Input: "El sol brillaba con fuerza. Los pájaros cantaban en los árboles." '
+User Input: 'Input: "El sol brillaba con fuerza. Los pájaros cantaban en los árboles." '
 
 Assistant Output:
+\`\`\`
 <p><b>Le soleil brillait fort. Les oiseaux chantaient dans les arbres.</b></p>
 <hr>
 <p>Ces deux phrases décrivent une scène matinale ou diurne paisible et agréable. La première phrase établit une condition météorologique claire et lumineuse. La seconde ajoute un élément auditif qui renforce l'atmosphère de tranquillité et de nature. Ensemble, elles peignent une image vivante d'un environnement serein.</p>
@@ -3159,16 +3168,20 @@ Assistant Output:
   <li><b>con fuerza:</b> avec force; intensément.</li>
   <li><b>cantaban:</b> ils chantaient.</li>
 </ul>
+\`\`\`
+
 Respond understood if you got it.
 `;
             const plainTextPrompt = `
-Do not use the formatting rules from the word/sentence prompts previously given for your responses in this mode. For all subsequent turns, the user input will be plain text.
-Crucially, you MUST remember the initial \`Input: "word or phrase" Context: "sentence..."\` or \`Input: "sentence(s)"\` that was processed right before this plain text mode started. This initial input and its associated context are vital for understanding follow-up questions in this conversational phase.
+# Plain Text Input (Conversational/Freetext)
 
-**Plain Text Input (Conversational/Freetext)**
+Do not use the formatting rules from the word/sentence prompts previously given for your responses in this mode. For all subsequent turns, the user input will be plain text.
+However, you MUST remember the initial \`Input: "word or phrase" Context: "sentence..."\` or \`Input: "sentence(s)"\` that was processed right before this plain text mode started. This initial input and its associated context are vital for understanding follow-up questions in this conversational phase.
+
+## Instructions
 - Input will be given as: 'Plain text input'.
 - Respond naturally and directly in ${userLanguage}. 
-- Avoid structured outputs (like those in word/phrase/sentence prompts); adhere to a conversational context. Use HTML tags ('<b>', '<i>', '<p>', '<ul>', '<li>', '<br>') but not <pre> or Markdown for presentation.
+- Avoid structured outputs (like those in word/phrase/sentence prompts); adhere to a conversational context. Use HTML tags ('<b>', '<i>', '<p>', '<ul>', '<li>', '<br>'), but not <pre> or Markdown for presentation.
 - If a user's plain text query refers to a word, phrase, concept, or asks a question that seems related to the initial structured input (the one with "Input:" and/or "Context:"), you MUST assume they are referring back to that specific initial input and its context, even if they don't explicitly state "in the previous context," "about the word we just discussed," or similar phrases. Use your knowledge of that initial input to provide a relevant and contextual answer in ${userLanguage}.
 - For general queries clearly not related to the initial input, answer as a general language assistant in ${userLanguage}.
 
@@ -3176,20 +3189,23 @@ Crucially, you MUST remember the initial \`Input: "word or phrase" Context: "sen
 
 ### Example 1: Plain Text Input (User Language: English) - General Query
 
-**User Input:**
-"What's the weather like in London today?"
+User Input: "What's the weather like in London today?"
 
-**Assistant Output:**
+Assistant Output:
+\`\`\`
 <p>I'm sorry, I do not have access to real-time weather information. You can check a reliable weather app or website for the current conditions in London.</p>
+\`\`\`
 
 ### Example 2: Plain Text Input (User Language: Korean) - Referential Query
+
 (Scenario: The initial input was for the word "translators" with its context from the ESV Bible example, and user language is Korean. The bot has already provided the structured \`wordPhrasePrompt\` output.)
 
-**User Input (in plain text mode, following the structured output for "translators"):**
-"그 단어가 문맥에서 정확히 어떤 의미로 사용되었나요?"
+User Input (in plain text mode, following the structured output for "translators"): "그 단어가 문맥에서 정확히 어떤 의미로 사용되었나요?"
 
-**Assistant Output (implicitly referring to "translators" and its initial context):**
+Assistant Output (implicitly referring to "translators" and its initial context):
+\`\`\`
 <p>앞서 논의된 문맥에서 '번역가들(translators)'이라는 단어는 ESV 성경 번역가들이 특정 단어를 '종(servant)'으로 번역하기로 선택한 상황을 가리킵니다. 이는 그들이 특정 해석을 선호하여 해당 여성이 공식적인 권위의 직책을 가졌을 가능성을 배제했음을 시사합니다. 따라서 문맥상 '번역가들'은 단순히 언어를 옮기는 사람을 넘어, 특정 신학적 또는 해석적 관점을 가진 번역 주체를 의미할 수 있습니다.</p>
+\`\`\`
 
 Respond understood if you got it.
 `;
@@ -3245,7 +3261,7 @@ Respond understood if you got it.
             mutations.forEach((mutation) => {
                 mutation.addedNodes.forEach((node) => {
                     if (node.nodeType !== Node.ELEMENT_NODE) return;
-                    if (!node.matches(".widget-area")) return;
+                    if (!(node.matches(".widget-area") && node.parentNode)) return;
                     console.debug('Observer:', `Widget added. ${mutation.type}`, mutation.addedNodes);
                     updateWidget();
                 });
