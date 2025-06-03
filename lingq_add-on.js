@@ -2749,10 +2749,10 @@
                     const data = await response.json();
 
                     const [inputPrice, outputPrice] = getLLMPricing(settings.llmProviderModel);
-                    const inputTokens = data.usageMetadata.totalTokenCount;
+                    const inputTokens = data.usageMetadata.promptTokenCount;
                     const cachedTokens = data.usageMetadata?.cachedContentTokenCount ?? 0;
                     const outputTokens = data.usageMetadata.candidatesTokenCount;
-                    const approxCost = (inputTokens - cachedTokens) * inputPrice + cachedTokens * (inputPrice/4) + outputTokens * outputPrice;
+                    const approxCost = inputTokens * inputPrice + cachedTokens * (inputPrice/4) + outputTokens * outputPrice;
                     console.log('Chat', `${model}, tokens: (${inputTokens-cachedTokens}/${cachedTokens}/${outputTokens}), cost: $${approxCost.toFixed(6)}`);
 
                     return data.candidates[0].content.parts[0].text || "Sorry, could not get a response.";
@@ -3070,7 +3070,7 @@ Use this prompt only for the right next input.
 - Input will be given as: 'Input: "sentences"'
 
 1. ALWAYS translate all input sentences first into ${userLanguage}. If multiple sentences are provided in the input, ensure every single one of them is translated and concatenated together to form one continuous block of text in ${userLanguage}. This entire translated block should be placed within a single '<p><b>' tag.
-2. After the translated sentences and an '<hr>' separator, provide a comprehensive explanation of the overall meaning of the input sentences in ${userLanguage}. This explanation should:
+2. After the translated sentences and an '<hr>' separator, provide a compact and non-verbose explanation of the overall meaning of the input sentences in ${userLanguage}. This explanation should:
  -  Clarify the main message or purpose of the sentences.
  -  Highlight any important contextual details that affect understanding.
  -  Explain any subtle nuances, implications, or underlying tones.
@@ -3081,15 +3081,14 @@ Use this prompt only for the right next input.
         -  Specific words: Especially advanced, nuanced, or polysemous ones whose specific meaning in context is crucial and might not be fully captured by a general translation.
         -  Established collocations or fixed expressions: These are word pairings or groups that frequently occur together and often carry a specific meaning that might be more than the sum of their parts (e.g., "foregone conclusion," "take into account," "collective consciousness").
         -  Idiomatic phrases: Expressions whose meaning is not deducible from the literal meanings of the words (e.g., "kick the bucket," "spill the beans," "it's not rocket science").
+        -  The selected element must be identifiable as a 'recognized phrase' or 'lexical chunk' beyond just being a sequence of words.
     - Avoid selecting:
         -  Elements whose meaning is perfectly self-evident from the provided full translation and context.
-        -  Overly simple common words used in their most basic sense.
-        -  Common, literal, and grammatically straightforward combinations of words.
-        -  Arbitrary sequences of words that are merely descriptive segments of the sentence and do not form a cohesive, recognized linguistic unit.
-        -  Long clauses or entire phrases that are not concise linguistic items of interest.
+        -  Overly simple, common, or grammatically straightforward (combination of) words.
+        -  Avoid selecting segments of a sentence that do not function as standalone lexical items (words, established collocations, or idioms).
         -  Common proper nouns unless their usage is idiomatic, symbolic, or particularly illustrative of a linguistic point beyond just naming.
 4.  For each identified key element:
-    - 4.1.State the element (word, short phrase, or idiom) in the original ${lessonLanguage}.
+    - 4.1.State the element (word, expression, or idiom) in the original ${lessonLanguage}.
     - 4.2.Provide a direct meaning or concise definition for each element in ${userLanguage}, focusing on its specific meaning as that unit, especially if idiomatic or nuanced.
 5.  Use the following HTML structure for the entire response:
 \`\`\`
@@ -3098,8 +3097,8 @@ Use this prompt only for the right next input.
 <p>[Comprehensive explanation in ${userLanguage} as per instruction #2. This may use multiple paragraphs.]</p>
 <hr>
 <ul>
-  <li><b>[Key Element 1 from original ${lessonLanguage} sentence - word, short phrase, or idiom]:</b> [Direct meaning or concise definition of this element in ${userLanguage}]</li>
-  <li><b>[Key Element 2 from original ${lessonLanguage} sentence - word, short phrase, or idiom]:</b> [Direct meaning or concise definition of this element in ${userLanguage}]</li>
+  <li><b>[Key Element 1 from original ${lessonLanguage} sentence - word, expression, or idiom]:</b> [Direct meaning or concise definition of this element in ${userLanguage}]</li>
+  <li><b>[Key Element 2 from original ${lessonLanguage} sentence - word, expression, or idiom]:</b> [Direct meaning or concise definition of this element in ${userLanguage}]</li>
   <!-- Repeat <li> for other identified key elements -->
 </ul>
 \`\`\`
