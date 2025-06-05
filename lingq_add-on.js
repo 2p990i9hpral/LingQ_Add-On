@@ -5,7 +5,7 @@
 // @match        https://www.lingq.com/*/learn/*/web/library/course/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      5.12.3
+// @version      5.13
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @namespace https://greasyfork.org/users/1458847
@@ -34,6 +34,7 @@
 
         colorMode: "white",
         white_fontColor: "rgb(0, 0, 0)",
+        white_translationFontColor: "rgb(0, 0, 0)",
         white_lingqBackground: "rgba(255, 232, 149, 1)",
         white_lingqBorder: "rgba(255, 200, 0, 0)",
         white_lingqBorderLearned: "rgba(255, 200, 0, 0)",
@@ -41,6 +42,7 @@
         white_unknownBorder: "rgba(0, 111, 255, 0)",
         white_playingUnderline: "rgb(0, 0, 0)",
         dark_fontColor: "rgb(255, 255, 255)",
+        dark_translationFontColor: "rgb(255, 255, 255)",
         dark_lingqBackground: "rgba(108, 87, 43, 1)",
         dark_lingqBorder: "rgba(254, 203, 72, 0)",
         dark_lingqBorderLearned: "rgba(254, 203, 72, 0)",
@@ -96,6 +98,7 @@
 
             return {
                 fontColor: settings[prefix + "fontColor"],
+                translationFontColor: settings[prefix + "translationFontColor"],
                 lingqBackground: settings[prefix + "lingqBackground"],
                 lingqBorder: settings[prefix + "lingqBorder"],
                 lingqBorderLearned: settings[prefix + "lingqBorderLearned"],
@@ -238,6 +241,7 @@
 
             [
                 { id: "fontColor", label: "Font Color:", value: colorSettings.fontColor },
+                { id: "translationFontColor", label: "Translation Font Color:", value: colorSettings.translationFontColor },
                 { id: "lingqBackground", label: "LingQ Background:", value: colorSettings.lingqBackground },
                 { id: "lingqBorder", label: "LingQ Border:", value: colorSettings.lingqBorder },
                 { id: "lingqBorderLearned", label: "LingQ Border Learned:", value: colorSettings.lingqBorderLearned },
@@ -537,12 +541,14 @@
                     setupRGBAPickr('unknownBackgroundPicker', 'unknownBackgroundText', 'unknownBackground', '--unknown-background');
                     setupRGBAPickr('unknownBorderPicker', 'unknownBorderText', 'unknownBorder', '--unknown-border');
                     setupRGBAPickr('fontColorPicker', 'fontColorText', 'fontColor', '--font-color');
+                    setupRGBAPickr('translationFontColorPicker', 'translationFontColorText', 'translationFontColor', '--translation-font-color');
                     setupRGBAPickr('playingUnderlinePicker', 'playingUnderlineText', 'playingUnderline', '--is-playing-underline');
                 });
             }
 
             function updateColorInputs(colorSettings) {
                 document.getElementById("fontColorText").value = colorSettings.fontColor;
+                document.getElementById("translationFontColorText").value = colorSettings.translationFontColor;
                 document.getElementById("lingqBackgroundText").value = colorSettings.lingqBackground;
                 document.getElementById("lingqBorderText").value = colorSettings.lingqBorder;
                 document.getElementById("lingqBorderLearnedText").value = colorSettings.lingqBorderLearned;
@@ -552,6 +558,9 @@
 
                 const fontColorPicker = document.getElementById("fontColorPicker");
                 if (fontColorPicker) fontColorPicker.style.backgroundColor = colorSettings.fontColor;
+
+                const translationFontColorPicker = document.getElementById("translationFontColorPicker");
+                if (translationFontColorPicker) translationFontColorPicker.style.backgroundColor = colorSettings.translationFontColor;
 
                 const playingUnderlinePicker = document.getElementById("playingUnderlinePicker");
                 if (playingUnderlinePicker) playingUnderlinePicker.style.backgroundColor = colorSettings.playingUnderline;
@@ -565,6 +574,7 @@
                     { id: "unknownBackgroundPicker", color: colorSettings.unknownBackground },
                     { id: "unknownBorderPicker", color: colorSettings.unknownBorder },
                     { id: "fontColorPicker", color: colorSettings.fontColor },
+                    { id: "translationFontColorPicker", color: colorSettings.translationFontColor },
                     { id: "playingUnderlinePicker", color: colorSettings.playingUnderline }
                 ];
 
@@ -578,6 +588,7 @@
 
             function updateCssColorVariables(colorSettings) {
                 document.documentElement.style.setProperty("--font-color", colorSettings.fontColor);
+                document.documentElement.style.setProperty("--translation-font-color", colorSettings.translationFontColor);
                 document.documentElement.style.setProperty("--lingq-background", colorSettings.lingqBackground);
                 document.documentElement.style.setProperty("--lingq-border", colorSettings.lingqBorder);
                 document.documentElement.style.setProperty("--lingq-border-learned", colorSettings.lingqBorderLearned);
@@ -2186,7 +2197,7 @@
         });
 
         return textParts.slice(0, -1).join(' ')
-            .replace(/[^\S\n]?(\?|\.|\n)[^\S\n]?/g, '$1')
+            .replace(/[^\S\n]?(\?|\.|\-|\n)[^\S\n]?/g, '$1')
             .replace(/[^\S\n]?(,)/g, '$1');
     }
 
@@ -2588,24 +2599,42 @@
     }
 
     async function setupReaderContainer() {
-        async function setupSentenceFocus(readerContainer) {
-            function focusPlayingSentence() {
-                const playingSentence = document.querySelector(".sentence.is-playing");
-                if (playingSentence) {
-                    const scrolling_div = document.querySelector(".reader-container")
-                    const targetScrollTop = playingSentence.offsetTop + Math.floor(playingSentence.offsetHeight / 2) - Math.floor(scrolling_div.offsetHeight / 2);
-                    smoothScrollTo(scrolling_div, targetScrollTop, 300);
-                }
+        function setupSentenceFocus(readerContainer) {
+            function focusPlayingSentence(playingSentence) {
+                const scrolling_div = document.querySelector(".reader-container")
+                const targetScrollTop = playingSentence.offsetTop + Math.floor(playingSentence.offsetHeight / 2) - Math.floor(scrolling_div.offsetHeight / 2);
+                smoothScrollTo(scrolling_div, targetScrollTop, 300);
             }
 
             const observer = new MutationObserver((mutations) => {
                 mutations.forEach((mutation) => {
+                    const target = mutation.target;
+                    if (!target.matches(".sentence")) return;
                     console.debug('Observer:', `Reader container subtree attribute change. ${mutation.type}, ${mutation.attributeName}`)
-                    if (!mutation.target.matches(".sentence")) return;
-                    focusPlayingSentence();
+                    if (target.matches(".is-playing")) focusPlayingSentence(target);
                 });
             });
             observer.observe(readerContainer, {attributes: true, subtree: true, attributeFilter: ['class']});
+        }
+
+        function changeTranslationColor(readerContainer) {
+            const observer = new MutationObserver((mutations) => {
+                for(const mutation of mutations) {
+                    for(const node of mutation.addedNodes) {
+                        if (node.nodeType !== Node.ELEMENT_NODE) continue;
+                        if (!node.matches('p:has(.sentence)')) continue;
+
+                        for(const sentence of node.querySelectorAll('.sentence')) {
+                            if (!(sentence.style.borderImageSource)) continue;
+
+                            const fontColor = settings[`${settings.colorMode}_translationFontColor`];
+                            const regex = /color:%23[0-9a-fA-F]{6}/g;
+                            sentence.style.borderImageSource = sentence.style.borderImageSource.replace(regex, `color:${fontColor}`);
+                        }
+                    }
+                }
+            });
+            observer.observe(readerContainer, {childList: true, subtree: true});
         }
 
         const observer = new MutationObserver(function (mutations) {
@@ -2617,6 +2646,7 @@
 
                     changeScrollAmount(".reader-container", 0.3);
                     setupSentenceFocus(node);
+                    changeTranslationColor(node);
                 });
             });
         });
