@@ -5,7 +5,7 @@
 // @match        https://www.lingq.com/*/learn/*/web/library/course/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      5.13
+// @version      5.13.1
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @namespace https://greasyfork.org/users/1458847
@@ -2601,8 +2601,9 @@
     async function setupReaderContainer() {
         function setupSentenceFocus(readerContainer) {
             function focusPlayingSentence(playingSentence) {
-                const scrolling_div = document.querySelector(".reader-container")
-                const targetScrollTop = playingSentence.offsetTop + Math.floor(playingSentence.offsetHeight / 2) - Math.floor(scrolling_div.offsetHeight / 2);
+                const scrolling_div = document.querySelector(".reader-container");
+                const offsetTop = playingSentence.parentElement.matches(".has-translation") ? playingSentence.parentElement.offsetTop : playingSentence.offsetTop;
+                const targetScrollTop = offsetTop + Math.floor(playingSentence.offsetHeight / 2) - Math.floor(scrolling_div.offsetHeight / 2);
                 smoothScrollTo(scrolling_div, targetScrollTop, 300);
             }
 
@@ -2628,8 +2629,9 @@
                             if (!(sentence.style.borderImageSource)) continue;
 
                             const fontColor = settings[`${settings.colorMode}_translationFontColor`];
-                            const regex = /color:%23[0-9a-fA-F]{6}/g;
-                            sentence.style.borderImageSource = sentence.style.borderImageSource.replace(regex, `color:${fontColor}`);
+                            const colorRegex = /color:%23[0-9a-fA-F]{6}/g;
+                            sentence.style.borderImageSource = sentence.style.borderImageSource.replace(colorRegex, `color:${fontColor}`);
+                            sentence.style.borderImageSource = sentence.style.borderImageSource.replace("line-height:.9", "line-height:.7");
                         }
                     }
                 }
