@@ -5,7 +5,7 @@
 // @match        https://www.lingq.com/*/learn/*/web/library/course/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      5.13.1
+// @version      5.13.2
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @namespace https://greasyfork.org/users/1458847
@@ -52,6 +52,7 @@
 
         librarySortOption: 0,
         autoFinishing: false,
+        focusPlayingSentence: false,
 
         keyboardShortcut: false,
         shortcutVideoFullscreen: 'p',
@@ -253,6 +254,7 @@
             container1.appendChild(colorSection);
 
             addCheckbox(container1, "autoFinishingCheckbox", "Finish Lesson Automatically", settings.autoFinishing);
+            addCheckbox(container1, "focusPlayingSentenceCheckbox", "Focus on Playing Sentence", settings.focusPlayingSentence);
 
             columns.appendChild(container1);
 
@@ -657,6 +659,9 @@
             const autoFinishingCheckbox = document.getElementById("autoFinishingCheckbox");
             autoFinishingCheckbox.addEventListener('change', (event) => {settings.autoFinishing = event.target.checked});
 
+            const focusPlayingSentenceCheckbox = document.getElementById("focusPlayingSentenceCheckbox");
+            focusPlayingSentenceCheckbox.addEventListener('change', (event) => {settings.focusPlayingSentence = event.target.checked});
+
             function setupShortcutInput(inputId, settingKey) {
                 const input = document.getElementById(inputId);
                 if (!input) return;
@@ -766,6 +771,7 @@
                 updateCssColorVariables(defaultColorSettings);
 
                 document.getElementById("autoFinishingCheckbox").checked = defaults.autoFinishing;
+                document.getElementById("focusPlayingSentenceCheckbox").checked = defaults.focusPlayingSentence;
 
                 document.getElementById("keyboardShortcutCheckbox").value = defaults.keyboardShortcut;
                 document.getElementById("shortcutVideoFullscreenInput").value = defaults.shortcutVideoFullscreen;
@@ -2610,9 +2616,8 @@
             const observer = new MutationObserver((mutations) => {
                 mutations.forEach((mutation) => {
                     const target = mutation.target;
-                    if (!target.matches(".sentence")) return;
-                    console.debug('Observer:', `Reader container subtree attribute change. ${mutation.type}, ${mutation.attributeName}`)
-                    if (target.matches(".is-playing")) focusPlayingSentence(target);
+                    if (!(target.matches(".sentence.is-playing") && settings.focusPlayingSentence)) return;
+                    focusPlayingSentence(target);
                 });
             });
             observer.observe(readerContainer, {attributes: true, subtree: true, attributeFilter: ['class']});
@@ -2622,8 +2627,7 @@
             const observer = new MutationObserver((mutations) => {
                 for(const mutation of mutations) {
                     for(const node of mutation.addedNodes) {
-                        if (node.nodeType !== Node.ELEMENT_NODE) continue;
-                        if (!node.matches('p:has(.sentence)')) continue;
+                        if (!(node.nodeType === Node.ELEMENT_NODE && node.matches('p:has(.sentence)'))) continue;
 
                         for(const sentence of node.querySelectorAll('.sentence')) {
                             if (!(sentence.style.borderImageSource)) continue;
@@ -2631,7 +2635,6 @@
                             const fontColor = settings[`${settings.colorMode}_translationFontColor`];
                             const colorRegex = /color:%23[0-9a-fA-F]{6}/g;
                             sentence.style.borderImageSource = sentence.style.borderImageSource.replace(colorRegex, `color:${fontColor}`);
-                            sentence.style.borderImageSource = sentence.style.borderImageSource.replace("line-height:.9", "line-height:.7");
                         }
                     }
                 }
