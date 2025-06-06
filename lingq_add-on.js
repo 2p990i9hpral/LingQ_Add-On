@@ -5,7 +5,7 @@
 // @match        https://www.lingq.com/*/learn/*/web/library/course/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      5.13.2
+// @version      5.13.3
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @namespace https://greasyfork.org/users/1458847
@@ -53,6 +53,7 @@
         librarySortOption: 0,
         autoFinishing: false,
         focusPlayingSentence: false,
+        showTranslation: false,
 
         keyboardShortcut: false,
         shortcutVideoFullscreen: 'p',
@@ -255,6 +256,7 @@
 
             addCheckbox(container1, "autoFinishingCheckbox", "Finish Lesson Automatically", settings.autoFinishing);
             addCheckbox(container1, "focusPlayingSentenceCheckbox", "Focus on Playing Sentence", settings.focusPlayingSentence);
+            addCheckbox(container1, "showTranslationCheckbox", "Show Translation Automatically", settings.showTranslation);
 
             columns.appendChild(container1);
 
@@ -662,6 +664,9 @@
             const focusPlayingSentenceCheckbox = document.getElementById("focusPlayingSentenceCheckbox");
             focusPlayingSentenceCheckbox.addEventListener('change', (event) => {settings.focusPlayingSentence = event.target.checked});
 
+            const showTranslationCheckbox = document.getElementById("showTranslationCheckbox");
+            showTranslationCheckbox.addEventListener('change', (event) => {settings.showTranslation = event.target.checked});
+
             function setupShortcutInput(inputId, settingKey) {
                 const input = document.getElementById(inputId);
                 if (!input) return;
@@ -772,6 +777,7 @@
 
                 document.getElementById("autoFinishingCheckbox").checked = defaults.autoFinishing;
                 document.getElementById("focusPlayingSentenceCheckbox").checked = defaults.focusPlayingSentence;
+                document.getElementById("showTranslationCheckbox").checked = defaults.showTranslation;
 
                 document.getElementById("keyboardShortcutCheckbox").value = defaults.keyboardShortcut;
                 document.getElementById("shortcutVideoFullscreenInput").value = defaults.shortcutVideoFullscreen;
@@ -1855,7 +1861,6 @@
         setupSettingEventListeners();
         setupDownloadWordsEventListeners();
         setupLessonCompletion();
-
         applyStyles();
     }
 
@@ -2280,6 +2285,12 @@
     function applyCSS(css) {
         const cssElement = createElement("style", {textContent: css});
         document.querySelector("head").appendChild(cssElement);
+    }
+
+    async function showTranslation() {
+        const selector = "#lesson-menu  .dropdown-content > .dropdown-item:nth-of-type(5) > a";
+        const translationButton = await waitForElement(selector, 3000);
+        translationButton.click();
     }
 
     /* Modules */
@@ -2952,7 +2963,7 @@
 
                 if (!settings.tts) return;
 
-                const ttsButton = await waitForElement('.is-tts', 100);
+                const ttsButton = document.querySelector('.is-tts');
                 if (!ttsButton) return;
 
                 const isWord = document.querySelector("span.selected-text, span.is-selected");
@@ -3350,6 +3361,7 @@ Respond understood if you got it.
             setupYoutubePlayerCustomization();
             setupReaderContainer();
             setupLLMs();
+            if (settings.showTranslation) showTranslation();
         } else if (document.URL.includes("/library")) {
             setupCourse();
         } else if (document.URL.includes("youtube")) {
