@@ -5,7 +5,7 @@
 // @match        https://www.lingq.com/*/learn/*/web/library/course/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      5.13.3
+// @version      5.13.4
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @namespace https://greasyfork.org/users/1458847
@@ -1589,31 +1589,47 @@
 
         /*video viewer*/
 
-        .video-player {
+        .video-player:not(.is-minimized) {
             display: flex !important;
             justify-content: flex-end !important;
             pointer-events: none;
             z-index: 38 !important;
+        }
+        
+        .video-player.is-minimized {
+            bottom: 0 !important;
+            right: 0 !important;
+            align-items: end !important;
         }
 
         .video-player > .modal-background {
             background-color: rgb(26 28 30 / 0%) !important;
         }
 
-        .video-player > .modal-content {
+        .video-player:not(.is-minimized) > .modal-content {
             max-width: var(--width-big) !important;
             margin: 0 0 10px 10px !important;
             border-radius: 0.75rem !important;
+        }
+        
+        .video-player.is-minimized > .modal-content {
+            width: calc(var(--widget-width) - 20px) !important;
+            max-width: unset !important;
+            margin: 0 10px var(--footer-height) 0 !important;
         }
 
         .video-player .modal-section {
             display: none !important;
         }
 
-        .video-wrapper {
+        .video-player:not(.is-minimized) .video-wrapper {
             height: var(--height-big) !important;
             overflow: hidden;
             pointer-events: auto;
+        }
+        
+        .video-player.is-minimized .video-wrapper {
+            height: 250px !important;
         }
 
         /*video controller*/
@@ -1687,7 +1703,7 @@
             align-self: end;
         }
         
-        .video-player {
+        .video-player:not(.is-minimized) {
             align-items: flex-start !important;
         }
         `;
@@ -1750,11 +1766,11 @@
             align-self: end;
         }
         
-        .video-player {
+        .video-player:not(.is-minimized) {
             align-items: end !important;
         }
         
-        .video-player > .modal-content {
+        .video-player:not(.is-minimized) > .modal-content {
             margin: 0 10px 10px !important;
         }
         `;
@@ -2288,8 +2304,8 @@
     }
 
     async function showTranslation() {
-        const selector = "#lesson-menu  .dropdown-content > .dropdown-item:nth-of-type(5) > a";
-        const translationButton = await waitForElement(selector, 3000);
+        const selector = "#lesson-menu  .dropdown-content > .dropdown-item:nth-child(6) > a";
+        const translationButton = await waitForElement(selector, 10000);
         translationButton.click();
     }
 
