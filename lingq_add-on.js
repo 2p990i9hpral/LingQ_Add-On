@@ -5,7 +5,7 @@
 // @match        https://www.lingq.com/*/learn/*/web/library/course/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      5.13.4
+// @version      5.13.5
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @namespace https://greasyfork.org/users/1458847
@@ -2304,9 +2304,12 @@
     }
 
     async function showTranslation() {
-        const selector = "#lesson-menu  .dropdown-content > .dropdown-item:nth-child(6) > a";
-        const translationButton = await waitForElement(selector, 10000);
-        translationButton.click();
+        const selector = "#lesson-menu  .dropdown-content";
+        const dropdownList = await waitForElement(selector, 5000);
+        const translationButton = Array.from(dropdownList.querySelectorAll('.dropdown-item > a')).find(link =>
+            link.querySelector('.text-wrapper')?.textContent.trim() === "Show Translation"
+        );
+        setTimeout(() => translationButton.click(), 1000);
     }
 
     /* Modules */
