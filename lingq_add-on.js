@@ -5,7 +5,7 @@
 // @match        https://www.lingq.com/*/learn/*/web/library/course/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      5.13.5
+// @version      5.14
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @namespace https://greasyfork.org/users/1458847
@@ -28,6 +28,7 @@
         styleType: "video",
         heightBig: 400,
         sentenceHeight: 400,
+        sentenceAutoplay: false,
         widgetWidth: 400,
         fontSize: 1.1,
         lineHeight: 1.7,
@@ -226,7 +227,8 @@
                 id: "sentenceVideoSettings",
                 style: `${settings.styleType === "off" ? "" : "display: none"}`
             });
-            addSlider(sentenceVideoSettings, "sentenceHeightSlider", "Sentence Video Height:", "sentenceHeightValue", settings.sentenceHeight, "px", 300, 600, 10);
+            addSlider(sentenceVideoSettings, "sentenceHeightSlider", "Sentence View Video Height:", "sentenceHeightValue", settings.sentenceHeight, "px", 300, 600, 10);
+            addCheckbox(sentenceVideoSettings, "sentenceAutoplayCheckbox", "Autoplay in Sentence View", settings.sentenceAutoplay);
             container1.appendChild(sentenceVideoSettings);
 
             addSlider(container1, "widgetWidthSlider", "Widget Width:", "widgetWidthValue", settings.widgetWidth, "px", 330, 500, 10);
@@ -652,6 +654,8 @@
 
             setupSlider("heightBigSlider", "heightBigValue", "heightBig", "px", "--height-big", (val) => `${val}px`);
             setupSlider("sentenceHeightSlider", "sentenceHeightValue", "sentenceHeight", "px", "--sentence-height", (val) => `${val}px`);
+            const sentenceAutoplayCheckbox = document.getElementById("sentenceAutoplayCheckbox");
+            sentenceAutoplayCheckbox.addEventListener('change', (event) => {settings.sentenceAutoplay = event.target.checked});
             setupSlider("widgetWidthSlider", "widgetWidthValue", "widgetWidth", "px", "--widget-width", (val) => `${val}px`);
             setupSlider("fontSizeSlider", "fontSizeValue", "fontSize", "rem", "--font-size", (val) => `${val}rem`);
             setupSlider("lineHeightSlider", "lineHeightValue", "lineHeight", "", "--line-height", (val) => val);
@@ -772,6 +776,7 @@
                 document.documentElement.style.setProperty("--line-height", defaults.lineHeight);
                 document.documentElement.style.setProperty("--height-big", `${defaults.heightBig}px`);
                 document.documentElement.style.setProperty("--sentence-height", `${defaults.sentenceHeight}px`);
+                document.getElementById("sentenceAutoplayCheckbox").checked = defaults.sentenceAutoplay;
                 document.documentElement.style.setProperty("--widget-width", `${defaults.widgetWidth}px`);
                 updateCssColorVariables(defaultColorSettings);
 
@@ -1814,7 +1819,7 @@
 
         /*sentence mode video player*/
         .loadedContent:has(#sentence-video-player-portal) {
-            grid-template-rows: var(--sentence-height) auto auto 1fr !important;
+            grid-template-rows: var(--sentence-height) auto 1fr !important;
         }
 
         #sentence-video-player-portal .video-section {
@@ -2309,7 +2314,22 @@
         const translationButton = Array.from(dropdownList.querySelectorAll('.dropdown-item > a')).find(link =>
             link.querySelector('.text-wrapper')?.textContent.trim() === "Show Translation"
         );
-        setTimeout(() => translationButton.click(), 1000);
+        if (translationButton) setTimeout(() => translationButton.click(), 1000);
+    }
+
+    async function AutoplayInSentenceView() {
+        for (const selector of ['.reader-component > .nav--right > a', '.reader-component > .nav--left > a']) {
+            const button = await waitForElement(selector, 5000);
+
+            button.addEventListener('click', function(event) {
+                if (!settings.sentenceAutoplay) return;
+
+                setTimeout(() => {
+                    document.dispatchEvent(new KeyboardEvent('keydown', {key: 'a'}));
+                    document.dispatchEvent(new KeyboardEvent('keydown', {key: 'T', shiftKey: true}));
+                }, 1500);
+            }, true);
+        }
     }
 
     /* Modules */
@@ -2557,6 +2577,7 @@
             const iframe = await waitForElement('.modal-container iframe', 1000);
             let src = iframe.getAttribute("src");
             src = src.replace("disablekb=1", "disablekb=0");
+            src = src.replace("autoplay=0", "autoplay=1");
             src = src + "&cc_load_policy=1";
             src = src + "&controls=0";
             iframe.setAttribute("src", src);
@@ -2626,7 +2647,9 @@
                     if (!node.matches(".modal-container")) return;
                     changeVideoPlayerSettings();
                     clickElement('.modal-section  button:nth-child(2)[title="Expand"]');
-                    setupSliderObserver();
+
+                    const isPageMode = document.querySelector('#lesson-reader').matches('.is-page-mode');
+                    if (isPageMode) setupSliderObserver();
                 });
             });
         });
@@ -3381,6 +3404,7 @@ Respond understood if you got it.
             setupReaderContainer();
             setupLLMs();
             if (settings.showTranslation) showTranslation();
+            AutoplayInSentenceView();
         } else if (document.URL.includes("/library")) {
             setupCourse();
         } else if (document.URL.includes("youtube")) {

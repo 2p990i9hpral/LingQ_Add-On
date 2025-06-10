@@ -39,10 +39,20 @@ It offers customizable layouts, appearance settings, vocabulary downloading tool
 
 ## Installation
 
+### Desktop
+
 1.  Install a userscript manager like [Tampermonkey](https://www.tampermonkey.net/) or [GreaseMonkey](https://addons.mozilla.org/en-US/firefox/addon/greasemonkey/).
 2.  Install the script from [Project page](https://greasyfork.org/en/scripts/533096-lingq-addon).
 3.  Visit [LingQ](https://lingq.com/), and the addon features will be active on reader pages.
 4.  If you want to use AI features (Chat, TTS), you need to make an API key. Refer to this tutorial video: [Get OpenAI GPT API](https://youtu.be/SzPE_AE0eEo), [Get Google Gemini API](https://youtu.be/6BRyynZkvf0).
+
+### Android
+
+1. Install [Firefox](https://play.google.com/store/apps/details?id=org.mozilla.firefox) app.
+2. Install [Tampermonkey](https://addons.mozilla.org/en-US/android/addon/tampermonkey/) within the browser.
+3. Install the script from [Project page](https://greasyfork.org/en/scripts/533096-lingq-addon).
+4. Visit [LingQ](https://lingq.com/), and the addon features will be active on reader pages. If it doesn't work, refresh the browser. 
+5. If you want to use AI features (Chat, TTS), you need to make an API key. Refer to this tutorial video: [Get OpenAI GPT API](https://youtu.be/SzPE_AE0eEo), [Get Google Gemini API](https://youtu.be/6BRyynZkvf0).
 
 ## Usage
 
