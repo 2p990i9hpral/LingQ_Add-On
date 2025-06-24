@@ -5,7 +5,7 @@
 // @match        https://www.lingq.com/*/learn/*/web/library/course/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      5.14
+// @version      5.14.2
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @namespace https://greasyfork.org/users/1458847
@@ -289,7 +289,8 @@
                 { value: "openai gpt-4.1", text: "OpenAI GPT-4.1 ($2.0/$8.0)" },
                 { value: "openai gpt-4.1-mini", text: "OpenAI GPT-4.1 mini ($0.4/$1.6)" },
                 { value: "openai gpt-4.1-nano", text: "OpenAI GPT-4.1 nano ($0.1/$0.4)" },
-                { value: "google gemini-2.5-flash-preview-05-20", text: "Google Gemini 2.5 Flash ($0.15/$0.6)" },
+                { value: "google gemini-2.5-flash-lite-preview-06-17", text: "Google Gemini 2.5 Flash Light ($0.1/$0.4)" },
+                { value: "google gemini-2.5-flash", text: "Google Gemini 2.5 Flash ($0.3/$2.5)" },
                 { value: "google gemini-2.0-flash", text: "Google Gemini 2.0 Flash ($0.1/$0.4)" }
             ], settings.llmProviderModel);
 
@@ -2704,6 +2705,7 @@
 
                     changeScrollAmount(".reader-container", 0.3);
                     setupSentenceFocus(node);
+                    if (settings.showTranslation) showTranslation();
                     changeTranslationColor(node);
                 });
             });
@@ -2843,7 +2845,7 @@
                     const inputTokens = data.usageMetadata.promptTokenCount;
                     const cachedTokens = data.usageMetadata?.cachedContentTokenCount ?? 0;
                     const outputTokens = data.usageMetadata.candidatesTokenCount;
-                    const approxCost = inputTokens * inputPrice + cachedTokens * (inputPrice/4) + outputTokens * outputPrice;
+                    const approxCost = (inputTokens - cachedTokens) * inputPrice + cachedTokens * (inputPrice/4) + outputTokens * outputPrice;
                     console.log('Chat', `${model}, tokens: (${inputTokens-cachedTokens}/${cachedTokens}/${outputTokens}), cost: $${approxCost.toFixed(6)}`);
 
                     return data.candidates[0].content.parts[0].text || "Sorry, could not get a response.";
@@ -3403,7 +3405,6 @@ Respond understood if you got it.
             setupYoutubePlayerCustomization();
             setupReaderContainer();
             setupLLMs();
-            if (settings.showTranslation) showTranslation();
             AutoplayInSentenceView();
         } else if (document.URL.includes("/library")) {
             setupCourse();
@@ -3414,3 +3415,7 @@ Respond understood if you got it.
 
     init();
 })();
+
+// TODO: turn on the translation after change the lesson page.
+// TODO: add a reroll button to the bot's last message.
+// TODO: add a sentence list to the print page.
