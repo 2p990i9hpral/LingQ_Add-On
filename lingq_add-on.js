@@ -3,9 +3,10 @@
 // @description  Provides custom LingQ layouts
 // @match        https://www.lingq.com/*/learn/*/web/reader/*
 // @match        https://www.lingq.com/*/learn/*/web/library/course/*
+// @match        https://www.lingq.com/*/learn/*/workdesk/item/*/print/
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      5.14.2
+// @version      5.15
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @namespace https://greasyfork.org/users/1458847
@@ -136,7 +137,11 @@
 
                 const select = createElement("select", {id});
                 options.forEach(option => {
-                    select.appendChild(createElement("option", {value: option.value, textContent: option.text, selected: selectedValue === option.value}));
+                    select.appendChild(createElement("option", {
+                        value: option.value,
+                        textContent: option.text,
+                        selected: selectedValue === option.value
+                    }));
                 });
 
                 container.appendChild(select);
@@ -147,13 +152,21 @@
             function addSlider(parent, id, labelText, valueId, value, unit, min, max, step) {
                 const container = createElement("div", {className: "popup-row"});
 
-                const label = createElement("label", { htmlFor: id });
+                const label = createElement("label", {htmlFor: id});
                 label.appendChild(document.createTextNode(labelText + " "));
-                label.appendChild(createElement("span", { id: valueId, textContent: value }));
+                label.appendChild(createElement("span", {id: valueId, textContent: value}));
                 if (unit) label.appendChild(document.createTextNode(unit));
 
                 container.appendChild(label);
-                container.appendChild(createElement("input", {type: "range", id, min, max, step, value, style: "width: 100%;"}));
+                container.appendChild(createElement("input", {
+                    type: "range",
+                    id,
+                    min,
+                    max,
+                    step,
+                    value,
+                    style: "width: 100%;"
+                }));
 
                 parent.appendChild(container);
                 return container;
@@ -164,8 +177,14 @@
                 container.appendChild(createElement("label", {htmlFor: id + "Text", textContent: labelText}));
 
                 const flexContainer = createElement("div", {style: "display: flex; align-items: center;"});
-                flexContainer.appendChild(createElement("div", {id: id + "Picker", className: "color-picker" }));
-                flexContainer.appendChild(createElement("input", {type: "text", id: id + "Text", value, style: "margin-left: 10px;", className: "popup-input"}));
+                flexContainer.appendChild(createElement("div", {id: id + "Picker", className: "color-picker"}));
+                flexContainer.appendChild(createElement("input", {
+                    type: "text",
+                    id: id + "Text",
+                    value,
+                    style: "margin-left: 10px;",
+                    className: "popup-input"
+                }));
 
                 container.appendChild(flexContainer);
                 parent.appendChild(container);
@@ -187,7 +206,10 @@
             }
 
             function addShortcutInput(parent, id, labelText, value) {
-                const container = createElement("div", {className: "popup-row", style: "display: flex; justify-content: space-between;"});
+                const container = createElement("div", {
+                    className: "popup-row",
+                    style: "display: flex; justify-content: space-between;"
+                });
 
                 container.appendChild(createElement("label", {htmlFor: id, textContent: labelText}));
 
@@ -210,10 +232,10 @@
             const container1 = createElement("div", {style: "padding: 5px; width: 350px;"});
 
             addSelect(container1, "styleTypeSelector", "Layout Style:", [
-                { value: "video", text: "Video" },
-                { value: "video2", text: "Video2" },
-                { value: "audio", text: "Audio" },
-                { value: "off", text: "Off" }
+                {value: "video", text: "Video"},
+                {value: "video2", text: "Video2"},
+                {value: "audio", text: "Audio"},
+                {value: "off", text: "Off"}
             ], settings.styleType);
 
             const videoSettings = createElement("div", {
@@ -239,19 +261,23 @@
             const colorSection = createElement("div", {className: "popup-section"});
 
             addSelect(colorSection, "colorModeSelector", "Color Mode:", [
-                { value: "white", text: "White" },
-                { value: "dark", text: "Dark" }
+                {value: "white", text: "White"},
+                {value: "dark", text: "Dark"}
             ], settings.colorMode);
 
             [
-                { id: "fontColor", label: "Font Color:", value: colorSettings.fontColor },
-                { id: "translationFontColor", label: "Translation Font Color:", value: colorSettings.translationFontColor },
-                { id: "lingqBackground", label: "LingQ Background:", value: colorSettings.lingqBackground },
-                { id: "lingqBorder", label: "LingQ Border:", value: colorSettings.lingqBorder },
-                { id: "lingqBorderLearned", label: "LingQ Border Learned:", value: colorSettings.lingqBorderLearned },
-                { id: "unknownBackground", label: "Unknown Background:", value: colorSettings.unknownBackground },
-                { id: "unknownBorder", label: "Unknown Border:", value: colorSettings.unknownBorder },
-                { id: "playingUnderline", label: "Playing Underline:", value: colorSettings.playingUnderline }
+                {id: "fontColor", label: "Font Color:", value: colorSettings.fontColor},
+                {
+                    id: "translationFontColor",
+                    label: "Translation Font Color:",
+                    value: colorSettings.translationFontColor
+                },
+                {id: "lingqBackground", label: "LingQ Background:", value: colorSettings.lingqBackground},
+                {id: "lingqBorder", label: "LingQ Border:", value: colorSettings.lingqBorder},
+                {id: "lingqBorderLearned", label: "LingQ Border Learned:", value: colorSettings.lingqBorderLearned},
+                {id: "unknownBackground", label: "Unknown Background:", value: colorSettings.unknownBackground},
+                {id: "unknownBorder", label: "Unknown Border:", value: colorSettings.unknownBorder},
+                {id: "playingUnderline", label: "Playing Underline:", value: colorSettings.playingUnderline}
             ].forEach(config => addColorPicker(colorSection, config.id, config.label, config.value));
 
             container1.appendChild(colorSection);
@@ -266,7 +292,11 @@
 
             addCheckbox(container2, "keyboardShortcutCheckbox", "Enable the Keyboard Shortcuts", settings.keyboardShortcut);
 
-            const shortcutSection = createElement("div", {id: "keyboardShortcutSection", className: "popup-section", style: `${settings.keyboardShortcut ? "" : "display: none"}`});
+            const shortcutSection = createElement("div", {
+                id: "keyboardShortcutSection",
+                className: "popup-section",
+                style: `${settings.keyboardShortcut ? "" : "display: none"}`
+            });
 
             addShortcutInput(shortcutSection, "shortcutVideoFullscreenInput", "Video Fullscreen Toggle:", settings.shortcutVideoFullscreen);
             addShortcutInput(shortcutSection, "shortcutBackward5sInput", "5 Sec Backward:", settings.shortcutBackward5s);
@@ -283,22 +313,37 @@
 
             addCheckbox(container2, "chatWidgetCheckbox", "Enable the Chat Widget", settings.chatWidget);
 
-            const chatWidgetSection = createElement("div", {id: "chatWidgetSection", className: "popup-section", style: `${settings.chatWidget ? "" : "display: none"}`});
+            const chatWidgetSection = createElement("div", {
+                id: "chatWidgetSection",
+                className: "popup-section",
+                style: `${settings.chatWidget ? "" : "display: none"}`
+            });
 
             addSelect(chatWidgetSection, "llmProviderModelSelector", "Chat Provider: (Price per 1M tokens)", [
-                { value: "openai gpt-4.1", text: "OpenAI GPT-4.1 ($2.0/$8.0)" },
-                { value: "openai gpt-4.1-mini", text: "OpenAI GPT-4.1 mini ($0.4/$1.6)" },
-                { value: "openai gpt-4.1-nano", text: "OpenAI GPT-4.1 nano ($0.1/$0.4)" },
-                { value: "google gemini-2.5-flash-lite-preview-06-17", text: "Google Gemini 2.5 Flash Light ($0.1/$0.4)" },
-                { value: "google gemini-2.5-flash", text: "Google Gemini 2.5 Flash ($0.3/$2.5)" },
-                { value: "google gemini-2.0-flash", text: "Google Gemini 2.0 Flash ($0.1/$0.4)" }
+                {value: "openai gpt-4.1", text: "OpenAI GPT-4.1 ($2.0/$8.0)"},
+                {value: "openai gpt-4.1-mini", text: "OpenAI GPT-4.1 mini ($0.4/$1.6)"},
+                {value: "openai gpt-4.1-nano", text: "OpenAI GPT-4.1 nano ($0.1/$0.4)"},
+                {
+                    value: "google gemini-2.5-flash-lite-preview-06-17",
+                    text: "Google Gemini 2.5 Flash Light ($0.1/$0.4)"
+                },
+                {value: "google gemini-2.5-flash", text: "Google Gemini 2.5 Flash ($0.3/$2.5)"},
+                {value: "google gemini-2.0-flash", text: "Google Gemini 2.0 Flash ($0.1/$0.4)"}
             ], settings.llmProviderModel);
 
             const apiKeyContainer = createElement("div", {className: "popup-row"});
-            apiKeyContainer.appendChild(createElement("label", {htmlFor: "llmApiKeyInput", textContent: "Chat API Key:"}));
+            apiKeyContainer.appendChild(createElement("label", {
+                htmlFor: "llmApiKeyInput",
+                textContent: "Chat API Key:"
+            }));
 
             const apiKeyFlexContainer = createElement("div", {style: "display: flex; align-items: center;"});
-            const apiKeyInput= createElement("input", {type: "password", id: "llmApiKeyInput", value: settings.llmApiKey, className: "popup-input"});
+            const apiKeyInput = createElement("input", {
+                type: "password",
+                id: "llmApiKeyInput",
+                value: settings.llmApiKey,
+                className: "popup-input"
+            });
             apiKeyFlexContainer.appendChild(apiKeyInput)
             apiKeyContainer.appendChild(apiKeyFlexContainer);
             chatWidgetSection.appendChild(apiKeyContainer);
@@ -309,61 +354,73 @@
 
             addCheckbox(container2, "ttsCheckbox", "Enable AI-TTS", settings.tts);
 
-            const ttsSection = createElement("div", {id: "ttsSection", className: "popup-section", style: `${settings.tts ? "" : "display: none"}`});
+            const ttsSection = createElement("div", {
+                id: "ttsSection",
+                className: "popup-section",
+                style: `${settings.tts ? "" : "display: none"}`
+            });
 
             const ttsApiKeyContainer = createElement("div", {className: "popup-row"});
-            ttsApiKeyContainer.appendChild(createElement("label", {htmlFor: "ttsApiKeyInput", textContent: "TTS API Key:"}));
+            ttsApiKeyContainer.appendChild(createElement("label", {
+                htmlFor: "ttsApiKeyInput",
+                textContent: "TTS API Key:"
+            }));
 
             const ttsApiKeyFlexContainer = createElement("div", {style: "display: flex; align-items: center;"});
-            const ttsApiKeyInput= createElement("input", {type: "password", id: "ttsApiKeyInput", value: settings.ttsApiKey, className: "popup-input"});
+            const ttsApiKeyInput = createElement("input", {
+                type: "password",
+                id: "ttsApiKeyInput",
+                value: settings.ttsApiKey,
+                className: "popup-input"
+            });
             ttsApiKeyFlexContainer.appendChild(ttsApiKeyInput)
             ttsApiKeyContainer.appendChild(ttsApiKeyFlexContainer);
             ttsSection.appendChild(ttsApiKeyContainer);
 
             addSelect(ttsSection, "ttsVoiceSelector", "TTS Voice:", [
-                { value: "openai random", text: "OpenAI Random" },
-                { value: "openai alloy", text: "OpenAI Alloy" },
-                { value: "openai ash", text: "OpenAI Ash" },
-                { value: "openai ballad", text: "OpenAI Ballad" },
-                { value: "openai coral", text: "OpenAI Coral" },
-                { value: "openai echo", text: "OpenAI Echo" },
-                { value: "openai fable", text: "OpenAI Fable" },
-                { value: "openai onyx", text: "OpenAI Onyx" },
-                { value: "openai nova", text: "OpenAI Nova" },
-                { value: "openai sage", text: "OpenAI Sage" },
-                { value: "openai shimmer", text: "OpenAI Shimmer" },
-                { value: "openai verse", text: "OpenAI Verse" },
-                { value: "google random", text: "Google Random" },
-                { value: "google Zephyr", text: "Google Zephyr (Bright)" },
-                { value: "google Puck", text: "Google Puck (Upbeat)" },
-                { value: "google Charon", text: "Google Charon (Informative)" },
-                { value: "google Kore", text: "Google Kore (Firm)" },
-                { value: "google Fenrir", text: "Google Fenrir (Excitable)" },
-                { value: "google Leda", text: "Google Leda (Youthful)" },
-                { value: "google Orus", text: "Google Orus (Firm)" },
-                { value: "google Aoede", text: "Google Aoede (Breezy)" },
-                { value: "google Callirrhoe", text: "Google Callirrhoe (Easy-going)" },
-                { value: "google Autonoe", text: "Google Autonoe (Bright)" },
-                { value: "google Enceladus", text: "Google Enceladus (Breathy)" },
-                { value: "google Iapetus", text: "Google Iapetus (Clear)" },
-                { value: "google Umbriel", text: "Google Umbriel (Easy-going)" },
-                { value: "google Algieba", text: "Google Algieba (Smooth)" },
-                { value: "google Despina", text: "Google Despina (Smooth)" },
-                { value: "google Erinome", text: "Google Erinome (Clear)" },
-                { value: "google Algenib", text: "Google Algenib (Gravelly)" },
-                { value: "google Rasalgethi", text: "Google Rasalgethi (Informative)" },
-                { value: "google Laomedeia", text: "Google Laomedeia (Upbeat)" },
-                { value: "google Achernar", text: "Google Achernar (Soft)" },
-                { value: "google Alnilam", text: "Google Alnilam (Firm)" },
-                { value: "google Schedar", text: "Google Schedar (Even)" },
-                { value: "google Gacrux", text: "Google Gacrux (Mature)" },
-                { value: "google Pulcherrima", text: "Google Pulcherrima (Forward)" },
-                { value: "google Achird", text: "Google Achird (Friendly)" },
-                { value: "google Zubenelgenubi", text: "Google Zubenelgenubi (Casual)" },
-                { value: "google Vindemiatrix", text: "Google Vindemiatrix (Gentle)" },
-                { value: "google Sadachbia", text: "Google Sadachbia (Lively)" },
-                { value: "google Sadaltager", text: "Google Sadaltager (Knowledgeable)" },
-                { value: "google Sulafat", text: "Google Sulafat (Warm)" }
+                {value: "openai random", text: "OpenAI Random"},
+                {value: "openai alloy", text: "OpenAI Alloy"},
+                {value: "openai ash", text: "OpenAI Ash"},
+                {value: "openai ballad", text: "OpenAI Ballad"},
+                {value: "openai coral", text: "OpenAI Coral"},
+                {value: "openai echo", text: "OpenAI Echo"},
+                {value: "openai fable", text: "OpenAI Fable"},
+                {value: "openai onyx", text: "OpenAI Onyx"},
+                {value: "openai nova", text: "OpenAI Nova"},
+                {value: "openai sage", text: "OpenAI Sage"},
+                {value: "openai shimmer", text: "OpenAI Shimmer"},
+                {value: "openai verse", text: "OpenAI Verse"},
+                {value: "google random", text: "Google Random"},
+                {value: "google Zephyr", text: "Google Zephyr (Bright)"},
+                {value: "google Puck", text: "Google Puck (Upbeat)"},
+                {value: "google Charon", text: "Google Charon (Informative)"},
+                {value: "google Kore", text: "Google Kore (Firm)"},
+                {value: "google Fenrir", text: "Google Fenrir (Excitable)"},
+                {value: "google Leda", text: "Google Leda (Youthful)"},
+                {value: "google Orus", text: "Google Orus (Firm)"},
+                {value: "google Aoede", text: "Google Aoede (Breezy)"},
+                {value: "google Callirrhoe", text: "Google Callirrhoe (Easy-going)"},
+                {value: "google Autonoe", text: "Google Autonoe (Bright)"},
+                {value: "google Enceladus", text: "Google Enceladus (Breathy)"},
+                {value: "google Iapetus", text: "Google Iapetus (Clear)"},
+                {value: "google Umbriel", text: "Google Umbriel (Easy-going)"},
+                {value: "google Algieba", text: "Google Algieba (Smooth)"},
+                {value: "google Despina", text: "Google Despina (Smooth)"},
+                {value: "google Erinome", text: "Google Erinome (Clear)"},
+                {value: "google Algenib", text: "Google Algenib (Gravelly)"},
+                {value: "google Rasalgethi", text: "Google Rasalgethi (Informative)"},
+                {value: "google Laomedeia", text: "Google Laomedeia (Upbeat)"},
+                {value: "google Achernar", text: "Google Achernar (Soft)"},
+                {value: "google Alnilam", text: "Google Alnilam (Firm)"},
+                {value: "google Schedar", text: "Google Schedar (Even)"},
+                {value: "google Gacrux", text: "Google Gacrux (Mature)"},
+                {value: "google Pulcherrima", text: "Google Pulcherrima (Forward)"},
+                {value: "google Achird", text: "Google Achird (Friendly)"},
+                {value: "google Zubenelgenubi", text: "Google Zubenelgenubi (Casual)"},
+                {value: "google Vindemiatrix", text: "Google Vindemiatrix (Gentle)"},
+                {value: "google Sadachbia", text: "Google Sadachbia (Lively)"},
+                {value: "google Sadaltager", text: "Google Sadaltager (Knowledgeable)"},
+                {value: "google Sulafat", text: "Google Sulafat (Warm)"}
             ], settings.ttsVoice);
 
             addCheckbox(ttsSection, "ttsWordCheckbox", "Enable AI-TTS for words", settings.ttsWord);
@@ -373,7 +430,10 @@
 
             columns.appendChild(container2);
 
-            const buttonContainer = createElement("div", {style: "display: flex; justify-content: space-between;", className: "popup-row"});
+            const buttonContainer = createElement("div", {
+                style: "display: flex; justify-content: space-between;",
+                className: "popup-row"
+            });
             [
                 {id: "resetSettingsBtn", textContent: "Reset", className: "popup-button"},
                 {id: "closeSettingsBtn", textContent: "Close", className: "popup-button"}
@@ -397,9 +457,21 @@
             const content = createElement("div", {style: `padding: 0 10px;`});
 
             [
-                {id: "downloadUnknownLingqsBtn", textContent: "Download Unknown LingQs (words + phrases)", className: "popup-button"},
-                {id: "downloadUnknownLingqWordsBtn", textContent: "Download Unknown LingQ Words (1, 2, 3, 4)", className: "popup-button"},
-                {id: "downloadUnknownLingqPhrasesBtn", textContent: "Download Unknown LingQ Phrases (1, 2, 3, 4)", className: "popup-button"},
+                {
+                    id: "downloadUnknownLingqsBtn",
+                    textContent: "Download Unknown LingQs (words + phrases)",
+                    className: "popup-button"
+                },
+                {
+                    id: "downloadUnknownLingqWordsBtn",
+                    textContent: "Download Unknown LingQ Words (1, 2, 3, 4)",
+                    className: "popup-button"
+                },
+                {
+                    id: "downloadUnknownLingqPhrasesBtn",
+                    textContent: "Download Unknown LingQ Phrases (1, 2, 3, 4)",
+                    className: "popup-button"
+                },
                 {id: "downloadKnownLingqsBtn", textContent: "Download Known LingQs (✓)", className: "popup-button"},
                 {id: "downloadKnownWordsBtn", textContent: "Download Known Words ", className: "popup-button"}
             ].forEach((prop) => {
@@ -416,8 +488,15 @@
             progressContainer.appendChild(progressBar);
             content.appendChild(progressContainer);
 
-            const buttonContainer = createElement("div", {style: "display: flex; justify-content: flex-end;", className: "popup-row"});
-            const closeButton = createElement("button", {id: "closeDownloadWordsBtn", textContent: "Close", className: "popup-button"});
+            const buttonContainer = createElement("div", {
+                style: "display: flex; justify-content: flex-end;",
+                className: "popup-row"
+            });
+            const closeButton = createElement("button", {
+                id: "closeDownloadWordsBtn",
+                textContent: "Close",
+                className: "popup-button"
+            });
             buttonContainer.appendChild(closeButton);
             content.appendChild(buttonContainer);
 
@@ -575,14 +654,14 @@
 
             function updateColorPickerBackgrounds(colorSettings) {
                 const pickerIds = [
-                    { id: "lingqBackgroundPicker", color: colorSettings.lingqBackground },
-                    { id: "lingqBorderPicker", color: colorSettings.lingqBorder },
-                    { id: "lingqBorderLearnedPicker", color: colorSettings.lingqBorderLearned },
-                    { id: "unknownBackgroundPicker", color: colorSettings.unknownBackground },
-                    { id: "unknownBorderPicker", color: colorSettings.unknownBorder },
-                    { id: "fontColorPicker", color: colorSettings.fontColor },
-                    { id: "translationFontColorPicker", color: colorSettings.translationFontColor },
-                    { id: "playingUnderlinePicker", color: colorSettings.playingUnderline }
+                    {id: "lingqBackgroundPicker", color: colorSettings.lingqBackground},
+                    {id: "lingqBorderPicker", color: colorSettings.lingqBorder},
+                    {id: "lingqBorderLearnedPicker", color: colorSettings.lingqBorderLearned},
+                    {id: "unknownBackgroundPicker", color: colorSettings.unknownBackground},
+                    {id: "unknownBorderPicker", color: colorSettings.unknownBorder},
+                    {id: "fontColorPicker", color: colorSettings.fontColor},
+                    {id: "translationFontColorPicker", color: colorSettings.translationFontColor},
+                    {id: "playingUnderlinePicker", color: colorSettings.playingUnderline}
                 ];
 
                 pickerIds.forEach(item => {
@@ -656,7 +735,9 @@
             setupSlider("heightBigSlider", "heightBigValue", "heightBig", "px", "--height-big", (val) => `${val}px`);
             setupSlider("sentenceHeightSlider", "sentenceHeightValue", "sentenceHeight", "px", "--sentence-height", (val) => `${val}px`);
             const sentenceAutoplayCheckbox = document.getElementById("sentenceAutoplayCheckbox");
-            sentenceAutoplayCheckbox.addEventListener('change', (event) => {settings.sentenceAutoplay = event.target.checked});
+            sentenceAutoplayCheckbox.addEventListener('change', (event) => {
+                settings.sentenceAutoplay = event.target.checked
+            });
             setupSlider("widgetWidthSlider", "widgetWidthValue", "widgetWidth", "px", "--widget-width", (val) => `${val}px`);
             setupSlider("fontSizeSlider", "fontSizeValue", "fontSize", "rem", "--font-size", (val) => `${val}rem`);
             setupSlider("lineHeightSlider", "lineHeightValue", "lineHeight", "", "--line-height", (val) => val);
@@ -664,19 +745,25 @@
             document.getElementById("colorModeSelector").addEventListener("change", updateColorMode);
 
             const autoFinishingCheckbox = document.getElementById("autoFinishingCheckbox");
-            autoFinishingCheckbox.addEventListener('change', (event) => {settings.autoFinishing = event.target.checked});
+            autoFinishingCheckbox.addEventListener('change', (event) => {
+                settings.autoFinishing = event.target.checked
+            });
 
             const focusPlayingSentenceCheckbox = document.getElementById("focusPlayingSentenceCheckbox");
-            focusPlayingSentenceCheckbox.addEventListener('change', (event) => {settings.focusPlayingSentence = event.target.checked});
+            focusPlayingSentenceCheckbox.addEventListener('change', (event) => {
+                settings.focusPlayingSentence = event.target.checked
+            });
 
             const showTranslationCheckbox = document.getElementById("showTranslationCheckbox");
-            showTranslationCheckbox.addEventListener('change', (event) => {settings.showTranslation = event.target.checked});
+            showTranslationCheckbox.addEventListener('change', (event) => {
+                settings.showTranslation = event.target.checked
+            });
 
             function setupShortcutInput(inputId, settingKey) {
                 const input = document.getElementById(inputId);
                 if (!input) return;
 
-                input.addEventListener("input", function() {
+                input.addEventListener("input", function () {
                     const allowedPattern = /^[a-z0-9`~!@#$%^&*()_+=-]*$/;
 
                     let value = this.value.toLowerCase();
@@ -721,13 +808,19 @@
             });
 
             const llmProviderModelSelector = document.getElementById("llmProviderModelSelector");
-            llmProviderModelSelector.addEventListener("change", (event) => {settings.llmProviderModel = event.target.value});
+            llmProviderModelSelector.addEventListener("change", (event) => {
+                settings.llmProviderModel = event.target.value
+            });
 
             const llmApiKeyInput = document.getElementById("llmApiKeyInput");
-            llmApiKeyInput.addEventListener("change", (event) => {settings.llmApiKey = event.target.value});
+            llmApiKeyInput.addEventListener("change", (event) => {
+                settings.llmApiKey = event.target.value
+            });
 
             const askSelectedCheckbox = document.getElementById("askSelectedCheckbox");
-            askSelectedCheckbox.addEventListener('change', (event) => {settings.askSelected = event.target.checked});
+            askSelectedCheckbox.addEventListener('change', (event) => {
+                settings.askSelected = event.target.checked
+            });
 
             const ttsCheckbox = document.getElementById("ttsCheckbox");
             ttsCheckbox.addEventListener('change', (event) => {
@@ -737,16 +830,24 @@
             });
 
             const ttsApiKeyInput = document.getElementById("ttsApiKeyInput");
-            ttsApiKeyInput.addEventListener("change", (event) => {settings.ttsApiKey = event.target.value});
+            ttsApiKeyInput.addEventListener("change", (event) => {
+                settings.ttsApiKey = event.target.value
+            });
 
             const ttsVoiceSelector = document.getElementById("ttsVoiceSelector");
-            ttsVoiceSelector.addEventListener("change", (event) => {settings.ttsVoice = event.target.value});
+            ttsVoiceSelector.addEventListener("change", (event) => {
+                settings.ttsVoice = event.target.value
+            });
 
             const ttsWordCheckbox = document.getElementById("ttsWordCheckbox");
-            ttsWordCheckbox.addEventListener('change', (event) => {settings.ttsWord = event.target.checked});
+            ttsWordCheckbox.addEventListener('change', (event) => {
+                settings.ttsWord = event.target.checked
+            });
 
             const ttsSentenceCheckbox = document.getElementById("ttsSentenceCheckbox");
-            ttsSentenceCheckbox.addEventListener('change', (event) => {settings.ttsSentence = event.target.checked});
+            ttsSentenceCheckbox.addEventListener('change', (event) => {
+                settings.ttsSentence = event.target.checked
+            });
 
             function resetSettings() {
                 if (!confirm("Reset all settings to default?")) return;
@@ -815,11 +916,14 @@
 
             document.getElementById("resetSettingsBtn").addEventListener("click", resetSettings);
 
-            document.getElementById("closeSettingsBtn").addEventListener("click", () => {settingsPopup.style.display = "none"});
+            document.getElementById("closeSettingsBtn").addEventListener("click", () => {
+                settingsPopup.style.display = "none"
+            });
         }
 
         async function setupDownloadWordsEventListeners() {
-            async function getAllWords(baseUrl, pageSize, apiType, additionalParams="", progressCallback = () => {}) {
+            async function getAllWords(baseUrl, pageSize, apiType, additionalParams = "", progressCallback = () => {
+            }) {
                 let allResults = [];
                 let nextUrl = `${baseUrl}?page_size=${pageSize}&page=1${additionalParams}`;
                 let currentPage = 0;
@@ -876,7 +980,7 @@
                 return allResults;
             }
 
-            async function downloadWords(baseUrl, pageSize, fileName, apiType, additionalParams="") {
+            async function downloadWords(baseUrl, pageSize, fileName, apiType, additionalParams = "") {
                 const progressContainer = document.getElementById("downloadProgressContainer");
                 const progressBar = document.getElementById("downloadProgressBar");
                 const progressText = document.getElementById("downloadProgressText");
@@ -888,7 +992,7 @@
                     progressContainer.style.display = "block";
                 }
 
-                const progressCallback = (currentPage, totalPages,_isDone, error_isErrorEncountered, totalCount) => {
+                const progressCallback = (currentPage, totalPages, _isDone, error_isErrorEncountered, totalCount) => {
                     if (progressBar && progressText) {
                         if (error_isErrorEncountered) {
                             progressText.textContent = `Error fetching page ${currentPage}: ${error_isErrorEncountered.message}`;
@@ -919,7 +1023,7 @@
 
                     if (fileType === 'json') {
                         const dataString = JSON.stringify(allWords, null, 2);
-                        blob = new Blob([dataString], { type: 'application/json' });
+                        blob = new Blob([dataString], {type: 'application/json'});
                     } else if (fileType === 'csv') {
                         const headers = Object.keys(allWords[0]).join(',');
                         const rows = allWords.map(item => {
@@ -932,7 +1036,7 @@
                         }).join('\n');
 
                         const dataString = headers + '\n' + rows;
-                        blob = new Blob([dataString], { type: 'text/csv' });
+                        blob = new Blob([dataString], {type: 'text/csv'});
                     }
 
                     downloadBlob(blob, fileName);
@@ -1055,7 +1159,7 @@
         }
 
         function generateBaseCSS(colorSettings) {
-            return`
+            return `
                 :root {
                     --font-size: ${settings.fontSize}rem;
                     --line-height: ${settings.lineHeight};
@@ -1887,7 +1991,7 @@
     }
 
     async function setupCourse() {
-        function createCourseUI(){
+        function createCourseUI() {
             const resetButton = createElement("button", {
                 id: "resetLessonPositions",
                 textContent: "⏮️",
@@ -1930,7 +2034,10 @@
 
                 const knownWordPercentage = Math.round((lessonInfo.knownWordsCount / lessonInfo.uniqueWordsCount) * 100);
 
-                const knownWordsItem = createElement('div', {className: 'word-indicator--item grid-layout grid-align--center grid-item is-fluid--left', title: 'Known Words'});
+                const knownWordsItem = createElement('div', {
+                    className: 'word-indicator--item grid-layout grid-align--center grid-item is-fluid--left',
+                    title: 'Known Words'
+                });
 
                 const knownWordsBox = createElement('div', {className: 'word-indicator--box word-indicator--box-white'});
                 knownWordsItem.appendChild(knownWordsBox);
@@ -2020,26 +2127,26 @@
 
     /* Get LingQ Data */
 
-    function getLessonId() {
-        const url = document.URL;
-        const regex = /(http|https):\/\/www\.lingq\.com\/\w+\/learn\/\w+\/web\/reader\/(\d+)/;
-        const match = url.match(regex);
+    function getLessonId(url) {
+        const urlToGet = url ? url : document.URL
+        const regex = /(http|https):\/\/www\.lingq\.com\/\w+\/learn\/\w+\/\w+\/\w+\/(\d+)/;
+        const match = urlToGet.match(regex);
 
         return match[2];
     }
 
-    function getCollectionId() {
-        const url = document.URL;
+    function getCollectionId(url) {
+        const urlToGet = url ? url : document.URL
         const regex = /(http|https):\/\/www\.lingq\.com\/\w+\/learn\/\w+\/web\/library\/course\/(\d+)/;
-        const match = url.match(regex);
+        const match = urlToGet.match(regex);
 
         return match[2];
     }
 
-    function getLessonLanguage() {
-        const url = document.URL;
-        const regex = /(http|https)*:\/\/www\.lingq\.com\/\w+\/learn\/(\w+)\/web\/reader\/\d+/;
-        const match = url.match(regex);
+    function getLessonLanguage(url) {
+        const urlToGet = url ? url : document.URL
+        const regex = /(http|https)*:\/\/www\.lingq\.com\/\w+\/learn\/(\w+)\/\w+\/\w+\/\d+/;
+        const match = urlToGet.match(regex);
 
         return match[2];
     }
@@ -2108,11 +2215,11 @@
     async function setLessonProgress(lessonId, wordIndex) {
         const languageCode = await getLanguageCode();
         const url = `https://www.lingq.com/api/v3/${languageCode}/lessons/${lessonId}/bookmark/`;
-        const payload = { wordIndex: wordIndex, completedWordIndex: wordIndex, client: 'web' };
+        const payload = {wordIndex: wordIndex, completedWordIndex: wordIndex, client: 'web'};
 
         fetch(url, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: {'Content-Type': 'application/json'},
             body: JSON.stringify(payload)
         });
     }
@@ -2146,7 +2253,7 @@
         }
     }
 
-    function waitForElement(selector, timeout=1000) {
+    function waitForElement(selector, timeout = 1000) {
         return new Promise((resolve, reject) => {
             const element = document.querySelector(selector);
             if (element) return resolve(element);
@@ -2193,6 +2300,7 @@
     function extractTextFromDOM(domElement) {
         function getAllLeafNodes(root) {
             const leaves = [];
+
             function traverse(node) {
                 if (node.nodeType === Node.TEXT_NODE) {
                     if (node.textContent.trim() !== "") leaves.push(node);
@@ -2208,6 +2316,7 @@
                     }
                 }
             }
+
             traverse(root);
             return leaves;
         }
@@ -2234,15 +2343,17 @@
             .replace(/[^\S\n]?(,)/g, '$1');
     }
 
-    function showToast(inputMessage, success=true) {
+    function showToast(inputMessage, success = true) {
         const toast = createElement("div", {
             className: 'userToast',
             textContent: inputMessage,
-            style: `box-shadow: 0 0 10px 0 ${success ? 'rgb(76, 175, 80)': 'rgb(175, 76, 80)'}`
+            style: `box-shadow: 0 0 10px 0 ${success ? 'rgb(76, 175, 80)' : 'rgb(175, 76, 80)'}`
         });
         document.body.appendChild(toast);
 
-        setTimeout(() => {toast.style.opacity = '1'}, 10);
+        setTimeout(() => {
+            toast.style.opacity = '1'
+        }, 10);
 
         setTimeout(() => {
             toast.style.opacity = '0';
@@ -2250,11 +2361,11 @@
         }, 1500);
     }
 
-    function finishLesson(){
+    function finishLesson() {
         clickElement(".reader-component > .nav--right > a");
     }
 
-    function preventPropagation(event){
+    function preventPropagation(event) {
         event.preventDefault();
         event.stopPropagation();
     }
@@ -2296,6 +2407,7 @@
                 element.scrollTop = to;
             }
         }
+
         requestAnimationFrame(animateScroll);
     }
 
@@ -2322,7 +2434,7 @@
         for (const selector of ['.reader-component > .nav--right > a', '.reader-component > .nav--left > a']) {
             const button = await waitForElement(selector, 5000);
 
-            button.addEventListener('click', function(event) {
+            button.addEventListener('click', function (event) {
                 if (!settings.sentenceAutoplay) return;
 
                 setTimeout(() => {
@@ -2348,6 +2460,7 @@
     }
 
     let audioContext = null;
+
     async function playAudio(audioData, volume = 0.5) {
         stopPlayingAudio(audioContext);
 
@@ -2474,12 +2587,12 @@
                     },
                     body: JSON.stringify({
                         contents: [{
-                            parts: [{ text: ttsInstructions + text }]
+                            parts: [{text: ttsInstructions + text}]
                         }],
                         generationConfig: {
                             speechConfig: {
                                 voiceConfig: {
-                                    prebuiltVoiceConfig: { voiceName: voice }
+                                    prebuiltVoiceConfig: {voiceName: voice}
                                 }
                             },
                             responseModalities: ["AUDIO"]
@@ -2504,7 +2617,7 @@
                 if (audioDataBase64) {
                     const inputTokens = data.usageMetadata.promptTokenCount;
                     const outputTokens = data.usageMetadata.candidatesTokenCount;
-                    const approxCost = inputTokens * 0.5/1000000 + outputTokens * 10/1000000;
+                    const approxCost = inputTokens * 0.5 / 1000000 + outputTokens * 10 / 1000000;
                     console.log('TTS', `${modelId}, ${voice}, tokens: (${inputTokens}/${outputTokens}) cost: $${approxCost.toFixed(6)}`);
 
                     const binaryString = atob(audioDataBase64);
@@ -2561,7 +2674,7 @@
                 [settings.shortcutTranslator]: () => clickElement(".dictionary-resources > a:nth-last-child(1)"), // Open Translator
                 [settings.shortcutBackward5s]: () => clickElement(".audio-player--controllers > div:nth-child(1) > a"), // 5 sec Backward
                 [settings.shortcutForward5s]: () => clickElement(".audio-player--controllers > div:nth-child(2) > a"), // 5 sec Forward
-                [settings.shortcutMakeKnown]: () => document.dispatchEvent(new KeyboardEvent("keydown", { key: "k" })), // Simulate original 'k' for Make Word Known
+                [settings.shortcutMakeKnown]: () => document.dispatchEvent(new KeyboardEvent("keydown", {key: "k"})), // Simulate original 'k' for Make Word Known
                 [settings.shortcutDictionary]: () => clickElement(".dictionary-resources > a:nth-child(1)"), // Open Dictionary
                 [settings.shortcutCopySelected]: () => copySelectedText() // Copy selected text
             };
@@ -2679,11 +2792,11 @@
 
         function changeTranslationColor(readerContainer) {
             const observer = new MutationObserver((mutations) => {
-                for(const mutation of mutations) {
-                    for(const node of mutation.addedNodes) {
+                for (const mutation of mutations) {
+                    for (const node of mutation.addedNodes) {
                         if (!(node.nodeType === Node.ELEMENT_NODE && node.matches('p:has(.sentence)'))) continue;
 
-                        for(const sentence of node.querySelectorAll('.sentence')) {
+                        for (const sentence of node.querySelectorAll('.sentence')) {
                             if (!(sentence.style.borderImageSource)) continue;
 
                             const fontColor = settings[`${settings.colorMode}_translationFontColor`];
@@ -2729,11 +2842,12 @@
                 const selectedText = selectedTextElement ? extractTextFromDOM(selectedTextElement).trim() : "";
                 const contextText = contextElement ? extractTextFromDOM(contextElement).trim() : "";
 
-                return `Input: "${selectedText}"` +  (!isSentence ? `, Context: "${contextText}"` : ``);
+                return `Input: "${selectedText}"` + (!isSentence ? `, Context: "${contextText}"` : ``);
             }
 
             let isProgrammaticReferenceWordUpdate = false;
-            function updateReferenceWord(){
+
+            function updateReferenceWord() {
                 isProgrammaticReferenceWordUpdate = true;
                 const selection = window.getSelection();
                 if (selection.rangeCount === 0) {
@@ -2750,7 +2864,7 @@
             }
 
             function updateChatHistoryState(currentHistory, message, role) {
-                return [...currentHistory, { role: role, content: message }];
+                return [...currentHistory, {role: role, content: message}];
             }
 
             function addMessageToUI(message, messageClass, container) {
@@ -2765,7 +2879,7 @@
 
             function getLLMPricing(llmProviderModel) {
                 const llmInfo = document.querySelector(`#llmProviderModelSelector > option[value="${llmProviderModel}"]`).text;
-                const [inputPrice, outputPrice] = llmInfo.match(/\$(\d+(?:\.\d+)?)\/\$(\d+(?:\.\d+)?)\)/).slice(1, 3).map(num => parseFloat(num)/1000000);
+                const [inputPrice, outputPrice] = llmInfo.match(/\$(\d+(?:\.\d+)?)\/\$(\d+(?:\.\d+)?)\)/).slice(1, 3).map(num => parseFloat(num) / 1000000);
                 return [inputPrice, outputPrice];
             }
 
@@ -2801,8 +2915,8 @@
                     const inputTokens = data.usage.prompt_tokens;
                     const cachedTokens = data.usage.prompt_tokens_details.cached_tokens;
                     const outputTokens = data.usage.completion_tokens;
-                    const approxCost = (inputTokens - cachedTokens) * inputPrice + cachedTokens * (inputPrice/4) + outputTokens * outputPrice;
-                    console.log('Chat', `${model}, tokens: (${inputTokens-cachedTokens}/${cachedTokens}/${outputTokens}), cost: $${approxCost.toFixed(6)}`);
+                    const approxCost = (inputTokens - cachedTokens) * inputPrice + cachedTokens * (inputPrice / 4) + outputTokens * outputPrice;
+                    console.log('Chat', `${model}, tokens: (${inputTokens - cachedTokens}/${cachedTokens}/${outputTokens}), cost: $${approxCost.toFixed(6)}`);
 
                     return data.choices[0]?.message?.content || "Sorry, could not get a response.";
 
@@ -2816,7 +2930,7 @@
                 try {
                     const formattedMessages = history.map(msg => ({
                         role: msg.role === 'assistant' ? 'model' : msg.role,
-                        parts: [{ text: msg.content }]
+                        parts: [{text: msg.content}]
                     }));
 
                     const api_url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
@@ -2824,11 +2938,11 @@
                         api_url,
                         {
                             method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
+                            headers: {'Content-Type': 'application/json'},
                             body: JSON.stringify({
                                 system_instruction: {parts: [{text: systemPrompt}]},
                                 contents: formattedMessages,
-                                generationConfig: { temperature: 0.7, ...(model.includes("2.5") ? { thinkingConfig: { thinkingBudget: 0 } } : {})}
+                                generationConfig: {temperature: 0.7, ...(model.includes("2.5") ? {thinkingConfig: {thinkingBudget: 0}} : {})}
                             })
                         }
                     );
@@ -2845,8 +2959,8 @@
                     const inputTokens = data.usageMetadata.promptTokenCount;
                     const cachedTokens = data.usageMetadata?.cachedContentTokenCount ?? 0;
                     const outputTokens = data.usageMetadata.candidatesTokenCount;
-                    const approxCost = (inputTokens - cachedTokens) * inputPrice + cachedTokens * (inputPrice/4) + outputTokens * outputPrice;
-                    console.log('Chat', `${model}, tokens: (${inputTokens-cachedTokens}/${cachedTokens}/${outputTokens}), cost: $${approxCost.toFixed(6)}`);
+                    const approxCost = (inputTokens - cachedTokens) * inputPrice + cachedTokens * (inputPrice / 4) + outputTokens * outputPrice;
+                    console.log('Chat', `${model}, tokens: (${inputTokens - cachedTokens}/${cachedTokens}/${outputTokens}), cost: $${approxCost.toFixed(6)}`);
 
                     return data.candidates[0].content.parts[0].text || "Sorry, could not get a response.";
                 } catch (error) {
@@ -2904,14 +3018,17 @@
                 chatHistory = updateChatHistoryState(chatHistory, botResponse, "assistant");
             }
 
-            async function updateChatWidget(){
+            async function updateChatWidget() {
                 if (!settings.chatWidget) return;
 
-                const chatWrapper = createElement("div", { id: "chat-widget", style: "margin-top: 5px 0 10px;" });
-                const chatContainer = createElement("div", { id: "chat-container" });
-                const inputContainer = createElement("div", { className: "input-container" });
-                const userInput = createElement("input", { type: "text", id: "user-input", placeholder: "Ask anything" });
-                const sendButton = createElement("button", { id: "send-button" , innerHTML: `<svg width="17" height="17" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" xmlns:xlink="http://www.w3.org/1999/xlink"><path fill="#6B6C7B" d="M481.508,210.336L68.414,38.926c-17.403-7.222-37.064-4.045-51.309,8.287C2.86,59.547-3.098,78.551,1.558,96.808 L38.327,241h180.026c8.284,0,15.001,6.716,15.001,15.001c0,8.284-6.716,15.001-15.001,15.001H38.327L1.558,415.193 c-4.656,18.258,1.301,37.262,15.547,49.595c14.274,12.357,33.937,15.495,51.31,8.287l413.094-171.409 C500.317,293.862,512,276.364,512,256.001C512,235.638,500.317,218.139,481.508,210.336z"></path></svg>`});
+                const chatWrapper = createElement("div", {id: "chat-widget", style: "margin-top: 5px 0 10px;"});
+                const chatContainer = createElement("div", {id: "chat-container"});
+                const inputContainer = createElement("div", {className: "input-container"});
+                const userInput = createElement("input", {type: "text", id: "user-input", placeholder: "Ask anything"});
+                const sendButton = createElement("button", {
+                    id: "send-button",
+                    innerHTML: `<svg width="17" height="17" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" xmlns:xlink="http://www.w3.org/1999/xlink"><path fill="#6B6C7B" d="M481.508,210.336L68.414,38.926c-17.403-7.222-37.064-4.045-51.309,8.287C2.86,59.547-3.098,78.551,1.558,96.808 L38.327,241h180.026c8.284,0,15.001,6.716,15.001,15.001c0,8.284-6.716,15.001-15.001,15.001H38.327L1.558,415.193 c-4.656,18.258,1.301,37.262,15.547,49.595c14.274,12.357,33.937,15.495,51.31,8.287l413.094-171.409 C500.317,293.862,512,276.364,512,256.001C512,235.638,500.317,218.139,481.508,210.336z"></path></svg>`
+                });
 
                 inputContainer.appendChild(userInput);
                 inputContainer.appendChild(sendButton);
@@ -2920,7 +3037,7 @@
 
                 const sectionHead = getSectionHead();
                 const existingChatWidget = document.getElementById('chat-widget');
-                if(existingChatWidget) {
+                if (existingChatWidget) {
                     existingChatWidget.replaceWith(chatWrapper);
                 } else if (sectionHead.matches(".section-widget--head")) {
                     sectionHead.appendChild(chatWrapper);
@@ -2945,7 +3062,7 @@
 
                 if (settings.askSelected && sectionHead.matches(".section-widget--head")) {
                     const initialUserMessage = getSelectedWithContext();
-                    chatHistory = updateChatHistoryState(chatHistory, !isSentence ? wordPhrasePrompt: sentencePrompt, "user");
+                    chatHistory = updateChatHistoryState(chatHistory, !isSentence ? wordPhrasePrompt : sentencePrompt, "user");
                     chatHistory = updateChatHistoryState(chatHistory, "Understood.", "assistant");
 
                     chatHistory = updateChatHistoryState(chatHistory, initialUserMessage, "user");
@@ -2963,7 +3080,7 @@
                     if (meaning) {
                         const meaningElement = document.querySelector(".reference-input-text");
                         const hasMeaning = meaningElement ? meaningElement.value : false;
-                        const textToCopy = (hasMeaning ? '\n': '') + meaning.textContent;
+                        const textToCopy = (hasMeaning ? '\n' : '') + meaning.textContent;
 
                         navigator.clipboard.writeText(textToCopy)
                             .then(() => {
@@ -2976,7 +3093,7 @@
                 }
             }
 
-            async function updateTTS(click=true) {
+            async function updateTTS(click = true) {
                 async function replaceTTSButton() {
                     const selectedTextElement = document.querySelector(".reference-word");
                     const selectedText = selectedTextElement ? selectedTextElement.textContent.trim() : "";
@@ -3310,7 +3427,7 @@ Respond understood if you got it.
             updateTTS(true);
 
             const selectedTextElement = document.querySelector(".reference-word");
-            if (selectedTextElement){
+            if (selectedTextElement) {
                 const observer = new MutationObserver((mutations) => {
                     if (isProgrammaticReferenceWordUpdate) return;
                     mutations.forEach(async (mutation) => {
@@ -3328,7 +3445,7 @@ Respond understood if you got it.
             const widgetArea = document.querySelector("#lesson-reader .widget-area");
             const observer = new MutationObserver((mutations) => {
                 mutations.forEach((mutation) => {
-                    mutation.addedNodes.forEach(async(node) => {
+                    mutation.addedNodes.forEach(async (node) => {
                         if (node.nodeType !== Node.ELEMENT_NODE) return;
                         if (!node.matches(".reader-widget")) return;
                         console.debug('Observer:', `Widget changed from resource. ${mutation.type}, ${mutation.addedNodes}`);
@@ -3396,6 +3513,76 @@ Respond understood if you got it.
         applyCSS(css);
     }
 
+    async function setupPrintPage() {
+        const lessonURL = document.referrer;
+        const lessonId = getLessonId(lessonURL);
+        const lessonLanguage = getLessonLanguage(lessonURL);
+        const wordsURL = `https://www.lingq.com/api/v3/${lessonLanguage}/lessons/${lessonId}/words`;
+
+        const response = await fetch(wordsURL);
+        const data = await response.json();
+
+        const cardsList = []
+        const seenTerms = new Set();
+
+        Object.values(data.cards)
+            .forEach(card => {
+                if (card.status < 3) {
+                    const term = card.term;
+
+                    if (!seenTerms.has(term)) {
+                        seenTerms.add(term);
+                        cardsList.push({
+                            term: term,
+                            fragment: card.fragment,
+                            notes: card.notes,
+                            status: card.status,
+                            hint: card.hints?.[0]?.text ?? ""
+                        });
+                    }
+                }
+            });
+
+        cardsList.sort((a, b) => {
+            return (a.term).localeCompare(b.term);
+        });
+
+        const css = `
+            th, td {
+                border: 1px solid #eee;
+                padding: 1px 2px;
+                white-space: pre-line;
+            }
+            `;
+        applyCSS(css);
+
+        const vocaTable = createElement("table");
+        const thead = createElement("thead");
+        const tr = createElement("tr");
+        tr.appendChild(createElement("th", {textContent: ""}));
+        tr.appendChild(createElement("th", {textContent: "word"}));
+        tr.appendChild(createElement("th", {textContent: "sentence"}));
+        tr.appendChild(createElement("th", {textContent: "meaning"}));
+        thead.appendChild(tr);
+        vocaTable.appendChild(thead);
+
+        const tbody = createElement("tbody");
+        cardsList.forEach(card => {
+            const tr = createElement("tr");
+            tr.appendChild(createElement("td", {className: "status", textContent: card.status}));
+            tr.appendChild(createElement("td", {className: "term", textContent: card.term}));
+            tr.appendChild(createElement("td", {className: "fragment", textContent: card.fragment}));
+            tr.appendChild(createElement("td", {className: "hint", textContent: card.hint}));
+            tbody.appendChild(tr);
+        })
+        vocaTable.appendChild(tbody);
+
+        let printPage = document.querySelector("#print-page");
+        printPage.appendChild(vocaTable);
+
+        console.log(cardsList);
+    }
+
     function init() {
         fixBugs();
 
@@ -3406,6 +3593,8 @@ Respond understood if you got it.
             setupReaderContainer();
             setupLLMs();
             AutoplayInSentenceView();
+        } else if (document.URL.includes("/print")) {
+            setupPrintPage();
         } else if (document.URL.includes("/library")) {
             setupCourse();
         } else if (document.URL.includes("youtube")) {
@@ -3416,6 +3605,4 @@ Respond understood if you got it.
     init();
 })();
 
-// TODO: turn on the translation after change the lesson page.
 // TODO: add a reroll button to the bot's last message.
-// TODO: add a sentence list to the print page.
