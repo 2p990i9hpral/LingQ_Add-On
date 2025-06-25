@@ -6,7 +6,7 @@
 // @match        https://www.lingq.com/*/learn/*/workdesk/item/*/print/
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      5.15.1
+// @version      5.15.2
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @namespace https://greasyfork.org/users/1458847
@@ -3533,35 +3533,59 @@ Respond understood if you got it.
                     if (!seenTerms.has(term)) {
                         seenTerms.add(term);
                         cardsList.push({
-                            term: term,
-                            fragment: card.fragment,
+                            word: term,
+                            context: card.fragment.replace(term, `<b>${term}</b>`),
                             notes: card.notes,
                             status: card.status,
-                            hint: card.hints?.[0]?.text ?? ""
+                            meaning: card.hints?.[0]?.text ?? ""
                         });
                     }
                 }
             });
 
         cardsList.sort((a, b) => {
-            return (a.term).localeCompare(b.term);
+            return (a.word).localeCompare(b.word);
         });
 
         const css = `
+            #logo {
+                max-width: 100px !important;
+            }
+            
+            th {
+                font-weight: bold;
+                background: whitesmoke;
+            }
+            
             th, td {
                 border: 1px solid #eee;
                 padding: 1px 2px;
                 white-space: pre-line;
             }
+            
+            td.word {
+                font-weight: bold;
+            }
+            
+            td:is(.word,.context) {
+                text-align: center;
+            }
+            
+            .lingQ {
+                background: rgba(255, 232, 149, 1);
+            }
             `;
         applyCSS(css);
+
+        const printContent = document.querySelector("#print-content");
+        let originalPrintContentHtml = printContent.innerHTML;
 
         const vocaTable = createElement("table", {style: "page-break-before: always;"});
         const thead = createElement("thead");
         const tr = createElement("tr");
         tr.appendChild(createElement("th", {textContent: ""}));
         tr.appendChild(createElement("th", {textContent: "word"}));
-        tr.appendChild(createElement("th", {textContent: "sentence"}));
+        tr.appendChild(createElement("th", {textContent: "context"}));
         tr.appendChild(createElement("th", {textContent: "meaning"}));
         thead.appendChild(tr);
         vocaTable.appendChild(thead);
@@ -3570,12 +3594,18 @@ Respond understood if you got it.
         cardsList.forEach(card => {
             const tr = createElement("tr");
             tr.appendChild(createElement("td", {className: "status", textContent: card.status}));
-            tr.appendChild(createElement("td", {className: "term", textContent: card.term}));
-            tr.appendChild(createElement("td", {className: "fragment", textContent: card.fragment}));
-            tr.appendChild(createElement("td", {className: "hint", textContent: card.hint}));
+            tr.appendChild(createElement("td", {className: "word", textContent: card.word}));
+            tr.appendChild(createElement("td", {className: "context", innerHTML: card.context}));
+            tr.appendChild(createElement("td", {className: "meaning", textContent: card.meaning}));
             tbody.appendChild(tr);
+
+            const escapedWord = card.word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            const regex = new RegExp(`\\b${escapedWord}\\b`, 'g');
+            originalPrintContentHtml = originalPrintContentHtml.replace(regex, `<span class="lingQ">${card.word}</span>`);
         })
         vocaTable.appendChild(tbody);
+
+        printContent.innerHTML = originalPrintContentHtml;
 
         let printPage = document.querySelector("#print-page");
         printPage.appendChild(vocaTable);
