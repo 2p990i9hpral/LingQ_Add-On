@@ -6,7 +6,7 @@
 // @match        https://www.lingq.com/*/learn/*/workdesk/item/*/print/
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      5.15
+// @version      5.15.1
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @namespace https://greasyfork.org/users/1458847
@@ -3556,7 +3556,7 @@ Respond understood if you got it.
             `;
         applyCSS(css);
 
-        const vocaTable = createElement("table");
+        const vocaTable = createElement("table", {style: "page-break-before: always;"});
         const thead = createElement("thead");
         const tr = createElement("tr");
         tr.appendChild(createElement("th", {textContent: ""}));

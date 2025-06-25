@@ -44,3 +44,6 @@
 - 5.10: Fixed the issues occurring when moving between the lessons without refreshing. The existing TTS will be replaced with AI TTS when clicked.
 - 5.11: Add Google TTS option.
 - 5.12: Integrated the youtube player simplification script into the code (Automatically collapse More videos popup in the player).
+- 5.13: Added the translation text color picker to the stting page.
+- 5.14: Added an autoplay in sentence view.
+- 5.15: Added a vocabulary table to the print page.
