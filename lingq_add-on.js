@@ -6,7 +6,7 @@
 // @match        https://www.lingq.com/*/learn/*/workdesk/item/*/print/
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      6.0
+// @version      6.0.1
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @namespace https://greasyfork.org/users/1458847
@@ -427,15 +427,17 @@
             columns.appendChild(container2);
 
             const buttonContainer = createElement("div", {
-                style: "display: flex; justify-content: space-between;",
+                style: "display: flex; justify-content: space-between; align-items: center;",
                 className: "popup-row"
             });
-            [
-                {id: "resetSettingsBtn", textContent: "Reset", className: "popup-button"},
-                {id: "closeSettingsBtn", textContent: "Close", className: "popup-button"}
-            ].forEach((prop) => {
-                buttonContainer.appendChild(createElement("button", prop));
-            });
+
+            buttonContainer.appendChild(createElement("button", {id: "resetSettingsBtn", textContent: "Reset", className: "popup-button"}));
+
+            const donationButton = createElement("a", {href: "https://www.buymeacoffee.com/mutti", target: "_blank"})
+            donationButton.appendChild(createElement("img", {src: "https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png", style: "width: 125px; height: 35px"}))
+            buttonContainer.appendChild(donationButton);
+
+            buttonContainer.appendChild(createElement("button", {id: "closeSettingsBtn", textContent: "Close", className: "popup-button"}));
 
             popupLayout.appendChild(columns)
             popupLayout.appendChild(buttonContainer);
