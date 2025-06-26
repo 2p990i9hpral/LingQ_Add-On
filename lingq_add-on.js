@@ -6,7 +6,7 @@
 // @match        https://www.lingq.com/*/learn/*/workdesk/item/*/print/
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      6.0.2
+// @version      6.0.3
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @namespace https://greasyfork.org/users/1458847
@@ -2994,7 +2994,7 @@
                 return messageDiv;
             }
 
-            async function callStreamOpenAI(botMessageDiv, chatContainer, onStreamCompleted = () => {}) {
+            async function callStreamOpenAI(botMessageDiv, chatContainer, focus, onStreamCompleted = () => {}) {
                 const userInput = document.getElementById("user-input");
                 const sendButton = document.getElementById("send-button");
 
@@ -3025,7 +3025,7 @@
                         chatHistory = updateChatHistoryState(chatHistory, cleanedContent, "assistant");
                         userInput.disabled = false;
                         sendButton.disabled = false;
-                        userInput.focus();
+                        if (focus) userInput.focus();
                         onStreamCompleted(cleanedContent);
                     },
                     (error) => {
@@ -3047,7 +3047,7 @@
 
                 const botMessageDiv = addMessageToUI("", 'bot-message', chatContainer, false);
 
-                await callStreamOpenAI(botMessageDiv, chatContainer);
+                await callStreamOpenAI(botMessageDiv, chatContainer, true);
             }
 
             async function getTTSResponse(provider, apiKey, voice, text) {
@@ -3121,6 +3121,7 @@
                     await callStreamOpenAI(
                         botMessageDiv,
                         chatContainer,
+                        false,
                         (finalContent) => {
                             const meaning = botMessageDiv.querySelector("p");
                             if (meaning) {
