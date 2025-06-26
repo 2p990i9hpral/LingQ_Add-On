@@ -6,7 +6,7 @@
 // @match        https://www.lingq.com/*/learn/*/workdesk/item/*/print/
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      5.15.2
+// @version      6.0
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @namespace https://greasyfork.org/users/1458847
@@ -320,14 +320,10 @@
             });
 
             addSelect(chatWidgetSection, "llmProviderModelSelector", "Chat Provider: (Price per 1M tokens)", [
-                {value: "openai gpt-4.1", text: "OpenAI GPT-4.1 ($2.0/$8.0)"},
                 {value: "openai gpt-4.1-mini", text: "OpenAI GPT-4.1 mini ($0.4/$1.6)"},
                 {value: "openai gpt-4.1-nano", text: "OpenAI GPT-4.1 nano ($0.1/$0.4)"},
-                {
-                    value: "google gemini-2.5-flash-lite-preview-06-17",
-                    text: "Google Gemini 2.5 Flash Light ($0.1/$0.4)"
-                },
                 {value: "google gemini-2.5-flash", text: "Google Gemini 2.5 Flash ($0.3/$2.5)"},
+                {value: "google gemini-2.5-flash-lite-preview-06-17",text: "Google Gemini 2.5 Flash Light ($0.1/$0.4)"},
                 {value: "google gemini-2.0-flash", text: "Google Gemini 2.0 Flash ($0.1/$0.4)"}
             ], settings.llmProviderModel);
 
@@ -2645,6 +2641,58 @@
         }
     }
 
+    function getLLMPricing(llmProviderModel) {
+        const llmInfo = document.querySelector(`#llmProviderModelSelector > option[value="${llmProviderModel}"]`).text;
+        const [inputPrice, outputPrice] = llmInfo.match(/\$(\d+(?:\.\d+)?)\/\$(\d+(?:\.\d+)?)\)/).slice(1, 3).map(num => parseFloat(num) / 1000000);
+        return [inputPrice, outputPrice];
+    }
+
+    async function getOpenAIResponse(provider, apiKey, model, history) {
+        const api_url = provider === "openai" ? `https://api.openai.com/v1/chat/completions` : (provider === "google" ? "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions" : "");
+        const body = {
+            model: model,
+            temperature: 0.3,
+            messages: history
+        };
+        if (provider === "google" && model.includes("2.5")) body.reasoning_effort = "none";
+
+        try {
+            const response = await fetch(
+                api_url,
+                {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${apiKey}`
+                    },
+                    body: JSON.stringify(body)
+                }
+            );
+
+            if (!response.ok) {
+                const errorData = await response.json();
+                console.error('OpenAI API error:', errorData);
+                return errorData.error.message;
+            }
+
+            const data = await response.json();
+
+            const [inputPrice, outputPrice] = getLLMPricing(settings.llmProviderModel);
+
+            const cachedTokens = data.usage.prompt_tokens_details ? data.usage.prompt_tokens_details.cached_tokens : 0;
+            const inputTokens = data.usage.prompt_tokens - cachedTokens;
+            const outputTokens = data.usage.completion_tokens;
+            const approxCost = (cachedTokens * (inputPrice / 4) + inputTokens * inputPrice + outputTokens * outputPrice);
+            console.log('Chat', `${model}, tokens: (${cachedTokens}/${inputTokens}/${outputTokens}), cost: $${approxCost.toFixed(6)}`);
+
+            return data.choices[0]?.message?.content || "Sorry, could not get a response.";
+
+        } catch (error) {
+            console.error('OpenAI API call failed:', error);
+            return "Sorry, something went wrong communicating with OpenAI.";
+        }
+    }
+
     /* Features */
 
     function setupKeyboardShortcuts() {
@@ -2867,114 +2915,163 @@
                 return [...currentHistory, {role: role, content: message}];
             }
 
-            function addMessageToUI(message, messageClass, container) {
-                const messageDiv = createElement("div", {
-                    className: `chat-message ${messageClass}`,
-                    innerHTML: message
-                });
+            function addMessageToUI(message, messageClass, container, initial = false) {
+                const messageDiv = createElement("div", {className: `chat-message ${messageClass}`});
+                if (initial) messageDiv.innerHTML = message;
                 container.appendChild(messageDiv);
 
                 if (container.childElementCount > 1) smoothScrollTo(container, container.scrollHeight, 300);
+                return messageDiv;
             }
 
-            function getLLMPricing(llmProviderModel) {
-                const llmInfo = document.querySelector(`#llmProviderModelSelector > option[value="${llmProviderModel}"]`).text;
-                const [inputPrice, outputPrice] = llmInfo.match(/\$(\d+(?:\.\d+)?)\/\$(\d+(?:\.\d+)?)\)/).slice(1, 3).map(num => parseFloat(num) / 1000000);
-                return [inputPrice, outputPrice];
-            }
+            async function streamOpenAIResponse(provider, apiKey, model, history, onChunkReceived, onStreamEnd, onError) {
+                const api_url = provider === "openai" ? `https://api.openai.com/v1/chat/completions` : (provider === "google" ? "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions" : "");
 
-            async function getOpenAIResponse(apiKey, model, history) {
+                const body = {
+                    model: model,
+                    temperature: 0.3,
+                    messages: history,
+                    stream: true,
+                };
+                if (provider === "google" && model.includes("2.5")) body.reasoning_effort = "none";
+
+                let buffer = '';
+                let fullContent = '';
+
                 try {
-                    const api_url = `https://api.openai.com/v1/chat/completions`;
-                    const response = await fetch(
-                        api_url,
-                        {
-                            method: 'POST',
-                            headers: {
-                                'Content-Type': 'application/json',
-                                'Authorization': `Bearer ${apiKey}`
-                            },
-                            body: JSON.stringify({
-                                model: model,
-                                messages: history,
-                                max_tokens: 500,
-                                temperature: 0.7,
-                            })
-                        }
-                    );
+                    const response = await fetch(api_url, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${apiKey}`,
+                        },
+                        body: JSON.stringify(body),
+                    });
 
                     if (!response.ok) {
                         const errorData = await response.json();
                         console.error('OpenAI API error:', errorData);
-                        return errorData.error.message;
+                        throw new Error(errorData.error ? errorData.error.message : JSON.stringify(errorData));
                     }
 
-                    const data = await response.json();
+                    const reader = response.body.getReader();
+                    const decoder = new TextDecoder('utf-8');
 
-                    const [inputPrice, outputPrice] = getLLMPricing(settings.llmProviderModel);
-                    const inputTokens = data.usage.prompt_tokens;
-                    const cachedTokens = data.usage.prompt_tokens_details.cached_tokens;
-                    const outputTokens = data.usage.completion_tokens;
-                    const approxCost = (inputTokens - cachedTokens) * inputPrice + cachedTokens * (inputPrice / 4) + outputTokens * outputPrice;
-                    console.log('Chat', `${model}, tokens: (${inputTokens - cachedTokens}/${cachedTokens}/${outputTokens}), cost: $${approxCost.toFixed(6)}`);
+                    while (true) {
+                        const { done, value } = await reader.read();
+                        if (done) break;
 
-                    return data.choices[0]?.message?.content || "Sorry, could not get a response.";
+                        const chunk = decoder.decode(value, { stream: true });
+                        buffer += chunk;
 
+                        const lines = buffer.split('\n');
+                        buffer = lines.pop();
+
+                        for (const line of lines) {
+                            if (line.trim() === '') continue;
+                            if (line.startsWith('data: ')) {
+                                const data = line.substring(6).trim();
+                                if (data === '[DONE]') continue;
+
+                                try {
+                                    const json = JSON.parse(data);
+                                    onChunkReceived(json);
+
+                                    if (json.choices && json.choices.length > 0 && json.choices[0].delta && json.choices[0].delta.content) fullContent += json.choices[0].delta.content;
+                                } catch (parseError) {
+                                    console.error(`JSON parsing error: ${parseError.message}, Data: ${data}`);
+                                    onError(new Error(`JSON parsing error: ${parseError.message}, Data: ${data}`));
+                                }
+                            }
+                        }
+                    }
+                    fullContent = fullContent.replace(/^```(?:\w+\n)?/, '').replace(/```\s*$/, '');
+                    onStreamEnd(fullContent);
                 } catch (error) {
-                    console.error('OpenAI API call failed:', error);
-                    return "Sorry, something went wrong communicating with OpenAI.";
+                    console.error("OpenAI API call failed:", error);
+                    onError(error);
                 }
             }
 
-            async function getGoogleResponse(apiKey, model, history) {
-                try {
-                    const formattedMessages = history.map(msg => ({
-                        role: msg.role === 'assistant' ? 'model' : msg.role,
-                        parts: [{text: msg.content}]
-                    }));
+            async function callStreamOpenAI(botMessageDiv, chatContainer, onStreamCompleted = () => {}, disableInputsOnStart = true) {
+                const userInput = document.getElementById("user-input");
+                const sendButton = document.getElementById("send-button");
 
-                    const api_url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
-                    const response = await fetch(
-                        api_url,
-                        {
-                            method: 'POST',
-                            headers: {'Content-Type': 'application/json'},
-                            body: JSON.stringify({
-                                system_instruction: {parts: [{text: systemPrompt}]},
-                                contents: formattedMessages,
-                                generationConfig: {temperature: 0.7, ...(model.includes("2.5") ? {thinkingConfig: {thinkingBudget: 0}} : {})}
-                            })
+                if (disableInputsOnStart) {
+                    userInput.disabled = true;
+                    sendButton.disabled = true;
+                }
+
+                let fullBotResponse = '';
+
+                try {
+                    await streamOpenAIResponse(
+                        llmProvider,
+                        llmApiKey,
+                        llmModel,
+                        chatHistory,
+                        (chunk) => {
+                            if (chunk.choices && chunk.choices.length > 0) {
+                                const delta = chunk.choices[0].delta;
+                                if (delta.content) {
+                                    fullBotResponse += delta.content;
+                                    botMessageDiv.innerHTML = fullBotResponse;
+                                    smoothScrollTo(chatContainer, chatContainer.scrollHeight, 100);
+                                }
+                            }
+                        },
+                        (finalContent) => {
+                            const cleanedContent = finalContent.replace(/^```(?:\w+\n)?/, '').replace(/```\s*$/, '');
+                            botMessageDiv.innerHTML = cleanedContent;
+
+                            chatHistory = updateChatHistoryState(chatHistory, finalContent, "assistant");
+                            if (disableInputsOnStart) {
+                                userInput.disabled = false;
+                                sendButton.disabled = false;
+                                userInput.focus();
+                            }
+                            onStreamCompleted(cleanedContent);
+                        },
+                        (error) => {
+                            botMessageDiv.innerHTML = `⚠️ Error: ${error.message}`;
+                            botMessageDiv.classList.add('error-message');
+                            if (disableInputsOnStart) {
+                                userInput.disabled = false;
+                                sendButton.disabled = false;
+                                userInput.focus();
+                            }
                         }
                     );
-
-                    if (!response.ok) {
-                        const errorData = await response.json();
-                        console.error('Google Gemini API error:', errorData);
-                        return errorData.error.message;
-                    }
-
-                    const data = await response.json();
-
-                    const [inputPrice, outputPrice] = getLLMPricing(settings.llmProviderModel);
-                    const inputTokens = data.usageMetadata.promptTokenCount;
-                    const cachedTokens = data.usageMetadata?.cachedContentTokenCount ?? 0;
-                    const outputTokens = data.usageMetadata.candidatesTokenCount;
-                    const approxCost = (inputTokens - cachedTokens) * inputPrice + cachedTokens * (inputPrice / 4) + outputTokens * outputPrice;
-                    console.log('Chat', `${model}, tokens: (${inputTokens - cachedTokens}/${cachedTokens}/${outputTokens}), cost: $${approxCost.toFixed(6)}`);
-
-                    return data.candidates[0].content.parts[0].text || "Sorry, could not get a response.";
                 } catch (error) {
-                    console.error('Google Gemini API call failed:', error);
-                    return "Sorry, something went wrong communicating with Google.";
+                    botMessageDiv.innerHTML = `⚠️ Error: ${error.message}`;
+                    botMessageDiv.classList.add('error-message');
+                    if (disableInputsOnStart) {
+                        userInput.disabled = false;
+                        sendButton.disabled = false;
+                        userInput.focus();
+                    }
                 }
             }
 
-            async function getBotResponse(provider, apiKey, model, history) {
-                if (provider === 'openai') {
-                    return await getOpenAIResponse(apiKey, model, history);
-                } else if (provider === 'google') {
-                    return await getGoogleResponse(apiKey, model, history);
+            async function handleSendMessage() {
+                const userInput = document.getElementById("user-input");
+                const chatContainer = document.getElementById("chat-container");
+
+                const message = userInput.value.trim();
+                if (!message) {
+                    console.log('Message is empty.');
+                    return;
                 }
+
+                const userMessage = message;
+                userInput.value = '';
+
+                addMessageToUI(userMessage, 'user-message', chatContainer, true);
+                chatHistory = updateChatHistoryState(chatHistory, userMessage, "user");
+
+                const botMessageDiv = addMessageToUI("", 'bot-message', chatContainer, false);
+
+                await callStreamOpenAI(botMessageDiv, chatContainer);
             }
 
             async function getTTSResponse(provider, apiKey, voice, text) {
@@ -2992,30 +3089,6 @@
                 } else if (provider === 'google') {
                     return await googleTTS(text, apiKey, voice, ttsInstructions);
                 }
-            }
-
-            async function handleSendMessage() {
-                const userInput = document.getElementById("user-input")
-                const chatContainer = document.getElementById("chat-container")
-
-                const message = userInput.value.trim();
-                if (!message) {
-                    console.log('Message is empty.')
-                    return;
-                }
-
-                const userMessage = message;
-                userInput.value = '';
-
-                addMessageToUI(userMessage, 'user-message', chatContainer);
-                chatHistory = updateChatHistoryState(chatHistory, userMessage, "user");
-
-                addMessageToUI("loading ...", 'loading-message', chatContainer);
-                const botResponse = await getBotResponse(llmProvider, llmApiKey, llmModel, chatHistory);
-                chatContainer.removeChild(chatContainer.lastChild);
-
-                addMessageToUI(botResponse, 'bot-message', chatContainer);
-                chatHistory = updateChatHistoryState(chatHistory, botResponse, "assistant");
             }
 
             async function updateChatWidget() {
@@ -3058,38 +3131,42 @@
                 }, true);
                 sendButton.addEventListener('click', handleSendMessage);
 
-                if (llmProvider === 'openai') chatHistory = updateChatHistoryState(chatHistory, systemPrompt, "system");
+                chatHistory = updateChatHistoryState(chatHistory, systemPrompt, "system");
 
                 if (settings.askSelected && sectionHead.matches(".section-widget--head")) {
                     const initialUserMessage = getSelectedWithContext();
+
                     chatHistory = updateChatHistoryState(chatHistory, !isSentence ? wordPhrasePrompt : sentencePrompt, "user");
                     chatHistory = updateChatHistoryState(chatHistory, "Understood.", "assistant");
 
                     chatHistory = updateChatHistoryState(chatHistory, initialUserMessage, "user");
-                    addMessageToUI("loading ...", 'loading-message', chatContainer);
-                    const botResponse = await getBotResponse(llmProvider, llmApiKey, llmModel, chatHistory);
-                    chatContainer.removeChild(chatContainer.lastChild);
-                    const messageType = isSentence ? "sentence-message" : "word-message"
-                    addMessageToUI(botResponse, `bot-message ${messageType}`, chatContainer);
-                    chatHistory = updateChatHistoryState(chatHistory, botResponse, "assistant");
+
+                    const botMessageDiv = addMessageToUI("", 'bot-message', chatContainer, false);
+
+                    await callStreamOpenAI(
+                        botMessageDiv,
+                        chatContainer,
+                        (finalContent) => {
+                            const messageType = isSentence ? "sentence-message" : "word-message";
+                            botMessageDiv.classList.add(messageType);
+                            chatHistory = updateChatHistoryState(chatHistory, finalContent, "assistant");
+
+                            const meaning = botMessageDiv.querySelector("p");
+                            if (meaning) {
+                                const meaningElement = document.querySelector(".reference-input-text");
+                                const hasMeaning = meaningElement ? meaningElement.value : false;
+                                const textToCopy = (hasMeaning ? '\n' : '') + (meaning.textContent || meaning.innerText);
+
+                                navigator.clipboard.writeText(textToCopy)
+                                    .then(() => {showToast("Meaning Copied!", true)})
+                                    .catch(() => {showToast("Failed to copy meaning.", false)});
+                            }
+                        },
+                        false
+                    );
 
                     chatHistory = updateChatHistoryState(chatHistory, plainTextPrompt, "user");
                     chatHistory = updateChatHistoryState(chatHistory, "Understood.", "assistant");
-
-                    const meaning = document.querySelector("#chat-container > .bot-message > p");
-                    if (meaning) {
-                        const meaningElement = document.querySelector(".reference-input-text");
-                        const hasMeaning = meaningElement ? meaningElement.value : false;
-                        const textToCopy = (hasMeaning ? '\n' : '') + meaning.textContent;
-
-                        navigator.clipboard.writeText(textToCopy)
-                            .then(() => {
-                                showToast("Meaning Copied!", true);
-                            })
-                            .catch(() => {
-                                showToast("Failed to copy meaning.", false);
-                            });
-                    }
                 }
             }
 
@@ -3634,5 +3711,3 @@ Respond understood if you got it.
 
     init();
 })();
-
-// TODO: add a reroll button to the bot's last message.
