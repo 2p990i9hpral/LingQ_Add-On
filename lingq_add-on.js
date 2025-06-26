@@ -6,7 +6,7 @@
 // @match        https://www.lingq.com/*/learn/*/workdesk/item/*/print/
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      6.0.1
+// @version      6.0.2
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @namespace https://greasyfork.org/users/1458847
@@ -2987,7 +2987,6 @@
                             }
                         }
                     }
-                    fullContent = fullContent.replace(/^```(?:\w+\n)?/, '').replace(/```\s*$/, '');
                     onStreamEnd(fullContent);
                 } catch (error) {
                     console.error("OpenAI API call failed:", error);
@@ -2995,77 +2994,52 @@
                 }
             }
 
-            async function callStreamOpenAI(botMessageDiv, chatContainer, onStreamCompleted = () => {}, disableInputsOnStart = true) {
+            async function callStreamOpenAI(botMessageDiv, chatContainer, onStreamCompleted = () => {}) {
                 const userInput = document.getElementById("user-input");
                 const sendButton = document.getElementById("send-button");
 
-                if (disableInputsOnStart) {
-                    userInput.disabled = true;
-                    sendButton.disabled = true;
-                }
+                userInput.disabled = true;
+                sendButton.disabled = true;
 
                 let fullBotResponse = '';
 
-                try {
-                    await streamOpenAIResponse(
-                        llmProvider,
-                        llmApiKey,
-                        llmModel,
-                        chatHistory,
-                        (chunk) => {
-                            if (chunk.choices && chunk.choices.length > 0) {
-                                const delta = chunk.choices[0].delta;
-                                if (delta.content) {
-                                    fullBotResponse += delta.content;
-                                    botMessageDiv.innerHTML = fullBotResponse;
-                                    smoothScrollTo(chatContainer, chatContainer.scrollHeight, 100);
-                                }
-                            }
-                        },
-                        (finalContent) => {
-                            const cleanedContent = finalContent.replace(/^```(?:\w+\n)?/, '').replace(/```\s*$/, '');
-                            botMessageDiv.innerHTML = cleanedContent;
-
-                            chatHistory = updateChatHistoryState(chatHistory, finalContent, "assistant");
-                            if (disableInputsOnStart) {
-                                userInput.disabled = false;
-                                sendButton.disabled = false;
-                                userInput.focus();
-                            }
-                            onStreamCompleted(cleanedContent);
-                        },
-                        (error) => {
-                            botMessageDiv.innerHTML = `⚠️ Error: ${error.message}`;
-                            botMessageDiv.classList.add('error-message');
-                            if (disableInputsOnStart) {
-                                userInput.disabled = false;
-                                sendButton.disabled = false;
-                                userInput.focus();
+                await streamOpenAIResponse(
+                    llmProvider,
+                    llmApiKey,
+                    llmModel,
+                    chatHistory,
+                    (chunk) => {
+                        if (chunk.choices && chunk.choices.length > 0) {
+                            const delta = chunk.choices[0].delta;
+                            if (delta.content) {
+                                fullBotResponse += delta.content;
+                                botMessageDiv.innerHTML = fullBotResponse;
+                                smoothScrollTo(chatContainer, chatContainer.scrollHeight, 100);
                             }
                         }
-                    );
-                } catch (error) {
-                    botMessageDiv.innerHTML = `⚠️ Error: ${error.message}`;
-                    botMessageDiv.classList.add('error-message');
-                    if (disableInputsOnStart) {
+                    },
+                    (finalContent) => {
+                        const cleanedContent = finalContent.replace(/^```(?:\w+\n)?/, '').replace(/```\s*$/, '');
+                        botMessageDiv.innerHTML = cleanedContent;
+
+                        chatHistory = updateChatHistoryState(chatHistory, cleanedContent, "assistant");
                         userInput.disabled = false;
                         sendButton.disabled = false;
                         userInput.focus();
+                        onStreamCompleted(cleanedContent);
+                    },
+                    (error) => {
+                        botMessageDiv.innerHTML = `⚠️ Error: ${error.message}`;
                     }
-                }
+                );
             }
 
             async function handleSendMessage() {
                 const userInput = document.getElementById("user-input");
                 const chatContainer = document.getElementById("chat-container");
 
-                const message = userInput.value.trim();
-                if (!message) {
-                    console.log('Message is empty.');
-                    return;
-                }
-
-                const userMessage = message;
+                const userMessage = userInput.value.trim();
+                if (!userMessage) return;
                 userInput.value = '';
 
                 addMessageToUI(userMessage, 'user-message', chatContainer, true);
@@ -3138,8 +3112,7 @@
                 if (settings.askSelected && sectionHead.matches(".section-widget--head")) {
                     const initialUserMessage = getSelectedWithContext();
 
-                    chatHistory = updateChatHistoryState(chatHistory, !isSentence ? wordPhrasePrompt : sentencePrompt, "user");
-                    chatHistory = updateChatHistoryState(chatHistory, "Understood.", "assistant");
+                    chatHistory = updateChatHistoryState(chatHistory, !isSentence ? wordPhrasePrompt : sentencePrompt, "system");
 
                     chatHistory = updateChatHistoryState(chatHistory, initialUserMessage, "user");
 
@@ -3149,10 +3122,6 @@
                         botMessageDiv,
                         chatContainer,
                         (finalContent) => {
-                            const messageType = isSentence ? "sentence-message" : "word-message";
-                            botMessageDiv.classList.add(messageType);
-                            chatHistory = updateChatHistoryState(chatHistory, finalContent, "assistant");
-
                             const meaning = botMessageDiv.querySelector("p");
                             if (meaning) {
                                 const meaningElement = document.querySelector(".reference-input-text");
@@ -3163,12 +3132,10 @@
                                     .then(() => {showToast("Meaning Copied!", true)})
                                     .catch(() => {showToast("Failed to copy meaning.", false)});
                             }
-                        },
-                        false
+                        }
                     );
 
-                    chatHistory = updateChatHistoryState(chatHistory, plainTextPrompt, "user");
-                    chatHistory = updateChatHistoryState(chatHistory, "Understood.", "assistant");
+                    chatHistory = updateChatHistoryState(chatHistory, plainTextPrompt, "system");
                 }
             }
 
@@ -3346,8 +3313,6 @@ Assistant Output:
   <li>Elle était capable de maîtriser la tâche difficile.</li>
 </ul>
 \`\`\`
-
-Respond understood if you got it.
 `;
             const sentencePrompt = `
 Use this prompt only for the right next input.
@@ -3457,8 +3422,6 @@ Assistant Output:
   <li><b>cantaban:</b> ils chantaient.</li>
 </ul>
 \`\`\`
-
-Respond understood if you got it.
 `;
             const plainTextPrompt = `
 # Plain Text Input (Conversational/Freetext)
@@ -3494,8 +3457,6 @@ Assistant Output (implicitly referring to "translators" and its initial context)
 \`\`\`
 <p>앞서 논의된 문맥에서 '번역가들(translators)'이라는 단어는 ESV 성경 번역가들이 특정 단어를 '종(servant)'으로 번역하기로 선택한 상황을 가리킵니다. 이는 그들이 특정 해석을 선호하여 해당 여성이 공식적인 권위의 직책을 가졌을 가능성을 배제했음을 시사합니다. 따라서 문맥상 '번역가들'은 단순히 언어를 옮기는 사람을 넘어, 특정 신학적 또는 해석적 관점을 가진 번역 주체를 의미할 수 있습니다.</p>
 \`\`\`
-
-Respond understood if you got it.
 `;
 
             let chatHistory = [];
