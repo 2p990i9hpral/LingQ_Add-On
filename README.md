@@ -98,10 +98,6 @@ Click the "💾" icon to export LingQs, after clicking a popup will open.  Use t
 *   **Download Known LingQs:** Exports known LingQs (words + phrases) as a CSV file.
 *   **Download Known Words:** Exports known words as a CSV file.
 
-### Completing Lesson
-
-Click the "✔" icon to complete the lesson.
-
 ### Reset Course Position
 
 <img src="images/reset_course.png"></br>
@@ -117,12 +113,6 @@ Library Lessons are enhanced with an indicator for known words.
 ### Print a Lesson with Highlighting and the Vocabulary List
 
 <img src="images/print.jpeg" width="800"></br>
-
-
-
-## Contributing
-
-Feel free to contribute to the project by submitting pull requests or opening issues to report bugs or suggest new features.
 
 ## License
 
