@@ -2695,6 +2695,74 @@
         }
     }
 
+    async function streamOpenAIResponse(provider, apiKey, model, history, onChunkReceived, onStreamEnd, onError) {
+        const api_url = provider === "openai" ? `https://api.openai.com/v1/chat/completions` : (provider === "google" ? "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions" : "");
+
+        const body = {
+            model: model,
+            temperature: 0.3,
+            messages: history,
+            stream: true,
+        };
+        if (provider === "google" && model.includes("2.5")) body.reasoning_effort = "none";
+
+        let buffer = '';
+        let fullContent = '';
+
+        try {
+            const response = await fetch(api_url, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${apiKey}`,
+                },
+                body: JSON.stringify(body),
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json();
+                console.error('OpenAI API error:', errorData);
+                throw new Error(errorData.error ? errorData.error.message : JSON.stringify(errorData));
+            }
+
+            const reader = response.body.getReader();
+            const decoder = new TextDecoder('utf-8');
+
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+
+                const chunk = decoder.decode(value, { stream: true });
+                buffer += chunk;
+
+                const lines = buffer.split('\n');
+                buffer = lines.pop();
+
+                for (const line of lines) {
+                    if (line.trim() === '') continue;
+                    if (line.startsWith('data: ')) {
+                        const data = line.substring(6).trim();
+                        if (data === '[DONE]') continue;
+
+                        try {
+                            const json = JSON.parse(data);
+                            onChunkReceived(json);
+
+                            if (json.choices && json.choices.length > 0 && json.choices[0].delta && json.choices[0].delta.content) fullContent += json.choices[0].delta.content;
+                        } catch (parseError) {
+                            console.error(`JSON parsing error: ${parseError.message}, Data: ${data}`);
+                            onError(new Error(`JSON parsing error: ${parseError.message}, Data: ${data}`));
+                        }
+                    }
+                }
+            }
+            onStreamEnd(fullContent);
+        } catch (error) {
+            console.error("OpenAI API call failed:", error);
+            onError(error);
+        }
+    }
+
     /* Features */
 
     function setupKeyboardShortcuts() {
@@ -2924,74 +2992,6 @@
 
                 if (container.childElementCount > 1) smoothScrollTo(container, container.scrollHeight, 300);
                 return messageDiv;
-            }
-
-            async function streamOpenAIResponse(provider, apiKey, model, history, onChunkReceived, onStreamEnd, onError) {
-                const api_url = provider === "openai" ? `https://api.openai.com/v1/chat/completions` : (provider === "google" ? "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions" : "");
-
-                const body = {
-                    model: model,
-                    temperature: 0.3,
-                    messages: history,
-                    stream: true,
-                };
-                if (provider === "google" && model.includes("2.5")) body.reasoning_effort = "none";
-
-                let buffer = '';
-                let fullContent = '';
-
-                try {
-                    const response = await fetch(api_url, {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                            'Authorization': `Bearer ${apiKey}`,
-                        },
-                        body: JSON.stringify(body),
-                    });
-
-                    if (!response.ok) {
-                        const errorData = await response.json();
-                        console.error('OpenAI API error:', errorData);
-                        throw new Error(errorData.error ? errorData.error.message : JSON.stringify(errorData));
-                    }
-
-                    const reader = response.body.getReader();
-                    const decoder = new TextDecoder('utf-8');
-
-                    while (true) {
-                        const { done, value } = await reader.read();
-                        if (done) break;
-
-                        const chunk = decoder.decode(value, { stream: true });
-                        buffer += chunk;
-
-                        const lines = buffer.split('\n');
-                        buffer = lines.pop();
-
-                        for (const line of lines) {
-                            if (line.trim() === '') continue;
-                            if (line.startsWith('data: ')) {
-                                const data = line.substring(6).trim();
-                                if (data === '[DONE]') continue;
-
-                                try {
-                                    const json = JSON.parse(data);
-                                    onChunkReceived(json);
-
-                                    if (json.choices && json.choices.length > 0 && json.choices[0].delta && json.choices[0].delta.content) fullContent += json.choices[0].delta.content;
-                                } catch (parseError) {
-                                    console.error(`JSON parsing error: ${parseError.message}, Data: ${data}`);
-                                    onError(new Error(`JSON parsing error: ${parseError.message}, Data: ${data}`));
-                                }
-                            }
-                        }
-                    }
-                    onStreamEnd(fullContent);
-                } catch (error) {
-                    console.error("OpenAI API call failed:", error);
-                    onError(error);
-                }
             }
 
             async function callStreamOpenAI(botMessageDiv, chatContainer, onStreamCompleted = () => {}) {

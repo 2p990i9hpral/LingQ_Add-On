@@ -31,11 +31,12 @@ It offers customizable layouts, appearance settings, vocabulary downloading tool
 *   **Chat Widget:**
     *   An AI-powered chat widget for interacting with the lesson content.
     *   An AI-based TTS model that substitutes original one.
-*   Enhanced YouTube player:
+*   **Enhanced YouTube player**
     *   Turns on caption default.
     *   Disables the player controller.
     *   Adds a video progress indicator synced with the audio player's progress.
     *   Remove the more videos pop-up and youtube logo in the player, so you can read the subtitle while the video is paused.
+*   **Print a Lesson with Highlighting and the Vocabulary List**
 
 ## Installation
 
@@ -76,6 +77,8 @@ Click the "⚙️" icon to open the settings popup.  From there, you can adjust:
 
 <img src="images/chat-widget.png"></br>
 
+<img src="images/chat_streaming.gif"></br>
+
 The add-on provides a chat widget that uses AI to enhance your learning experience:
 
 *   **Access:** The chat widget can be enabled/disabled in the settings popup.
@@ -99,13 +102,23 @@ Click the "💾" icon to export LingQs, after clicking a popup will open.  Use t
 
 Click the "✔" icon to complete the lesson.
 
-### Reset Course
+### Reset Course Position
+
+<img src="images/reset_course.png"></br>
 
 Library courses will have an option to reset lessons to their first position.
 
 ### Known Words Indicator
 
+<img src="images/known_words.png"></br>
+
 Library Lessons are enhanced with an indicator for known words.
+
+### Print a Lesson with Highlighting and the Vocabulary List
+
+<img src="images/print.jpeg" width="800"></br>
+
+
 
 ## Contributing
 
