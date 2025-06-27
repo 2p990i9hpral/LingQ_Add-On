@@ -6,7 +6,7 @@
 // @match        https://www.lingq.com/*/learn/*/workdesk/item/*/print/
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      6.1.3
+// @version      6.2.0
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @namespace https://greasyfork.org/users/1458847
@@ -2970,7 +2970,7 @@
 
                     const readerContainer = (await waitForElement(".reader-container .sentence-text-head", 5000)).parentNode;
                     const lessonContent = extractTextFromDOM(readerContainer).trim();
-                    await getLessonSummary(llmProvider, llmApiKey, llmModel, lessonContent);
+                    lessonSummary = await getLessonSummary(llmProvider, llmApiKey, llmModel, lessonContent);
                 });
             });
         });
@@ -3108,6 +3108,11 @@
 
                 let fullBotResponse = '';
 
+                const existingRegenerateButton = botMessageDiv.querySelector('.regenerate-button');
+                if (existingRegenerateButton) {
+                    existingRegenerateButton.remove();
+                }
+
                 await streamOpenAIResponse(
                     llmProvider,
                     llmApiKey,
@@ -3131,6 +3136,28 @@
                         userInput.disabled = false;
                         sendButton.disabled = false;
                         if (focus) userInput.focus();
+
+                        const existingRegenerateButton = document.querySelector('.regenerate-button');
+                        if (existingRegenerateButton) existingRegenerateButton.remove();
+
+                        const regenerateButton = createElement("button", {
+                            className: "regenerate-button",
+                            innerHTML: `<svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="transparent" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-rotate-ccw" aria-hidden="true"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path><path d="M3 3v5h5"></path></svg>`,
+                            style: "margin-top: 5px;",
+                        });
+
+                        regenerateButton.addEventListener('click', async () => {
+                            botMessageDiv.remove();
+                            chatHistory = chatHistory.slice(0, chatHistory.findLastIndex(item => item.role === "assistant"));
+
+                            const chatContainer = document.getElementById("chat-container");
+                            const newBotMessageDiv = addMessageToUI("", 'bot-message', chatContainer, false);
+                            await callStreamOpenAI(newBotMessageDiv, chatContainer, true);
+                        });
+
+                        botMessageDiv.appendChild(regenerateButton);
+                        smoothScrollTo(chatContainer, chatContainer.scrollHeight, 100);
+
                         onStreamCompleted(cleanedContent);
                     },
                     (error) => {
@@ -3151,7 +3178,6 @@
                 chatHistory = updateChatHistoryState(chatHistory, userMessage, "user");
 
                 const botMessageDiv = addMessageToUI("", 'bot-message', chatContainer, false);
-
                 await callStreamOpenAI(botMessageDiv, chatContainer, true);
             }
 
