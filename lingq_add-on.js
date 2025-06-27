@@ -6,7 +6,7 @@
 // @match        https://www.lingq.com/*/learn/*/workdesk/item/*/print/
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      6.1.0
+// @version      6.1.2
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @namespace https://greasyfork.org/users/1458847
@@ -2727,7 +2727,6 @@
 
             if (!response.ok) {
                 const errorData = await response.json();
-                console.error('OpenAI API error:', errorData);
                 throw new Error(errorData.error ? errorData.error.message : JSON.stringify(errorData));
             }
 
@@ -2756,7 +2755,6 @@
 
                             if (json.choices && json.choices.length > 0 && json.choices[0].delta && json.choices[0].delta.content) fullContent += json.choices[0].delta.content;
                         } catch (parseError) {
-                            console.error(`JSON parsing error: ${parseError.message}, Data: ${data}`);
                             onError(new Error(`JSON parsing error: ${parseError.message}, Data: ${data}`));
                         }
                     }
@@ -2764,12 +2762,11 @@
             }
             onStreamEnd(fullContent);
         } catch (error) {
-            console.error("OpenAI API call failed:", error);
             onError(error);
         }
     }
 
-    async function getLessonSummary(provider, apikey, model) {
+    async function getLessonSummary(provider, apikey, model, content) {
         let summaryPrompt = `
             # System Settings
             - Summarize the content in ENGLISH while retaining all the key information from the input, allowing the user to understand the original content. 
@@ -2780,10 +2777,9 @@
             - Write in ENGLISH even if the original content's language is non-English.`;
         summaryPrompt = removeIndent(summaryPrompt);
 
-        const lessonContent = extractTextFromDOM(document.querySelector(".reader-container")).trim();
         const summary_history = [
             {role: "system", content: summaryPrompt},
-            {role: "user", content: lessonContent}
+            {role: "user", content: content}
         ]
         const summary = await getOpenAIResponse(provider, apikey, model, summary_history);
         console.log(`Lesson summary: \n${summary}`);
@@ -2917,7 +2913,11 @@
         observer.observe(document.body, {childList: true});
     }
 
+    let lessonSummary = "";
     async function setupReaderContainer() {
+        const [llmProvider, llmModel] = settings.llmProviderModel.split(" ");
+        const llmApiKey = settings.llmApiKey;
+
         function setupSentenceFocus(readerContainer) {
             function focusPlayingSentence(playingSentence) {
                 const scrolling_div = document.querySelector(".reader-container");
@@ -2958,7 +2958,7 @@
         const observer = new MutationObserver(function (mutations) {
             mutations.forEach((mutation) => {
                 console.debug('Observer:', `Sentence text child created. ${mutation.type}`, mutation.addedNodes);
-                mutation.addedNodes.forEach((node) => {
+                mutation.addedNodes.forEach(async (node) => {
                     if (node.nodeType !== Node.ELEMENT_NODE) return;
                     if (!node.matches(".loadedContent")) return;
 
@@ -2966,6 +2966,12 @@
                     setupSentenceFocus(node);
                     if (settings.showTranslation) showTranslation();
                     changeTranslationColor(node);
+
+                    // console.log();
+
+                    const readerContainer = (await waitForElement(".reader-container .sentence-text-head", 5000)).parentNode;
+                    const lessonContent = extractTextFromDOM(readerContainer).trim();
+                    await getLessonSummary(llmProvider, llmApiKey, llmModel, lessonContent);
                 });
             });
         });
@@ -2978,6 +2984,74 @@
         const [llmProvider, llmModel] = settings.llmProviderModel.split(" ");
         const [ttsProvider, ttsVoice] = settings.ttsVoice.split(" ");
         const llmApiKey = settings.llmApiKey;
+
+        async function getTTSResponse(provider, apiKey, voice, text) {
+            const ttsInstructions = `Read the text in a realistic, genuine, neutral, and clear manner. vary your rhythm and pace naturally, like a professional voice actor: `;
+
+            const voices = Array.from(document.querySelector("#ttsVoiceSelector").options)
+                .filter(option => option.value.startsWith(provider))
+                .map(option => option.value)
+                .slice(1);
+
+            if (voice === "random") voice = getRandomElement(voices).split(" ")[1];
+
+            if (provider === 'openai') {
+                return await openAITTS(text, apiKey, voice, ttsInstructions);
+            } else if (provider === 'google') {
+                return await googleTTS(text, apiKey, voice, ttsInstructions);
+            }
+        }
+
+        async function updateTTS(click = true) {
+            async function replaceTTSButton() {
+                const selectedTextElement = document.querySelector(".reference-word");
+                const selectedText = selectedTextElement ? selectedTextElement.textContent.trim() : "";
+                if (!selectedText) return;
+
+                if (selectedText.length > 1000) {
+                    console.log("The length of the selected text exceeds 1,000.")
+                    return;
+                }
+
+                ttsButton.disabled = true;
+                let audioData = await getTTSResponse(ttsProvider, settings.ttsApiKey, ttsVoice, selectedText);
+                if (audioData == null) {
+                    console.log("audioData can't be got.")
+                    return;
+                }
+                ttsButton.disabled = false;
+
+                const newTTSButton = ttsButton.cloneNode(true);
+                newTTSButton.id = "playAudio";
+                newTTSButton.addEventListener('click', async (event) => {
+                    await playAudio(audioData, 0.7);
+                })
+                ttsButton.replaceWith(newTTSButton);
+                showToast("TTS Replaced", true);
+                playAudio(audioData, 0.7);
+            }
+
+            if (!settings.tts) return;
+
+            const ttsButton = document.querySelector('.is-tts');
+            if (!ttsButton) return;
+
+            const isWord = document.querySelector("span.selected-text, span.is-selected");
+
+            const ttsWordOffCondition = !settings.ttsWord && isWord;
+            const ttsSentenceOffCondition = !settings.ttsSentence && !isWord;
+
+            if (ttsWordOffCondition || ttsSentenceOffCondition) {
+                if (click) ttsButton.click();
+
+                ttsButton.addEventListener('click', (event) => {
+                    event.stopImmediatePropagation();
+                    replaceTTSButton();
+                }, true);
+            } else {
+                replaceTTSButton();
+            }
+        }
 
         async function updateWidget() {
             function getSectionHead() {
@@ -3082,23 +3156,6 @@
                 await callStreamOpenAI(botMessageDiv, chatContainer, true);
             }
 
-            async function getTTSResponse(provider, apiKey, voice, text) {
-                const ttsInstructions = `Read the text in a realistic, genuine, neutral, and clear manner. vary your rhythm and pace naturally, like a professional voice actor: `;
-
-                const voices = Array.from(document.querySelector("#ttsVoiceSelector").options)
-                    .filter(option => option.value.startsWith(provider))
-                    .map(option => option.value)
-                    .slice(1);
-
-                if (voice === "random") voice = getRandomElement(voices).split(" ")[1];
-
-                if (provider === 'openai') {
-                    return await openAITTS(text, apiKey, voice, ttsInstructions);
-                } else if (provider === 'google') {
-                    return await googleTTS(text, apiKey, voice, ttsInstructions);
-                }
-            }
-
             async function updateChatWidget() {
                 if (!settings.chatWidget) return;
 
@@ -3140,10 +3197,15 @@
                 sendButton.addEventListener('click', handleSendMessage);
 
                 chatHistory = updateChatHistoryState(chatHistory, systemPrompt, "system");
-                chatHistory = updateChatHistoryState(chatHistory, `This is the summary of this lesson. You can refer to this when you response. \n[Lesson Summary] ${lessonSummary}`, "system");
+                chatHistory = updateChatHistoryState(chatHistory, `This is the summary of this lesson. You can refer to this when you response. \n[Lesson Summary] ${lessonSummary}`, "user");
 
                 if (settings.askSelected && sectionHead.matches(".section-widget--head")) {
                     const initialUserMessage = getSelectedWithContext();
+
+                    if (initialUserMessage.length > 1000) {
+                        console.log("The length of the selected text exceeds 1,000.")
+                        return;
+                    }
 
                     chatHistory = updateChatHistoryState(chatHistory, !isSentence ? wordPhrasePrompt : sentencePrompt, "system");
 
@@ -3170,57 +3232,6 @@
                     );
 
                     chatHistory = updateChatHistoryState(chatHistory, plainTextPrompt, "system");
-                }
-            }
-
-            async function updateTTS(click = true) {
-                async function replaceTTSButton() {
-                    const selectedTextElement = document.querySelector(".reference-word");
-                    const selectedText = selectedTextElement ? selectedTextElement.textContent.trim() : "";
-                    if (!selectedText) return;
-
-                    if (selectedText.length > 1000) {
-                        console.log("The length of the selected text exceeds 1,000.")
-                        return;
-                    }
-
-                    ttsButton.disabled = true;
-                    let audioData = await getTTSResponse(ttsProvider, settings.ttsApiKey, ttsVoice, selectedText);
-                    if (audioData == null) {
-                        console.log("audioData can't be got.")
-                        return;
-                    }
-                    ttsButton.disabled = false;
-
-                    const newTTSButton = ttsButton.cloneNode(true);
-                    newTTSButton.id = "playAudio";
-                    newTTSButton.addEventListener('click', async (event) => {
-                        await playAudio(audioData, 0.7);
-                    })
-                    ttsButton.replaceWith(newTTSButton);
-                    showToast("TTS Replaced", true);
-                    playAudio(audioData, 0.7);
-                }
-
-                if (!settings.tts) return;
-
-                const ttsButton = document.querySelector('.is-tts');
-                if (!ttsButton) return;
-
-                const isWord = document.querySelector("span.selected-text, span.is-selected");
-
-                const ttsWordOffCondition = !settings.ttsWord && isWord;
-                const ttsSentenceOffCondition = !settings.ttsSentence && !isWord;
-
-                if (ttsWordOffCondition || ttsSentenceOffCondition) {
-                    if (click) ttsButton.click();
-
-                    ttsButton.addEventListener('click', (event) => {
-                        event.stopImmediatePropagation();
-                        replaceTTSButton();
-                    }, true);
-                } else {
-                    replaceTTSButton();
                 }
             }
 
@@ -3534,7 +3545,6 @@
         const lessonLanguage = DictionaryLocalePairs[getLessonLanguage()];
         const userLanguage = DictionaryLocalePairs[userDictionaryLang];
         const lessonReader = document.getElementById('lesson-reader');
-        const lessonSummary = await getLessonSummary(llmProvider, llmApiKey, llmModel);
 
         updateWidget();
         const observer = new MutationObserver((mutations) => {
