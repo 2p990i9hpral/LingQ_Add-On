@@ -6,7 +6,7 @@
 // @match        https://www.lingq.com/*/learn/*/workdesk/item/*/print/
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      6.2.1
+// @version      6.2.2
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @namespace https://greasyfork.org/users/1458847
@@ -1383,6 +1383,11 @@
                     border: 0;
                     height: 1px;
                     background-color: rgb(125 125 125 / 50%);
+                }
+                
+                .message-botton:disabled {
+                    opacity: 0.5;
+                    cursor: auto;
                 }
                 
                 /*tts*/
@@ -2786,6 +2791,23 @@
         return summary;
     }
 
+    async function getTTSResponse(provider, apiKey, voice, text) {
+        const ttsInstructions = `Read the text in a realistic, genuine, neutral, and clear manner. vary your rhythm and pace naturally, like a professional voice actor: `;
+
+        const voices = Array.from(document.querySelector("#ttsVoiceSelector").options)
+            .filter(option => option.value.startsWith(provider))
+            .map(option => option.value)
+            .slice(1);
+
+        if (voice === "random") voice = getRandomElement(voices).split(" ")[1];
+
+        if (provider === 'openai') {
+            return await openAITTS(text, apiKey, voice, ttsInstructions);
+        } else if (provider === 'google') {
+            return await googleTTS(text, apiKey, voice, ttsInstructions);
+        }
+    }
+
     /* Features */
 
     function setupKeyboardShortcuts() {
@@ -2981,27 +3003,10 @@
 
     async function setupLLMs() {
         const [llmProvider, llmModel] = settings.llmProviderModel.split(" ");
-        const [ttsProvider, ttsVoice] = settings.ttsVoice.split(" ");
         const llmApiKey = settings.llmApiKey;
 
-        async function getTTSResponse(provider, apiKey, voice, text) {
-            const ttsInstructions = `Read the text in a realistic, genuine, neutral, and clear manner. vary your rhythm and pace naturally, like a professional voice actor: `;
-
-            const voices = Array.from(document.querySelector("#ttsVoiceSelector").options)
-                .filter(option => option.value.startsWith(provider))
-                .map(option => option.value)
-                .slice(1);
-
-            if (voice === "random") voice = getRandomElement(voices).split(" ")[1];
-
-            if (provider === 'openai') {
-                return await openAITTS(text, apiKey, voice, ttsInstructions);
-            } else if (provider === 'google') {
-                return await googleTTS(text, apiKey, voice, ttsInstructions);
-            }
-        }
-
         async function updateTTS(click = true) {
+            const [ttsProvider, ttsVoice] = settings.ttsVoice.split(" ");
             async function replaceTTSButton() {
                 const selectedTextElement = document.querySelector(".reference-word");
                 const selectedText = selectedTextElement ? selectedTextElement.textContent.trim() : "";
@@ -3143,7 +3148,7 @@
                         const messageButtonContainer = createElement("div", {style: "margin: 10px 5px 5px; display: flex; gap: 10px;"});
 
                         const regenerateButton = createElement("button", {
-                            className: "regenerate-button",
+                            className: "message-botton regenerate-button",
                             innerHTML: `<svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="transparent" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-rotate-ccw" aria-hidden="true"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path><path d="M3 3v5h5"></path></svg>`,
                         });
                         regenerateButton.addEventListener('click', async () => {
@@ -3157,7 +3162,7 @@
                         messageButtonContainer.appendChild(regenerateButton);
 
                         const copyButton = createElement("button", {
-                            className: "copy-button",
+                            className: "message-botton copy-button",
                             innerHTML: `<svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="transparent" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-copy"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"></rect><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"></path></svg>`,
                         });
                         copyButton.addEventListener('click', async () => {
@@ -3167,6 +3172,30 @@
                                 .catch(() => {showToast("Failed to copy message.", false)});
                         });
                         messageButtonContainer.appendChild(copyButton);
+
+                        const ttsButton = createElement("button", {
+                            className: "message-botton tts-button",
+                            innerHTML: `<svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="transparent" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-play" aria-hidden="true"><polygon points="6 3 20 12 6 21 6 3"></polygon></svg>`,
+                        });
+                        ttsButton.addEventListener('click', async function initialTTSHandler() {
+                            const [ttsProvider, ttsVoice] = settings.ttsVoice.split(" ");
+                            const textToTTS = botMessageDiv.textContent;
+
+                            ttsButton.disabled = true;
+                            const audioData = await getTTSResponse(ttsProvider, settings.ttsApiKey, ttsVoice, textToTTS);
+                            if (audioData == null) {
+                                console.log("audioData can't be got.")
+                                return;
+                            }
+                            ttsButton.disabled = false;
+                            playAudio(audioData, 0.7);
+
+                            ttsButton.removeEventListener('click', initialTTSHandler);
+                            ttsButton.addEventListener('click', async () => {
+                                await playAudio(audioData, 0.7);
+                            });
+                        });
+                        messageButtonContainer.appendChild(ttsButton);
 
                         botMessageDiv.appendChild(messageButtonContainer);
                         smoothScrollTo(chatContainer, chatContainer.scrollHeight, 100);
