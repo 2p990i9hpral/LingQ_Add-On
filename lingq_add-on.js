@@ -6,7 +6,7 @@
 // @match        https://www.lingq.com/*/learn/*/workdesk/item/*/print/
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      6.2.4
+// @version      6.2.6
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @namespace https://greasyfork.org/users/1458847
@@ -1326,6 +1326,15 @@
                 #send-button {
                     padding: 5px 10px;
                 }
+                
+                #send-button:disabled {
+                    opacity: 0.3;
+                    pointer-events: none;
+                }
+                
+                #send-button:hover {
+                    background-color: rgba(125, 125, 125, 50%);
+                }
         
                 .chat-message {
                     padding: 5px;
@@ -1392,7 +1401,7 @@
                  
                 .message-botton:disabled {
                     opacity: 0.5;
-                    cursor: auto;
+                    pointer-events: none;
                 }
                 
                 .message-botton:hover {
@@ -3154,7 +3163,7 @@
                         const existingRegenerateButton = document.querySelector('.regenerate-button');
                         if (existingRegenerateButton) existingRegenerateButton.remove();
 
-                        const messageButtonContainer = createElement("div", {style: "margin: 10px 5px 5px; display: flex; gap: 10px;"});
+                        const messageButtonContainer = createElement("div", {style: "margin: 5px 0 0; display: flex; gap: 5px;"});
 
                         const copyButton = createElement("button", {
                             className: "message-botton copy-button",
@@ -3248,7 +3257,7 @@
                 const userInput = createElement("input", {type: "text", id: "user-input", placeholder: "Ask anything"});
                 const sendButton = createElement("button", {
                     id: "send-button",
-                    innerHTML: `<svg width="17" height="17" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" xmlns:xlink="http://www.w3.org/1999/xlink"><path fill="#6B6C7B" d="M481.508,210.336L68.414,38.926c-17.403-7.222-37.064-4.045-51.309,8.287C2.86,59.547-3.098,78.551,1.558,96.808 L38.327,241h180.026c8.284,0,15.001,6.716,15.001,15.001c0,8.284-6.716,15.001-15.001,15.001H38.327L1.558,415.193 c-4.656,18.258,1.301,37.262,15.547,49.595c14.274,12.357,33.937,15.495,51.31,8.287l413.094-171.409 C500.317,293.862,512,276.364,512,256.001C512,235.638,500.317,218.139,481.508,210.336z"></path></svg>`
+                    innerHTML: `<svg width="17" height="17" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" xmlns:xlink="http://www.w3.org/1999/xlink"><path fill="currentColor" d="M481.508,210.336L68.414,38.926c-17.403-7.222-37.064-4.045-51.309,8.287C2.86,59.547-3.098,78.551,1.558,96.808 L38.327,241h180.026c8.284,0,15.001,6.716,15.001,15.001c0,8.284-6.716,15.001-15.001,15.001H38.327L1.558,415.193 c-4.656,18.258,1.301,37.262,15.547,49.595c14.274,12.357,33.937,15.495,51.31,8.287l413.094-171.409 C500.317,293.862,512,276.364,512,256.001C512,235.638,500.317,218.139,481.508,210.336z"></path></svg>`
                 });
 
                 inputContainer.appendChild(userInput);
@@ -3279,8 +3288,8 @@
                 }, true);
                 sendButton.addEventListener('click', handleSendMessage);
 
-                chatHistory = updateChatHistoryState(chatHistory, removeIndent(systemPrompt), "system");
                 chatHistory = updateChatHistoryState(chatHistory, `This is the summary of this lesson. You can refer to this when you response. \n[Lesson Summary] ${lessonSummary}`, "user");
+                chatHistory = updateChatHistoryState(chatHistory, removeIndent(systemPrompt), "system");
 
                 if (settings.askSelected && sectionHead.matches(".section-widget--head")) {
                     const initialUserMessage = getSelectedWithContext();
@@ -3291,7 +3300,6 @@
                     }
 
                     chatHistory = updateChatHistoryState(chatHistory, !isSentence ? removeIndent(wordPhrasePrompt) : removeIndent(sentencePrompt), "system");
-
                     chatHistory = updateChatHistoryState(chatHistory, initialUserMessage, "user");
 
                     const messageClass = isSentence ? "sentence-message" : "word-message";
@@ -3312,6 +3320,8 @@
                                     .then(() => {showToast("Meaning Copied!", true)})
                                     .catch(() => {showToast("Failed to copy meaning.", false)});
                             }
+
+                            chatHistory = chatHistory.filter((_, index) => index !== chatHistory.findLastIndex(item => item.role === "system"));
                         }
                     );
 
@@ -3330,8 +3340,7 @@
                 # System Settings
                 ## Responsibility
                 - Your primary function is to serve as a language assistant. Your responses must meticulously adhere to the following guidelines to ensure clarity, accuracy, and consistency.
-                - Utilize the HTML tags for presentation: '<b>' (for bolding key terms like the base form or selected sentence elements), '<i>' (for part of speech or emphasizing specific words within explanations), '<p>' (for paragraphs of text like definitions and explanations), '<ul>' (for unordered lists, primarily for examples or key elements), '<li>' (for list items within '<ul>'). 
-                - Do not use the '<pre>' tag.
+                - Utilize the HTML tags for presentation: '<b>' (for bolding key terms like the base form or selected sentence elements), '<i>' (for part of speech or emphasizing specific words within explanations), '<p>' (for paragraphs of text like definitions and explanations), '<ul>' (for unordered lists, primarily for examples or key elements), '<li>' (for list items within '<ul>'). But do not use the '<pre>' tag.
                 - Use '<br>' tags sparingly and only for intentional line breaks within a block element. Avoid using '<br>' for paragraph spacing; use new '<p>' tags instead.
                 - Output raw HTML as plain text. This means your entire response should be a string of HTML. Do not use Markdown syntax (e.g., '# H1', '**Bold**', '*Italic*', '> blockquote', '---'), do not wrap your HTML in Markdown code blocks (e.g., \`\`\`html ... \`\`\`), and do not use any other formatting conventions like XML declarations.
                 ## Response
@@ -3346,7 +3355,6 @@
                 - Your explanation must clearly articulate how the context influences the meaning, especially for words with multiple senses or for idiomatic expressions.
                 - Do not provide generic definitions if the context narrows the meaning.`;
             const wordPhrasePrompt = `
-                Use this prompt only for the right next input.
                 # Single Word/Phrase Input
                 ## Process
                 Input will be given as: 'Input: "word or phrase" Context: "sentence including the word or phrase"'
@@ -3404,7 +3412,6 @@
                   <li>Elle était capable de maîtriser la tâche difficile.</li>
                 </ul>`;
             const sentencePrompt = `
-                Use this prompt only for the right next input.
                 # Sentences Input
                 ## Process
                 Input will be given as: 'Input: "sentences"'
@@ -3487,14 +3494,10 @@
                 </ul>`;
             const plainTextPrompt = `
                 # Plain Text Input (Conversational/Freetext)
-                Do not use the formatting rules from the word/sentence prompts previously given for your responses in this mode. For all subsequent turns, the user input will be plain text.
-                However, you MUST remember the initial 'Input: "word or phrase" Context: "sentence..."' or 'Input: "sentence(s)"' that was processed right before this plain text mode started. This initial input and its associated context are vital for understanding follow-up questions in this conversational phase.
+                Remember the initial 'Input: "word or phrase" Context: "sentence..."' or 'Input: "sentence(s)"'. This initial input and its associated context are vital for understanding follow-up questions in this conversational phase.
                 ## Response
-                - Input will be given as: 'Plain text input'.
-                - Respond naturally and directly in ${userLanguage}. 
-                - Avoid structured outputs (like those in word/phrase/sentence prompts); adhere to a conversational context. Use HTML tags ('<b>', '<i>', '<p>', '<ul>', '<li>', '<br>'), but not <pre> or Markdown for presentation.
-                - If a user's plain text query refers to a word, phrase, concept, or asks a question that seems related to the initial structured input (the one with "Input:" and/or "Context:"), you MUST assume they are referring back to that specific initial input and its context, even if they don't explicitly state "in the previous context," "about the word we just discussed," or similar phrases. Use your knowledge of that initial input to provide a relevant and contextual answer in ${userLanguage}.
-                - For general queries clearly not related to the initial input, answer as a general language assistant in ${userLanguage}.
+                - If a user's plain text query refers to a word, phrase, concept, or asks a question that seems related to the initial structured input (the one with "Input:" and/or "Context:"), you MUST assume they are referring back to that specific initial input and its context, even if they don't explicitly state "in the previous context," "about the word we just discussed," or similar phrases. Use your knowledge of that initial input to provide a relevant and contextual answer.
+                - For general queries clearly not related to the initial input, answer as a general assistant.
                 ## Examples
                 ### Example 1: Plain Text Input (User Language: English) - General Query
                 User Input: "What's the weather like in London today?"
