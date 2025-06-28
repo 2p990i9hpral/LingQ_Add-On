@@ -6,7 +6,7 @@
 // @match        https://www.lingq.com/*/learn/*/workdesk/item/*/print/
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      6.2.3
+// @version      6.2.4
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @namespace https://greasyfork.org/users/1458847
@@ -1385,9 +1385,18 @@
                     background-color: rgb(125 125 125 / 50%);
                 }
                 
+                .message-botton {
+                    padding: 3px;
+                    border-radius: 3px;
+                }
+                 
                 .message-botton:disabled {
                     opacity: 0.5;
                     cursor: auto;
+                }
+                
+                .message-botton:hover {
+                    background-color: rgba(125, 125, 125, 50%);
                 }
                 
                 /*tts*/
