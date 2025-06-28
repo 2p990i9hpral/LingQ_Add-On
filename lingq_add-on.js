@@ -6,7 +6,7 @@
 // @match        https://www.lingq.com/*/learn/*/workdesk/item/*/print/
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      6.2.2
+// @version      6.2.3
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @namespace https://greasyfork.org/users/1458847
@@ -3147,20 +3147,6 @@
 
                         const messageButtonContainer = createElement("div", {style: "margin: 10px 5px 5px; display: flex; gap: 10px;"});
 
-                        const regenerateButton = createElement("button", {
-                            className: "message-botton regenerate-button",
-                            innerHTML: `<svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="transparent" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-rotate-ccw" aria-hidden="true"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path><path d="M3 3v5h5"></path></svg>`,
-                        });
-                        regenerateButton.addEventListener('click', async () => {
-                            botMessageDiv.remove();
-                            chatHistory = chatHistory.slice(0, chatHistory.findLastIndex(item => item.role === "assistant"));
-
-                            const chatContainer = document.getElementById("chat-container");
-                            const newBotMessageDiv = addMessageToUI("", 'bot-message', chatContainer, false);
-                            await callStreamOpenAI(newBotMessageDiv, chatContainer, true);
-                        });
-                        messageButtonContainer.appendChild(regenerateButton);
-
                         const copyButton = createElement("button", {
                             className: "message-botton copy-button",
                             innerHTML: `<svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="transparent" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-copy"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"></rect><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"></path></svg>`,
@@ -3179,7 +3165,14 @@
                         });
                         ttsButton.addEventListener('click', async function initialTTSHandler() {
                             const [ttsProvider, ttsVoice] = settings.ttsVoice.split(" ");
-                            const textToTTS = botMessageDiv.textContent;
+
+                            let textToTTS = "";
+
+                            if (botMessageDiv.matches(".word-message")) {
+                                textToTTS = Array.from(botMessageDiv.querySelectorAll("b, ul > li:nth-child(1)")).map(node => node.textContent).join("\n");
+                            } else {
+                                textToTTS =botMessageDiv.textContent;
+                            }
 
                             ttsButton.disabled = true;
                             const audioData = await getTTSResponse(ttsProvider, settings.ttsApiKey, ttsVoice, textToTTS);
@@ -3196,6 +3189,20 @@
                             });
                         });
                         messageButtonContainer.appendChild(ttsButton);
+
+                        const regenerateButton = createElement("button", {
+                            className: "message-botton regenerate-button",
+                            innerHTML: `<svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="transparent" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-rotate-ccw" aria-hidden="true"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path><path d="M3 3v5h5"></path></svg>`,
+                        });
+                        regenerateButton.addEventListener('click', async () => {
+                            botMessageDiv.remove();
+                            chatHistory = chatHistory.slice(0, chatHistory.findLastIndex(item => item.role === "assistant"));
+
+                            const chatContainer = document.getElementById("chat-container");
+                            const newBotMessageDiv = addMessageToUI("", 'bot-message', chatContainer, false);
+                            await callStreamOpenAI(newBotMessageDiv, chatContainer, true);
+                        });
+                        messageButtonContainer.appendChild(regenerateButton);
 
                         botMessageDiv.appendChild(messageButtonContainer);
                         smoothScrollTo(chatContainer, chatContainer.scrollHeight, 100);
@@ -3278,7 +3285,8 @@
 
                     chatHistory = updateChatHistoryState(chatHistory, initialUserMessage, "user");
 
-                    const botMessageDiv = addMessageToUI("", 'bot-message', chatContainer, false);
+                    const messageClass = isSentence ? "sentence-message" : "word-message";
+                    const botMessageDiv = addMessageToUI("", `bot-message ${messageClass}`, chatContainer, false);
 
                     await callStreamOpenAI(
                         botMessageDiv,
