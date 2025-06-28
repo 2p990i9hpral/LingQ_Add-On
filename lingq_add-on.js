@@ -6,7 +6,7 @@
 // @match        https://www.lingq.com/*/learn/*/workdesk/item/*/print/
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      6.2.6
+// @version      6.3.0
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @namespace https://greasyfork.org/users/1458847
@@ -73,6 +73,7 @@
         llmProviderModel: "openai gpt-4.1-nano",
         llmApiKey: "",
         askSelected: false,
+        prependSummary: false,
 
         tts: false,
         ttsApiKey: "",
@@ -345,6 +346,7 @@
             chatWidgetSection.appendChild(apiKeyContainer);
 
             addCheckbox(chatWidgetSection, "askSelectedCheckbox", "Enable asking with selected text", settings.askSelected);
+            addCheckbox(chatWidgetSection, "prependSummaryCheckbox", "Prepend the Summary", settings.prependSummary);
 
             container2.appendChild(chatWidgetSection);
 
@@ -820,6 +822,11 @@
                 settings.askSelected = event.target.checked
             });
 
+            const prependSummaryCheckbox = document.getElementById("prependSummaryCheckbox");
+            prependSummaryCheckbox.addEventListener('change', (event) => {
+                settings.prependSummary = event.target.checked
+            });
+
             const ttsCheckbox = document.getElementById("ttsCheckbox");
             ttsCheckbox.addEventListener('change', (event) => {
                 const checked = event.target.checked;
@@ -900,6 +907,7 @@
                 document.getElementById("llmProviderModelSelector").value = defaults.llmProviderModel;
                 document.getElementById("llmApiKeyInput").value = defaults.llmApiKey;
                 document.getElementById("askSelectedCheckbox").value = defaults.askSelected;
+                document.getElementById("prependSummaryCheckbox").value = defaults.prependSummary;
 
                 document.getElementById("ttsCheckbox").value = defaults.tts;
                 document.getElementById("ttsApiKeyInput").value = defaults.ttsApiKey;
@@ -1324,6 +1332,7 @@
                 }
         
                 #send-button {
+                    opacity: 0.5;
                     padding: 5px 10px;
                 }
                 
@@ -2487,7 +2496,6 @@
     }
 
     let audioContext = null;
-
     async function playAudio(audioData, volume = 0.5) {
         stopPlayingAudio(audioContext);
 
@@ -2682,7 +2690,7 @@
         const api_url = provider === "openai" ? `https://api.openai.com/v1/chat/completions` : (provider === "google" ? "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions" : "");
         const body = {
             model: model,
-            temperature: 0.5,
+            temperature: 0.3,
             messages: history
         };
         if (provider === "google" && model.includes("2.5")) body.reasoning_effort = "none";
@@ -2792,8 +2800,7 @@
     async function getLessonSummary(provider, apikey, model, content) {
         const summaryPrompt = `
             # System Settings
-            - Summarize the content in ENGLISH while retaining all the key information from the input, allowing the user to understand the original content. 
-            - Ensure the summary isn't too brief; rather, it could be long to include all the key information.
+            - Summarize the content in ENGLISH while retaining key information from the input. 
             - Be objective and factual. Write only based on the given data.
             - No preface and postface only include a summary. 
             ## Response
@@ -3006,11 +3013,14 @@
                     if (settings.showTranslation) showTranslation();
                     changeTranslationColor(node);
 
-                    // console.log();
-
                     const readerContainer = (await waitForElement(".reader-container .sentence-text-head", 5000)).parentNode;
                     const lessonContent = extractTextFromDOM(readerContainer).trim();
                     lessonSummary = await getLessonSummary(llmProvider, llmApiKey, llmModel, lessonContent);
+
+                    if (settings.prependSummary) {
+                        const summaryElement = createElement("p", {className: "lesson-summary", textContent: '[Quick Summary]\n\n' + lessonSummary, style: "white-space: pre-line; color: var(--font-color);line-height: normal; margin-bottom: 20px;"});
+                        readerContainer.prepend(summaryElement);
+                    }
                 });
             });
         });
@@ -3140,7 +3150,7 @@
                     llmProvider,
                     llmApiKey,
                     llmModel,
-                    chatHistory,
+                    chatHistory.map(item => ({role: item.role.split("-")[0], content: item.content})),
                     (chunk) => {
                         if (chunk.choices && chunk.choices.length > 0) {
                             const delta = chunk.choices[0].delta;
@@ -3241,6 +3251,8 @@
                 if (!userMessage) return;
                 userInput.value = '';
 
+                if (chatHistory.findIndex(item => item.role === "system-plain") !== -1) chatHistory = chatHistory.filter(item => (item.role !== "system-word" && item.role !== "system-sentence"));
+
                 addMessageToUI(userMessage, 'user-message', chatContainer, true);
                 chatHistory = updateChatHistoryState(chatHistory, userMessage, "user");
 
@@ -3289,7 +3301,7 @@
                 sendButton.addEventListener('click', handleSendMessage);
 
                 chatHistory = updateChatHistoryState(chatHistory, `This is the summary of this lesson. You can refer to this when you response. \n[Lesson Summary] ${lessonSummary}`, "user");
-                chatHistory = updateChatHistoryState(chatHistory, removeIndent(systemPrompt), "system");
+                chatHistory = updateChatHistoryState(chatHistory, removeIndent(systemPrompt), "system-main");
 
                 if (settings.askSelected && sectionHead.matches(".section-widget--head")) {
                     const initialUserMessage = getSelectedWithContext();
@@ -3299,7 +3311,9 @@
                         return;
                     }
 
-                    chatHistory = updateChatHistoryState(chatHistory, !isSentence ? removeIndent(wordPhrasePrompt) : removeIndent(sentencePrompt), "system");
+                    if (isSentence) chatHistory = updateChatHistoryState(chatHistory, removeIndent(sentencePrompt), "system-sentence");
+                    else chatHistory = updateChatHistoryState(chatHistory, removeIndent(wordPhrasePrompt), "system-word");
+
                     chatHistory = updateChatHistoryState(chatHistory, initialUserMessage, "user");
 
                     const messageClass = isSentence ? "sentence-message" : "word-message";
@@ -3320,12 +3334,10 @@
                                     .then(() => {showToast("Meaning Copied!", true)})
                                     .catch(() => {showToast("Failed to copy meaning.", false)});
                             }
-
-                            chatHistory = chatHistory.filter((_, index) => index !== chatHistory.findLastIndex(item => item.role === "system"));
                         }
                     );
 
-                    chatHistory = updateChatHistoryState(chatHistory, removeIndent(plainTextPrompt), "system");
+                    chatHistory = updateChatHistoryState(chatHistory, removeIndent(plainTextPrompt), "system-plain");
                 }
             }
 
