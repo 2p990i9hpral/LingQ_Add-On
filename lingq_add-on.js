@@ -6,7 +6,7 @@
 // @match        https://www.lingq.com/*/learn/*/workdesk/item/*/print/
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      6.3.0
+// @version      6.3.2
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @namespace https://greasyfork.org/users/1458847
@@ -1417,6 +1417,18 @@
                     background-color: rgba(125, 125, 125, 50%);
                 }
                 
+                .quick-summary {
+                    color: var(--font-color);
+                    line-height: normal; 
+                    margin-bottom: 20px;
+                    max-height: 300px;
+                    overflow-y: scroll;
+                    resize: vertical;
+                    display: flex;
+                    flex-direction: column;
+                    gap: 15px;
+                }
+                
                 /*tts*/
                 
                 #playAudio {
@@ -2797,14 +2809,38 @@
         }
     }
 
+    async function getQuickSummary(provider, apikey, model, content) {
+        const DictionaryLocalePairs = await getDictionaryLocalePairs()
+        const lessonLanguage = DictionaryLocalePairs[getLessonLanguage()];
+        const summaryPrompt = `
+            # System Settings
+            - Summarize the content in original content's language (${lessonLanguage}). The summary needs to be consist of multiple paragraphs.
+            - This summary will be used as a quick summary presented before reading the full content.
+            - Start with '<b>summary</b>'. Place each paragraph within '<p>' tag..
+            - The result will be used as the innerHTML of a DOM element. So, Output raw HTML as plain text. This means your entire response should be a string of HTML. Do not use Markdown syntax, do not wrap your HTML in Markdown code blocks.
+            - Be objective and factual. Write only based on the given data.
+            - No preface and postface only include a summary.
+            - Recommended length is 200 words, but can be varied based on the original content's length`;
+
+        const summary_history = [
+            {role: "system", content: removeIndent(summaryPrompt)},
+            {role: "user", content: content}
+        ]
+        const summary = await getOpenAIResponse(provider, apikey, model, summary_history);
+        console.log(`Quick summary: \n${summary}`);
+
+        return summary;
+    }
+
     async function getLessonSummary(provider, apikey, model, content) {
         const summaryPrompt = `
             # System Settings
-            - Summarize the content in ENGLISH while retaining key information from the input. 
+            - Summarize the content in ENGLISH even if the original content's language is non-English while retaining key information from the input. 
+            - This summary will be used for understanding the lesson's context without referring to the original content.
+            - Do not omit key details from the original content.
             - Be objective and factual. Write only based on the given data.
-            - No preface and postface only include a summary. 
-            ## Response
-            - Write in ENGLISH even if the original content's language is non-English.`;
+            - No preface and postface only include a summary.
+            - Recommended length is 1000 words, but can be varied based on the original content's length.`;
 
         const summary_history = [
             {role: "system", content: removeIndent(summaryPrompt)},
@@ -2960,6 +2996,7 @@
     }
 
     let lessonSummary = "";
+    let quickSummary = "";
     async function setupReaderContainer() {
         const [llmProvider, llmModel] = settings.llmProviderModel.split(" ");
         const llmApiKey = settings.llmApiKey;
@@ -3001,6 +3038,29 @@
             observer.observe(readerContainer, {childList: true, subtree: true});
         }
 
+        function generateLessonSummary(readerContainer) {
+            const observer = new MutationObserver((mutations) => {
+                for (const mutation of mutations) {
+                    for (const node of mutation.addedNodes) {
+                        if (!(node.nodeType === Node.ELEMENT_NODE && node.matches('section'))) continue;
+                        const summaryElement = createElement("div", {className: "quick-summary", innerHTML: quickSummary});
+                        node.parentNode.prepend(summaryElement);
+                    }
+                }
+            });
+            observer.observe(readerContainer, {childList: true, subtree: true});
+
+            const lessonContent = extractTextFromDOM(readerContainer).trim();
+
+            getQuickSummary(llmProvider, llmApiKey, llmModel, lessonContent)
+                .then(result => {
+                    if (!settings.prependSummary) return;
+                    document.querySelector(".quick-summary").innerHTML = result;
+                    quickSummary = result;
+                })
+            getLessonSummary(llmProvider, llmApiKey, llmModel, lessonContent).then(summary => {lessonSummary = summary})
+        }
+
         const observer = new MutationObserver(function (mutations) {
             mutations.forEach((mutation) => {
                 console.debug('Observer:', `Sentence text child created. ${mutation.type}`, mutation.addedNodes);
@@ -3008,19 +3068,13 @@
                     if (node.nodeType !== Node.ELEMENT_NODE) return;
                     if (!node.matches(".loadedContent")) return;
 
+                    await waitForElement("article.current-page-loaded", 30000);
                     changeScrollAmount(".reader-container", 0.3);
                     setupSentenceFocus(node);
                     if (settings.showTranslation) showTranslation();
                     changeTranslationColor(node);
 
-                    const readerContainer = (await waitForElement(".reader-container .sentence-text-head", 5000)).parentNode;
-                    const lessonContent = extractTextFromDOM(readerContainer).trim();
-                    lessonSummary = await getLessonSummary(llmProvider, llmApiKey, llmModel, lessonContent);
-
-                    if (settings.prependSummary) {
-                        const summaryElement = createElement("p", {className: "lesson-summary", textContent: '[Quick Summary]\n\n' + lessonSummary, style: "white-space: pre-line; color: var(--font-color);line-height: normal; margin-bottom: 20px;"});
-                        readerContainer.prepend(summaryElement);
-                    }
+                    generateLessonSummary(node);
                 });
             });
         });
@@ -3197,7 +3251,7 @@
                             let textToTTS = "";
 
                             if (botMessageDiv.matches(".word-message")) {
-                                textToTTS = Array.from(botMessageDiv.querySelectorAll("b, ul > li:nth-child(1)")).map(node => node.textContent).join("\n");
+                                textToTTS = Array.from(botMessageDiv.querySelectorAll("b, ul > li:nth-child(1)")).map(node => node.textContent).join(".\n");
                             } else {
                                 textToTTS =botMessageDiv.textContent;
                             }
@@ -3354,7 +3408,7 @@
                 - Your primary function is to serve as a language assistant. Your responses must meticulously adhere to the following guidelines to ensure clarity, accuracy, and consistency.
                 - Utilize the HTML tags for presentation: '<b>' (for bolding key terms like the base form or selected sentence elements), '<i>' (for part of speech or emphasizing specific words within explanations), '<p>' (for paragraphs of text like definitions and explanations), '<ul>' (for unordered lists, primarily for examples or key elements), '<li>' (for list items within '<ul>'). But do not use the '<pre>' tag.
                 - Use '<br>' tags sparingly and only for intentional line breaks within a block element. Avoid using '<br>' for paragraph spacing; use new '<p>' tags instead.
-                - Output raw HTML as plain text. This means your entire response should be a string of HTML. Do not use Markdown syntax (e.g., '# H1', '**Bold**', '*Italic*', '> blockquote', '---'), do not wrap your HTML in Markdown code blocks (e.g., \`\`\`html ... \`\`\`), and do not use any other formatting conventions like XML declarations.
+                - Output raw HTML as plain text. This means your entire response should be a string of HTML. Do not use Markdown syntax (e.g., '# H1', '**Bold**', '*Italic*', '> blockquote', '---'), do not wrap your HTML in Markdown code blocks (e.g., \`\`\`html ... \`\`\`).
                 ## Response
                 - Your primary response language for all explanatory text, definitions, part-of-speech labels, and translations of examples is '${userLanguage}'. Content specifically designated to be in the language of the original input (e.g., original example sentences before their translation) should be presented in '${lessonLanguage}'. The vast majority of your response visible to the user must be in '${userLanguage}'.
                 - Provide responses that are concise and directly address the user's query. Get straight to the point without a preface.
@@ -3507,6 +3561,8 @@
             const plainTextPrompt = `
                 # Plain Text Input (Conversational/Freetext)
                 Remember the initial 'Input: "word or phrase" Context: "sentence..."' or 'Input: "sentence(s)"'. This initial input and its associated context are vital for understanding follow-up questions in this conversational phase.
+                ## Responsibility
+                - Ensure that all responses are in HTML as plain text and do NOT include any Markdown syntax such as '**bold**', '* list', and '[text](url)'.
                 ## Response
                 - If a user's plain text query refers to a word, phrase, concept, or asks a question that seems related to the initial structured input (the one with "Input:" and/or "Context:"), you MUST assume they are referring back to that specific initial input and its context, even if they don't explicitly state "in the previous context," "about the word we just discussed," or similar phrases. Use your knowledge of that initial input to provide a relevant and contextual answer.
                 - For general queries clearly not related to the initial input, answer as a general assistant.
