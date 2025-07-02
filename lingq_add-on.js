@@ -6,7 +6,7 @@
 // @match        https://www.lingq.com/*/learn/*/workdesk/item/*/print/
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      6.3.2
+// @version      6.3.3
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @namespace https://greasyfork.org/users/1458847
@@ -2814,13 +2814,15 @@
         const lessonLanguage = DictionaryLocalePairs[getLessonLanguage()];
         const summaryPrompt = `
             # System Settings
-            - Summarize the content in original content's language (${lessonLanguage}). The summary needs to be consist of multiple paragraphs.
+            - Summarize the content in original content's language (${lessonLanguage}). The summary needs to be consist of two to four paragraphs.
             - This summary will be used as a quick summary presented before reading the full content.
-            - Start with '<b>summary</b>'. Place each paragraph within '<p>' tag..
+            - Start with '<b>summary</b>'. Place each paragraph within '<p>' tag.
             - The result will be used as the innerHTML of a DOM element. So, Output raw HTML as plain text. This means your entire response should be a string of HTML. Do not use Markdown syntax, do not wrap your HTML in Markdown code blocks.
             - Be objective and factual. Write only based on the given data.
             - No preface and postface only include a summary.
-            - Recommended length is 200 words, but can be varied based on the original content's length`;
+            - Recommended length is at most 200 words, but can be varied a bit based on the original content's length
+            # Example Format
+            <b>summary</b> <p>first paragraph</p> <!-- <p>n-th paragraph</p> -->`;
 
         const summary_history = [
             {role: "system", content: removeIndent(summaryPrompt)},
@@ -2840,7 +2842,7 @@
             - Do not omit key details from the original content.
             - Be objective and factual. Write only based on the given data.
             - No preface and postface only include a summary.
-            - Recommended length is 1000 words, but can be varied based on the original content's length.`;
+            - Recommended length is at most 1000 words, but can be varied a bit based on the original content's length.`;
 
         const summary_history = [
             {role: "system", content: removeIndent(summaryPrompt)},
@@ -3038,11 +3040,12 @@
             observer.observe(readerContainer, {childList: true, subtree: true});
         }
 
-        function generateLessonSummary(readerContainer) {
+        async function generateLessonSummary(readerContainer) {
             const observer = new MutationObserver((mutations) => {
                 for (const mutation of mutations) {
                     for (const node of mutation.addedNodes) {
                         if (!(node.nodeType === Node.ELEMENT_NODE && node.matches('section'))) continue;
+
                         const summaryElement = createElement("div", {className: "quick-summary", innerHTML: quickSummary});
                         node.parentNode.prepend(summaryElement);
                     }
@@ -3063,23 +3066,23 @@
 
         const observer = new MutationObserver(function (mutations) {
             mutations.forEach((mutation) => {
+                // should I clear the summaries?
                 console.debug('Observer:', `Sentence text child created. ${mutation.type}`, mutation.addedNodes);
                 mutation.addedNodes.forEach(async (node) => {
                     if (node.nodeType !== Node.ELEMENT_NODE) return;
                     if (!node.matches(".loadedContent")) return;
 
-                    await waitForElement("article.current-page-loaded", 30000);
                     changeScrollAmount(".reader-container", 0.3);
                     setupSentenceFocus(node);
                     if (settings.showTranslation) showTranslation();
                     changeTranslationColor(node);
-
+                    await waitForElement('.sentence-text p', 10000);
                     generateLessonSummary(node);
                 });
             });
         });
 
-        const sentenceText = await waitForElement('.sentence-text', 1000);
+        const sentenceText = await waitForElement('.sentence-text', 10000);
         observer.observe(sentenceText, {childList: true});
     }
 
