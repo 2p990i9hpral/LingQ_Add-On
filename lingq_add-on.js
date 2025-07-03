@@ -1,12 +1,10 @@
 // ==UserScript==
 // @name         LingQ Addon
 // @description  Provides custom LingQ layouts
-// @match        https://www.lingq.com/*/learn/*/web/reader/*
-// @match        https://www.lingq.com/*/learn/*/web/library/course/*
-// @match        https://www.lingq.com/*/learn/*/workdesk/item/*/print/
+// @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      6.3.3
+// @version      7.0.0
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @namespace https://greasyfork.org/users/1458847
@@ -96,8 +94,7 @@
     });
 
     /* Main Setup Functions */
-
-    function setupReader() {
+    function setupPopups() {
         function getColorSettings(colorMode) {
             const prefix = colorMode === "dark" ? "dark_" : "white_";
 
@@ -696,7 +693,6 @@
                 updateColorInputs(colorSettings);
                 updateCssColorVariables(colorSettings);
                 updateColorPickerBackgrounds(colorSettings);
-                applyStyles(document.getElementById("styleTypeSelector").value, selectedColorMode);
             }
 
             function setupSlider(sliderId, valueId, settingKey, unit, cssVar, valueTransform) {
@@ -729,7 +725,6 @@
                 settings.styleType = selectedStyleType;
                 document.getElementById("videoSettings").style.display = selectedStyleType === "video" ? "block" : "none";
                 document.getElementById("sentenceVideoSettings").style.display = selectedStyleType === "off" ? "block" : "none";
-                applyStyles(selectedStyleType, document.getElementById("colorModeSelector").value);
             });
 
             setupSlider("heightBigSlider", "heightBigValue", "heightBig", "px", "--height-big", (val) => `${val}px`);
@@ -874,7 +869,6 @@
 
                 updateColorInputs(defaultColorSettings);
                 updateColorPickerBackgrounds(defaultColorSettings);
-                applyStyles(defaults.styleType, currentColorMode);
 
                 document.getElementById("videoSettings").style.display = defaults.styleType === "video" ? "block" : "none";
                 document.getElementById("sentenceVideoSettings").style.display = defaults.styleType === "off" ? "block" : "none";
@@ -928,8 +922,7 @@
         }
 
         async function setupDownloadWordsEventListeners() {
-            async function getAllWords(baseUrl, pageSize, apiType, additionalParams = "", progressCallback = () => {
-            }) {
+            async function getAllWords(baseUrl, pageSize, apiType, additionalParams = "", progressCallback = () => {}) {
                 let allResults = [];
                 let nextUrl = `${baseUrl}?page_size=${pageSize}&page=1${additionalParams}`;
                 let currentPage = 0;
@@ -1120,67 +1113,8 @@
             });
         }
 
-        function setupLessonCompletion() {
-            document.getElementById("lingqLessonComplete").addEventListener("click", finishLesson);
-        }
-
-        function applyStyles() {
-            const colorSettings = getColorSettings(settings.colorMode);
-
-            let baseCSS = generateBaseCSS(colorSettings);
-            let layoutCSS = generateLayoutCSS();
-            let specificCSS = "";
-
-            switch (settings.colorMode) {
-                case "white":
-                    clickElement(".reader-themes-component > button:nth-child(1)");
-                    break;
-                case "dark":
-                    clickElement(".reader-themes-component > button:nth-child(5)");
-                    break;
-            }
-
-            switch (settings.styleType) {
-                case "video":
-                    specificCSS = generateVideoCSS();
-                    break;
-                case "video2":
-                    specificCSS = generateVideo2CSS();
-                    break;
-                case "audio":
-                    specificCSS = generateAudioCSS();
-                    break;
-                case "off":
-                    specificCSS = generateOffModeCSS();
-                    layoutCSS = "";
-                    break;
-            }
-
-            baseCSS += layoutCSS;
-            baseCSS += specificCSS;
-
-            if (styleElement) styleElement.remove();
-            styleElement = createElement("style", {textContent: baseCSS});
-            document.querySelector("head").appendChild(styleElement);
-        }
-
-        function generateBaseCSS(colorSettings) {
+        function generatePopupCSS() {
             return `
-                :root {
-                    --font-size: ${settings.fontSize}rem;
-                    --line-height: ${settings.lineHeight};
-        
-                    --font-color: ${colorSettings.fontColor};
-                    --lingq-background: ${colorSettings.lingqBackground};
-                    --lingq-border: ${colorSettings.lingqBorder};
-                    --lingq-border-learned: ${colorSettings.lingqBorderLearned};
-                    --unknown-background: ${colorSettings.unknownBackground};
-                    --unknown-border: ${colorSettings.unknownBorder};
-                    --is-playing-underline: ${colorSettings.playingUnderline};
-        
-                    --background-color: ${settings.colorMode === "dark" ? "#2a2c2e" : "#ffffff"}
-                }
-                
                 /*Color picker*/
         
                 .color-picker {
@@ -1296,6 +1230,138 @@
                 
                 option {
                     background: var(--background-color) !important;
+                }
+            `;
+        }
+
+        const colorSettings = getColorSettings(settings.colorMode);
+
+        const settingsButton = createElement("button", {
+            id: "lingqAddonSettings",
+            textContent: "⚙️",
+            title: "LingQ Addon Settings",
+            className: "nav-button"
+        });
+
+        const downloadWordsButton = createElement("button", {
+            id: "lingqDownloadWords",
+            textContent: "💾",
+            title: "Download Words",
+            className: "nav-button"
+        });
+
+        let mainNav = document.querySelector("#main-nav > nav > div:nth-child(2) > div:nth-child(1)");
+
+        mainNav.appendChild(settingsButton);
+        mainNav.appendChild(downloadWordsButton);
+
+        const settingsPopup = createSettingsPopup();
+        document.body.appendChild(settingsPopup);
+
+        const downloadWordsPopup = createDownloadWordsPopup();
+        document.body.appendChild(downloadWordsPopup);
+
+        const popupCSS = generatePopupCSS();
+        applyCSS(popupCSS);
+        setupSettingEventListeners();
+        setupDownloadWordsEventListeners();
+    }
+
+    function setupReader() {
+        function setupLessonCompletion() {
+            document.getElementById("lingqLessonComplete").addEventListener("click", finishLesson);
+        }
+
+        function getColorSettings(colorMode) {
+            const prefix = colorMode === "dark" ? "dark_" : "white_";
+
+            return {
+                fontColor: settings[prefix + "fontColor"],
+                translationFontColor: settings[prefix + "translationFontColor"],
+                lingqBackground: settings[prefix + "lingqBackground"],
+                lingqBorder: settings[prefix + "lingqBorder"],
+                lingqBorderLearned: settings[prefix + "lingqBorderLearned"],
+                unknownBackground: settings[prefix + "unknownBackground"],
+                unknownBorder: settings[prefix + "unknownBorder"],
+                playingUnderline: settings[prefix + "playingUnderline"],
+            };
+        }
+
+        function applyStyles() {
+            const colorSettings = getColorSettings(settings.colorMode);
+
+            let baseCSS = generateBaseCSS(colorSettings);
+            let layoutCSS = generateLayoutCSS();
+            let specificCSS = "";
+
+            switch (settings.colorMode) {
+                case "white":
+                    clickElement(".reader-themes-component > button:nth-child(1)");
+                    break;
+                case "dark":
+                    clickElement(".reader-themes-component > button:nth-child(5)");
+                    break;
+            }
+
+            switch (settings.styleType) {
+                case "video":
+                    specificCSS = generateVideoCSS();
+                    break;
+                case "video2":
+                    specificCSS = generateVideo2CSS();
+                    break;
+                case "audio":
+                    specificCSS = generateAudioCSS();
+                    break;
+                case "off":
+                    specificCSS = generateOffModeCSS();
+                    layoutCSS = "";
+                    break;
+            }
+
+            baseCSS += layoutCSS;
+            baseCSS += specificCSS;
+
+            if (styleElement) styleElement.remove();
+            styleElement = createElement("style", {textContent: baseCSS});
+            document.querySelector("head").appendChild(styleElement);
+        }
+
+        function setupStyleEventListeners() {
+            const styleTypeSelector = document.getElementById("styleTypeSelector");
+            styleTypeSelector.addEventListener("change", (event) => {
+                const selectedStyleType = event.target.value;
+                applyStyles(selectedStyleType, document.getElementById("colorModeSelector").value);
+            });
+        }
+
+        function createReaderUI() {
+            const completeLessonButton = createElement("button", {
+                id: "lingqLessonComplete",
+                textContent: "✔",
+                title: "Complete Lesson Button",
+                className: "nav-button",
+            });
+
+            let mainNav = document.querySelector("#main-nav > nav > div:nth-child(2) > div:nth-child(1)");
+            mainNav.appendChild(completeLessonButton);
+        }
+
+        function generateBaseCSS(colorSettings) {
+            return `
+                :root {
+                    --font-size: ${settings.fontSize}rem;
+                    --line-height: ${settings.lineHeight};
+        
+                    --font-color: ${colorSettings.fontColor};
+                    --lingq-background: ${colorSettings.lingqBackground};
+                    --lingq-border: ${colorSettings.lingqBorder};
+                    --lingq-border-learned: ${colorSettings.lingqBorderLearned};
+                    --unknown-background: ${colorSettings.unknownBackground};
+                    --unknown-border: ${colorSettings.unknownBorder};
+                    --is-playing-underline: ${colorSettings.playingUnderline};
+        
+                    --background-color: ${settings.colorMode === "dark" ? "#2a2c2e" : "#ffffff"}
                 }
         
                 /*Chat*/
@@ -1985,49 +2051,10 @@
         `;
         }
 
-        const colorSettings = getColorSettings(settings.colorMode);
-
         let styleElement = null;
 
-        const settingsButton = createElement("button", {
-            id: "lingqAddonSettings",
-            textContent: "⚙️",
-            title: "LingQ Addon Settings",
-            className: "nav-button"
-        });
-
-        const completeLessonButton = createElement("button", {
-            id: "lingqLessonComplete",
-            textContent: "✔",
-            title: "Complete Lesson Button",
-            className: "nav-button"
-        });
-
-        const downloadWordsButton = createElement("button", {
-            id: "lingqDownloadWords",
-            textContent: "💾",
-            title: "Download Words",
-            className: "nav-button"
-        });
-
-        let mainNav = document.querySelector("#main-nav > nav > div:nth-child(2) > div:nth-child(1)");
-
-        if (mainNav) {
-            mainNav.appendChild(settingsButton);
-            mainNav.appendChild(downloadWordsButton);
-            mainNav.appendChild(completeLessonButton);
-        } else {
-            console.error("#main-nav element not found. Buttons not inserted.");
-        }
-
-        const settingsPopup = createSettingsPopup();
-        document.body.appendChild(settingsPopup);
-
-        const downloadWordsPopup = createDownloadWordsPopup();
-        document.body.appendChild(downloadWordsPopup);
-
-        setupSettingEventListeners();
-        setupDownloadWordsEventListeners();
+        createReaderUI();
+        setupStyleEventListeners();
         setupLessonCompletion();
         applyStyles();
     }
@@ -2167,6 +2194,152 @@
         setupLessonResetButton();
     }
 
+    async function setupEditor() {
+        async function concatenateAudioBuffers(audioContext, audioBuffers) {
+            if (audioBuffers.length === 0) return { concatenatedBuffer: null, duration: 0, timestamps: [] };
+
+            const sampleRate = audioBuffers[0].sampleRate;
+            const numberOfChannels = audioBuffers[0].numberOfChannels;
+
+            let totalLength = 0;
+            audioBuffers.forEach(buffer => {
+                if (buffer.sampleRate !== sampleRate || buffer.numberOfChannels !== numberOfChannels) {
+                    console.warn("Mismatched audio buffer properties. Concatenation might have issues.");
+                }
+                totalLength += buffer.length;
+            });
+
+            const concatenatedBuffer = audioContext.createBuffer(numberOfChannels, totalLength, sampleRate);
+
+            let currentOffsetInSamples = 0;
+            const timestamps = [];
+
+            for (let i = 0; i < audioBuffers.length; i++) {
+                const buffer = audioBuffers[i];
+                for (let channel = 0; channel < numberOfChannels; channel++) {
+                    concatenatedBuffer.getChannelData(channel).set(buffer.getChannelData(channel), currentOffsetInSamples);
+                }
+
+                timestamps.push({
+                    start: currentOffsetInSamples / sampleRate,
+                    end: (currentOffsetInSamples + buffer.length) / sampleRate,
+                });
+
+                currentOffsetInSamples += buffer.length;
+            }
+
+            return {
+                concatenatedBuffer: concatenatedBuffer,
+                duration: concatenatedBuffer.duration,
+                timestamps: timestamps
+            };
+        }
+
+        async function generateLessonAudio() {
+            const [ttsProvider, ttsVoice] = settings.ttsVoice.split(" ");
+
+            const lessonId = getLessonId();
+            const lessonLanguage = getLessonLanguage();
+
+            let data = await getLessonSentences(lessonLanguage, lessonId);
+
+            const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            const sentenceTexts = data.map(item => item["text"]);
+            const totalSentences = sentenceTexts.length;
+            let processedSentences = 0;
+
+            const progressBar = document.getElementById("lessonAudioProgressBar");
+            progressBar.style.display = "block";
+            progressBar.max = totalSentences;
+
+            const audioDataBuffers = new Array(totalSentences);
+
+            const RPM_LIMIT = ttsProvider === "openai" ? (500*0.9) : ttsProvider === "google" ? (10*0.9) : 1;
+            const DELAY_BETWEEN_CALLS = (60 * 1000) / RPM_LIMIT;
+
+            const apiCallPromises = [];
+            let nextAvailableCallTime = Date.now();
+
+            for (let i = 0; i < totalSentences; i++) {
+                const text = sentenceTexts[i];
+                const actualCallTime = Math.max(Date.now(), nextAvailableCallTime);
+                nextAvailableCallTime = actualCallTime + DELAY_BETWEEN_CALLS;
+
+                const p = new Promise(resolve => {
+                    const timeToWait = actualCallTime - Date.now();
+
+                    setTimeout(async () => {
+                        console.log(`Calling TTS for sentence ${i + 1}/${totalSentences} at ${new Date().toLocaleTimeString()} (scheduled for ${new Date(actualCallTime).toLocaleTimeString()})`);
+                        const audioArrayBuffer = await getTTSResponse(ttsProvider, settings.ttsApiKey, ttsVoice, text);
+                        resolve({ index: i, buffer: audioArrayBuffer });
+
+                        processedSentences += 1;
+                        progressBar.value = processedSentences;
+                    }, Math.max(0, timeToWait));
+                });
+                apiCallPromises.push(p);
+            }
+
+            console.log('All TTS API calls scheduled. Waiting for completion...');
+
+            const results = await Promise.all(apiCallPromises);
+
+            for (let i = 0; i < totalSentences; i++) {
+                const result = results[i];
+                const decodedBuffer = await decodeAudioData(audioContext, result.buffer);
+                audioDataBuffers[result.index] = decodedBuffer;
+            }
+
+            console.log('concatenating audio buffers...');
+            const { concatenatedBuffer, duration, timestamps } = await concatenateAudioBuffers(
+                audioContext,
+                audioDataBuffers
+            );
+
+            if (!concatenatedBuffer) throw new Error(`No audio detected. Please ensure the API key is accurate.`);
+
+            console.log('encoding audio...');
+            const finalMP3AudioData = encodeAudioBufferToMP3(concatenatedBuffer);
+
+            if (finalMP3AudioData.length <= 0) throw new Error(`MP3 encoding failed. Empty audio data.`);
+
+            await uploadAudioToLesson(lessonLanguage, lessonId, finalMP3AudioData, Math.ceil(duration));
+
+            const jsonTimestamps = timestamps.map(({start, end}, index) => {return {index: index+1, timestamp: [start, end]}});
+            await updataTimestampToLesson(lessonLanguage, lessonId, jsonTimestamps);
+
+            window.onbeforeunload = null;
+            location.reload();
+        }
+
+        async function createEditorUI() {
+            const genLessonAudioButton = createElement("button", { id: "genLessonAudio", className: "button", tableindex: "0"});
+            genLessonAudioButton.addEventListener("click", () => {
+                genLessonAudioButton.disabled = true;
+                generateLessonAudio();
+            });
+            genLessonAudioButton.appendChild(createElement("span", { className: "text-wrapper has-text-overflow", textContent: "Generate Lesson Audio"}));
+
+            const control = createElement("div", { className: "control", style: "display: flex; flex-direction: column; gap: 5px;" });
+            const field = createElement("div", { className: "field is-grouped" });
+            const navItem = createElement("div", {className: "nav-item"});
+
+            const progressBar = createElement("progress", {id: "lessonAudioProgressBar", value: "0", max: "100", style: "width: 100%; display: none;"});
+
+            control.appendChild(genLessonAudioButton);
+            control.appendChild(progressBar);
+            field.appendChild(control);
+            navItem.appendChild(field);
+
+            let mainNav = await waitForElement(".nav--left");
+            mainNav.appendChild(createElement("hr", {className: "divider my-3"}));
+            mainNav.appendChild(navItem);
+        }
+
+        await loadScript("https://cdnjs.cloudflare.com/ajax/libs/lamejs/1.2.1/lame.min.js");
+        await createEditorUI();
+    }
+
     /* Get LingQ Data */
 
     function getLessonId(url) {
@@ -2264,6 +2437,50 @@
             headers: {'Content-Type': 'application/json'},
             body: JSON.stringify(payload)
         });
+    }
+
+    async function getLessonSentences(lessonLanguage, lessonId) {
+        const url = `https://www.lingq.com/api/v3/${lessonLanguage}/lessons/${lessonId}/sentences/`;
+
+        const response = await fetch(url);
+        return await response.json();
+    }
+
+    async function uploadAudioToLesson(lessonLanguage, lessonId, audioData, duration) {
+        const url = `https://www.lingq.com/api/v3/${lessonLanguage}/lessons/${lessonId}/`;
+
+        const formData = new FormData();
+        formData.append('audio', new Blob([audioData], {type: 'audio/mpeg'}), 'output.mp3');
+        formData.append('duration', duration);
+        formData.append('external_audio', '');
+        formData.append('language', lessonLanguage);
+
+        const response = await fetch(url, {
+            method: 'PATCH',
+            body: formData,
+        });
+
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+
+        return await response.json();
+    }
+
+    async function updataTimestampToLesson(lessonLanguage, lessonId, timestamp) {
+        const url= `https://www.lingq.com/api/v3/${lessonLanguage}/lessons/${lessonId}/timestamps/`;
+
+        const response = await fetch(url, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(timestamp)
+        });
+
+        if (!response.ok) {
+            throw new Error(`Could not update timestamp. ${response.status} ${response.statusText}`);
+        }
     }
 
     /* Utils */
@@ -2491,6 +2708,70 @@
         const lines = text.split('\n');
         const processedLines = lines.map(line => line.trimStart());
         return processedLines.join('\n').trim();
+    }
+
+    async function loadScript(url) {
+        return new Promise((resolve, reject) => {
+            const script = createElement("script", {
+                src: url,
+                onload: () => resolve(script),
+                onerror: reject
+            });
+            document.head.appendChild(script);
+        });
+    }
+
+    async function decodeAudioData(audioContext, audioArrayBuffer) {
+        return new Promise((resolve, reject) => {
+            audioContext.decodeAudioData(audioArrayBuffer, resolve, reject);
+        });
+    }
+
+    function encodeAudioBufferToMP3(audioBuffer) {
+        const sampleRate = audioBuffer.sampleRate;
+        const mp3encoder = new lamejs.Mp3Encoder(1, sampleRate, 128);
+        const mp3Data = [];
+
+        const monoLength = audioBuffer.length;
+        const monoPcmData = audioBuffer.getChannelData(0);
+
+        const samples = new Int16Array(monoLength);
+        for (let i = 0; i < monoLength; i++) {
+            samples[i] = monoPcmData[i] * 32767.5;
+        }
+
+        const sampleBlockSize = 1152;
+        for (let i = 0; i < samples.length; i += sampleBlockSize) {
+            console.log(`${i}/${samples.length}`);
+            const currentBlockEnd = Math.min(i + sampleBlockSize, samples.length);
+            const currentSamples = samples.subarray(i, currentBlockEnd);
+
+            const mp3buf = mp3encoder.encodeBuffer(currentSamples);
+            if (mp3buf.length > 0) {
+                mp3Data.push(new Uint8Array(mp3buf));
+            }
+        }
+
+        const mp3buf = mp3encoder.flush();
+        if (mp3buf.length > 0) {
+            mp3Data.push(new Uint8Array(mp3buf));
+        }
+
+        console.log(`Merging mp3 uint8array blocks into one.`);
+
+        let totalLength = 0;
+        for (let i = 0; i < mp3Data.length; i++) {
+            totalLength += mp3Data[i].length;
+        }
+
+        const finalMp3Data = new Uint8Array(totalLength);
+        let offset = 0;
+        for (let i = 0; i < mp3Data.length; i++) {
+            finalMp3Data.set(mp3Data[i], offset);
+            offset += mp3Data[i].length;
+        }
+
+        return finalMp3Data;
     }
 
     /* Modules */
@@ -3775,20 +4056,26 @@
     }
 
     function init() {
-        fixBugs();
+        if (document.URL.includes("lingq.com")){
+            fixBugs();
+            setupPopups();
 
-        if (document.URL.includes("/reader")) {
-            setupReader();
-            setupKeyboardShortcuts();
-            setupYoutubePlayerCustomization();
-            setupReaderContainer();
-            setupLLMs();
-            AutoplayInSentenceView();
-        } else if (document.URL.includes("/print")) {
-            setupPrintPage();
-        } else if (document.URL.includes("/library")) {
-            setupCourse();
-        } else if (document.URL.includes("youtube")) {
+            if (document.URL.includes("/reader")) {
+                setupReader();
+                setupKeyboardShortcuts();
+                setupYoutubePlayerCustomization();
+                setupReaderContainer();
+                setupLLMs();
+                AutoplayInSentenceView();
+            } else if (document.URL.includes("/editor")) {
+                setupEditor();
+            } else if (document.URL.includes("/library/course")) {
+                setupCourse();
+            } else if (document.URL.includes("/print")) {
+                setupPrintPage();
+            }
+        }
+        if (document.URL.includes("youtube")) {
             simplifyYoutubeEmbeddedPlayer();
         }
     }
