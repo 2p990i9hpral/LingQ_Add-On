@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      7.0.0
+// @version      7.1.0
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @namespace https://greasyfork.org/users/1458847
@@ -75,7 +75,8 @@
 
         tts: false,
         ttsApiKey: "",
-        ttsVoice: "openai alloy",
+        ttsProvider: "openai",
+        ttsVoice: "alloy",
         ttsWord: false,
         ttsSentence: false,
     };
@@ -92,6 +93,59 @@
             return true;
         }
     });
+
+    const openaiVoiceOptions = [
+        {value: "random", text: "Random"},
+        {value: "alloy", text: "Alloy"},
+        {value: "ash", text: "Ash"},
+        {value: "ballad", text: "Ballad"},
+        {value: "coral", text: "Coral"},
+        {value: "echo", text: "Echo"},
+        {value: "fable", text: "Fable"},
+        {value: "onyx", text: "Onyx"},
+        {value: "nova", text: "Nova"},
+        {value: "sage", text: "Sage"},
+        {value: "shimmer", text: "Shimmer"},
+        {value: "verse", text: "Verse"}];
+    const googleGeminiVoiceOptions = [
+        {value: "random", text: "Random"},
+        {value: "Zephyr", text: "Zephyr (Bright)"},
+        {value: "Puck", text: "Puck (Upbeat)"},
+        {value: "Charon", text: "Charon (Informative)"},
+        {value: "Kore", text: "Kore (Firm)"},
+        {value: "Fenrir", text: "Fenrir (Excitable)"},
+        {value: "Leda", text: "Leda (Youthful)"},
+        {value: "Orus", text: "Orus (Firm)"},
+        {value: "Aoede", text: "Aoede (Breezy)"},
+        {value: "Callirrhoe", text: "Callirrhoe (Easy-going)"},
+        {value: "Autonoe", text: "Autonoe (Bright)"},
+        {value: "Enceladus", text: "Enceladus (Breathy)"},
+        {value: "Iapetus", text: "Iapetus (Clear)"},
+        {value: "Umbriel", text: "Umbriel (Easy-going)"},
+        {value: "Algieba", text: "Algieba (Smooth)"},
+        {value: "Despina", text: "Despina (Smooth)"},
+        {value: "Erinome", text: "Erinome (Clear)"},
+        {value: "Algenib", text: "Algenib (Gravelly)"},
+        {value: "Rasalgethi", text: "Rasalgethi (Informative)"},
+        {value: "Laomedeia", text: "Laomedeia (Upbeat)"},
+        {value: "Achernar", text: "Achernar (Soft)"},
+        {value: "Alnilam", text: "Alnilam (Firm)"},
+        {value: "Schedar", text: "Schedar (Even)"},
+        {value: "Gacrux", text: "Gacrux (Mature)"},
+        {value: "Pulcherrima", text: "Pulcherrima (Forward)"},
+        {value: "Achird", text: "Achird (Friendly)"},
+        {value: "Zubenelgenubi", text: "Zubenelgenubi (Casual)"},
+        {value: "Vindemiatrix", text: "Vindemiatrix (Gentle)"},
+        {value: "Sadachbia", text: "Sadachbia (Lively)"},
+        {value: "Sadaltager", text: "Sadaltager (Knowledgeable)"},
+        {value: "Sulafat", text: "Sulafat (Warm)"}
+    ];
+    const googleCloudVoiceOptions = [{value: "random", text: "Random"}, ...generateGoogleCloudVoiceOptions(getLessonLanguage())];
+    const voiceOptionsObject = {
+        "openai": openaiVoiceOptions,
+        "google gemini": googleGeminiVoiceOptions,
+        "google cloud": googleCloudVoiceOptions
+    };
 
     /* Main Setup Functions */
     function setupPopups() {
@@ -304,8 +358,8 @@
             addShortcutInput(shortcutSection, "shortcutMakeKnownInput", "Make Word Known:", settings.shortcutMakeKnown);
             addShortcutInput(shortcutSection, "shortcutDictionaryOpenInput", "Open Dictionary:", settings.shortcutDictionary);
             addShortcutInput(shortcutSection, "shortcutCopySelectedInput", "Copy Selected Text:", settings.shortcutCopySelected);
-            addShortcutInput(shortcutSection, "shortcutMeaningInputInput", "Meaning Input Focus:", settings.shortcutMeaningInput);
-            addShortcutInput(shortcutSection, "shortcutChatInputInput", "Chat Input Focus:", settings.shortcutChatInput);
+            addShortcutInput(shortcutSection, "shortcutMeaningInput", "Meaning Input Focus:", settings.shortcutMeaningInput);
+            addShortcutInput(shortcutSection, "shortcutChatInput", "Chat Input Focus:", settings.shortcutChatInput);
 
             container2.appendChild(shortcutSection);
 
@@ -321,7 +375,10 @@
                 {value: "openai gpt-4.1-mini", text: "OpenAI GPT-4.1 mini ($0.4/$1.6)"},
                 {value: "openai gpt-4.1-nano", text: "OpenAI GPT-4.1 nano ($0.1/$0.4)"},
                 {value: "google gemini-2.5-flash", text: "Google Gemini 2.5 Flash ($0.3/$2.5)"},
-                {value: "google gemini-2.5-flash-lite-preview-06-17",text: "Google Gemini 2.5 Flash Light ($0.1/$0.4)"},
+                {
+                    value: "google gemini-2.5-flash-lite-preview-06-17",
+                    text: "Google Gemini 2.5 Flash Light ($0.1/$0.4)"
+                },
                 {value: "google gemini-2.0-flash", text: "Google Gemini 2.0 Flash ($0.1/$0.4)"}
             ], settings.llmProviderModel);
 
@@ -372,51 +429,13 @@
             ttsApiKeyContainer.appendChild(ttsApiKeyFlexContainer);
             ttsSection.appendChild(ttsApiKeyContainer);
 
-            addSelect(ttsSection, "ttsVoiceSelector", "TTS Voice:", [
-                {value: "openai random", text: "OpenAI Random"},
-                {value: "openai alloy", text: "OpenAI Alloy"},
-                {value: "openai ash", text: "OpenAI Ash"},
-                {value: "openai ballad", text: "OpenAI Ballad"},
-                {value: "openai coral", text: "OpenAI Coral"},
-                {value: "openai echo", text: "OpenAI Echo"},
-                {value: "openai fable", text: "OpenAI Fable"},
-                {value: "openai onyx", text: "OpenAI Onyx"},
-                {value: "openai nova", text: "OpenAI Nova"},
-                {value: "openai sage", text: "OpenAI Sage"},
-                {value: "openai shimmer", text: "OpenAI Shimmer"},
-                {value: "openai verse", text: "OpenAI Verse"},
-                {value: "google random", text: "Google Random"},
-                {value: "google Zephyr", text: "Google Zephyr (Bright)"},
-                {value: "google Puck", text: "Google Puck (Upbeat)"},
-                {value: "google Charon", text: "Google Charon (Informative)"},
-                {value: "google Kore", text: "Google Kore (Firm)"},
-                {value: "google Fenrir", text: "Google Fenrir (Excitable)"},
-                {value: "google Leda", text: "Google Leda (Youthful)"},
-                {value: "google Orus", text: "Google Orus (Firm)"},
-                {value: "google Aoede", text: "Google Aoede (Breezy)"},
-                {value: "google Callirrhoe", text: "Google Callirrhoe (Easy-going)"},
-                {value: "google Autonoe", text: "Google Autonoe (Bright)"},
-                {value: "google Enceladus", text: "Google Enceladus (Breathy)"},
-                {value: "google Iapetus", text: "Google Iapetus (Clear)"},
-                {value: "google Umbriel", text: "Google Umbriel (Easy-going)"},
-                {value: "google Algieba", text: "Google Algieba (Smooth)"},
-                {value: "google Despina", text: "Google Despina (Smooth)"},
-                {value: "google Erinome", text: "Google Erinome (Clear)"},
-                {value: "google Algenib", text: "Google Algenib (Gravelly)"},
-                {value: "google Rasalgethi", text: "Google Rasalgethi (Informative)"},
-                {value: "google Laomedeia", text: "Google Laomedeia (Upbeat)"},
-                {value: "google Achernar", text: "Google Achernar (Soft)"},
-                {value: "google Alnilam", text: "Google Alnilam (Firm)"},
-                {value: "google Schedar", text: "Google Schedar (Even)"},
-                {value: "google Gacrux", text: "Google Gacrux (Mature)"},
-                {value: "google Pulcherrima", text: "Google Pulcherrima (Forward)"},
-                {value: "google Achird", text: "Google Achird (Friendly)"},
-                {value: "google Zubenelgenubi", text: "Google Zubenelgenubi (Casual)"},
-                {value: "google Vindemiatrix", text: "Google Vindemiatrix (Gentle)"},
-                {value: "google Sadachbia", text: "Google Sadachbia (Lively)"},
-                {value: "google Sadaltager", text: "Google Sadaltager (Knowledgeable)"},
-                {value: "google Sulafat", text: "Google Sulafat (Warm)"}
-            ], settings.ttsVoice);
+            addSelect(ttsSection, "ttsProviderSelector", "TTS Provider:", [
+                {value: "openai", text: "OpenAI"},
+                {value: "google gemini", text: "Google Gemini"},
+                {value: "google cloud", text: "Google Cloud"}
+            ], settings.ttsProvider);
+
+            addSelect(ttsSection, "ttsVoiceSelector", "TTS Voice:", voiceOptionsObject[settings.ttsProvider], settings.ttsVoice);
 
             addCheckbox(ttsSection, "ttsWordCheckbox", "Enable AI-TTS for words", settings.ttsWord);
             addCheckbox(ttsSection, "ttsSentenceCheckbox", "Enable AI-TTS for sentences", settings.ttsSentence);
@@ -430,13 +449,24 @@
                 className: "popup-row"
             });
 
-            buttonContainer.appendChild(createElement("button", {id: "resetSettingsBtn", textContent: "Reset", className: "popup-button"}));
+            buttonContainer.appendChild(createElement("button", {
+                id: "resetSettingsBtn",
+                textContent: "Reset",
+                className: "popup-button"
+            }));
 
             const donationButton = createElement("a", {href: "https://www.buymeacoffee.com/mutti", target: "_blank"})
-            donationButton.appendChild(createElement("img", {src: "https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png", style: "width: 125px; height: 35px"}))
+            donationButton.appendChild(createElement("img", {
+                src: "https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png",
+                style: "width: 125px; height: 35px"
+            }))
             buttonContainer.appendChild(donationButton);
 
-            buttonContainer.appendChild(createElement("button", {id: "closeSettingsBtn", textContent: "Close", className: "popup-button"}));
+            buttonContainer.appendChild(createElement("button", {
+                id: "closeSettingsBtn",
+                textContent: "Close",
+                className: "popup-button"
+            }));
 
             popupLayout.appendChild(columns)
             popupLayout.appendChild(buttonContainer);
@@ -792,8 +822,8 @@
             setupShortcutInput("shortcutMakeKnownInput", "shortcutMakeKnown");
             setupShortcutInput("shortcutDictionaryOpenInput", "shortcutDictionary");
             setupShortcutInput("shortcutCopySelectedInput", "shortcutCopySelected");
-            setupShortcutInput("shortcutMeaningInputInput", "shortcutMeaningInput");
-            setupShortcutInput("shortcutChatInputInput", "shortcutChatInput");
+            setupShortcutInput("shortcutMeaningInput", "shortcutMeaningInput");
+            setupShortcutInput("shortcutChatInput", "shortcutChatInput");
 
             const chatWidgetCheckbox = document.getElementById("chatWidgetCheckbox");
             chatWidgetCheckbox.addEventListener('change', (event) => {
@@ -837,6 +867,18 @@
             const ttsVoiceSelector = document.getElementById("ttsVoiceSelector");
             ttsVoiceSelector.addEventListener("change", (event) => {
                 settings.ttsVoice = event.target.value
+            });
+
+            const ttsProviderSelector = document.getElementById("ttsProviderSelector");
+            ttsProviderSelector.addEventListener("change", (event) => {
+                settings.ttsProvider = event.target.value
+                ttsVoiceSelector.innerHTML = "";
+                voiceOptionsObject[settings.ttsProvider].forEach(option => {
+                    ttsVoiceSelector.appendChild(createElement("option", {
+                        value: option.value,
+                        textContent: option.text
+                    }));
+                });
             });
 
             const ttsWordCheckbox = document.getElementById("ttsWordCheckbox");
@@ -894,8 +936,8 @@
                 document.getElementById("shortcutMakeKnownInput").value = defaults.shortcutMakeKnown;
                 document.getElementById("shortcutDictionaryOpenInput").value = defaults.shortcutDictionary;
                 document.getElementById("shortcutCopySelectedInput").value = defaults.shortcutCopySelected;
-                document.getElementById("shortcutMeaningInputInput").value = defaults.shortcutMeaningInput;
-                document.getElementById("shortcutChatInputInput").value = defaults.shortcutChatInput;
+                document.getElementById("shortcutMeaningInput").value = defaults.shortcutMeaningInput;
+                document.getElementById("shortcutChatInput").value = defaults.shortcutChatInput;
 
                 document.getElementById("chatWidgetCheckbox").value = defaults.chatWidget;
                 document.getElementById("llmProviderModelSelector").value = defaults.llmProviderModel;
@@ -905,6 +947,7 @@
 
                 document.getElementById("ttsCheckbox").value = defaults.tts;
                 document.getElementById("ttsApiKeyInput").value = defaults.ttsApiKey;
+                document.getElementById("ttsProviderSelector").value = defaults.ttsProvider;
                 document.getElementById("ttsVoiceSelector").value = defaults.ttsVoice;
                 document.getElementById("ttsWordCheckbox").value = defaults.ttsWord;
                 document.getElementById("ttsSentenceCheckbox").value = defaults.ttsSentence;
@@ -922,7 +965,8 @@
         }
 
         async function setupDownloadWordsEventListeners() {
-            async function getAllWords(baseUrl, pageSize, apiType, additionalParams = "", progressCallback = () => {}) {
+            async function getAllWords(baseUrl, pageSize, apiType, additionalParams = "", progressCallback = () => {
+            }) {
                 let allResults = [];
                 let nextUrl = `${baseUrl}?page_size=${pageSize}&page=1${additionalParams}`;
                 let currentPage = 0;
@@ -2196,7 +2240,7 @@
 
     async function setupEditor() {
         async function concatenateAudioBuffers(audioContext, audioBuffers) {
-            if (audioBuffers.length === 0) return { concatenatedBuffer: null, duration: 0, timestamps: [] };
+            if (audioBuffers.length === 0) return {concatenatedBuffer: null, duration: 0, timestamps: []};
 
             const sampleRate = audioBuffers[0].sampleRate;
             const numberOfChannels = audioBuffers[0].numberOfChannels;
@@ -2236,7 +2280,7 @@
         }
 
         async function generateLessonAudio() {
-            const [ttsProvider, ttsVoice] = settings.ttsVoice.split(" ");
+            const ttsProvider = settings.ttsProvider;
 
             const lessonId = getLessonId();
             const lessonLanguage = getLessonLanguage();
@@ -2254,7 +2298,21 @@
 
             const audioDataBuffers = new Array(totalSentences);
 
-            const RPM_LIMIT = ttsProvider === "openai" ? (500*0.9) : ttsProvider === "google" ? (10*0.9) : 1;
+            let RPM_LIMIT = 1;
+            switch (ttsProvider) {
+                case "openai":
+                    RPM_LIMIT = 500;
+                    break;
+                case "google gemini":
+                    RPM_LIMIT = 10;
+                    break;
+                case "google cloud":
+                    RPM_LIMIT = 100;
+                    break;
+            }
+
+            RPM_LIMIT = RPM_LIMIT * 0.9;
+
             const DELAY_BETWEEN_CALLS = (60 * 1000) / RPM_LIMIT;
 
             const apiCallPromises = [];
@@ -2270,8 +2328,8 @@
 
                     setTimeout(async () => {
                         console.log(`Calling TTS for sentence ${i + 1}/${totalSentences} at ${new Date().toLocaleTimeString()} (scheduled for ${new Date(actualCallTime).toLocaleTimeString()})`);
-                        const audioArrayBuffer = await getTTSResponse(ttsProvider, settings.ttsApiKey, ttsVoice, text);
-                        resolve({ index: i, buffer: audioArrayBuffer });
+                        const audioArrayBuffer = await getTTSResponse(ttsProvider, settings.ttsApiKey, settings.ttsVoice, text);
+                        resolve({index: i, buffer: audioArrayBuffer});
 
                         processedSentences += 1;
                         progressBar.value = processedSentences;
@@ -2291,7 +2349,7 @@
             }
 
             console.log('concatenating audio buffers...');
-            const { concatenatedBuffer, duration, timestamps } = await concatenateAudioBuffers(
+            const {concatenatedBuffer, duration, timestamps} = await concatenateAudioBuffers(
                 audioContext,
                 audioDataBuffers
             );
@@ -2305,7 +2363,9 @@
 
             await uploadAudioToLesson(lessonLanguage, lessonId, finalMP3AudioData, Math.ceil(duration));
 
-            const jsonTimestamps = timestamps.map(({start, end}, index) => {return {index: index+1, timestamp: [start, end]}});
+            const jsonTimestamps = timestamps.map(({start, end}, index) => {
+                return {index: index + 1, timestamp: [start, end]}
+            });
             await updataTimestampToLesson(lessonLanguage, lessonId, jsonTimestamps);
 
             window.onbeforeunload = null;
@@ -2313,18 +2373,33 @@
         }
 
         async function createEditorUI() {
-            const genLessonAudioButton = createElement("button", { id: "genLessonAudio", className: "button", tableindex: "0"});
+            const genLessonAudioButton = createElement("button", {
+                id: "genLessonAudio",
+                className: "button",
+                tableindex: "0"
+            });
             genLessonAudioButton.addEventListener("click", () => {
                 genLessonAudioButton.disabled = true;
                 generateLessonAudio();
             });
-            genLessonAudioButton.appendChild(createElement("span", { className: "text-wrapper has-text-overflow", textContent: "Generate Lesson Audio"}));
+            genLessonAudioButton.appendChild(createElement("span", {
+                className: "text-wrapper has-text-overflow",
+                textContent: "Generate Lesson Audio"
+            }));
 
-            const control = createElement("div", { className: "control", style: "display: flex; flex-direction: column; gap: 5px;" });
-            const field = createElement("div", { className: "field is-grouped" });
+            const control = createElement("div", {
+                className: "control",
+                style: "display: flex; flex-direction: column; gap: 5px;"
+            });
+            const field = createElement("div", {className: "field is-grouped"});
             const navItem = createElement("div", {className: "nav-item"});
 
-            const progressBar = createElement("progress", {id: "lessonAudioProgressBar", value: "0", max: "100", style: "width: 100%; display: none;"});
+            const progressBar = createElement("progress", {
+                id: "lessonAudioProgressBar",
+                value: "0",
+                max: "100",
+                style: "width: 100%; display: none;"
+            });
 
             control.appendChild(genLessonAudioButton);
             control.appendChild(progressBar);
@@ -2468,7 +2543,7 @@
     }
 
     async function updataTimestampToLesson(lessonLanguage, lessonId, timestamp) {
-        const url= `https://www.lingq.com/api/v3/${lessonLanguage}/lessons/${lessonId}/timestamps/`;
+        const url = `https://www.lingq.com/api/v3/${lessonLanguage}/lessons/${lessonId}/timestamps/`;
 
         const response = await fetch(url, {
             method: 'POST',
@@ -2774,6 +2849,27 @@
         return finalMp3Data;
     }
 
+    function generateGoogleCloudVoiceOptions(languageCode) {
+        const googleCloudLanguages = ["ar-XA", "bn-IN", "cmn-CN", "de-DE", "en-AU", "en-GB", "en-IN", "en-US", "es-ES", "es-US", "fr-CA", "fr-FR", "gu-IN", "hi-IN", "id-ID", "it-IT", "ja-JP", "kn-IN", "ko-KR", "ml-IN", "mr-IN", "nl-BE", "nl-NL", "pl-PL", "pt-BR", "ru-RU", "sw-KE", "ta-IN", "te-IN", "th-TH", "tr-TR", "uk-UA", "ur-IN", "vi-VN"];
+        const googleCloudNames = ["Achernar", "Achird", "Algenib", "Algieba", "Alnilam", "Aoede", "Autonoe", "Callirrhoe", "Charon", "Despina", "Enceladus", "Erinome", "Fenrir", "Gacrux", "Iapetus", "Kore", "Laomedeia", "Leda", "Orus", "Puck", "Pulcherrima", "Rasalgethi", "Sadachbia", "Sadaltager", "Schedar", "Sulafat", "Umbriel", "Vindemiatrix", "Zephyr", "Zubenelgenubi"];
+
+        const options = [];
+
+        const filteredLanguages = googleCloudLanguages.filter(lang =>
+            lang.startsWith(languageCode + "-") || lang === languageCode
+        );
+
+        filteredLanguages.forEach(lang => {
+            googleCloudNames.forEach(name => {
+                const value = `${lang}-Chirp3-HD-${name}`;
+                const text = `${name} (${lang})`;
+                options.push({value, text});
+            });
+        });
+
+        return options;
+    }
+
     /* Modules */
 
     function stopPlayingAudio(autioContext) {
@@ -2789,6 +2885,7 @@
     }
 
     let audioContext = null;
+
     async function playAudio(audioData, volume = 0.5) {
         stopPlayingAudio(audioContext);
 
@@ -2824,9 +2921,8 @@
         const modelId = "gpt-4o-mini-tts";
         const apiUrl = "https://api.openai.com/v1/audio/speech";
 
-        console.log('TTS', `${modelId}, ${voice}`);
-
         if (!API_KEY) throw new Error("Invalid or missing OpenAI API key. Please set the API_KEY");
+        console.log('TTS', `${modelId}, ${voice}`);
 
         try {
             const response = await fetch(apiUrl, {
@@ -2863,7 +2959,7 @@
         }
     }
 
-    async function googleTTS(text, API_KEY, voice = "Zephyr", ttsInstructions) {
+    async function geminiTTS(text, API_KEY, voice = "Zephyr", ttsInstructions) {
         function createWavHeader(dataLength) {
             const sampleRate = 24000;
             const numChannels = 1;
@@ -2973,6 +3069,86 @@
         }
     }
 
+    async function googleCloudTTS(text, API_KEY, voice) {
+        function base64ToArrayBuffer(base64String) {
+            const binaryString = atob(base64String);
+            const len = binaryString.length;
+            const bytes = new Uint8Array(len);
+
+            for (let i = 0; i < len; i++) {
+                bytes[i] = binaryString.charCodeAt(i);
+            }
+
+            return bytes.buffer;
+        }
+
+        const apiUrl = `https://texttospeech.googleapis.com/v1/text:synthesize?key=${API_KEY}`;
+
+        if (!API_KEY) throw new Error("Invalid or missing Google API key. Please set the API_KEY");
+        console.log('TTS', `${voice}`);
+
+        try {
+            const response = await fetch(apiUrl, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    input: {text: text},
+                    voice: {
+                        languageCode: voice.split("-Chirp3-HD-")[0],
+                        name: voice
+                    },
+                    audioConfig: {audioEncoding: "MP3"}
+                })
+            });
+
+            if (!response.ok) {
+                let errorMessage = `HTTP error! Status: ${response.status}`;
+
+                const permissionErrorMessage = `
+                    You need to enable the Text-to-Speech API in the Google Cloud Console.
+                    1. Enable the Cloud Text-to-Speech API from the url: https://console.developers.google.com/apis/api/texttospeech.googleapis.com/overview
+                    2. Visit https://console.cloud.google.com/apis/credentials Select an API key displayed > Select the Cloud Text-to-Speech API from the API restrictions section > ok > save.
+                `;
+                if (response.status === 403) console.error(removeIndent(permissionErrorMessage));
+
+                try {
+                    const errorBody = await response.json();
+                    errorMessage += ` - Google Error: ${errorBody?.error?.message || JSON.stringify(errorBody)}`;
+                } catch (parseError) {
+                    errorMessage += ` - Failed to parse error response.`;
+                }
+                throw new Error(errorMessage);
+            }
+            const data = await response.json();
+            const audioDataBase64 = data.audioContent;
+            return base64ToArrayBuffer(audioDataBase64);
+        } catch (error) {
+            console.error("Error during Google Cloud TTS request:", error);
+            throw error;
+        }
+    }
+
+    async function getTTSResponse(provider, apiKey, voice, text) {
+        const ttsInstructions = `Read the text in a realistic, genuine, neutral, and clear manner. vary your rhythm and pace naturally, like a professional voice actor: `;
+
+        const voices = Array.from(document.querySelector("#ttsVoiceSelector").options)
+            .map(option => option.value)
+            .slice(1);
+
+        if (voice === "random") voice = getRandomElement(voices).split(" ")[1];
+
+        switch (provider) {
+            case "openai":
+                return await openAITTS(text, apiKey, voice, ttsInstructions);
+            case "google gemini":
+                return await geminiTTS(text, apiKey, voice, ttsInstructions);
+            case "google cloud":
+                return await googleCloudTTS(text, apiKey, voice);
+        }
+    }
+
     function getLLMPricing(llmProviderModel) {
         const llmInfo = document.querySelector(`#llmProviderModelSelector > option[value="${llmProviderModel}"]`).text;
         const [inputPrice, outputPrice] = llmInfo.match(/\$(\d+(?:\.\d+)?)\/\$(\d+(?:\.\d+)?)\)/).slice(1, 3).map(num => parseFloat(num) / 1000000);
@@ -3058,10 +3234,10 @@
             const decoder = new TextDecoder('utf-8');
 
             while (true) {
-                const { done, value } = await reader.read();
+                const {done, value} = await reader.read();
                 if (done) break;
 
-                const chunk = decoder.decode(value, { stream: true });
+                const chunk = decoder.decode(value, {stream: true});
                 buffer += chunk;
 
                 const lines = buffer.split('\n');
@@ -3133,23 +3309,6 @@
         console.log(`Lesson summary: \n${summary}`);
 
         return summary;
-    }
-
-    async function getTTSResponse(provider, apiKey, voice, text) {
-        const ttsInstructions = `Read the text in a realistic, genuine, neutral, and clear manner. vary your rhythm and pace naturally, like a professional voice actor: `;
-
-        const voices = Array.from(document.querySelector("#ttsVoiceSelector").options)
-            .filter(option => option.value.startsWith(provider))
-            .map(option => option.value)
-            .slice(1);
-
-        if (voice === "random") voice = getRandomElement(voices).split(" ")[1];
-
-        if (provider === 'openai') {
-            return await openAITTS(text, apiKey, voice, ttsInstructions);
-        } else if (provider === 'google') {
-            return await googleTTS(text, apiKey, voice, ttsInstructions);
-        }
     }
 
     /* Features */
@@ -3280,6 +3439,7 @@
 
     let lessonSummary = "";
     let quickSummary = "";
+
     async function setupReaderContainer() {
         const [llmProvider, llmModel] = settings.llmProviderModel.split(" ");
         const llmApiKey = settings.llmApiKey;
@@ -3327,7 +3487,10 @@
                     for (const node of mutation.addedNodes) {
                         if (!(node.nodeType === Node.ELEMENT_NODE && node.matches('section'))) continue;
 
-                        const summaryElement = createElement("div", {className: "quick-summary", innerHTML: quickSummary});
+                        const summaryElement = createElement("div", {
+                            className: "quick-summary",
+                            innerHTML: quickSummary
+                        });
                         node.parentNode.prepend(summaryElement);
                     }
                 }
@@ -3342,7 +3505,9 @@
                     document.querySelector(".quick-summary").innerHTML = result;
                     quickSummary = result;
                 })
-            getLessonSummary(llmProvider, llmApiKey, llmModel, lessonContent).then(summary => {lessonSummary = summary})
+            getLessonSummary(llmProvider, llmApiKey, llmModel, lessonContent).then(summary => {
+                lessonSummary = summary
+            })
         }
 
         const observer = new MutationObserver(function (mutations) {
@@ -3372,7 +3537,6 @@
         const llmApiKey = settings.llmApiKey;
 
         async function updateTTS(click = true) {
-            const [ttsProvider, ttsVoice] = settings.ttsVoice.split(" ");
             async function replaceTTSButton() {
                 const selectedTextElement = document.querySelector(".reference-word");
                 const selectedText = selectedTextElement ? selectedTextElement.textContent.trim() : "";
@@ -3384,7 +3548,7 @@
                 }
 
                 ttsButton.disabled = true;
-                let audioData = await getTTSResponse(ttsProvider, settings.ttsApiKey, ttsVoice, selectedText);
+                let audioData = await getTTSResponse(settings.ttsProvider, settings.ttsApiKey, settings.ttsVoice, selectedText);
                 if (audioData == null) {
                     console.log("audioData can't be got.")
                     return;
@@ -3470,7 +3634,8 @@
                 return messageDiv;
             }
 
-            async function callStreamOpenAI(botMessageDiv, chatContainer, focus, onStreamCompleted = () => {}) {
+            async function callStreamOpenAI(botMessageDiv, chatContainer, focus, onStreamCompleted = () => {
+            }) {
                 const userInput = document.getElementById("user-input");
                 const sendButton = document.getElementById("send-button");
 
@@ -3520,8 +3685,12 @@
                         copyButton.addEventListener('click', async () => {
                             const textToCopy = botMessageDiv.textContent;
                             navigator.clipboard.writeText(textToCopy)
-                                .then(() => {showToast("Message Copied!", true)})
-                                .catch(() => {showToast("Failed to copy message.", false)});
+                                .then(() => {
+                                    showToast("Message Copied!", true)
+                                })
+                                .catch(() => {
+                                    showToast("Failed to copy message.", false)
+                                });
                         });
                         messageButtonContainer.appendChild(copyButton);
 
@@ -3530,18 +3699,16 @@
                             innerHTML: `<svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="transparent" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-play" aria-hidden="true"><polygon points="6 3 20 12 6 21 6 3"></polygon></svg>`,
                         });
                         ttsButton.addEventListener('click', async function initialTTSHandler() {
-                            const [ttsProvider, ttsVoice] = settings.ttsVoice.split(" ");
-
                             let textToTTS = "";
 
                             if (botMessageDiv.matches(".word-message")) {
                                 textToTTS = Array.from(botMessageDiv.querySelectorAll("b, ul > li:nth-child(1)")).map(node => node.textContent).join(".\n");
                             } else {
-                                textToTTS =botMessageDiv.textContent;
+                                textToTTS = botMessageDiv.textContent;
                             }
 
                             ttsButton.disabled = true;
-                            const audioData = await getTTSResponse(ttsProvider, settings.ttsApiKey, ttsVoice, textToTTS);
+                            const audioData = await getTTSResponse(settings.ttsProvider, settings.ttsApiKey, settings.ttsVoice, textToTTS);
                             if (audioData == null) {
                                 console.log("audioData can't be got.")
                                 return;
@@ -3669,8 +3836,12 @@
                                 const textToCopy = (hasMeaning ? '\n' : '') + (meaning.textContent || meaning.innerText);
 
                                 navigator.clipboard.writeText(textToCopy)
-                                    .then(() => {showToast("Meaning Copied!", true)})
-                                    .catch(() => {showToast("Failed to copy meaning.", false)});
+                                    .then(() => {
+                                        showToast("Meaning Copied!", true)
+                                    })
+                                    .catch(() => {
+                                        showToast("Failed to copy meaning.", false)
+                                    });
                             }
                         }
                     );
@@ -4056,26 +4227,26 @@
     }
 
     function init() {
-        if (document.URL.includes("lingq.com")){
+        const url = document.URL.split("?")[0];
+        if (url.includes("lingq")) {
             fixBugs();
-            setupPopups();
-
-            if (document.URL.includes("/reader")) {
+            if (url.includes("/reader")) {
+                setupPopups();
                 setupReader();
                 setupKeyboardShortcuts();
                 setupYoutubePlayerCustomization();
                 setupReaderContainer();
                 setupLLMs();
                 AutoplayInSentenceView();
-            } else if (document.URL.includes("/editor")) {
+            } else if (url.includes("/editor")) {
+                setupPopups();
                 setupEditor();
-            } else if (document.URL.includes("/library/course")) {
+            } else if (url.includes("/library/course")) {
                 setupCourse();
-            } else if (document.URL.includes("/print")) {
+            } else if (url.includes("/print")) {
                 setupPrintPage();
             }
-        }
-        if (document.URL.includes("youtube")) {
+        } else if (url.includes("youtube")) {
             simplifyYoutubeEmbeddedPlayer();
         }
     }

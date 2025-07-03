@@ -4,8 +4,8 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="b2d6afe9-1e6d-49e2-bcc7-015adf2ef12e" name="Changes" comment="">
-      <change beforePath="$PROJECT_DIR$/.idea/.gitignore" beforeDir="false" />
+    <list default="true" id="b2d6afe9-1e6d-49e2-bcc7-015adf2ef12e" name="Changes" comment="Implemented lesson audio generation and refactors core setup logic.">
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/lingq_add-on.js" beforeDir="false" afterPath="$PROJECT_DIR$/lingq_add-on.js" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
@@ -61,6 +61,7 @@
   <component name="VcsManagerConfiguration">
     <MESSAGE value="Enhanced summary prompts and fixed a bug related to the quick summary loading." />
     <MESSAGE value="Implements lesson audio generation and refactors core setup logic." />
-    <option name="LAST_COMMIT_MESSAGE" value="Implements lesson audio generation and refactors core setup logic." />
+    <MESSAGE value="Implemented lesson audio generation and refactors core setup logic." />
+    <option name="LAST_COMMIT_MESSAGE" value="Implemented lesson audio generation and refactors core setup logic." />
   </component>
 </project>
