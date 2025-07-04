@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      7.1.2
+// @version      7.1.3
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @namespace https://greasyfork.org/users/1458847
@@ -2239,6 +2239,15 @@
     }
 
     async function setupEditor() {
+        function updateProgress(progressBar, progressText, message, value, total) {
+            if (value !== undefined && total !== undefined) {
+                progressBar.max = total;
+                progressBar.value = value;
+            }
+            progressText.textContent = message;
+            console.log(message);
+        }
+
         async function concatenateAudioBuffers(audioContext, audioBuffers) {
             if (audioBuffers.length === 0) return {concatenatedBuffer: null, duration: 0, timestamps: []};
 
@@ -2293,10 +2302,10 @@
             let processedSentences = 0;
 
             const progressBar = document.getElementById("lessonAudioProgressBar");
-            progressBar.style.display = "block";
-            progressBar.max = totalSentences;
+            const progressText = document.getElementById("lessonAudioProgressText");
 
-            const audioDataBuffers = new Array(totalSentences);
+            progressBar.style.display = "block";
+            progressBar.max = totalSentences * 2;
 
             let RPM_LIMIT = 1;
             switch (ttsProvider) {
@@ -2307,15 +2316,14 @@
                     RPM_LIMIT = 10;
                     break;
                 case "google cloud":
-                    RPM_LIMIT = 100;
+                    RPM_LIMIT = 200;
                     break;
             }
-
             RPM_LIMIT = RPM_LIMIT * 0.9;
-
             const DELAY_BETWEEN_CALLS = (60 * 1000) / RPM_LIMIT;
 
             const apiCallPromises = [];
+            const audioDataBuffers = new Array(totalSentences);
             let nextAvailableCallTime = Date.now();
 
             for (let i = 0; i < totalSentences; i++) {
@@ -2327,45 +2335,42 @@
                     const timeToWait = actualCallTime - Date.now();
 
                     setTimeout(async () => {
-                        console.log(`Calling TTS for sentence ${i + 1}/${totalSentences} at ${new Date().toLocaleTimeString()} (scheduled for ${new Date(actualCallTime).toLocaleTimeString()})`);
-                        const audioArrayBuffer = await getTTSResponse(ttsProvider, settings.ttsApiKey, settings.ttsVoice, text);
-                        resolve({index: i, buffer: audioArrayBuffer});
+                        updateProgress(progressBar, progressText, `Calling TTS for sentence ${i + 1}/${totalSentences}`, processedSentences, totalSentences * 2);
 
+                        const audioArrayBuffer = await getTTSResponse(ttsProvider, settings.ttsApiKey, settings.ttsVoice, text);
+                        audioDataBuffers[i] = await decodeAudioData(audioContext, audioArrayBuffer);
+                        resolve();
                         processedSentences += 1;
-                        progressBar.value = processedSentences;
                     }, Math.max(0, timeToWait));
                 });
                 apiCallPromises.push(p);
             }
+            updateProgress(progressBar, progressText, 'All TTS API calls scheduled.', processedSentences, totalSentences * 2);
 
-            console.log('All TTS API calls scheduled. Waiting for completion...');
+            await Promise.all(apiCallPromises);
+            updateProgress(progressBar, progressText, 'All TTS API calls completed.', processedSentences, totalSentences * 2);
 
-            const results = await Promise.all(apiCallPromises);
-
-            for (let i = 0; i < totalSentences; i++) {
-                const result = results[i];
-                const decodedBuffer = await decodeAudioData(audioContext, result.buffer);
-                audioDataBuffers[result.index] = decodedBuffer;
-            }
-
-            console.log('concatenating audio buffers...');
+            updateProgress(progressBar, progressText, 'Concatenating audio buffers.', processedSentences, totalSentences * 2);
             const {concatenatedBuffer, duration, timestamps} = await concatenateAudioBuffers(
                 audioContext,
                 audioDataBuffers
             );
 
-            if (!concatenatedBuffer) throw new Error(`No audio detected. Please ensure the API key is accurate.`);
+            updateProgress(progressBar, progressText, 'Encoding audio.', processedSentences, totalSentences * 2);
+            const encodingProgressCallback = (current, total) => {
+                const encodingProgressValue = processedSentences + Math.floor((current / total) * totalSentences);
+                updateProgress(progressBar, progressText, `Encoding audio: ${Math.floor((current / total) * 100)}%`, encodingProgressValue, totalSentences * 2);
+            };
+            const finalMP3AudioData = await encodeAudioBufferToMP3(concatenatedBuffer, encodingProgressCallback);
+            updateProgress(progressBar, progressText, 'Audio encoding completed.', totalSentences * 2, totalSentences * 2);
 
-            console.log('encoding audio...');
-            const finalMP3AudioData = encodeAudioBufferToMP3(concatenatedBuffer);
-
-            if (finalMP3AudioData.length <= 0) throw new Error(`MP3 encoding failed. Empty audio data.`);
-
+            updateProgress(progressBar, progressText, 'Uploading audio to lesson.', totalSentences * 2, totalSentences * 2);
             await uploadAudioToLesson(lessonLanguage, lessonId, finalMP3AudioData, Math.ceil(duration));
 
             const jsonTimestamps = timestamps.map(({start, end}, index) => {
                 return {index: index + 1, timestamp: [start, end]}
             });
+            updateProgress(progressBar, progressText, 'Updating timestamps to lesson.', totalSentences * 2, totalSentences * 2);
             await updataTimestampToLesson(lessonLanguage, lessonId, jsonTimestamps);
 
             window.onbeforeunload = null;
@@ -2401,8 +2406,14 @@
                 style: "width: 100%; display: none;"
             });
 
+            const progressText = createElement("span", {
+                id: "lessonAudioProgressText",
+                style: "font-size: 0.8em;"
+            });
+
             control.appendChild(genLessonAudioButton);
             control.appendChild(progressBar);
+            control.appendChild(progressText);
             field.appendChild(control);
             navItem.appendChild(field);
 
@@ -2802,51 +2813,75 @@
         });
     }
 
-    function encodeAudioBufferToMP3(audioBuffer) {
-        const sampleRate = audioBuffer.sampleRate;
-        const mp3encoder = new lamejs.Mp3Encoder(1, sampleRate, 128);
-        const mp3Data = [];
+    function encodeAudioBufferToMP3(audioBuffer, progressCallback) {
+        return new Promise(resolve => {
+            const sampleRate = audioBuffer.sampleRate;
+            const mp3encoder = new lamejs.Mp3Encoder(1, sampleRate, 128);
+            const mp3Data = [];
 
-        const monoLength = audioBuffer.length;
-        const monoPcmData = audioBuffer.getChannelData(0);
+            const monoLength = audioBuffer.length;
+            const monoPcmData = audioBuffer.getChannelData(0);
 
-        const samples = new Int16Array(monoLength);
-        for (let i = 0; i < monoLength; i++) {
-            samples[i] = monoPcmData[i] * 32767.5;
-        }
-
-        const sampleBlockSize = 1152;
-        for (let i = 0; i < samples.length; i += sampleBlockSize) {
-            console.log(`${i}/${samples.length}`);
-            const currentBlockEnd = Math.min(i + sampleBlockSize, samples.length);
-            const currentSamples = samples.subarray(i, currentBlockEnd);
-
-            const mp3buf = mp3encoder.encodeBuffer(currentSamples);
-            if (mp3buf.length > 0) {
-                mp3Data.push(new Uint8Array(mp3buf));
+            const samples = new Int16Array(monoLength);
+            for (let i = 0; i < monoLength; i++) {
+                samples[i] = monoPcmData[i] * 32767.5;
             }
-        }
 
-        const mp3buf = mp3encoder.flush();
-        if (mp3buf.length > 0) {
-            mp3Data.push(new Uint8Array(mp3buf));
-        }
+            const sampleBlockSize = 1152;
+            const totalSamples = samples.length;
 
-        console.log(`Merging mp3 uint8array blocks into one.`);
+            const targetUpdateCount = 100;
+            const progressUpdateBlocksInterval = Math.max(1, Math.floor((totalSamples / sampleBlockSize) / targetUpdateCount));
+            let nextUpdateBlockThreshold = progressUpdateBlocksInterval;
 
-        let totalLength = 0;
-        for (let i = 0; i < mp3Data.length; i++) {
-            totalLength += mp3Data[i].length;
-        }
+            let currentSampleIndex = 0;
 
-        const finalMp3Data = new Uint8Array(totalLength);
-        let offset = 0;
-        for (let i = 0; i < mp3Data.length; i++) {
-            finalMp3Data.set(mp3Data[i], offset);
-            offset += mp3Data[i].length;
-        }
+            const processNextChunk = () => {
+                const targetIndexForThisChunk = Math.min(totalSamples, (nextUpdateBlockThreshold * sampleBlockSize));
 
-        return finalMp3Data;
+                while (currentSampleIndex < targetIndexForThisChunk) {
+                    const currentBlockEnd = Math.min(currentSampleIndex + sampleBlockSize, totalSamples);
+                    const currentSamples = samples.subarray(currentSampleIndex, currentBlockEnd);
+
+                    const mp3buf = mp3encoder.encodeBuffer(currentSamples);
+                    if (mp3buf.length > 0) {
+                        mp3Data.push(new Uint8Array(mp3buf));
+                    }
+
+                    currentSampleIndex = currentBlockEnd;
+                }
+
+                if (currentSampleIndex >= nextUpdateBlockThreshold * sampleBlockSize) {
+                    progressCallback(currentSampleIndex, totalSamples);
+                    nextUpdateBlockThreshold += progressUpdateBlocksInterval;
+                }
+
+                if (currentSampleIndex < totalSamples) {
+                    requestAnimationFrame(processNextChunk);
+                } else {
+                    const mp3buf = mp3encoder.flush();
+                    if (mp3buf.length > 0) mp3Data.push(new Uint8Array(mp3buf));
+
+                    if (progressCallback) progressCallback(totalSamples, totalSamples);
+
+                    console.log(`Merging mp3 uint8array blocks into one.`);
+                    let totalLength = 0;
+                    for (let i = 0; i < mp3Data.length; i++) {
+                        totalLength += mp3Data[i].length;
+                    }
+
+                    const finalMp3Data = new Uint8Array(totalLength);
+                    let offset = 0;
+                    for (let i = 0; i < mp3Data.length; i++) {
+                        finalMp3Data.set(mp3Data[i], offset);
+                        offset += mp3Data[i].length;
+                    }
+                    resolve(finalMp3Data);
+                }
+            };
+
+            requestAnimationFrame(processNextChunk);
+        });
     }
 
     function generateGoogleCloudVoiceOptions(languageCode) {

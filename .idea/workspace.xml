@@ -4,9 +4,12 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="b2d6afe9-1e6d-49e2-bcc7-015adf2ef12e" name="Changes" comment="Changed the google cloud voice list loading logic.">
+    <list default="true" id="b2d6afe9-1e6d-49e2-bcc7-015adf2ef12e" name="Changes" comment="Added more random options for google cloud TTS.">
+      <change afterPath="$PROJECT_DIR$/images/lesson audio generation.png" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/README.md" beforeDir="false" afterPath="$PROJECT_DIR$/README.md" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/lingq_add-on.js" beforeDir="false" afterPath="$PROJECT_DIR$/lingq_add-on.js" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/patchnote.txt" beforeDir="false" afterPath="$PROJECT_DIR$/patchnote.txt" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -34,6 +37,11 @@
     &quot;nodejs_package_manager_path&quot;: &quot;npm&quot;
   }
 }</component>
+  <component name="RecentsManager">
+    <key name="MoveFile.RECENT_KEYS">
+      <recent name="D:\OneDrive\local\workspace\LingQ_Add-On\images" />
+    </key>
+  </component>
   <component name="TaskManager">
     <task active="true" id="Default" summary="Default task">
       <changelist id="b2d6afe9-1e6d-49e2-bcc7-015adf2ef12e" name="Changes" comment="" />
@@ -68,7 +76,10 @@
     <MESSAGE value="Added the Google Cloud as a new TTS Provider. It's stable and has more varied voices." />
     <MESSAGE value="Consolidates Google Cloud voice data for simpler option generation." />
     <MESSAGE value="Changed the google cloud voice list loading logic." />
-    <option name="LAST_COMMIT_MESSAGE" value="Changed the google cloud voice list loading logic." />
+    <MESSAGE value="Improves Google Cloud TTS" />
+    <MESSAGE value="Improves Google Cloud TTS random voice selection logic." />
+    <MESSAGE value="Added more random options for google cloud TTS." />
+    <option name="LAST_COMMIT_MESSAGE" value="Added more random options for google cloud TTS." />
     <option name="NON_MODAL_COMMIT_POSTPONE_SLOW_CHECKS" value="false" />
   </component>
 </project>

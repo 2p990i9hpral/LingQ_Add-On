@@ -49,3 +49,9 @@
 - 5.15: Added a vocabulary table to the print page.
 
 - 6.0: Implemented LLM response streaming to enhance chat experience.
+- 6.1: Made LLM have a lesson summary in its context.
+- 6.2: Added regenerate, copy, read response buttons to the last bot message.
+- 6.3: Added a setting to prepend quick lesson summary.
+
+- 7.0: Implemented lesson audio generation feature.
+- 7.1: Added the Google Cloud as a new TTS Provider.

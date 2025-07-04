@@ -37,6 +37,7 @@ It offers customizable layouts, appearance settings, vocabulary downloading tool
     *   Adds a video progress indicator synced with the audio player's progress.
     *   Remove the more videos pop-up and youtube logo in the player, so you can read the subtitle while the video is paused.
 *   **Print a Lesson with Highlighting and the Vocabulary List**
+*   **Generate a Lesson Audio with AI-based TTS**
 
 ## Installation
 
@@ -113,6 +114,10 @@ Library Lessons are enhanced with an indicator for known words.
 ### Print a Lesson with Highlighting and the Vocabulary List
 
 <img src="images/print.jpeg" width="800"></br>
+
+### Generate a Lesson Audio with AI-based TTS
+
+<img src="images/lesson audio generation.png" width=800></br>
 
 ## License
 
