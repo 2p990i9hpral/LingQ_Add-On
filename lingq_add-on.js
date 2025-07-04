@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      7.1.4
+// @version      8.0.0
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @namespace https://greasyfork.org/users/1458847
@@ -879,9 +879,7 @@
         }
     }
 
-    async function getTTSResponse(provider, apiKey, voice, text) {
-        const ttsInstructions = `Read the text in a realistic, genuine, neutral, and clear manner. vary your rhythm and pace naturally, like a professional voice actor: `;
-
+    async function getTTSResponse(provider, apiKey, voice, text, ttsInstructions = 'Read the text in a realistic, genuine, neutral, and clear manner. vary your rhythm and pace naturally, like a professional voice actor: ') {
         const voices = Array.from(document.querySelector("#ttsVoiceSelector").options)
             .map(option => option.value)
             .filter(option => {return !option.startsWith("random")});
@@ -1025,15 +1023,15 @@
         const lessonLanguage = DictionaryLocalePairs[getLessonLanguage()];
         const summaryPrompt = `
             # System Settings
-            - Summarize the content in original content's language (${lessonLanguage}). The summary needs to be consist of two to four paragraphs.
+            - Summarize the content in original content's language (${lessonLanguage}). The summary needs to be consist of two to three paragraphs.
             - This summary will be used as a quick summary presented before reading the full content.
             - Start with '<b>summary</b>'. Place each paragraph within '<p>' tag.
             - The result will be used as the innerHTML of a DOM element. So, Output raw HTML as plain text. This means your entire response should be a string of HTML. Do not use Markdown syntax, do not wrap your HTML in Markdown code blocks.
             - Be objective and factual. Write only based on the given data.
             - No preface and postface only include a summary.
-            - Recommended length is at most 200 words, but can be varied a bit based on the original content's length
+            - Recommended length is at most 200 words.
             # Example Format
-            <b>summary</b> <p>first paragraph</p> <!-- <p>n-th paragraph</p> -->`;
+            <b>summary</b> <p>first paragraph</p> <p>second paragraph</p>`;
 
         const summary_history = [
             {role: "system", content: removeIndent(summaryPrompt)},
@@ -1053,7 +1051,7 @@
             - Do not omit key details from the original content.
             - Be objective and factual. Write only based on the given data.
             - No preface and postface only include a summary.
-            - Recommended length is at most 1000 words, but can be varied a bit based on the original content's length.`;
+            - Recommended length is at most 1000 words.`;
 
         const summary_history = [
             {role: "system", content: removeIndent(summaryPrompt)},
@@ -1453,6 +1451,60 @@
             });
             const closeButton = createElement("button", {
                 id: "closeDownloadWordsBtn",
+                textContent: "Close",
+                className: "popup-button"
+            });
+            buttonContainer.appendChild(closeButton);
+            content.appendChild(buttonContainer);
+
+            popup.appendChild(dragHandle);
+            popup.appendChild(content);
+
+            return popup;
+        }
+
+        function createTTSPlaygroundPopup() {
+            const popup = createElement("div", {id: "ttsPlaygroundPopup"});
+
+            const dragHandle = createElement("div", {id: "ttsPlaygroundDragHandle"});
+
+            const dragHandleTitle = createElement("h3", {textContent: "TTS Playground"});
+            dragHandle.appendChild(dragHandleTitle);
+
+            const content = createElement("div", {style: `padding: 0 10px;`});
+
+            const container = createElement("div", {style: "width: 550px;"});
+
+            const instructionsContainer = createElement("div", {className: "popup-row", style: "display: flex; flex-direction: column;"});
+            instructionsContainer.appendChild(createElement("label", {htmlFor: "ttsInstructionsInput", textContent: "Style Instructions"}));
+            const ttsInstructions = createElement("input", {id: "ttsInstructionsInput", className: "popup-input", style: "padding: 3px 5px;"});
+            instructionsContainer.appendChild(ttsInstructions);
+            container.appendChild(instructionsContainer);
+
+            const textContainer = createElement("div", {className: "popup-row", style: "display: flex; flex-direction: column;"});
+            textContainer.appendChild(createElement("label", {htmlFor: "ttsTextarea", textContent: "Text"}));
+            const ttsText = createElement("textarea", {id: "ttsTextarea", style: "width: 100%; height: 200px; border: 1px solid rgb(125 125 125 / 50%); border-radius: 5px; padding: 3px 5px;"});
+            textContainer.appendChild(ttsText);
+            container.appendChild(textContainer);
+
+            const ttsResultContainer = createElement("div", {style: "display: grid; grid-template-columns: 1fr 1fr 1fr;", className: "popup-row"});
+
+            const ttsPlayBtn = createElement("button", {id: "ttsPlayBtn", textContent: "Play Audio", className: "popup-button", style: "grid-column: 1 / 2; justify-self: start; display: none;"});
+            ttsResultContainer.appendChild(ttsPlayBtn);
+            const ttsDownloadBtn = createElement("button", {id: "ttsDownloadBtn", textContent: "Download Audio", className: "popup-button", style: "grid-column: 2 / 3; justify-self: center; display: none;"});
+            ttsResultContainer.appendChild(ttsDownloadBtn);
+            const ttsGenerateBtn = createElement("button", {id: "ttsGenerationButton", textContent: "Generate Audio", className: "popup-button", style: "grid-column: 3 / 4; justify-self: end;"});
+            ttsResultContainer.appendChild(ttsGenerateBtn);
+            container.appendChild(ttsResultContainer);
+
+            content.appendChild(container);
+
+            const buttonContainer = createElement("div", {
+                style: "display: flex; justify-content: flex-end;",
+                className: "popup-row"
+            });
+            const closeButton = createElement("button", {
+                id: "closeTTSPlaygroundBtn",
                 textContent: "Close",
                 className: "popup-button"
             });
@@ -2089,6 +2141,58 @@
             });
         }
 
+        function setupTTSPlaygroundEventListeners() {
+            const ttsPlaygroundButton = document.getElementById('ttsPlayground');
+            const ttsPlaygroundPopup = document.getElementById('ttsPlaygroundPopup');
+
+            ttsPlaygroundButton.addEventListener("click", () => {
+                ttsPlaygroundPopup.style.display = "block";
+
+                const dragHandle = document.getElementById("ttsPlaygroundDragHandle");
+                if (dragHandle) {
+                    makeDraggable(ttsPlaygroundPopup, dragHandle);
+                }
+            });
+
+            let audioData = null;
+            const ttsPlayBtn = document.getElementById('ttsPlayBtn');
+            ttsPlayBtn.addEventListener("click", () => {
+                if (!audioData) return;
+                playAudio(audioData, 1.0);
+            })
+            const ttsDownloadBtn = document.getElementById('ttsDownloadBtn');
+            ttsDownloadBtn.addEventListener("click", () => {
+                if (!audioData) return;
+
+                const mp3Blob = new Blob([audioData], { type: 'audio/mp3' });
+                const mp3Url = URL.createObjectURL(mp3Blob);
+
+                const a = createElement("a", {href: mp3Url, download: "tts_audio.mp3"});
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+            })
+            const ttsGenerationButton = document.getElementById('ttsGenerationButton');
+            ttsGenerationButton.addEventListener("click", async () => {
+                const ttsInstructionsText = document.getElementById("ttsInstructionsInput").value;
+                const ttsTextareaText = document.getElementById("ttsTextarea").value.replaceAll('\n', ' ');
+
+                ttsPlayBtn.style.display = "none";
+                ttsDownloadBtn.style.display = "none";
+                ttsGenerationButton.disabled = true;
+                audioData = await getTTSResponse(settings.ttsProvider, settings.ttsApiKey, settings.ttsVoice, ttsTextareaText, ttsInstructionsText);
+                playAudio(audioData, 1.0);
+                ttsGenerationButton.disabled = false;
+
+                ttsPlayBtn.style.display = "block";
+                ttsDownloadBtn.style.display = "block";
+            });
+
+            document.getElementById("closeTTSPlaygroundBtn").addEventListener("click", () => {
+                ttsPlaygroundPopup.style.display = "none";
+            });
+        }
+
         function generatePopupCSS() {
             return `
                 /*Color picker*/
@@ -2115,7 +2219,7 @@
                     color: var(--font-color);
                 }
         
-                #lingqAddonSettingsPopup, #lingqDownloadWordsPopup {
+                #lingqAddonSettingsPopup, #lingqDownloadWordsPopup, #ttsPlaygroundPopup {
                     position: fixed;
                     top: 40%;
                     left: 40%;
@@ -2131,7 +2235,7 @@
                     overflow-y: auto;
                 }
         
-                #lingqAddonSettingsDragHandle, #lingqDownloadWordsDragHandle {
+                #lingqAddonSettingsDragHandle, #lingqDownloadWordsDragHandle, #ttsPlaygroundDragHandle {
                     cursor: move;
                     background-color: rgba(128, 128, 128, 0.2);
                     padding: 8px;
@@ -2226,10 +2330,18 @@
             className: "nav-button"
         });
 
+        const ttsPlaygroundButton = createElement("button", {
+            id: "ttsPlayground",
+            textContent: "🗣️",
+            title: "TTS Playground",
+            className: "nav-button"
+        });
+
         let mainNav = document.querySelector("#main-nav > nav > div:nth-child(2) > div:nth-child(1)");
 
         mainNav.appendChild(settingsButton);
         mainNav.appendChild(downloadWordsButton);
+        mainNav.appendChild(ttsPlaygroundButton);
 
         const settingsPopup = createSettingsPopup();
         document.body.appendChild(settingsPopup);
@@ -2237,10 +2349,14 @@
         const downloadWordsPopup = createDownloadWordsPopup();
         document.body.appendChild(downloadWordsPopup);
 
+        const ttsPopup = createTTSPlaygroundPopup();
+        document.body.appendChild(ttsPopup);
+
         const popupCSS = generatePopupCSS();
         applyCSS(popupCSS);
         setupSettingEventListeners();
         setupDownloadWordsEventListeners();
+        setupTTSPlaygroundEventListeners();
     }
 
     function setupReader() {
@@ -3124,7 +3240,7 @@
                         lastCompletedPercentage = updateLessonProgress(lessonId, lessonInfo, progressPercentage, lastCompletedPercentage);
                         console.debug('Observer:', `Slider Changed. Progress: ${progressPercentage}`);
 
-                        const isLessonFinished = progressPercentage >= 99.9;
+                        const isLessonFinished = (progressPercentage >= 99) && document.querySelector(`.shared-player div[data-original-title="Play video"]`);
                         if (isLessonFinished && settings.autoFinishing) {
                             console.log('Slider', 'lesson finished.')
                             setTimeout(finishLesson, 1000);
@@ -3273,11 +3389,11 @@
                     const newTTSButton = ttsButton.cloneNode(true);
                     newTTSButton.id = "playAudio";
                     newTTSButton.addEventListener('click', async (event) => {
-                        await playAudio(audioData, 0.7);
+                        await playAudio(audioData, 1.0);
                     })
                     ttsButton.replaceWith(newTTSButton);
                     showToast("TTS Replaced", true);
-                    playAudio(audioData, 0.7);
+                    playAudio(audioData, 1.0);
                 }
 
                 if (!settings.tts) return;
@@ -3349,8 +3465,7 @@
                     return messageDiv;
                 }
 
-                async function callStreamOpenAI(botMessageDiv, chatContainer, focus, onStreamCompleted = () => {
-                }) {
+                async function callStreamOpenAI(botMessageDiv, chatContainer, focus, onStreamCompleted = () => {}) {
                     const userInput = document.getElementById("user-input");
                     const sendButton = document.getElementById("send-button");
 
@@ -3417,9 +3532,9 @@
                                 let textToTTS = "";
 
                                 if (botMessageDiv.matches(".word-message")) {
-                                    textToTTS = Array.from(botMessageDiv.querySelectorAll("b, ul > li:nth-child(1)")).map(node => node.textContent).join(".\n");
+                                    textToTTS = Array.from(botMessageDiv.querySelectorAll("b, ul > li:nth-child(1)")).map(node => node.textContent).join(". ");
                                 } else {
-                                    textToTTS = botMessageDiv.textContent;
+                                    textToTTS = botMessageDiv.textContent.replaceAll("\n", " ");
                                 }
 
                                 ttsButton.disabled = true;
@@ -3429,11 +3544,11 @@
                                     return;
                                 }
                                 ttsButton.disabled = false;
-                                playAudio(audioData, 0.7);
+                                playAudio(audioData, 1.0);
 
                                 ttsButton.removeEventListener('click', initialTTSHandler);
                                 ttsButton.addEventListener('click', async () => {
-                                    await playAudio(audioData, 0.7);
+                                    await playAudio(audioData, 1.0);
                                 });
                             });
                             messageButtonContainer.appendChild(ttsButton);
@@ -4224,7 +4339,7 @@
                         seenTerms.add(term);
                         cardsList.push({
                             word: term,
-                            context: card.fragment.replace(term, `<b>${term}</b>`),
+                            context: card.fragment.replaceAll(term, `<b>${term}</b>`),
                             notes: card.notes,
                             status: card.status,
                             meaning: card.hints?.[0]?.text ?? ""
