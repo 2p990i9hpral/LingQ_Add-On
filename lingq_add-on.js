@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      8.0.0
+// @version      8.1.0
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @namespace https://greasyfork.org/users/1458847
@@ -1095,9 +1095,9 @@
         }
 
         function createSettingsPopup() {
-            const popup = createElement("div", {id: "lingqAddonSettingsPopup"});
+            const popup = createElement("div", {id: "lingqAddonSettingsPopup", className: "popup"});
 
-            const dragHandle = createElement("div", {id: "lingqAddonSettingsDragHandle"});
+            const dragHandle = createElement("div", {id: "lingqAddonSettingsDragHandle", className: "popup-drag-handle"});
 
             const dragHandleTitle = createElement("h3", {textContent: "LingQ Addon Settings"});
             dragHandle.appendChild(dragHandleTitle);
@@ -1404,9 +1404,9 @@
         }
 
         function createDownloadWordsPopup() {
-            const popup = createElement("div", {id: "lingqDownloadWordsPopup"});
+            const popup = createElement("div", {id: "lingqDownloadWordsPopup", className: "popup"});
 
-            const dragHandle = createElement("div", {id: "lingqDownloadWordsDragHandle"});
+            const dragHandle = createElement("div", {id: "lingqDownloadWordsDragHandle", className: "popup-drag-handle"});
 
             const dragHandleTitle = createElement("h3", {textContent: "Download Words"});
             dragHandle.appendChild(dragHandleTitle);
@@ -1464,9 +1464,9 @@
         }
 
         function createTTSPlaygroundPopup() {
-            const popup = createElement("div", {id: "ttsPlaygroundPopup"});
+            const popup = createElement("div", {id: "ttsPlaygroundPopup", className: "popup"});
 
-            const dragHandle = createElement("div", {id: "ttsPlaygroundDragHandle"});
+            const dragHandle = createElement("div", {id: "ttsPlaygroundDragHandle", className: "popup-drag-handle"});
 
             const dragHandleTitle = createElement("h3", {textContent: "TTS Playground"});
             dragHandle.appendChild(dragHandleTitle);
@@ -1477,24 +1477,24 @@
 
             const instructionsContainer = createElement("div", {className: "popup-row", style: "display: flex; flex-direction: column;"});
             instructionsContainer.appendChild(createElement("label", {htmlFor: "ttsInstructionsInput", textContent: "Style Instructions"}));
-            const ttsInstructions = createElement("input", {id: "ttsInstructionsInput", className: "popup-input", style: "padding: 3px 5px;"});
+            const ttsInstructions = createElement("input", {id: "ttsInstructionsInput", className: "popup-input", style: "padding: 3px 5px;", placeholder: `Describe the style of your dialog, e.g. "Read this in a dramatic whisper"`});
             instructionsContainer.appendChild(ttsInstructions);
             container.appendChild(instructionsContainer);
 
             const textContainer = createElement("div", {className: "popup-row", style: "display: flex; flex-direction: column;"});
             textContainer.appendChild(createElement("label", {htmlFor: "ttsTextarea", textContent: "Text"}));
-            const ttsText = createElement("textarea", {id: "ttsTextarea", style: "width: 100%; height: 200px; border: 1px solid rgb(125 125 125 / 50%); border-radius: 5px; padding: 3px 5px;"});
+            const ttsText = createElement("textarea", {id: "ttsTextarea", style: "width: 100%; height: 200px; border: 1px solid rgb(125 125 125 / 50%); border-radius: 5px; padding: 3px 5px;", placeholder: "Start writing or paste text here to generate speech."});
             textContainer.appendChild(ttsText);
             container.appendChild(textContainer);
 
-            const ttsResultContainer = createElement("div", {style: "display: grid; grid-template-columns: 1fr 1fr 1fr;", className: "popup-row"});
+            const ttsResultContainer = createElement("div", {style: "display: flex; justify-content: space-between; align-items: center;", className: "popup-row"});
 
-            const ttsPlayBtn = createElement("button", {id: "ttsPlayBtn", textContent: "Play Audio", className: "popup-button", style: "grid-column: 1 / 2; justify-self: start; display: none;"});
-            ttsResultContainer.appendChild(ttsPlayBtn);
-            const ttsDownloadBtn = createElement("button", {id: "ttsDownloadBtn", textContent: "Download Audio", className: "popup-button", style: "grid-column: 2 / 3; justify-self: center; display: none;"});
-            ttsResultContainer.appendChild(ttsDownloadBtn);
-            const ttsGenerateBtn = createElement("button", {id: "ttsGenerationButton", textContent: "Generate Audio", className: "popup-button", style: "grid-column: 3 / 4; justify-self: end;"});
+            const ttsPlayer = createElement('audio', {id: "ttsPlayer", src: "", controls: true, style: "width: 400px; height: 40px; display: none;"});
+            ttsResultContainer.appendChild(ttsPlayer);
+
+            const ttsGenerateBtn = createElement("button", {id: "ttsGenerationButton", textContent: "Generate Audio", className: "popup-button", style: "margin-left: auto;"});
             ttsResultContainer.appendChild(ttsGenerateBtn);
+
             container.appendChild(ttsResultContainer);
 
             content.appendChild(container);
@@ -2154,38 +2154,22 @@
                 }
             });
 
-            let audioData = null;
-            const ttsPlayBtn = document.getElementById('ttsPlayBtn');
-            ttsPlayBtn.addEventListener("click", () => {
-                if (!audioData) return;
-                playAudio(audioData, 1.0);
-            })
-            const ttsDownloadBtn = document.getElementById('ttsDownloadBtn');
-            ttsDownloadBtn.addEventListener("click", () => {
-                if (!audioData) return;
-
-                const mp3Blob = new Blob([audioData], { type: 'audio/mp3' });
-                const mp3Url = URL.createObjectURL(mp3Blob);
-
-                const a = createElement("a", {href: mp3Url, download: "tts_audio.mp3"});
-                document.body.appendChild(a);
-                a.click();
-                document.body.removeChild(a);
-            })
+            const ttsPlayer = document.getElementById('ttsPlayer');
             const ttsGenerationButton = document.getElementById('ttsGenerationButton');
             ttsGenerationButton.addEventListener("click", async () => {
                 const ttsInstructionsText = document.getElementById("ttsInstructionsInput").value;
                 const ttsTextareaText = document.getElementById("ttsTextarea").value.replaceAll('\n', ' ');
 
-                ttsPlayBtn.style.display = "none";
-                ttsDownloadBtn.style.display = "none";
+                ttsPlayer.style.display = "none";
                 ttsGenerationButton.disabled = true;
-                audioData = await getTTSResponse(settings.ttsProvider, settings.ttsApiKey, settings.ttsVoice, ttsTextareaText, ttsInstructionsText);
-                playAudio(audioData, 1.0);
+                const audioData = await getTTSResponse(settings.ttsProvider, settings.ttsApiKey, settings.ttsVoice, ttsTextareaText, ttsInstructionsText);
+                const audioURL = URL.createObjectURL(new Blob([audioData], { type: 'audio/mp3' }))
                 ttsGenerationButton.disabled = false;
 
-                ttsPlayBtn.style.display = "block";
-                ttsDownloadBtn.style.display = "block";
+                ttsPlayer.src = audioURL;
+                ttsPlayer.play();
+
+                ttsPlayer.style.display = "block";
             });
 
             document.getElementById("closeTTSPlaygroundBtn").addEventListener("click", () => {
@@ -2219,7 +2203,7 @@
                     color: var(--font-color);
                 }
         
-                #lingqAddonSettingsPopup, #lingqDownloadWordsPopup, #ttsPlaygroundPopup {
+                .popup {
                     position: fixed;
                     top: 40%;
                     left: 40%;
@@ -2235,7 +2219,7 @@
                     overflow-y: auto;
                 }
         
-                #lingqAddonSettingsDragHandle, #lingqDownloadWordsDragHandle, #ttsPlaygroundDragHandle {
+                .popup-drag-handle {
                     cursor: move;
                     background-color: rgba(128, 128, 128, 0.2);
                     padding: 8px;
@@ -2262,7 +2246,11 @@
                     border: 1px solid rgb(125, 125, 125, 50%);
                     border-radius: 5px;
                     margin: 5px 0;
-                    
+                }
+                
+                .popup-button:disabled {
+                    opacity: 0.5;
+                    pointer-events: none;
                 }
         
                 .popup-section {
