@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      8.1.0
+// @version      8.1.1
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @namespace https://greasyfork.org/users/1458847
@@ -911,7 +911,7 @@
         const api_url = provider === "openai" ? `https://api.openai.com/v1/chat/completions` : (provider === "google" ? "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions" : "");
         const body = {
             model: model,
-            temperature: 0.3,
+            temperature: 0.5,
             messages: history
         };
         if (provider === "google" && model.includes("2.5")) body.reasoning_effort = "none";
@@ -1029,7 +1029,7 @@
             - The result will be used as the innerHTML of a DOM element. So, Output raw HTML as plain text. This means your entire response should be a string of HTML. Do not use Markdown syntax, do not wrap your HTML in Markdown code blocks.
             - Be objective and factual. Write only based on the given data.
             - No preface and postface only include a summary.
-            - Recommended length is at most 200 words.
+            - Recommended length is at most 150 words.
             # Example Format
             <b>summary</b> <p>first paragraph</p> <p>second paragraph</p>`;
 
@@ -2179,6 +2179,11 @@
 
         function generatePopupCSS() {
             return `
+                :root {
+                    --font-color: ${colorSettings.fontColor};
+                    --background-color: ${settings.colorMode === "dark" ? "#2a2c2e" : "#ffffff"}
+                }
+            
                 /*Color picker*/
         
                 .color-picker {
@@ -3228,7 +3233,8 @@
                         lastCompletedPercentage = updateLessonProgress(lessonId, lessonInfo, progressPercentage, lastCompletedPercentage);
                         console.debug('Observer:', `Slider Changed. Progress: ${progressPercentage}`);
 
-                        const isLessonFinished = (progressPercentage >= 99) && document.querySelector(`.shared-player div[data-original-title="Play video"]`);
+                        const isVideoStopped = document.querySelector(`.shared-player div[data-original-title="Play video"]`);
+                        const isLessonFinished = ((progressPercentage >= 99) && isVideoStopped) || (progressPercentage >= 99.95);
                         if (isLessonFinished && settings.autoFinishing) {
                             console.log('Slider', 'lesson finished.')
                             setTimeout(finishLesson, 1000);
