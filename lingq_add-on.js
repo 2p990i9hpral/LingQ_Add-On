@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      8.1.2
+// @version      8.1.3
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @namespace https://greasyfork.org/users/1458847
@@ -964,6 +964,12 @@
             stream: true,
         };
         if (provider === "google" && model.includes("2.5")) body.reasoning_effort = "none";
+        if (provider === "openai" && model.includes("gpt-5")) {
+            if (model.includes("gpt-5-mini") || model.includes("gpt-5-nano")) {
+                body.reasoning_effort = "minimal";
+                body.temperature = 1;
+            }
+        }
         
         let buffer = '';
         let fullContent = '';
@@ -1303,6 +1309,9 @@
             });
             
             addSelect(chatWidgetSection, "llmProviderModelSelector", "Chat Provider: (Price per 1M tokens)", [
+                {value: "openai gpt-5-chat-latest", text: "OpenAI GPT-5 Chat ($1.25/$10)"},
+                {value: "openai gpt-5-mini-2025-08-07", text: "OpenAI GPT-5 mini ($0.25/$2.0)"},
+                {value: "openai gpt-5-nano-2025-08-07", text: "OpenAI GPT-5 nano ($0.05/$0.4)"},
                 {value: "openai gpt-4.1-mini", text: "OpenAI GPT-4.1 mini ($0.4/$1.6)"},
                 {value: "openai gpt-4.1-nano", text: "OpenAI GPT-4.1 nano ($0.1/$0.4)"},
                 {value: "google gemini-2.5-flash", text: "Google Gemini 2.5 Flash ($0.3/$2.5)"},
@@ -3275,8 +3284,8 @@
         }
         
         async function setupReaderContainer() {
-            const [llmProvider, llmModel] = settings.llmProviderModel.split(" ");
-            const llmApiKey = settings.llmApiKey;
+            let [llmProvider, llmModel] = settings.llmProviderModel.split(" ");
+            let llmApiKey = settings.llmApiKey;
             
             function setupSentenceFocus(readerContainer) {
                 function focusPlayingSentence(playingSentence) {
@@ -3333,6 +3342,8 @@
                 
                 const lessonContent = extractTextFromDOM(readerContainer).trim();
                 
+                [llmProvider, llmModel] = settings.llmProviderModel.split(" ");
+                llmApiKey = settings.llmApiKey;
                 getQuickSummary(llmProvider, llmApiKey, llmModel, lessonContent)
                     .then(result => {
                         if (!settings.prependSummary) return;
@@ -3367,8 +3378,8 @@
         }
         
         async function setupLLMs() {
-            const [llmProvider, llmModel] = settings.llmProviderModel.split(" ");
-            const llmApiKey = settings.llmApiKey;
+            let [llmProvider, llmModel] = settings.llmProviderModel.split(" ");
+            let llmApiKey = settings.llmApiKey;
             
             async function updateTTS(click = true) {
                 async function replaceTTSButton() {
@@ -3483,6 +3494,8 @@
                         existingRegenerateButton.remove();
                     }
                     
+                    [llmProvider, llmModel] = settings.llmProviderModel.split(" ");
+                    llmApiKey = settings.llmApiKey;
                     await streamOpenAIResponse(
                         llmProvider,
                         llmApiKey,
