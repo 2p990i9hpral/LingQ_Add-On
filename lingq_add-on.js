@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      8.1.3
+// @version      8.1.4
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @namespace https://greasyfork.org/users/1458847
@@ -916,6 +916,12 @@
             messages: history
         };
         if (provider === "google" && model.includes("2.5")) body.reasoning_effort = "none";
+        if (provider === "openai" && model.includes("gpt-5")) {
+            if (model.includes("gpt-5-mini") || model.includes("gpt-5-nano")) {
+                body.reasoning_effort = "minimal";
+                body.temperature = 1;
+            }
+        }
         
         try {
             const response = await fetch(
@@ -1310,15 +1316,12 @@
             
             addSelect(chatWidgetSection, "llmProviderModelSelector", "Chat Provider: (Price per 1M tokens)", [
                 {value: "openai gpt-5-chat-latest", text: "OpenAI GPT-5 Chat ($1.25/$10)"},
-                {value: "openai gpt-5-mini-2025-08-07", text: "OpenAI GPT-5 mini ($0.25/$2.0)"},
-                {value: "openai gpt-5-nano-2025-08-07", text: "OpenAI GPT-5 nano ($0.05/$0.4)"},
+                {value: "openai gpt-5-mini", text: "OpenAI GPT-5 mini ($0.25/$2.0)"},
+                {value: "openai gpt-5-nano", text: "OpenAI GPT-5 nano ($0.05/$0.4)"},
                 {value: "openai gpt-4.1-mini", text: "OpenAI GPT-4.1 mini ($0.4/$1.6)"},
                 {value: "openai gpt-4.1-nano", text: "OpenAI GPT-4.1 nano ($0.1/$0.4)"},
                 {value: "google gemini-2.5-flash", text: "Google Gemini 2.5 Flash ($0.3/$2.5)"},
-                {
-                    value: "google gemini-2.5-flash-lite-preview-06-17",
-                    text: "Google Gemini 2.5 Flash Light ($0.1/$0.4)"
-                },
+                {value: "google gemini-2.5-flash-lite", text: "Google Gemini 2.5 Flash Light ($0.1/$0.4)"},
                 {value: "google gemini-2.0-flash", text: "Google Gemini 2.0 Flash ($0.1/$0.4)"}
             ], settings.llmProviderModel);
             
