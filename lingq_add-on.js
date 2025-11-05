@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      8.1.4
+// @version      8.1.3
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @namespace https://greasyfork.org/users/1458847
@@ -3209,6 +3209,14 @@
                 src = src + "&cc_load_policy=1";
                 src = src + "&controls=0";
                 iframe.setAttribute("src", src);
+                
+                const modalRelative = iframe.closest('.modal-content > .relative');
+                modalRelative?.classList.remove('relative');
+                modalRelative?.style.setProperty('width', 'auto', 'important');
+                modalRelative?.style.setProperty('height', 'auto', 'important');
+                
+                const wrapperRelative = iframe.closest('.video-wrapper > .relative');
+                wrapperRelative?.classList.remove('relative');
             }
             
             async function setupSliderObserver() {
