@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      8.1.5
+// @version      8.1.6
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @namespace https://greasyfork.org/users/1458847
@@ -3345,6 +3345,7 @@
                                 className: "quick-summary",
                                 innerHTML: quickSummary
                             });
+                            summaryElement.addEventListener('wheel', (event) => event.stopPropagation());
                             node.parentNode.prepend(summaryElement);
                         }
                     }
