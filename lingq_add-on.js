@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      8.1.6
+// @version      8.1.7
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @namespace https://greasyfork.org/users/1458847
@@ -416,7 +416,7 @@
             textContent: inputMessage,
             style: `box-shadow: 0 0 10px 0 ${success ? 'rgb(76, 175, 80)' : 'rgb(175, 76, 80)'}`
         });
-        document.body.appendChild(toast);
+        document.querySelector('.reader-widget').appendChild(toast);
         
         setTimeout(() => {
             toast.style.opacity = '1'
@@ -2784,6 +2784,7 @@
         }
 
         .reader-widget {
+            position: relative;
             display: flow !important;
             overflow-y: auto;
             width: 100% !important;
@@ -2845,9 +2846,9 @@
         }
 
         .userToast {
-            position: fixed;
-            top: 60px;
-            right: 20px;
+            position: absolute;
+            top: 15px;
+            right: 15px;
             background-color: var(--background-color);
             color: ${settings.colorMode === "dark" ? "white" : "#ffffff"};
             padding: 5px 10px;
