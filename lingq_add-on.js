@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      8.1.7
+// @version      8.2.0
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @namespace https://greasyfork.org/users/1458847
@@ -618,6 +618,13 @@
         options.unshift({value: 'random', text: 'Random'});
         
         return options;
+    }
+    
+    function addElementToNavBar(element) {
+        const anchorElement = document.querySelector('#app > .main-wrapper > [data-slot="sidebar-wrapper"] > header > div > a');
+        if (!anchorElement) return;
+        
+        anchorElement.insertAdjacentElement('afterend', element);
     }
     
     /* Modules */
@@ -2263,7 +2270,6 @@
                     border: none;
                     cursor: pointer;
                     font-size: 1.2rem;
-                    margin-left: 10px;
                     padding: 5px;
                 }
 
@@ -2351,11 +2357,9 @@
             className: "nav-button"
         });
         
-        let mainNav = document.querySelector("#main-nav > nav > div:nth-child(2) > div:nth-child(1)");
-        
-        mainNav.appendChild(settingsButton);
-        mainNav.appendChild(downloadWordsButton);
-        mainNav.appendChild(ttsPlaygroundButton);
+        addElementToNavBar(settingsButton);
+        addElementToNavBar(downloadWordsButton);
+        addElementToNavBar(ttsPlaygroundButton);
         
         const settingsPopup = createSettingsPopup();
         document.body.appendChild(settingsPopup);
@@ -2449,8 +2453,7 @@
                 className: "nav-button",
             });
             
-            let mainNav = document.querySelector("#main-nav > nav > div:nth-child(2) > div:nth-child(1)");
-            mainNav.appendChild(completeLessonButton);
+            addElementToNavBar(completeLessonButton);
         }
         
         function generateBaseCSS(colorSettings) {
@@ -2599,6 +2602,7 @@
                     display: flex;
                     flex-direction: column;
                     gap: 15px;
+                    padding: 10px 0;
                 }
 
                 /*tts*/
@@ -2704,6 +2708,11 @@
         .main-wrapper {
             padding: 0 !important;
         }
+        
+        #app > .main-wrapper > [data-slot="sidebar-wrapper"] > header {
+            position: absolute;
+            z-index: 10;
+        }
 
         #main-nav {
             z-index: 1;
@@ -2718,6 +2727,7 @@
         }
 
         .main-header {
+            z-index: 20;
             pointer-events: none;
         }
 
@@ -3203,7 +3213,7 @@
         
         function setupYoutubePlayerCustomization() {
             async function changeVideoPlayerSettings() {
-                const iframe = await waitForElement('.modal-container iframe', 1000);
+                const iframe = await waitForElement('.modal-container iframe', 5000);
                 let src = iframe.getAttribute("src");
                 src = src.replace("disablekb=1", "disablekb=0");
                 src = src.replace("autoplay=0", "autoplay=1");
@@ -3276,20 +3286,23 @@
                 sliderObserver.observe(sliderTrack, {attributes: true, attributeFilter: ['style']});
             }
             
-            const observer = new MutationObserver(function (mutations) {
-                mutations.forEach((mutation) => {
-                    console.debug('Observer:', `Modal container created. ${mutation.type}`, mutation.addedNodes)
-                    mutation.addedNodes.forEach((node) => {
-                        if (node.nodeType !== Node.ELEMENT_NODE) return;
+            const observer = new MutationObserver(async function (mutations) {
+                for (const mutation of mutations) {
+                    console.debug('Observer:', `Modal container created. ${mutation.type}`, mutation.addedNodes);
+                    
+                    for (const node of mutation.addedNodes) {
+                        if (node.nodeType !== Node.ELEMENT_NODE) continue;
+                        if (!node.matches(".modal-container")) continue;
                         
-                        if (!node.matches(".modal-container")) return;
                         changeVideoPlayerSettings();
-                        clickElement('.modal-section  button:nth-child(2)[title="Expand"]');
+                        
+                        await waitForElement('.modal-container .modal-section', 5000);
+                        clickElement('.modal-section button:nth-child(2)[title="Expand"]');
                         
                         const isPageMode = document.querySelector('#lesson-reader').matches('.is-page-mode');
                         if (isPageMode) setupSliderObserver();
-                    });
-                });
+                    }
+                }
             });
             
             observer.observe(document.body, {childList: true});
@@ -3346,6 +3359,7 @@
                                 className: "quick-summary",
                                 innerHTML: quickSummary
                             });
+                            changeScrollAmount(".quick-summary", 0.2);
                             summaryElement.addEventListener('wheel', (event) => event.stopPropagation());
                             node.parentNode.prepend(summaryElement);
                         }
@@ -3357,12 +3371,15 @@
                 
                 [llmProvider, llmModel] = settings.llmProviderModel.split(" ");
                 llmApiKey = settings.llmApiKey;
-                getQuickSummary(llmProvider, llmApiKey, llmModel, lessonContent)
-                    .then(result => {
-                        if (!settings.prependSummary) return;
-                        document.querySelector(".quick-summary").innerHTML = result;
-                        quickSummary = result;
-                    })
+                
+                if (settings.prependSummary) {
+                    getQuickSummary(llmProvider, llmApiKey, llmModel, lessonContent)
+                        .then(result => {
+                            document.querySelector(".quick-summary").innerHTML = result;
+                            quickSummary = result;
+                        })
+                }
+                
                 getLessonSummary(llmProvider, llmApiKey, llmModel, lessonContent).then(summary => {
                     lessonSummary = summary
                 })
