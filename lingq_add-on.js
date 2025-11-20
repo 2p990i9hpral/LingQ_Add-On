@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      8.2.0
+// @version      8.3.0
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @namespace https://greasyfork.org/users/1458847
@@ -424,7 +424,7 @@
         
         setTimeout(() => {
             toast.style.opacity = '0';
-            setTimeout(toast.remove, 1000);
+            setTimeout(() => toast.remove(), 1000);
         }, 1500);
     }
     
@@ -2540,6 +2540,16 @@
                 #chat-container .word-message :is(b:nth-child(1), span:nth-child(2)) {
                     font-size: 1.05rem;
                 }
+                
+                #chat-container .word-message p:nth-child(4):hover {
+                    color: ${settings.colorMode === "dark" ? "white" : "black"};
+                    cursor: pointer;
+                }
+                
+                #chat-container .word-message ul:nth-last-child(2):hover {
+                    color: ${settings.colorMode === "dark" ? "white" : "black"};
+                    cursor: pointer;
+                }
 
                 @keyframes gradient-move {
                     0% {
@@ -2867,7 +2877,7 @@
             opacity: 0;
             transition: opacity 0.5s ease-in-out;
             font-size: 0.8rem;
-            font-weight: lighter;
+            font-weight: 200;
             pointer-events: none;
         }
 
@@ -3707,18 +3717,35 @@
                             false,
                             (finalContent) => {
                                 const meaning = botMessageDiv.querySelector("p");
+                                const exampleList = botMessageDiv.querySelector("ul");
+                                
                                 if (meaning) {
-                                    const meaningElement = document.querySelector(".reference-input-text");
-                                    const hasMeaning = meaningElement ? meaningElement.value : false;
-                                    const textToCopy = (hasMeaning ? '\n' : '') + (meaning.textContent || meaning.innerText);
-                                    
+                                    meaning.addEventListener('click', async () => {
+                                        const textToCopy = meaning.textContent || meaning.innerText;
+                                        navigator.clipboard.writeText(textToCopy)
+                                            .then(() => showToast("Meaning Copied!", true))
+                                            .catch(() => showToast("Failed to copy meaning.", false));
+                                    });
+                                }
+                                
+                                if (exampleList) {
+                                    exampleList.addEventListener('click', async () => {
+                                        const textToCopy = Array.from(exampleList.querySelectorAll("li"))
+                                            .map(li => li.textContent)
+                                            .join("\n");
+                                        navigator.clipboard.writeText(textToCopy)
+                                            .then(() => showToast("Example Copied!", true))
+                                            .catch(() => showToast("Failed to copy example.", false));
+                                    });
+                                }
+                                
+                                const meaningElement = document.querySelector(".reference-input-text");
+                                const hasMeaning = meaningElement ? meaningElement.value : false;
+                                const textToCopy = (hasMeaning ? '\n' : '') + (meaning?.textContent || meaning?.innerText || '');
+                                if (textToCopy.trim() !== '') {
                                     navigator.clipboard.writeText(textToCopy)
-                                        .then(() => {
-                                            showToast("Meaning Copied!", true)
-                                        })
-                                        .catch(() => {
-                                            showToast("Failed to copy meaning.", false)
-                                        });
+                                        .then(() => showToast("Meaning Copied!", true))
+                                        .catch(() => showToast("Failed to copy meaning.", false));
                                 }
                             }
                         );
