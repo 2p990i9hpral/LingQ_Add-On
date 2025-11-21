@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      9.0.0
+// @version      9.0.1
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @namespace https://greasyfork.org/users/1458847
@@ -12,10 +12,10 @@
 // @updateURL https://update.greasyfork.org/scripts/533096/LingQ%20Addon.meta.js
 // ==/UserScript==
 
-const {createClient} = await import('https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm');
-
 (function () {
     "use strict";
+    
+    let createClient;
     
     const storage = {
         get: (key, defaultValue) => {
@@ -3592,6 +3592,9 @@ const {createClient} = await import('https://cdn.jsdelivr.net/npm/@supabase/supa
         }
         
         async function setupLLMs() {
+            ({ createClient } = await import('https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm'));
+            supabase = createClient(settings.dbUrl, settings.dbKey);
+            
             let [llmProvider, llmModel] = settings.llmProviderModel.split(" ");
             let llmApiKey = settings.llmApiKey;
             
@@ -4391,7 +4394,6 @@ const {createClient} = await import('https://cdn.jsdelivr.net/npm/@supabase/supa
         setupReaderContainer();
         setupLLMs();
         AutoplayInSentenceView();
-        supabase = createClient(settings.dbUrl, settings.dbKey);
     }
     
     async function setupCourse() {
