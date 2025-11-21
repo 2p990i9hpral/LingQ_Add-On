@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      9.0.1
+// @version      9.0.2
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @namespace https://greasyfork.org/users/1458847
@@ -3969,8 +3969,7 @@
                                 
                                 if (meaningElement) {
                                     meaningElement.addEventListener('click', async () => {
-                                        const textToCopy = meaning;
-                                        navigator.clipboard.writeText(textToCopy)
+                                        navigator.clipboard.writeText(meaning)
                                             .then(() => showToast("Meaning Copied!", true))
                                             .catch(() => showToast("Failed to copy meaning.", false));
                                     });
@@ -3989,7 +3988,7 @@
                                 
                                 const lingqMeaningElement = botMessageDiv.querySelector(".reference-input-text");
                                 const hasMeaning = lingqMeaningElement ? lingqMeaningElement.value : false;
-                                const textToCopy = (hasMeaning ? '\n' : '') + (meaning?.textContent || meaning?.innerText || '');
+                                const textToCopy = (hasMeaning ? '\n' : '') + meaning;
                                 if (textToCopy.trim() !== '') {
                                     navigator.clipboard.writeText(textToCopy)
                                         .then(() => showToast("Meaning Copied!", true))
