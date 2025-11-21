@@ -55,3 +55,10 @@
 
 - 7.0: Implemented lesson audio generation feature.
 - 7.1: Added the Google Cloud as a new TTS Provider.
+
+- 8.0: Added TTS playground.
+- 8.1: Added an audio player to the TTS playground. Added the autoplay TTS voice option, GPT5 series as options.
+- 8.2: Fixed issues caused by the LingQ website's layout change.
+- 8.3: Implemented the copy-by-clicking feature.
+
+- 9.0: Implemented a flashcard-making feature.

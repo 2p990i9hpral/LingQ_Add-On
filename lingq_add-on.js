@@ -4,13 +4,15 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      8.3.0
+// @version      9.0.0
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @namespace https://greasyfork.org/users/1458847
 // @downloadURL https://update.greasyfork.org/scripts/533096/LingQ%20Addon.user.js
 // @updateURL https://update.greasyfork.org/scripts/533096/LingQ%20Addon.meta.js
 // ==/UserScript==
+
+const {createClient} = await import('https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm');
 
 (function () {
     "use strict";
@@ -72,6 +74,8 @@
         llmApiKey: "",
         askSelected: false,
         prependSummary: false,
+        dbUrl: "",
+        dbKey: "",
         
         tts: false,
         ttsAutoplay: false,
@@ -94,6 +98,8 @@
             return true;
         }
     });
+    
+    let supabase;
     
     const openaiVoiceOptions = [
         {value: "random", text: "Random"},
@@ -596,7 +602,9 @@
         
         if (!languageCode) return [];
         
-        const filteredLanguages = voices.filter(voice => {return voice.startsWith(languageCode + "-")});
+        const filteredLanguages = voices.filter(voice => {
+            return voice.startsWith(languageCode + "-")
+        });
         
         const options = [];
         let languages = new Set();
@@ -890,7 +898,9 @@
     async function getTTSResponse(provider, apiKey, voice, text, ttsInstructions = 'Read the text in a realistic, genuine, neutral, and clear manner. vary your rhythm and pace naturally, like a professional voice actor: ') {
         const voices = Array.from(document.querySelector("#ttsVoiceSelector").options)
             .map(option => option.value)
-            .filter(option => {return !option.startsWith("random")});
+            .filter(option => {
+                return !option.startsWith("random")
+            });
         
         if (voice === "random") voice = getRandomElement(voices);
         
@@ -902,7 +912,9 @@
             case "google cloud":
                 if (voice.startsWith("random-")) {
                     const randomLanguage = voice.replace("random-", "");
-                    voice = getRandomElement(voices.filter(option => {return option.startsWith(randomLanguage)}));
+                    voice = getRandomElement(voices.filter(option => {
+                        return option.startsWith(randomLanguage)
+                    }));
                 }
                 
                 return await googleCloudTTS(text, apiKey, voice);
@@ -1117,7 +1129,10 @@
         function createSettingsPopup() {
             const popup = createElement("div", {id: "lingqAddonSettingsPopup", className: "popup"});
             
-            const dragHandle = createElement("div", {id: "lingqAddonSettingsDragHandle", className: "popup-drag-handle"});
+            const dragHandle = createElement("div", {
+                id: "lingqAddonSettingsDragHandle",
+                className: "popup-drag-handle"
+            });
             
             const dragHandleTitle = createElement("h3", {textContent: "LingQ Addon Settings"});
             dragHandle.appendChild(dragHandleTitle);
@@ -1352,6 +1367,53 @@
             addCheckbox(chatWidgetSection, "askSelectedCheckbox", "Enable asking with selected text", settings.askSelected);
             addCheckbox(chatWidgetSection, "prependSummaryCheckbox", "Prepend the Summary", settings.prependSummary);
             
+            const dbUrlContainer = createElement("div", {
+                className: "popup-row",
+                style: "display: flex; justify-content: space-between; align-items: center;"
+            });
+            dbUrlContainer.appendChild(createElement("label", {
+                htmlFor: "dbUrlInput",
+                textContent: "DB URL: ",
+                style: "width: 25%;"
+            }));
+            const dbUrlInput = createElement("input", {
+                type: "text",
+                id: "dbUrlInput",
+                value: settings.dbUrl,
+                className: "popup-input"
+            });
+            dbUrlContainer.appendChild(dbUrlInput);
+            chatWidgetSection.appendChild(dbUrlContainer);
+            
+            const dbKeyContainer = createElement("div", {
+                className: "popup-row",
+                style: "display: flex; justify-content: space-between; align-items: center;"
+            });
+            dbKeyContainer.appendChild(createElement("label", {
+                htmlFor: "dbKeyInput",
+                textContent: "DB Key: ",
+                style: "width: 25%;"
+            }));
+            const dbKeInputGroup = createElement("div", {
+                style: "display: flex; align-items: center; gap: 5px; flex: 1;"
+            });
+            const dbKeyInput = createElement("input", {
+                type: "password",
+                id: "dbKeyInput",
+                value: settings.dbKey,
+                className: "popup-input"
+            });
+            const testDBConnectionButton = createElement("button", {
+                id: "testDBConnectionButton",
+                textContent: "Save",
+                className: "popup-button"
+            })
+            
+            dbKeInputGroup.appendChild(dbKeyInput);
+            dbKeInputGroup.appendChild(testDBConnectionButton);
+            dbKeyContainer.appendChild(dbKeInputGroup);
+            chatWidgetSection.appendChild(dbKeyContainer);
+            
             container2.appendChild(chatWidgetSection);
             
             addCheckbox(container2, "ttsCheckbox", "Enable AI-TTS", settings.tts);
@@ -1428,7 +1490,10 @@
         function createDownloadWordsPopup() {
             const popup = createElement("div", {id: "lingqDownloadWordsPopup", className: "popup"});
             
-            const dragHandle = createElement("div", {id: "lingqDownloadWordsDragHandle", className: "popup-drag-handle"});
+            const dragHandle = createElement("div", {
+                id: "lingqDownloadWordsDragHandle",
+                className: "popup-drag-handle"
+            });
             
             const dragHandleTitle = createElement("h3", {textContent: "Download Words"});
             dragHandle.appendChild(dragHandleTitle);
@@ -1497,24 +1562,55 @@
             
             const container = createElement("div", {style: "width: 550px;"});
             
-            const instructionsContainer = createElement("div", {className: "popup-row", style: "display: flex; flex-direction: column;"});
-            instructionsContainer.appendChild(createElement("label", {htmlFor: "ttsInstructionsInput", textContent: "Style Instructions"}));
-            const ttsInstructions = createElement("input", {id: "ttsInstructionsInput", className: "popup-input", style: "padding: 3px 5px;", placeholder: `Describe the style of your dialog, e.g. "Read this in a dramatic whisper"`});
+            const instructionsContainer = createElement("div", {
+                className: "popup-row",
+                style: "display: flex; flex-direction: column;"
+            });
+            instructionsContainer.appendChild(createElement("label", {
+                htmlFor: "ttsInstructionsInput",
+                textContent: "Style Instructions"
+            }));
+            const ttsInstructions = createElement("input", {
+                id: "ttsInstructionsInput",
+                className: "popup-input",
+                style: "padding: 3px 5px;",
+                placeholder: `Describe the style of your dialog, e.g. "Read this in a dramatic whisper"`
+            });
             instructionsContainer.appendChild(ttsInstructions);
             container.appendChild(instructionsContainer);
             
-            const textContainer = createElement("div", {className: "popup-row", style: "display: flex; flex-direction: column;"});
+            const textContainer = createElement("div", {
+                className: "popup-row",
+                style: "display: flex; flex-direction: column;"
+            });
             textContainer.appendChild(createElement("label", {htmlFor: "ttsTextarea", textContent: "Text"}));
-            const ttsText = createElement("textarea", {id: "ttsTextarea", style: "width: 100%; height: 200px; border: 1px solid rgb(125 125 125 / 50%); border-radius: 5px; padding: 3px 5px;", placeholder: "Start writing or paste text here to generate speech."});
+            const ttsText = createElement("textarea", {
+                id: "ttsTextarea",
+                style: "width: 100%; height: 200px; border: 1px solid rgb(125 125 125 / 50%); border-radius: 5px; padding: 3px 5px;",
+                placeholder: "Start writing or paste text here to generate speech."
+            });
             textContainer.appendChild(ttsText);
             container.appendChild(textContainer);
             
-            const ttsResultContainer = createElement("div", {style: "display: flex; justify-content: space-between; align-items: center;", className: "popup-row"});
+            const ttsResultContainer = createElement("div", {
+                style: "display: flex; justify-content: space-between; align-items: center;",
+                className: "popup-row"
+            });
             
-            const ttsPlayer = createElement('audio', {id: "ttsPlayer", src: "", controls: true, style: "width: 400px; height: 40px; display: none;"});
+            const ttsPlayer = createElement('audio', {
+                id: "ttsPlayer",
+                src: "",
+                controls: true,
+                style: "width: 400px; height: 40px; display: none;"
+            });
             ttsResultContainer.appendChild(ttsPlayer);
             
-            const ttsGenerateBtn = createElement("button", {id: "ttsGenerationButton", textContent: "Generate Audio", className: "popup-button", style: "margin-left: auto;"});
+            const ttsGenerateBtn = createElement("button", {
+                id: "ttsGenerationButton",
+                textContent: "Generate Audio",
+                className: "popup-button",
+                style: "margin-left: auto;"
+            });
             ttsResultContainer.appendChild(ttsGenerateBtn);
             
             container.appendChild(ttsResultContainer);
@@ -1858,6 +1954,40 @@
                 settings.prependSummary = event.target.checked
             });
             
+            const dbUrlInput = document.getElementById("dbUrlInput");
+            dbUrlInput.addEventListener("change", (event) => {
+                settings.dbUrl = event.target.value
+            });
+            
+            const dbKeyInput = document.getElementById("dbKeyInput");
+            dbKeyInput.addEventListener("change", (event) => {
+                settings.dbKey = event.target.value
+            });
+            
+            const testDBConnectionButton = document.getElementById("testDBConnectionButton");
+            testDBConnectionButton.addEventListener("click", async (event) => {
+                if (!settings.dbUrl || !settings.dbKey) {
+                    alert("Please enter both Supabase URL and Key.");
+                    return;
+                }
+                
+                try {
+                    const supabaseTest = createClient(settings.dbUrl, settings.dbKey);
+                    const {data, error} = await supabaseTest.from("word_data").select("*").limit(1);
+                    
+                    if (error) {
+                        console.error("Connection test error:", error);
+                        alert("❌ Invalid Supabase credentials or unable to connect.");
+                    } else {
+                        supabase = supabaseTest;
+                        alert("✅ Supabase connection successful!");
+                    }
+                } catch (err) {
+                    console.error("Unexpected connection test error:", err);
+                    alert("❌ Connection failed. Please check URL and API key.");
+                }
+            })
+            
             const ttsCheckbox = document.getElementById("ttsCheckbox");
             ttsCheckbox.addEventListener('change', (event) => {
                 const checked = event.target.checked;
@@ -2191,7 +2321,7 @@
                 ttsPlayer.style.display = "none";
                 ttsGenerationButton.disabled = true;
                 const audioData = await getTTSResponse(settings.ttsProvider, settings.ttsApiKey, settings.ttsVoice, ttsTextareaText, ttsInstructionsText);
-                const audioURL = URL.createObjectURL(new Blob([audioData], { type: 'audio/mp3' }))
+                const audioURL = URL.createObjectURL(new Blob([audioData], {type: 'audio/mp3'}))
                 ttsGenerationButton.disabled = false;
                 
                 ttsPlayer.src = audioURL;
@@ -2537,6 +2667,15 @@
                     background-color: rgb(125 125 125 / 15%);
                 }
 
+                #chat-container .word-message b:nth-child(1) {
+                    position: relative;
+                }
+                
+                #chat-container .word-message b:nth-child(1):hover {
+                    color: ${settings.colorMode === "dark" ? "white" : "black"};
+                    cursor: pointer;
+                }
+
                 #chat-container .word-message :is(b:nth-child(1), span:nth-child(2)) {
                     font-size: 1.05rem;
                 }
@@ -2549,6 +2688,41 @@
                 #chat-container .word-message ul:nth-last-child(2):hover {
                     color: ${settings.colorMode === "dark" ? "white" : "black"};
                     cursor: pointer;
+                }
+                
+                #flashcard-popup {
+                    display: flex;
+                    flex-direction: column;
+                    gap: 4px;
+                    position: absolute;
+                    padding: 4px 8px;
+                    border-radius: 6px;
+                    z-index: 20;
+                    background-color: var(--background-color, #2a2c2e);
+                    color: var(--font-color, #e0e0e0);
+                    border: 1px solid rgb(125 125 125 / 50%);
+                }
+                
+                .flashcard-count-badge {
+                    position: absolute;
+                    top: 1px;
+                    right: -5px;
+                    color: var(--font-color, #e0e0e0);
+                    font-size: 10px;
+                    border-radius: 3px;
+                    line-height: 1;
+                }
+                
+                .flashcard-row {
+                    display:flex;
+                    align-items:center;
+                    gap:5px;
+                }
+                
+                .popup-delete-button {
+                    width: 10px;
+                    height: 10px;
+                    margin-right: 5px;
                 }
 
                 @keyframes gradient-move {
@@ -3482,11 +3656,12 @@
                 
                 function getSelectedWithContext() {
                     const selectedTextElement = document.querySelector(".reference-word");
-                    const contextElement = document.querySelector("span.selected-text, span.is-selected")?.closest('.sentence');
+                    const contextElement = document.querySelector("span.selected-text, span.is-selected")?.closest(".sentence");
+                    
                     const selectedText = selectedTextElement ? extractTextFromDOM(selectedTextElement).trim() : "";
                     const contextText = contextElement ? extractTextFromDOM(contextElement).trim() : "";
                     
-                    return `Input: "${selectedText}"` + (!isSentence ? `, Context: "${contextText}"` : ``);
+                    return {input: selectedText, context: contextText};
                 }
                 
                 let isProgrammaticReferenceWordUpdate = false;
@@ -3520,7 +3695,8 @@
                     return messageDiv;
                 }
                 
-                async function callStreamOpenAI(botMessageDiv, chatContainer, focus, onStreamCompleted = () => {}) {
+                async function callStreamOpenAI(botMessageDiv, chatContainer, focus, onStreamCompleted = () => {
+                }) {
                     const userInput = document.getElementById("user-input");
                     const sendButton = document.getElementById("send-button");
                     
@@ -3570,7 +3746,11 @@
                                 innerHTML: `<svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="transparent" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-copy"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"></rect><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"></path></svg>`,
                             });
                             copyButton.addEventListener('click', async () => {
-                                const textToCopy = botMessageDiv.textContent;
+                                const clone = botMessageDiv.cloneNode(true);
+                                const popup = clone.querySelector("#flashcard-popup");
+                                if (popup) popup.remove();
+                                
+                                const textToCopy = clone.textContent;
                                 navigator.clipboard.writeText(textToCopy)
                                     .then(() => {
                                         showToast("Message Copied!", true)
@@ -3609,6 +3789,56 @@
                                 });
                             });
                             messageButtonContainer.appendChild(ttsButton);
+                            
+                            if (botMessageDiv.matches('.word-message') && supabase) {
+                                const saveFlashcardButton = createElement("button", {
+                                    className: "message-button save-flashcard-button",
+                                    innerHTML: `<svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="transparent" stroke="currentColor"><g id="SVGRepo_iconCarrier"> <path d="M16 3.98999H8C6.93913 3.98999 5.92178 4.41135 5.17163 5.1615C4.42149 5.91164 4 6.92912 4 7.98999V17.99C4 19.0509 4.42149 20.0682 5.17163 20.8184C5.92178 21.5685 6.93913 21.99 8 21.99H16C17.0609 21.99 18.0783 21.5685 18.8284 20.8184C19.5786 20.0682 20 19.0509 20 17.99V7.98999C20 6.92912 19.5786 5.91164 18.8284 5.1615C18.0783 4.41135 17.0609 3.98999 16 3.98999Z" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"></path> <path d="M9 2V7" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"></path> <path d="M15 2V7" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"></path> <path d="M8 16H14" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"></path> <path d="M8 12H16" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"></path> </g></svg>`
+                                });
+                                saveFlashcardButton.addEventListener("click", async () => {
+                                    saveFlashcardButton.disabled = true;
+                                    
+                                    const word = botMessageDiv.querySelector("b")?.textContent?.trim();
+                                    if (!word) {
+                                        console.error("No word to save.");
+                                        saveFlashcardButton.disabled = false;
+                                        return;
+                                    }
+                                    
+                                    try {
+                                        const {data: latest, error: fetchError} = await supabase
+                                            .from("word_data")
+                                            .select("idx")
+                                            .eq("word", word)
+                                            .order("idx", {ascending: false})
+                                            .limit(1)
+                                            .maybeSingle();
+                                        
+                                        if (fetchError || !latest) {
+                                            console.error("Flashcard latest fetch error:", fetchError);
+                                            saveFlashcardButton.disabled = false;
+                                            return;
+                                        }
+                                        
+                                        const {updateError} = await supabase
+                                            .from("word_data")
+                                            .update({flashcard: true})
+                                            .eq("idx", latest.idx);
+                                        
+                                        if (updateError) {
+                                            console.error("Flashcard update error:", error);
+                                            showToast("Failed to save flashcard.", false);
+                                            saveFlashcardButton.disabled = false;
+                                        } else {
+                                            showToast("Saved to Flashcard!", true);
+                                        }
+                                    } catch {
+                                        console.error("Unexpected error:", err);
+                                        saveFlashcardButton.disabled = false;
+                                    }
+                                });
+                                messageButtonContainer.appendChild(saveFlashcardButton);
+                            }
                             
                             const regenerateButton = createElement("button", {
                                 className: "message-botton regenerate-button",
@@ -3658,7 +3888,11 @@
                     const chatWrapper = createElement("div", {id: "chat-widget", style: "margin-top: 5px 0 10px;"});
                     const chatContainer = createElement("div", {id: "chat-container"});
                     const inputContainer = createElement("div", {className: "input-container"});
-                    const userInput = createElement("input", {type: "text", id: "user-input", placeholder: "Ask anything"});
+                    const userInput = createElement("input", {
+                        type: "text",
+                        id: "user-input",
+                        placeholder: "Ask anything"
+                    });
                     const sendButton = createElement("button", {
                         id: "send-button",
                         innerHTML: `<svg width="17" height="17" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" xmlns:xlink="http://www.w3.org/1999/xlink"><path fill="currentColor" d="M481.508,210.336L68.414,38.926c-17.403-7.222-37.064-4.045-51.309,8.287C2.86,59.547-3.098,78.551,1.558,96.808 L38.327,241h180.026c8.284,0,15.001,6.716,15.001,15.001c0,8.284-6.716,15.001-15.001,15.001H38.327L1.558,415.193 c-4.656,18.258,1.301,37.262,15.547,49.595c14.274,12.357,33.937,15.495,51.31,8.287l413.094-171.409 C500.317,293.862,512,276.364,512,256.001C512,235.638,500.317,218.139,481.508,210.336z"></path></svg>`
@@ -3696,7 +3930,8 @@
                     chatHistory = updateChatHistoryState(chatHistory, removeIndent(systemPrompt), "system-main");
                     
                     if (settings.askSelected && sectionHead.matches(".section-widget--head")) {
-                        const initialUserMessage = getSelectedWithContext();
+                        const selectedData = getSelectedWithContext();
+                        const initialUserMessage = `Input: "${selectedData.input}"` + (!isSentence ? `, Context: "${selectedData.context}"` : "");
                         
                         if (initialUserMessage.length > 1000) {
                             console.log("The length of the selected text exceeds 1,000.")
@@ -3715,13 +3950,23 @@
                             botMessageDiv,
                             chatContainer,
                             false,
-                            (finalContent) => {
-                                const meaning = botMessageDiv.querySelector("p");
+                            async (finalContent) => {
+                                const wordElem = botMessageDiv.querySelector("b");
+                                const word = Array.from(wordElem.childNodes)
+                                    .filter(n => n.nodeType === Node.TEXT_NODE)
+                                    .map(n => n.textContent.trim())
+                                    .join("") || "";
+                                const pronunciation = botMessageDiv.querySelector("span")?.textContent?.trim() || "";
+                                const meaningElement = botMessageDiv.querySelector("p");
+                                const meaning = meaningElement?.textContent?.trim() || "";
+                                const explanation = botMessageDiv.querySelector("p")?.textContent?.trim() || "";
                                 const exampleList = botMessageDiv.querySelector("ul");
+                                const exampleSentence = exampleList.querySelector("li:nth-child(1)")?.textContent?.trim() || "";
+                                const exampleTranslation = exampleList.querySelector("li:nth-child(2)")?.textContent?.trim() || "";
                                 
-                                if (meaning) {
-                                    meaning.addEventListener('click', async () => {
-                                        const textToCopy = meaning.textContent || meaning.innerText;
+                                if (meaningElement) {
+                                    meaningElement.addEventListener('click', async () => {
+                                        const textToCopy = meaning;
                                         navigator.clipboard.writeText(textToCopy)
                                             .then(() => showToast("Meaning Copied!", true))
                                             .catch(() => showToast("Failed to copy meaning.", false));
@@ -3739,13 +3984,132 @@
                                     });
                                 }
                                 
-                                const meaningElement = document.querySelector(".reference-input-text");
-                                const hasMeaning = meaningElement ? meaningElement.value : false;
+                                const lingqMeaningElement = botMessageDiv.querySelector(".reference-input-text");
+                                const hasMeaning = lingqMeaningElement ? lingqMeaningElement.value : false;
                                 const textToCopy = (hasMeaning ? '\n' : '') + (meaning?.textContent || meaning?.innerText || '');
                                 if (textToCopy.trim() !== '') {
                                     navigator.clipboard.writeText(textToCopy)
                                         .then(() => showToast("Meaning Copied!", true))
                                         .catch(() => showToast("Failed to copy meaning.", false));
+                                }
+                                
+                                if (supabase) {
+                                    // Word click to show existing flashcards
+                                    wordElem.addEventListener("click", async (e) => {
+                                        const existingPopup = document.getElementById("flashcard-popup");
+                                        if (existingPopup) existingPopup.remove();
+                                        
+                                        const {data, error} = await supabase
+                                            .from("word_data")
+                                            .select("*")
+                                            .eq("word", word)
+                                            .eq("flashcard", true);
+                                        
+                                        if (error) {
+                                            console.error("Flashcard fetch error:", error);
+                                            return;
+                                        }
+                                        const popup = createElement("div", {
+                                            id: "flashcard-popup",
+                                            style: `top: ${wordElem.offsetTop + wordElem.offsetHeight}px; left: ${wordElem.offsetLeft}px;`,
+                                        });
+                                        
+                                        if (!data || data.length === 0) {
+                                            popup.appendChild(createElement("em", {innerHTML: "No flashcards found."}));
+                                        } else {
+                                            for (const row of data) {
+                                                const rowDiv = createElement("div", {className: "flashcard-row"});
+                                                
+                                                const deleteBtn = createElement("button", {
+                                                    className: "popup-delete-button",
+                                                    innerHTML: `<svg viewBox="6 6 12 12" xmlns="http://www.w3.org/2000/svg" stroke="currentColor"><path d="M17 17L7 7.00002M17 7L7.00001 17" stroke-width="2" stroke-linecap="round"/></svg>`
+                                                });
+                                                
+                                                deleteBtn.addEventListener("click", async (ev) => {
+                                                    ev.stopPropagation();
+                                                    deleteBtn.disabled = true;
+                                                    
+                                                    const {error: updateError} = await supabase
+                                                        .from("word_data")
+                                                        .update({flashcard: false})
+                                                        .eq("idx", row.idx)
+                                                        .eq("word", row.word);
+                                                    
+                                                    if (updateError) {
+                                                        console.error("Flashcard delete error:", updateError);
+                                                        deleteBtn.disabled = false;
+                                                    } else {
+                                                        rowDiv.remove();
+                                                        
+                                                        if (!popup.querySelector("div")) {
+                                                            popup.appendChild(
+                                                                createElement("em", {innerHTML: "No flashcards found."})
+                                                            );
+                                                        }
+                                                        
+                                                        showToast("Flashcard removed.", true);
+                                                    }
+                                                });
+                                                
+                                                rowDiv.appendChild(deleteBtn);
+                                                rowDiv.appendChild(createElement("b", {innerHTML: `${row.word}`}));
+                                                rowDiv.appendChild(createElement("span", {innerHTML: `${row.meaning}`}));
+                                                popup.appendChild(rowDiv);
+                                            }
+                                        }
+                                        
+                                        botMessageDiv.appendChild(popup);
+                                        
+                                        const closePopup = (ev) => {
+                                            if (!popup.contains(ev.target) && ev.target !== wordElem) {
+                                                popup.remove();
+                                                document.removeEventListener("click", closePopup);
+                                            }
+                                        };
+                                        document.addEventListener("click", closePopup);
+                                    });
+                                    
+                                    supabase
+                                        .from("word_data")
+                                        .select("*", {count: "exact", head: true})
+                                        .eq("word", word)
+                                        .eq("flashcard", true)
+                                        .then(({count, error}) => {
+                                            if (error) return console.error("Flashcard count error:", error);
+                                            if (count > 0) {
+                                                const badge = createElement("span", {
+                                                    className: "flashcard-count-badge",
+                                                    textContent: count > 9 ? "9+" : count,
+                                                });
+                                                wordElem.style.marginRight = "5px";
+                                                wordElem.appendChild(badge);
+                                            }
+                                        });
+                                    
+                                    // Save to DB
+                                    const newItem = {
+                                        language: getLessonLanguage(),
+                                        original_word: selectedData.input,
+                                        context: selectedData.context,
+                                        word,
+                                        pronunciation,
+                                        meaning: meaning,
+                                        explanation,
+                                        example_sentence: exampleSentence,
+                                        example_translation: exampleTranslation,
+                                        flashcard: false
+                                    };
+                                    
+                                    supabase
+                                        .from("word_data")
+                                        .insert([newItem])
+                                        .then(({data: inserted, error: insertError}) => {
+                                            if (insertError) {
+                                                console.error("Insert error:", insertError);
+                                            } else {
+                                                console.log("Inserted:", inserted);
+                                            }
+                                        });
                                 }
                             }
                         );
@@ -4027,6 +4391,7 @@
         setupReaderContainer();
         setupLLMs();
         AutoplayInSentenceView();
+        supabase = createClient(settings.dbUrl, settings.dbKey);
     }
     
     async function setupCourse() {
@@ -4374,7 +4739,7 @@
                         
                         if (index > lastIndex) fragment.appendChild(document.createTextNode(text.substring(lastIndex, index)));
                         
-                        const span = createElement("span", { className: "lingQ", textContent: word });
+                        const span = createElement("span", {className: "lingQ", textContent: word});
                         fragment.appendChild(span);
                         
                         lastIndex = index + word.length;
