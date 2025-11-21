@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      9.0.2
+// @version      9.0.3
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @namespace https://greasyfork.org/users/1458847
@@ -81,7 +81,7 @@
         ttsAutoplay: false,
         ttsApiKey: "",
         ttsProvider: "openai",
-        ttsVoice: "random",
+        ttsVoice: {},
         ttsWord: false,
         ttsSentence: false,
     };
@@ -2007,7 +2007,9 @@
             
             const ttsVoiceSelector = document.getElementById("ttsVoiceSelector");
             ttsVoiceSelector.addEventListener("change", (event) => {
-                settings.ttsVoice = event.target.value
+                const voices = typeof settings.ttsVoice === "object" ? { ...settings.ttsVoice } : {};
+                voices[getLessonLanguage()] = event.target.value;
+                settings.ttsVoice = voices;
             });
             
             const ttsProviderSelector = document.getElementById("ttsProviderSelector");
@@ -2320,7 +2322,7 @@
                 
                 ttsPlayer.style.display = "none";
                 ttsGenerationButton.disabled = true;
-                const audioData = await getTTSResponse(settings.ttsProvider, settings.ttsApiKey, settings.ttsVoice, ttsTextareaText, ttsInstructionsText);
+                const audioData = await getTTSResponse(settings.ttsProvider, settings.ttsApiKey, (settings.ttsVoice[getLessonLanguage()] ?? "random"), ttsTextareaText, ttsInstructionsText);
                 const audioURL = URL.createObjectURL(new Blob([audioData], {type: 'audio/mp3'}))
                 ttsGenerationButton.disabled = false;
                 
@@ -3610,7 +3612,7 @@
                     }
                     
                     ttsButton.disabled = true;
-                    let audioData = await getTTSResponse(settings.ttsProvider, settings.ttsApiKey, settings.ttsVoice, selectedText);
+                    let audioData = await getTTSResponse(settings.ttsProvider, settings.ttsApiKey, (settings.ttsVoice[getLessonLanguage()] ?? "random"), selectedText);
                     if (audioData == null) {
                         console.log("audioData can't be got.")
                         return;
@@ -3749,11 +3751,11 @@
                                 innerHTML: `<svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="transparent" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-copy"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"></rect><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"></path></svg>`,
                             });
                             copyButton.addEventListener('click', async () => {
-                                const clone = botMessageDiv.cloneNode(true);
-                                const popup = clone.querySelector("#flashcard-popup");
-                                if (popup) popup.remove();
-                                
-                                const textToCopy = clone.textContent;
+                                const textToCopy = (() => {
+                                    const clone = botMessageDiv.cloneNode(true);
+                                    const popup = clone.querySelector("#flashcard-popup")?.remove();
+                                    return clone.textContent;
+                                });
                                 navigator.clipboard.writeText(textToCopy)
                                     .then(() => {
                                         showToast("Message Copied!", true)
@@ -3778,7 +3780,7 @@
                                 }
                                 
                                 ttsButton.disabled = true;
-                                const audioData = await getTTSResponse(settings.ttsProvider, settings.ttsApiKey, settings.ttsVoice, textToTTS);
+                                const audioData = await getTTSResponse(settings.ttsProvider, settings.ttsApiKey, (settings.ttsVoice[getLessonLanguage()] ?? "random"), textToTTS);
                                 if (audioData == null) {
                                     console.log("audioData can't be got.")
                                     return;
@@ -3955,17 +3957,25 @@
                             false,
                             async (finalContent) => {
                                 const wordElem = botMessageDiv.querySelector("b");
-                                const word = Array.from(wordElem.childNodes)
-                                    .filter(n => n.nodeType === Node.TEXT_NODE)
-                                    .map(n => n.textContent.trim())
-                                    .join("") || "";
+                                const word = (() => {
+                                    if (!wordElem) return "";
+                                    const clone = wordElem.cloneNode(true);
+                                    clone.querySelector(".flashcard-count-badge")?.remove();
+                                    return clone.textContent.trim();
+                                })();
                                 const pronunciation = botMessageDiv.querySelector("span")?.textContent?.trim() || "";
                                 const meaningElement = botMessageDiv.querySelector("p");
                                 const meaning = meaningElement?.textContent?.trim() || "";
-                                const explanation = botMessageDiv.querySelector("p")?.textContent?.trim() || "";
+                                const explanation = botMessageDiv.querySelector("hr + p")?.textContent?.trim() || "";
                                 const exampleList = botMessageDiv.querySelector("ul");
                                 const exampleSentence = exampleList.querySelector("li:nth-child(1)")?.textContent?.trim() || "";
                                 const exampleTranslation = exampleList.querySelector("li:nth-child(2)")?.textContent?.trim() || "";
+                                
+                                wordElem.addEventListener('click', async () => {
+                                    navigator.clipboard.writeText(word)
+                                        .then(() => showToast("Word Copied!", true))
+                                        .catch(() => showToast("Failed to copy word.", false));
+                                });
                                 
                                 if (meaningElement) {
                                     meaningElement.addEventListener('click', async () => {
@@ -4629,7 +4639,7 @@
                     setTimeout(async () => {
                         updateProgress(progressBar, progressText, `Calling TTS for sentence ${i + 1}/${totalSentences}`, processedSentences, totalSentences * 2);
                         
-                        const audioArrayBuffer = await getTTSResponse(ttsProvider, settings.ttsApiKey, settings.ttsVoice, text);
+                        const audioArrayBuffer = await getTTSResponse(ttsProvider, settings.ttsApiKey, (settings.ttsVoice[getLessonLanguage()] ?? "random"), text);
                         audioDataBuffers[i] = await decodeAudioData(audioContext, audioArrayBuffer);
                         resolve();
                         processedSentences += 1;
