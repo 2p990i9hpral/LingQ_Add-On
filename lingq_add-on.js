@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      9.0.5
+// @version      9.0.6
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @namespace https://greasyfork.org/users/1458847
@@ -2683,25 +2683,22 @@
                     background-color: rgb(125 125 125 / 15%);
                 }
 
-                #chat-container .word-message b:nth-child(1) {
+                #chat-container .word-message b:nth-of-type(1) {
                     position: relative;
-                }
-                
-                #chat-container .word-message b:nth-child(1):hover {
-                    color: ${settings.colorMode === "dark" ? "white" : "black"};
-                    cursor: pointer;
-                }
-
-                #chat-container .word-message :is(b:nth-child(1), span:nth-child(2)) {
                     font-size: 1.05rem;
                 }
                 
-                #chat-container .word-message p:nth-child(4):hover {
+                #chat-container :is(.word-message, .sentence-message) b:nth-of-type(1):hover {
                     color: ${settings.colorMode === "dark" ? "white" : "black"};
                     cursor: pointer;
                 }
                 
-                #chat-container .word-message ul:nth-last-child(2):hover {
+                #chat-container .word-message p:nth-of-type(1):hover {
+                    color: ${settings.colorMode === "dark" ? "white" : "black"};
+                    cursor: pointer;
+                }
+                
+                #chat-container .word-message ul:nth-last-of-type(1):hover {
                     color: ${settings.colorMode === "dark" ? "white" : "black"};
                     cursor: pointer;
                 }
@@ -2717,6 +2714,10 @@
                     background-color: var(--background-color, #2a2c2e);
                     color: var(--font-color, #e0e0e0);
                     border: 1px solid rgb(125 125 125 / 50%);
+                }
+                
+                .word-message b:has(.flashcard-count-badge) {
+                    margin-right: 5px;
                 }
                 
                 .flashcard-count-badge {
@@ -3772,7 +3773,7 @@
                             copyButton.addEventListener('click', async () => {
                                 const textToCopy = (() => {
                                     const clone = botMessageDiv.cloneNode(true);
-                                    const popup = clone.querySelector("#flashcard-popup")?.remove();
+                                    clone.querySelector("#flashcard-popup")?.remove();
                                     return clone.textContent;
                                 });
                                 navigator.clipboard.writeText(textToCopy)
@@ -3822,7 +3823,13 @@
                                 saveFlashcardButton.addEventListener("click", async () => {
                                     saveFlashcardButton.disabled = true;
                                     
-                                    const word = botMessageDiv.querySelector("b")?.textContent?.trim();
+                                    const wordElem = botMessageDiv.querySelector("b");
+                                    const word = (() => {
+                                        if (!wordElem) return "";
+                                        const clone = wordElem.cloneNode(true);
+                                        clone.querySelector(".flashcard-count-badge")?.remove();
+                                        return clone.textContent.trim();
+                                    })();
                                     if (!word) {
                                         console.error("No word to save.");
                                         saveFlashcardButton.disabled = false;
@@ -3854,6 +3861,13 @@
                                             showToast("Failed to save flashcard.", false);
                                             saveFlashcardButton.disabled = false;
                                         } else {
+                                            botMessageDiv.querySelector("b .flashcard-count-badge");
+                                            const badge = wordElem.querySelector('.flashcard-count-badge');
+                                            if (badge) {
+                                                badge.textContent = +badge.textContent + 1;
+                                            } else {
+                                                wordElem.appendChild(createElement('span', { className: 'flashcard-count-badge', textContent: '1' }));
+                                            }
                                             showToast("Saved to Flashcard!", true);
                                         }
                                     } catch {
@@ -4015,7 +4029,7 @@
                                     });
                                 }
                                 
-                                const lingqMeaningElement = botMessageDiv.querySelector(".reference-input-text");
+                                const lingqMeaningElement = document.querySelector(".reference-input-text");
                                 const hasMeaning = lingqMeaningElement ? lingqMeaningElement.value : false;
                                 const textToCopy = (hasMeaning ? '\n' : '') + meaning;
                                 if (textToCopy.trim() !== '') {
@@ -4025,97 +4039,105 @@
                                 }
                                 
                                 if (supabase) {
-                                    // Word click to show existing flashcards
-                                    wordElem.addEventListener("click", async (e) => {
-                                        const existingPopup = document.getElementById("flashcard-popup");
-                                        if (existingPopup) existingPopup.remove();
-                                        
-                                        const {data, error} = await supabase
-                                            .from("word_data")
-                                            .select("*")
-                                            .eq("word", word)
-                                            .eq("flashcard", true);
-                                        
-                                        if (error) {
-                                            console.error("Flashcard fetch error:", error);
-                                            return;
-                                        }
-                                        const popup = createElement("div", {
-                                            id: "flashcard-popup",
-                                            style: `top: ${wordElem.offsetTop + wordElem.offsetHeight}px; left: ${wordElem.offsetLeft}px;`,
-                                        });
-                                        
-                                        if (!data || data.length === 0) {
-                                            popup.appendChild(createElement("em", {innerHTML: "No flashcards found."}));
-                                        } else {
-                                            for (const row of data) {
-                                                const rowDiv = createElement("div", {className: "flashcard-row"});
-                                                
-                                                const deleteBtn = createElement("button", {
-                                                    className: "popup-delete-button",
-                                                    innerHTML: `<svg viewBox="6 6 12 12" xmlns="http://www.w3.org/2000/svg" stroke="currentColor"><path d="M17 17L7 7.00002M17 7L7.00001 17" stroke-width="2" stroke-linecap="round"/></svg>`
-                                                });
-                                                
-                                                deleteBtn.addEventListener("click", async (ev) => {
-                                                    ev.stopPropagation();
-                                                    deleteBtn.disabled = true;
+                                    if (!isSentence) {
+                                        // Word click to show existing flashcards
+                                        wordElem.addEventListener("click", async (e) => {
+                                            const existingPopup = document.getElementById("flashcard-popup");
+                                            if (existingPopup) existingPopup.remove();
+                                            
+                                            const {data, error} = await supabase
+                                                .from("word_data")
+                                                .select("*")
+                                                .eq("word", word)
+                                                .eq("flashcard", true);
+                                            
+                                            if (error) {
+                                                console.error("Flashcard fetch error:", error);
+                                                return;
+                                            }
+                                            const popup = createElement("div", {
+                                                id: "flashcard-popup",
+                                                style: `top: ${wordElem.offsetTop + wordElem.offsetHeight}px; left: ${wordElem.offsetLeft}px;`,
+                                            });
+                                            
+                                            if (!data || data.length === 0) {
+                                                popup.appendChild(createElement("em", {innerHTML: "No flashcards found."}));
+                                            } else {
+                                                for (const row of data) {
+                                                    const rowDiv = createElement("div", {className: "flashcard-row"});
                                                     
-                                                    const {error: updateError} = await supabase
-                                                        .from("word_data")
-                                                        .update({flashcard: false})
-                                                        .eq("idx", row.idx)
-                                                        .eq("word", row.word);
+                                                    const deleteBtn = createElement("button", {
+                                                        className: "popup-delete-button",
+                                                        innerHTML: `<svg viewBox="6 6 12 12" xmlns="http://www.w3.org/2000/svg" stroke="currentColor"><path d="M17 17L7 7.00002M17 7L7.00001 17" stroke-width="2" stroke-linecap="round"/></svg>`
+                                                    });
                                                     
-                                                    if (updateError) {
-                                                        console.error("Flashcard delete error:", updateError);
-                                                        deleteBtn.disabled = false;
-                                                    } else {
-                                                        rowDiv.remove();
+                                                    deleteBtn.addEventListener("click", async (ev) => {
+                                                        ev.stopPropagation();
+                                                        deleteBtn.disabled = true;
                                                         
-                                                        if (!popup.querySelector("div")) {
-                                                            popup.appendChild(
-                                                                createElement("em", {innerHTML: "No flashcards found."})
-                                                            );
+                                                        const {error: updateError} = await supabase
+                                                            .from("word_data")
+                                                            .update({flashcard: false})
+                                                            .eq("idx", row.idx)
+                                                            .eq("word", row.word);
+                                                        
+                                                        if (updateError) {
+                                                            console.error("Flashcard delete error:", updateError);
+                                                            deleteBtn.disabled = false;
+                                                        } else {
+                                                            rowDiv.remove();
+                                                            
+                                                            if (!popup.querySelector("div")) {
+                                                                popup.appendChild(
+                                                                    createElement("em", {innerHTML: "No flashcards found."})
+                                                                );
+                                                            }
+                                                            
+                                                            const badge = wordElem.querySelector('.flashcard-count-badge');
+                                                            if (+badge.textContent > 1) {
+                                                                badge.textContent = +badge.textContent - 1;
+                                                            } else {
+                                                                badge.remove();
+                                                            }
+                                                            
+                                                            showToast("Flashcard removed.", true);
                                                         }
-                                                        
-                                                        showToast("Flashcard removed.", true);
-                                                    }
-                                                });
-                                                
-                                                rowDiv.appendChild(deleteBtn);
-                                                rowDiv.appendChild(createElement("b", {innerHTML: `${row.word}`}));
-                                                rowDiv.appendChild(createElement("span", {innerHTML: `${row.meaning}`}));
-                                                popup.appendChild(rowDiv);
+                                                    });
+                                                    
+                                                    rowDiv.appendChild(deleteBtn);
+                                                    rowDiv.appendChild(createElement("b", {innerHTML: `${row.word}`}));
+                                                    rowDiv.appendChild(createElement("span", {innerHTML: `${row.meaning}`}));
+                                                    popup.appendChild(rowDiv);
+                                                }
                                             }
-                                        }
-                                        
-                                        botMessageDiv.appendChild(popup);
-                                        
-                                        const closePopup = (ev) => {
-                                            if (!popup.contains(ev.target) && ev.target !== wordElem) {
-                                                popup.remove();
-                                                document.removeEventListener("click", closePopup);
-                                            }
-                                        };
-                                        document.addEventListener("click", closePopup);
-                                    });
-                                    
-                                    supabase
-                                        .from("word_data")
-                                        .select("*", {count: "exact", head: true})
-                                        .eq("word", word)
-                                        .eq("flashcard", true)
-                                        .then(({count, error}) => {
-                                            if (error) return console.error("Flashcard count error:", error);
-                                            if (count > 0) {
-                                                const badge = createElement("span", {
-                                                    className: "flashcard-count-badge",
-                                                    textContent: count > 9 ? "9+" : count,
-                                                });
-                                                wordElem.style.marginRight = "5px";
-                                                wordElem.appendChild(badge);
-                                            }
+                                            
+                                            botMessageDiv.appendChild(popup);
+                                            
+                                            const closePopup = (ev) => {
+                                                if (!popup.contains(ev.target) && ev.target !== wordElem) {
+                                                    popup.remove();
+                                                    document.removeEventListener("click", closePopup);
+                                                }
+                                            };
+                                            document.addEventListener("click", closePopup);
                                         });
+                                        
+                                        supabase
+                                            .from("word_data")
+                                            .select("*", {count: "exact", head: true})
+                                            .eq("word", word)
+                                            .eq("flashcard", true)
+                                            .then(({count, error}) => {
+                                                if (error) return console.error("Flashcard count error:", error);
+                                                if (count > 0) {
+                                                    const badge = createElement("span", {
+                                                        className: "flashcard-count-badge",
+                                                        textContent: count > 9 ? "9+" : count,
+                                                    });
+                                                    wordElem.appendChild(badge);
+                                                }
+                                            });
+                                    }
                                     
                                     // Save to DB
                                     const newItem = {
