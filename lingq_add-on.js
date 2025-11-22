@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      9.0.3
+// @version      9.0.4
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @namespace https://greasyfork.org/users/1458847
@@ -3594,9 +3594,14 @@
         }
         
         async function setupLLMs() {
-            ({ createClient } = await import('https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm'));
-            supabase = createClient(settings.dbUrl, settings.dbKey);
-            
+            try {
+                const { createClient } = await import('https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm');
+                supabase = createClient(settings.dbUrl, settings.dbKey);
+                console.log('Supabase initialized.');
+            } catch (err) {
+                console.error('Supabase initialization failed:', err);
+                supabase = null;
+            }
             let [llmProvider, llmModel] = settings.llmProviderModel.split(" ");
             let llmApiKey = settings.llmApiKey;
             
