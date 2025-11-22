@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      9.0.4
+// @version      9.0.5
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @namespace https://greasyfork.org/users/1458847
@@ -1376,13 +1376,25 @@
                 textContent: "DB URL: ",
                 style: "width: 25%;"
             }));
+            const dbUrlInputGroup = createElement("div", {
+                style: "display: flex; align-items: center; gap: 5px; flex: 1;"
+            });
             const dbUrlInput = createElement("input", {
                 type: "text",
                 id: "dbUrlInput",
                 value: settings.dbUrl,
-                className: "popup-input"
+                className: "popup-input",
+                style: "width: 70%; flex-grow: unset;"
             });
-            dbUrlContainer.appendChild(dbUrlInput);
+            const dbSetupGuide = createElement("a", {
+                href: "https://github.com/2p990i9hpral/LingQ_Add-On?tab=readme-ov-file#supabase-db-optional",
+                target: "_blank",
+                textContent: "Setup",
+                style: "font-size: 0.9em; color: var(--blue-500); margin: 0 auto;"
+            });
+            dbUrlInputGroup.appendChild(dbUrlInput);
+            dbUrlInputGroup.appendChild(dbSetupGuide);
+            dbUrlContainer.appendChild(dbUrlInputGroup);
             chatWidgetSection.appendChild(dbUrlContainer);
             
             const dbKeyContainer = createElement("div", {
@@ -1394,24 +1406,26 @@
                 textContent: "DB Key: ",
                 style: "width: 25%;"
             }));
-            const dbKeInputGroup = createElement("div", {
+            const dbKeyInputGroup = createElement("div", {
                 style: "display: flex; align-items: center; gap: 5px; flex: 1;"
             });
             const dbKeyInput = createElement("input", {
                 type: "password",
                 id: "dbKeyInput",
                 value: settings.dbKey,
-                className: "popup-input"
+                className: "popup-input",
+                style: "width: 70%; flex-grow: unset;"
             });
             const testDBConnectionButton = createElement("button", {
                 id: "testDBConnectionButton",
                 textContent: "Save",
-                className: "popup-button"
+                className: "popup-button",
+                style: "margin: 0 auto;"
             })
             
-            dbKeInputGroup.appendChild(dbKeyInput);
-            dbKeInputGroup.appendChild(testDBConnectionButton);
-            dbKeyContainer.appendChild(dbKeInputGroup);
+            dbKeyInputGroup.appendChild(dbKeyInput);
+            dbKeyInputGroup.appendChild(testDBConnectionButton);
+            dbKeyContainer.appendChild(dbKeyInputGroup);
             chatWidgetSection.appendChild(dbKeyContainer);
             
             container2.appendChild(chatWidgetSection);
@@ -3594,8 +3608,8 @@
         }
         
         async function setupLLMs() {
+            ({ createClient } = await import('https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm'));
             try {
-                const { createClient } = await import('https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm');
                 supabase = createClient(settings.dbUrl, settings.dbKey);
                 console.log('Supabase initialized.');
             } catch (err) {
