@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      9.0.6
+// @version      9.1.0
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @namespace https://greasyfork.org/users/1458847
@@ -3887,7 +3887,7 @@
                                 chatHistory = chatHistory.slice(0, chatHistory.findLastIndex(item => item.role === "assistant"));
                                 
                                 const chatContainer = document.getElementById("chat-container");
-                                const newBotMessageDiv = addMessageToUI("", 'bot-message', chatContainer, false);
+                                const newBotMessageDiv = addMessageToUI("", botMessageDiv.classList, chatContainer, false);
                                 await callStreamOpenAI(newBotMessageDiv, chatContainer, true);
                             });
                             messageButtonContainer.appendChild(regenerateButton);
@@ -4038,107 +4038,104 @@
                                         .catch(() => showToast("Failed to copy meaning.", false));
                                 }
                                 
-                                if (supabase) {
-                                    if (!isSentence) {
-                                        // Word click to show existing flashcards
-                                        wordElem.addEventListener("click", async (e) => {
-                                            const existingPopup = document.getElementById("flashcard-popup");
-                                            if (existingPopup) existingPopup.remove();
-                                            
-                                            const {data, error} = await supabase
-                                                .from("word_data")
-                                                .select("*")
-                                                .eq("word", word)
-                                                .eq("flashcard", true);
-                                            
-                                            if (error) {
-                                                console.error("Flashcard fetch error:", error);
-                                                return;
-                                            }
-                                            const popup = createElement("div", {
-                                                id: "flashcard-popup",
-                                                style: `top: ${wordElem.offsetTop + wordElem.offsetHeight}px; left: ${wordElem.offsetLeft}px;`,
-                                            });
-                                            
-                                            if (!data || data.length === 0) {
-                                                popup.appendChild(createElement("em", {innerHTML: "No flashcards found."}));
-                                            } else {
-                                                for (const row of data) {
-                                                    const rowDiv = createElement("div", {className: "flashcard-row"});
-                                                    
-                                                    const deleteBtn = createElement("button", {
-                                                        className: "popup-delete-button",
-                                                        innerHTML: `<svg viewBox="6 6 12 12" xmlns="http://www.w3.org/2000/svg" stroke="currentColor"><path d="M17 17L7 7.00002M17 7L7.00001 17" stroke-width="2" stroke-linecap="round"/></svg>`
-                                                    });
-                                                    
-                                                    deleteBtn.addEventListener("click", async (ev) => {
-                                                        ev.stopPropagation();
-                                                        deleteBtn.disabled = true;
-                                                        
-                                                        const {error: updateError} = await supabase
-                                                            .from("word_data")
-                                                            .update({flashcard: false})
-                                                            .eq("idx", row.idx)
-                                                            .eq("word", row.word);
-                                                        
-                                                        if (updateError) {
-                                                            console.error("Flashcard delete error:", updateError);
-                                                            deleteBtn.disabled = false;
-                                                        } else {
-                                                            rowDiv.remove();
-                                                            
-                                                            if (!popup.querySelector("div")) {
-                                                                popup.appendChild(
-                                                                    createElement("em", {innerHTML: "No flashcards found."})
-                                                                );
-                                                            }
-                                                            
-                                                            const badge = wordElem.querySelector('.flashcard-count-badge');
-                                                            if (+badge.textContent > 1) {
-                                                                badge.textContent = +badge.textContent - 1;
-                                                            } else {
-                                                                badge.remove();
-                                                            }
-                                                            
-                                                            showToast("Flashcard removed.", true);
-                                                        }
-                                                    });
-                                                    
-                                                    rowDiv.appendChild(deleteBtn);
-                                                    rowDiv.appendChild(createElement("b", {innerHTML: `${row.word}`}));
-                                                    rowDiv.appendChild(createElement("span", {innerHTML: `${row.meaning}`}));
-                                                    popup.appendChild(rowDiv);
-                                                }
-                                            }
-                                            
-                                            botMessageDiv.appendChild(popup);
-                                            
-                                            const closePopup = (ev) => {
-                                                if (!popup.contains(ev.target) && ev.target !== wordElem) {
-                                                    popup.remove();
-                                                    document.removeEventListener("click", closePopup);
-                                                }
-                                            };
-                                            document.addEventListener("click", closePopup);
+                                if (!isSentence && supabase) {
+                                    // Word click to show existing flashcards
+                                    wordElem.addEventListener("click", async (e) => {
+                                        const existingPopup = document.getElementById("flashcard-popup");
+                                        if (existingPopup) existingPopup.remove();
+                                        
+                                        const {data, error} = await supabase
+                                            .from("word_data")
+                                            .select("*")
+                                            .eq("word", word)
+                                            .eq("flashcard", true);
+                                        
+                                        if (error) {
+                                            console.error("Flashcard fetch error:", error);
+                                            return;
+                                        }
+                                        const popup = createElement("div", {
+                                            id: "flashcard-popup",
+                                            style: `top: ${wordElem.offsetTop + wordElem.offsetHeight}px; left: ${wordElem.offsetLeft}px;`,
                                         });
                                         
-                                        supabase
-                                            .from("word_data")
-                                            .select("*", {count: "exact", head: true})
-                                            .eq("word", word)
-                                            .eq("flashcard", true)
-                                            .then(({count, error}) => {
-                                                if (error) return console.error("Flashcard count error:", error);
-                                                if (count > 0) {
-                                                    const badge = createElement("span", {
-                                                        className: "flashcard-count-badge",
-                                                        textContent: count > 9 ? "9+" : count,
-                                                    });
-                                                    wordElem.appendChild(badge);
-                                                }
-                                            });
-                                    }
+                                        if (!data || data.length === 0) {
+                                            popup.appendChild(createElement("em", {innerHTML: "No flashcards found."}));
+                                        } else {
+                                            for (const row of data) {
+                                                const rowDiv = createElement("div", {className: "flashcard-row"});
+                                                
+                                                const deleteBtn = createElement("button", {
+                                                    className: "popup-delete-button",
+                                                    innerHTML: `<svg viewBox="6 6 12 12" xmlns="http://www.w3.org/2000/svg" stroke="currentColor"><path d="M17 17L7 7.00002M17 7L7.00001 17" stroke-width="2" stroke-linecap="round"/></svg>`
+                                                });
+                                                
+                                                deleteBtn.addEventListener("click", async (ev) => {
+                                                    ev.stopPropagation();
+                                                    deleteBtn.disabled = true;
+                                                    
+                                                    const {error: updateError} = await supabase
+                                                        .from("word_data")
+                                                        .update({flashcard: false})
+                                                        .eq("idx", row.idx)
+                                                        .eq("word", row.word);
+                                                    
+                                                    if (updateError) {
+                                                        console.error("Flashcard delete error:", updateError);
+                                                        deleteBtn.disabled = false;
+                                                    } else {
+                                                        rowDiv.remove();
+                                                        
+                                                        if (!popup.querySelector("div")) {
+                                                            popup.appendChild(
+                                                                createElement("em", {innerHTML: "No flashcards found."})
+                                                            );
+                                                        }
+                                                        
+                                                        const badge = wordElem.querySelector('.flashcard-count-badge');
+                                                        if (+badge.textContent > 1) {
+                                                            badge.textContent = +badge.textContent - 1;
+                                                        } else {
+                                                            badge.remove();
+                                                        }
+                                                        
+                                                        showToast("Flashcard removed.", true);
+                                                    }
+                                                });
+                                                
+                                                rowDiv.appendChild(deleteBtn);
+                                                rowDiv.appendChild(createElement("b", {innerHTML: `${row.word}`}));
+                                                rowDiv.appendChild(createElement("span", {innerHTML: `${row.meaning}`}));
+                                                popup.appendChild(rowDiv);
+                                            }
+                                        }
+                                        
+                                        botMessageDiv.appendChild(popup);
+                                        
+                                        const closePopup = (ev) => {
+                                            if (!popup.contains(ev.target) && ev.target !== wordElem) {
+                                                popup.remove();
+                                                document.removeEventListener("click", closePopup);
+                                            }
+                                        };
+                                        document.addEventListener("click", closePopup);
+                                    });
                                     
+                                    supabase
+                                        .from("word_data")
+                                        .select("*", {count: "exact", head: true})
+                                        .eq("word", word)
+                                        .eq("flashcard", true)
+                                        .then(({count, error}) => {
+                                            if (error) return console.error("Flashcard count error:", error);
+                                            if (count > 0) {
+                                                const badge = createElement("span", {
+                                                    className: "flashcard-count-badge",
+                                                    textContent: count > 9 ? "9+" : count,
+                                                });
+                                                wordElem.appendChild(badge);
+                                            }
+                                        });
                                     // Save to DB
                                     const newItem = {
                                         language: getLessonLanguage(),
@@ -4200,7 +4197,7 @@
                 # Single Word/Phrase Input
                 ## Process
                 Input will be given as: 'Input: "word or phrase" Context: "sentence including the word or phrase"'
-                1. Determine the base, dictionary form of the word or phrase. This means using the singular form for nouns (e.g., "cat" instead of "cats") and the infinitive form for verbs (e.g., "run" instead of "ran"). For phrases, use the standard dictionary form. Address and explain the base form of the word or phrase directly, even if the input is in a conjugated or inflected form. This is especially important for idioms.
+                1. Determine the base, dictionary form of the word or phrase. This means using the singular form for nouns (e.g., "cat" instead of "cats") and the infinitive form for verbs (e.g., "run" instead of "ran"). For phrases, use the standard dictionary form. Address and explain the base form of the word or phrase directly, even if the input is in a conjugated or inflected form (e.g., if the input is "書いていました", use the base form "書く" instead of "書いていました"). This is especially important for idioms.
                 2. Provide the IPA pronunciation for the base form of the word or phrase. The IPA should be enclosed in square brackets (e.g., [prəˌnʌnsiˈeɪʃən]).
                 3. Provide a concise dictionary definition of the word/phrase as it is used within the given context in ${userLanguage}. This definition should be very brief, akin to a quick lookup in a dictionary (e.g., for a verb: '달리다', '성취하다'; for a noun: '사과', '번역가'), typically just a few words or a short phrase, **not a full explanatory sentence**.
                 4. Explain the contextual meaning of the word/phrase with more details in ${userLanguage}.
@@ -4252,7 +4249,20 @@
                 <ul>
                   <li>Sie war imstande, die schwierige Aufgabe zu bewältigen.</li>
                   <li>Elle était capable de maîtriser la tâche difficile.</li>
-                </ul>`;
+                </ul>
+                ### Example 4: Phrase with Context (Original language: Japanese, User Language: Korean)
+                User Input: 'Input: "入っていました", Context: "ぬいぐるみ も 入っていました 。 これ は ミッキー です 。 ミッキーの ぬいぐるみ です 。 この ミッキー は 喋ります 。 お腹 を 押すと 喋ります 。"'
+                Assistant Output:
+                <b>入る</b> <span>[haɪru]</span> <i>(동사)</i>
+                <p>들어가다.</p>
+                <hr>
+                <p>이것은 무언가가 어떤 공간이나 용기 안으로 이동하거나, 그 안에 존재하게 되는 것을 나타내는 동사입니다. '入っていました'는 이 동사의 과거형 겸양어입니다.</p>
+                <hr>
+                <ul>
+                  <li>部屋に入る。</li>
+                  <li>방에 들어가다.</li>
+                </ul>
+                `;
                 const sentencePrompt = `
                 # Sentences Input
                 ## Process
@@ -4338,7 +4348,7 @@
                 # Plain Text Input (Conversational/Freetext)
                 Remember the initial 'Input: "word or phrase" Context: "sentence..."' or 'Input: "sentence(s)"'. This initial input and its associated context are vital for understanding follow-up questions in this conversational phase.
                 ## Responsibility
-                - Ensure that all responses are in HTML as plain text and do NOT include any Markdown syntax such as '**bold**', '* list', and '[text](url)'.
+                - Ensure that all responses are in raw HTML as plain text. This means your entire response should be a string of HTML. Do not use Markdown syntax (e.g., '# H1', '**Bold**', '*Italic*', '> blockquote', '---', '[text](url)'), do not wrap your HTML in Markdown code blocks (e.g., \`\`\`html ... \`\`\`).
                 ## Response
                 - If a user's plain text query refers to a word, phrase, concept, or asks a question that seems related to the initial structured input (the one with "Input:" and/or "Context:"), you MUST assume they are referring back to that specific initial input and its context, even if they don't explicitly state "in the previous context," "about the word we just discussed," or similar phrases. Use your knowledge of that initial input to provide a relevant and contextual answer.
                 - For general queries clearly not related to the initial input, answer as a general assistant.
