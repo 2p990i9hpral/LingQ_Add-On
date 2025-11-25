@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      9.1.0
+// @version      9.2.0
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @namespace https://greasyfork.org/users/1458847
@@ -2741,6 +2741,13 @@
                     height: 10px;
                     margin-right: 5px;
                 }
+                
+                .meaning-edit-input {
+                    width: 100%;
+                    border: none;
+                    outline: none;
+                    padding: 3px;
+                }
 
                 @keyframes gradient-move {
                     0% {
@@ -2779,17 +2786,23 @@
                     background-color: rgb(125 125 125 / 50%);
                 }
 
-                .message-botton {
+                .message-button-container {
+                    display: flex;
+                    gap: 5px;
+                    margin-top: 5px;
+                }
+
+                .message-button {
                     padding: 3px;
                     border-radius: 3px;
                 }
 
-                .message-botton:disabled {
+                .message-button:disabled {
                     opacity: 0.5;
                     pointer-events: none;
                 }
 
-                .message-botton:hover {
+                .message-button:hover {
                     background-color: rgba(125, 125, 125, 50%);
                 }
 
@@ -3707,6 +3720,307 @@
                     isProgrammaticReferenceWordUpdate = false;
                 }
                 
+                function isWordMessageStructure(botMessageDiv) {
+                    if (!botMessageDiv) return false;
+                    
+                    const wordElem = botMessageDiv.querySelector("b");
+                    const pronunciationElem = botMessageDiv.querySelector("span");
+                    const posElem = botMessageDiv.querySelector("i");
+                    const paragraphs = botMessageDiv.querySelectorAll("p");
+                    const hrs = botMessageDiv.querySelectorAll("hr");
+                    const exampleListElem = botMessageDiv.querySelector("ul");
+                    const exampleItems = exampleListElem ? exampleListElem.querySelectorAll("li") : [];
+                    
+                    if (!wordElem || !pronunciationElem || !posElem) return false;
+                    if (paragraphs.length < 2 || hrs.length < 2) return false;
+                    if (!exampleListElem || exampleItems.length < 2) return false;
+                    
+                    return true;
+                }
+                
+                function enhanceWordMessage(botMessageDiv, selectedData) {
+                    if (!isWordMessageStructure(botMessageDiv)) return;
+                    
+                    if (!botMessageDiv.classList.contains("word-message")) botMessageDiv.classList.add("word-message");
+                    
+                    const safeSelectedData = selectedData || {input: "", context: ""};
+                    
+                    const wordElem = botMessageDiv.querySelector("b");
+                    const pronunciationElem = botMessageDiv.querySelector("span");
+                    const meaningElem = botMessageDiv.querySelector("p");
+                    const explanationElem = botMessageDiv.querySelectorAll("p")[1];
+                    const exampleListElem = botMessageDiv.querySelector("ul");
+                    const exampleSentenceElem = exampleListElem?.querySelector("li:nth-child(1)");
+                    const exampleTranslationElem = exampleListElem?.querySelector("li:nth-child(2)");
+                    
+                    const word = (() => {
+                        if (!wordElem) return "";
+                        const clone = wordElem.cloneNode(true);
+                        clone.querySelector(".flashcard-count-badge")?.remove();
+                        return clone.textContent.trim();
+                    })();
+                    const pronunciation = pronunciationElem?.textContent?.trim() || "";
+                    const meaning = meaningElem?.textContent?.trim() || "";
+                    const explanation = explanationElem?.textContent?.trim() || "";
+                    const exampleSentence = exampleSentenceElem?.textContent?.trim() || "";
+                    const exampleTranslation = exampleTranslationElem?.textContent?.trim() || "";
+                    
+                    if (!word) return;
+                    
+                    wordElem.addEventListener("click", async () => {
+                        navigator.clipboard.writeText(word)
+                            .then(() => showToast("Word Copied!", true))
+                            .catch(() => showToast("Failed to copy word.", false));
+                    });
+                    
+                    if (meaningElem) {
+                        meaningElem.addEventListener("click", async (e) => {
+                            if (e.ctrlKey || e.metaKey) {
+                                if (meaningElem.querySelector("input")) return;
+                                
+                                const currentText = meaningElem.textContent.trim();
+                                
+                                const input = createElement("input", {type: "text", value: currentText, className: "meaning-edit-input",});
+                                
+                                meaningElem.textContent = "";
+                                meaningElem.appendChild(input);
+                                input.focus();
+                                
+                                const finishEdit = async (save) => {
+                                    const newValue = input.value.trim();
+                                    meaningElem.textContent = newValue;
+                                    
+                                    if (save && newValue !== currentText) {
+                                        const storedIdx = botMessageDiv.dataset.wordIdx;
+                                        if (storedIdx) {
+                                            const { error: updateError } = await supabase
+                                                .from("word_data")
+                                                .update({ meaning: newValue })
+                                                .eq("idx", storedIdx);
+                                            if (updateError) {
+                                                console.error("Meaning update error:", updateError);
+                                                showToast("Failed to update meaning.", false);
+                                            } else {
+                                                showToast("Meaning updated!", true);
+                                            }
+                                        } else {
+                                            console.warn("No stored idx - cannot update meaning.");
+                                        }
+                                    }
+                                };
+                                
+                                input.addEventListener("keydown", async (event) => {
+                                    if (event.key === "Enter") {
+                                        event.preventDefault();
+                                        input.blur();
+                                    } else if (event.key === "Escape") {
+                                        meaningElem.textContent = currentText;
+                                    }
+                                });
+                                
+                                input.addEventListener("blur", async () => {
+                                    await finishEdit(true);
+                                });
+                                
+                                return;
+                            }
+                            
+                            navigator.clipboard.writeText(meaning)
+                                .then(() => showToast("Meaning Copied!", true))
+                                .catch(() => showToast("Failed to copy meaning.", false));
+                            
+                            
+                        });
+                    }
+                    
+                    if (exampleListElem) {
+                        exampleListElem.addEventListener("click", async () => {
+                            const textToCopy = Array
+                                .from(exampleListElem.querySelectorAll("li"))
+                                .map(li => li.textContent)
+                                .join("\n");
+                            navigator.clipboard.writeText(textToCopy)
+                                .then(() => showToast("Example Copied!", true))
+                                .catch(() => showToast("Failed to copy example.", false));
+                        });
+                    }
+                    
+                    const lingqMeaningElement = document.querySelector(".reference-input-text");
+                    const hasMeaning = lingqMeaningElement ? lingqMeaningElement.value : false;
+                    const textToCopyForLingq = (hasMeaning ? "\n" : "") + meaning;
+                    if (textToCopyForLingq.trim() !== "") {
+                        navigator.clipboard.writeText(textToCopyForLingq)
+                            .then(() => showToast("Meaning Copied!", true))
+                            .catch(() => showToast("Failed to copy meaning.", false));
+                    }
+                    
+                    if (supabase) {
+                        wordElem.addEventListener("click", async (e) => {
+                            const existingPopup = document.getElementById("flashcard-popup");
+                            if (existingPopup) existingPopup.remove();
+                            
+                            const {data, error} = await supabase
+                                .from("word_data")
+                                .select("*")
+                                .eq("word", word)
+                                .eq("flashcard", true);
+                            
+                            if (error) {
+                                console.error("Flashcard fetch error:", error);
+                                return;
+                            }
+                            
+                            const rect = wordElem.getBoundingClientRect();
+                            const popup = createElement("div", {
+                                id: "flashcard-popup",
+                                style: `top: ${rect.bottom + window.scrollY}px; left: ${rect.left + window.scrollX}px;`
+                            });
+                            
+                            if (!data || data.length === 0) {
+                                popup.appendChild(createElement("em", {innerHTML: "No flashcards found."}));
+                            } else {
+                                data.forEach(row => {
+                                    const rowDiv = createElement("div", {className: "flashcard-row"});
+                                    const deleteBtn = createElement("button", {
+                                        className: "popup-delete-button",
+                                        innerHTML: `<svg viewBox="6 6 12 12" xmlns="http://www.w3.org/2000/svg" stroke="currentColor"><path d="M17 17L7 7.00002M17 7L7.00001 17" stroke-width="2" stroke-linecap="round"/></svg>`
+                                    });
+                                    
+                                    deleteBtn.addEventListener("click", async (ev) => {
+                                        ev.stopPropagation();
+                                        deleteBtn.disabled = true;
+                                        const {error: updateError} = await supabase
+                                            .from("word_data")
+                                            .update({flashcard: false})
+                                            .eq("idx", row.idx)
+                                            .eq("word", row.word);
+                                        if (updateError) {
+                                            console.error("Flashcard delete error:", updateError);
+                                            deleteBtn.disabled = false;
+                                        } else {
+                                            rowDiv.remove();
+                                            if (!popup.querySelector("div")) {
+                                                popup.appendChild(createElement("em", {innerHTML: "No flashcards found."}));
+                                            }
+                                            const badge = wordElem.querySelector(".flashcard-count-badge");
+                                            if (badge) {
+                                                if (+badge.textContent > 1) badge.textContent = +badge.textContent - 1;
+                                                else badge.remove();
+                                            }
+                                            showToast("Flashcard removed.", true);
+                                        }
+                                    });
+                                    
+                                    rowDiv.appendChild(deleteBtn);
+                                    rowDiv.appendChild(createElement("b", {innerHTML: `${row.word}`}));
+                                    rowDiv.appendChild(createElement("span", {innerHTML: `${row.meaning}`}));
+                                    popup.appendChild(rowDiv);
+                                });
+                            }
+                            
+                            document.body.appendChild(popup);
+                            
+                            const chatContainer = document.querySelector("#chat-container");
+                            const closePopup = (ev) => {
+                                if (!popup.contains(ev.target) && ev.target !== wordElem) {
+                                    popup.remove();
+                                    document.removeEventListener("click", closePopup);
+                                    chatContainer.removeEventListener("scroll", closePopup);
+                                }
+                            };
+                            document.addEventListener("click", closePopup);
+                            chatContainer.addEventListener("scroll", closePopup);
+                        });
+                        
+                        supabase
+                            .from("word_data")
+                            .select("*", {count: "exact", head: true})
+                            .eq("word", word)
+                            .eq("flashcard", true)
+                            .then(({count, error}) => {
+                                if (error) {
+                                    console.error("Flashcard count error:", error);
+                                    return;
+                                }
+                                if (count > 0) {
+                                    const existingBadge = wordElem.querySelector(".flashcard-count-badge");
+                                    if (existingBadge) return;
+                                    const badge = createElement("span", {
+                                        className: "flashcard-count-badge",
+                                        textContent: count > 9 ? "9+" : count
+                                    });
+                                    wordElem.appendChild(badge);
+                                }
+                            });
+                        
+                        const newItem = {
+                            language: getLessonLanguage(),
+                            original_word: safeSelectedData.input,
+                            context: safeSelectedData.context,
+                            word,
+                            pronunciation,
+                            meaning,
+                            explanation,
+                            example_sentence: exampleSentence,
+                            example_translation: exampleTranslation,
+                            flashcard: false
+                        };
+                        
+                        supabase
+                            .from("word_data")
+                            .insert([newItem])
+                            .select("idx")
+                            .then(({data: inserted, error: insertError}) => {
+                                if (insertError) console.error("Insert error:", insertError);
+                                
+                                botMessageDiv.dataset.wordIdx = inserted[0].idx;
+                            });
+                        
+                        const messageButtonContainer = botMessageDiv.querySelector(".message-button-container");
+                        if (!messageButtonContainer.querySelector(".save-flashcard-button")) {
+                            const saveFlashcardButton = createElement("button", {
+                                className: "message-button save-flashcard-button",
+                                innerHTML: `<svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="transparent" stroke="currentColor"><g id="SVGRepo_iconCarrier"> <path d="M16 3.98999H8C6.93913 3.98999 5.92178 4.41135 5.17163 5.1615C4.42149 5.91164 4 6.92912 4 7.98999V17.99C4 19.0509 4.42149 20.0682 5.17163 20.8184C5.92178 21.5685 6.93913 21.99 8 21.99H16C17.0609 21.99 18.0783 21.5685 18.8284 20.8184C19.5786 20.0682 20 19.0509 20 17.99V7.98999C20 6.92912 19.5786 5.91164 18.8284 5.1615C18.0783 4.41135 17.0609 3.98999 16 3.98999Z" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"></path> <path d="M9 2V7" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"></path> <path d="M15 2V7" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"></path> <path d="M8 16H14" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"></path> <path d="M8 12H16" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"></path> </g></svg>`
+                            });
+                            
+                            saveFlashcardButton.addEventListener("click", async () => {
+                                saveFlashcardButton.disabled = true;
+                                try {
+                                    const targetIdx = botMessageDiv.dataset.wordIdx;
+                                    if (!targetIdx) {
+                                        console.error("No stored idx for this message.");
+                                        saveFlashcardButton.disabled = false;
+                                        return;
+                                    }
+                                    
+                                    const { error: updateError } = await supabase
+                                        .from("word_data")
+                                        .update({ flashcard: true })
+                                        .eq("idx", targetIdx);
+                                    
+                                    if (updateError) {
+                                        console.error("Flashcard update error:", updateError);
+                                        showToast("Failed to save flashcard.", false);
+                                        saveFlashcardButton.disabled = false;
+                                    } else {
+                                        const badge = wordElem.querySelector(".flashcard-count-badge");
+                                        if (badge) badge.textContent = +badge.textContent + 1;
+                                        else wordElem.appendChild(createElement("span", {className: "flashcard-count-badge", textContent: "1"}));
+                                        showToast("Saved to Flashcard!", true);
+                                    }
+                                } catch (err) {
+                                    console.error("Unexpected error:", err);
+                                    saveFlashcardButton.disabled = false;
+                                }
+                            });
+                            
+                            const regenerateButton = messageButtonContainer.querySelector(".regenerate-button");
+                            if (regenerateButton) messageButtonContainer.insertBefore(saveFlashcardButton, regenerateButton);
+                            else messageButtonContainer.appendChild(saveFlashcardButton);
+                        }
+                    }
+                }
+                
                 function updateChatHistoryState(currentHistory, message, role) {
                     return [...currentHistory, {role: role, content: message}];
                 }
@@ -3764,17 +4078,17 @@
                             const existingRegenerateButton = document.querySelector('.regenerate-button');
                             if (existingRegenerateButton) existingRegenerateButton.remove();
                             
-                            const messageButtonContainer = createElement("div", {style: "margin: 5px 0 0; display: flex; gap: 5px;"});
+                            const messageButtonContainer = createElement("div", {className: 'message-button-container'});
                             
                             const copyButton = createElement("button", {
-                                className: "message-botton copy-button",
+                                className: "message-button copy-button",
                                 innerHTML: `<svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="transparent" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-copy"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"></rect><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"></path></svg>`,
                             });
                             copyButton.addEventListener('click', async () => {
                                 const textToCopy = (() => {
                                     const clone = botMessageDiv.cloneNode(true);
-                                    clone.querySelector("#flashcard-popup")?.remove();
-                                    return clone.textContent;
+                                    clone.querySelector(".flashcard-count-badge")?.remove();
+                                    return botMessageDiv.textContent;
                                 });
                                 navigator.clipboard.writeText(textToCopy)
                                     .then(() => {
@@ -3787,7 +4101,7 @@
                             messageButtonContainer.appendChild(copyButton);
                             
                             const ttsButton = createElement("button", {
-                                className: "message-botton tts-button",
+                                className: "message-button tts-button",
                                 innerHTML: `<svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="transparent" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-play" aria-hidden="true"><polygon points="6 3 20 12 6 21 6 3"></polygon></svg>`,
                             });
                             ttsButton.addEventListener('click', async function initialTTSHandler() {
@@ -3815,80 +4129,23 @@
                             });
                             messageButtonContainer.appendChild(ttsButton);
                             
-                            if (botMessageDiv.matches('.word-message') && supabase) {
-                                const saveFlashcardButton = createElement("button", {
-                                    className: "message-button save-flashcard-button",
-                                    innerHTML: `<svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="transparent" stroke="currentColor"><g id="SVGRepo_iconCarrier"> <path d="M16 3.98999H8C6.93913 3.98999 5.92178 4.41135 5.17163 5.1615C4.42149 5.91164 4 6.92912 4 7.98999V17.99C4 19.0509 4.42149 20.0682 5.17163 20.8184C5.92178 21.5685 6.93913 21.99 8 21.99H16C17.0609 21.99 18.0783 21.5685 18.8284 20.8184C19.5786 20.0682 20 19.0509 20 17.99V7.98999C20 6.92912 19.5786 5.91164 18.8284 5.1615C18.0783 4.41135 17.0609 3.98999 16 3.98999Z" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"></path> <path d="M9 2V7" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"></path> <path d="M15 2V7" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"></path> <path d="M8 16H14" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"></path> <path d="M8 12H16" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"></path> </g></svg>`
-                                });
-                                saveFlashcardButton.addEventListener("click", async () => {
-                                    saveFlashcardButton.disabled = true;
-                                    
-                                    const wordElem = botMessageDiv.querySelector("b");
-                                    const word = (() => {
-                                        if (!wordElem) return "";
-                                        const clone = wordElem.cloneNode(true);
-                                        clone.querySelector(".flashcard-count-badge")?.remove();
-                                        return clone.textContent.trim();
-                                    })();
-                                    if (!word) {
-                                        console.error("No word to save.");
-                                        saveFlashcardButton.disabled = false;
-                                        return;
-                                    }
-                                    
-                                    try {
-                                        const {data: latest, error: fetchError} = await supabase
-                                            .from("word_data")
-                                            .select("idx")
-                                            .eq("word", word)
-                                            .order("idx", {ascending: false})
-                                            .limit(1)
-                                            .maybeSingle();
-                                        
-                                        if (fetchError || !latest) {
-                                            console.error("Flashcard latest fetch error:", fetchError);
-                                            saveFlashcardButton.disabled = false;
-                                            return;
-                                        }
-                                        
-                                        const {updateError} = await supabase
-                                            .from("word_data")
-                                            .update({flashcard: true})
-                                            .eq("idx", latest.idx);
-                                        
-                                        if (updateError) {
-                                            console.error("Flashcard update error:", error);
-                                            showToast("Failed to save flashcard.", false);
-                                            saveFlashcardButton.disabled = false;
-                                        } else {
-                                            botMessageDiv.querySelector("b .flashcard-count-badge");
-                                            const badge = wordElem.querySelector('.flashcard-count-badge');
-                                            if (badge) {
-                                                badge.textContent = +badge.textContent + 1;
-                                            } else {
-                                                wordElem.appendChild(createElement('span', { className: 'flashcard-count-badge', textContent: '1' }));
-                                            }
-                                            showToast("Saved to Flashcard!", true);
-                                        }
-                                    } catch {
-                                        console.error("Unexpected error:", err);
-                                        saveFlashcardButton.disabled = false;
-                                    }
-                                });
-                                messageButtonContainer.appendChild(saveFlashcardButton);
-                            }
-                            
                             const regenerateButton = createElement("button", {
-                                className: "message-botton regenerate-button",
+                                className: "message-button regenerate-button",
                                 innerHTML: `<svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="transparent" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-rotate-ccw" aria-hidden="true"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path><path d="M3 3v5h5"></path></svg>`,
                             });
-                            regenerateButton.addEventListener('click', async () => {
+                            regenerateButton.addEventListener("click", async () => {
                                 botMessageDiv.remove();
-                                chatHistory = chatHistory.slice(0, chatHistory.findLastIndex(item => item.role === "assistant"));
+                                chatHistory = chatHistory.slice(0, chatHistory.findLastIndex((item) => item.role === "assistant"));
                                 
                                 const chatContainer = document.getElementById("chat-container");
                                 const newBotMessageDiv = addMessageToUI("", botMessageDiv.classList, chatContainer, false);
-                                await callStreamOpenAI(newBotMessageDiv, chatContainer, true);
+                                
+                                await callStreamOpenAI(newBotMessageDiv, chatContainer, true,
+                                    (finalContent) => {
+                                        const selectedData = getSelectedWithContext();
+                                        enhanceWordMessage(newBotMessageDiv, selectedData);
+                                    }
+                                );
                             });
                             messageButtonContainer.appendChild(regenerateButton);
                             
@@ -3916,8 +4173,13 @@
                     addMessageToUI(userMessage, 'user-message', chatContainer, true);
                     chatHistory = updateChatHistoryState(chatHistory, userMessage, "user");
                     
-                    const botMessageDiv = addMessageToUI("", 'bot-message', chatContainer, false);
-                    await callStreamOpenAI(botMessageDiv, chatContainer, true);
+                    const botMessageDiv = addMessageToUI("", "bot-message", chatContainer, false);
+                    await callStreamOpenAI(botMessageDiv, chatContainer, true,
+                        (finalContent) => {
+                            const selectedData = getSelectedWithContext();
+                            enhanceWordMessage(botMessageDiv, selectedData);
+                        }
+                    );
                 }
                 
                 async function updateChatWidget() {
@@ -3984,183 +4246,9 @@
                         const messageClass = isSentence ? "sentence-message" : "word-message";
                         const botMessageDiv = addMessageToUI("", `bot-message ${messageClass}`, chatContainer, false);
                         
-                        await callStreamOpenAI(
-                            botMessageDiv,
-                            chatContainer,
-                            false,
+                        await callStreamOpenAI(botMessageDiv, chatContainer, false,
                             async (finalContent) => {
-                                const wordElem = botMessageDiv.querySelector("b");
-                                const word = (() => {
-                                    if (!wordElem) return "";
-                                    const clone = wordElem.cloneNode(true);
-                                    clone.querySelector(".flashcard-count-badge")?.remove();
-                                    return clone.textContent.trim();
-                                })();
-                                const pronunciation = botMessageDiv.querySelector("span")?.textContent?.trim() || "";
-                                const meaningElement = botMessageDiv.querySelector("p");
-                                const meaning = meaningElement?.textContent?.trim() || "";
-                                const explanation = botMessageDiv.querySelector("hr + p")?.textContent?.trim() || "";
-                                const exampleList = botMessageDiv.querySelector("ul");
-                                const exampleSentence = exampleList.querySelector("li:nth-child(1)")?.textContent?.trim() || "";
-                                const exampleTranslation = exampleList.querySelector("li:nth-child(2)")?.textContent?.trim() || "";
-                                
-                                wordElem.addEventListener('click', async () => {
-                                    navigator.clipboard.writeText(word)
-                                        .then(() => showToast("Word Copied!", true))
-                                        .catch(() => showToast("Failed to copy word.", false));
-                                });
-                                
-                                if (meaningElement) {
-                                    meaningElement.addEventListener('click', async () => {
-                                        navigator.clipboard.writeText(meaning)
-                                            .then(() => showToast("Meaning Copied!", true))
-                                            .catch(() => showToast("Failed to copy meaning.", false));
-                                    });
-                                }
-                                
-                                if (exampleList) {
-                                    exampleList.addEventListener('click', async () => {
-                                        const textToCopy = Array.from(exampleList.querySelectorAll("li"))
-                                            .map(li => li.textContent)
-                                            .join("\n");
-                                        navigator.clipboard.writeText(textToCopy)
-                                            .then(() => showToast("Example Copied!", true))
-                                            .catch(() => showToast("Failed to copy example.", false));
-                                    });
-                                }
-                                
-                                const lingqMeaningElement = document.querySelector(".reference-input-text");
-                                const hasMeaning = lingqMeaningElement ? lingqMeaningElement.value : false;
-                                const textToCopy = (hasMeaning ? '\n' : '') + meaning;
-                                if (textToCopy.trim() !== '') {
-                                    navigator.clipboard.writeText(textToCopy)
-                                        .then(() => showToast("Meaning Copied!", true))
-                                        .catch(() => showToast("Failed to copy meaning.", false));
-                                }
-                                
-                                if (!isSentence && supabase) {
-                                    // Word click to show existing flashcards
-                                    wordElem.addEventListener("click", async (e) => {
-                                        const existingPopup = document.getElementById("flashcard-popup");
-                                        if (existingPopup) existingPopup.remove();
-                                        
-                                        const {data, error} = await supabase
-                                            .from("word_data")
-                                            .select("*")
-                                            .eq("word", word)
-                                            .eq("flashcard", true);
-                                        
-                                        if (error) {
-                                            console.error("Flashcard fetch error:", error);
-                                            return;
-                                        }
-                                        const popup = createElement("div", {
-                                            id: "flashcard-popup",
-                                            style: `top: ${wordElem.offsetTop + wordElem.offsetHeight}px; left: ${wordElem.offsetLeft}px;`,
-                                        });
-                                        
-                                        if (!data || data.length === 0) {
-                                            popup.appendChild(createElement("em", {innerHTML: "No flashcards found."}));
-                                        } else {
-                                            for (const row of data) {
-                                                const rowDiv = createElement("div", {className: "flashcard-row"});
-                                                
-                                                const deleteBtn = createElement("button", {
-                                                    className: "popup-delete-button",
-                                                    innerHTML: `<svg viewBox="6 6 12 12" xmlns="http://www.w3.org/2000/svg" stroke="currentColor"><path d="M17 17L7 7.00002M17 7L7.00001 17" stroke-width="2" stroke-linecap="round"/></svg>`
-                                                });
-                                                
-                                                deleteBtn.addEventListener("click", async (ev) => {
-                                                    ev.stopPropagation();
-                                                    deleteBtn.disabled = true;
-                                                    
-                                                    const {error: updateError} = await supabase
-                                                        .from("word_data")
-                                                        .update({flashcard: false})
-                                                        .eq("idx", row.idx)
-                                                        .eq("word", row.word);
-                                                    
-                                                    if (updateError) {
-                                                        console.error("Flashcard delete error:", updateError);
-                                                        deleteBtn.disabled = false;
-                                                    } else {
-                                                        rowDiv.remove();
-                                                        
-                                                        if (!popup.querySelector("div")) {
-                                                            popup.appendChild(
-                                                                createElement("em", {innerHTML: "No flashcards found."})
-                                                            );
-                                                        }
-                                                        
-                                                        const badge = wordElem.querySelector('.flashcard-count-badge');
-                                                        if (+badge.textContent > 1) {
-                                                            badge.textContent = +badge.textContent - 1;
-                                                        } else {
-                                                            badge.remove();
-                                                        }
-                                                        
-                                                        showToast("Flashcard removed.", true);
-                                                    }
-                                                });
-                                                
-                                                rowDiv.appendChild(deleteBtn);
-                                                rowDiv.appendChild(createElement("b", {innerHTML: `${row.word}`}));
-                                                rowDiv.appendChild(createElement("span", {innerHTML: `${row.meaning}`}));
-                                                popup.appendChild(rowDiv);
-                                            }
-                                        }
-                                        
-                                        botMessageDiv.appendChild(popup);
-                                        
-                                        const closePopup = (ev) => {
-                                            if (!popup.contains(ev.target) && ev.target !== wordElem) {
-                                                popup.remove();
-                                                document.removeEventListener("click", closePopup);
-                                            }
-                                        };
-                                        document.addEventListener("click", closePopup);
-                                    });
-                                    
-                                    supabase
-                                        .from("word_data")
-                                        .select("*", {count: "exact", head: true})
-                                        .eq("word", word)
-                                        .eq("flashcard", true)
-                                        .then(({count, error}) => {
-                                            if (error) return console.error("Flashcard count error:", error);
-                                            if (count > 0) {
-                                                const badge = createElement("span", {
-                                                    className: "flashcard-count-badge",
-                                                    textContent: count > 9 ? "9+" : count,
-                                                });
-                                                wordElem.appendChild(badge);
-                                            }
-                                        });
-                                    // Save to DB
-                                    const newItem = {
-                                        language: getLessonLanguage(),
-                                        original_word: selectedData.input,
-                                        context: selectedData.context,
-                                        word,
-                                        pronunciation,
-                                        meaning: meaning,
-                                        explanation,
-                                        example_sentence: exampleSentence,
-                                        example_translation: exampleTranslation,
-                                        flashcard: false
-                                    };
-                                    
-                                    supabase
-                                        .from("word_data")
-                                        .insert([newItem])
-                                        .then(({data: inserted, error: insertError}) => {
-                                            if (insertError) {
-                                                console.error("Insert error:", insertError);
-                                            } else {
-                                                console.log("Inserted:", inserted);
-                                            }
-                                        });
-                                }
+                                enhanceWordMessage(botMessageDiv, selectedData);
                             }
                         );
                         
