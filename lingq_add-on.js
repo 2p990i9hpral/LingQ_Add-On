@@ -4,18 +4,19 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      9.2.0
+// @version      9.3.0
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @namespace https://greasyfork.org/users/1458847
 // @downloadURL https://update.greasyfork.org/scripts/533096/LingQ%20Addon.user.js
 // @updateURL https://update.greasyfork.org/scripts/533096/LingQ%20Addon.meta.js
+// @require https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js
 // ==/UserScript==
 
 (function () {
     "use strict";
     
-    let createClient;
+    const createClient = window.supabase.createClient;
     
     const storage = {
         get: (key, defaultValue) => {
@@ -299,17 +300,25 @@
     
     /* Utils */
     
-    function createElement(tag, props = {}) {
+    function createElement(tag, props = {}, ...children) {
         const element = document.createElement(tag);
-        Object.entries(props).forEach(([key, value]) => {
-            if (key === "style" && typeof value === "string") {
-                element.style.cssText = value;
-            } else if (key === "textContent") {
-                element.textContent = value;
-            } else {
-                element[key] = value;
-            }
-        });
+        const { dataset, style, ...restProps } = props || {};
+        
+        Object.assign(element, restProps);
+        
+        if (typeof style === 'string') {
+            element.style.cssText = style;
+        } else if (typeof style === 'object' && style !== null) {
+            Object.assign(element.style, style);
+        }
+        
+        if (dataset && typeof dataset === 'object') {
+            Object.entries(dataset).forEach(([key, value]) => {
+                if (value != null) element.dataset[key] = String(value);
+            });
+        }
+        
+        children.forEach(child => child && element.append(child));
         return element;
     }
     
@@ -1649,6 +1658,39 @@
             return popup;
         }
         
+        function createFlashcardPopup() {
+            const popup = createElement("div", {id: "flashcardPopup", className: "popup"},
+                createElement("div", {id: "flashcardDragHandle", className: "popup-drag-handle"},
+                    createElement("h3", {textContent: "Flashcard Manager"})
+                ),
+                createElement("div", {style: "padding: 0 10px; width: 800px;"},
+                    createElement("div", {id: "flashcardPopupHeader"},
+                        createElement("span", {id: "flashcardCount"}, "Flashcards:"),
+                        createElement("div", {id: "flashcardPagination"})
+                    ),
+                    createElement("div", {id: "flashcardTableContainer"},
+                        createElement("table", {id: "flashcardTable"},
+                            createElement("thead", {},
+                                createElement("tr", {},
+                                    ...["Word", "Meaning", "Explanation"]
+                                        .map(headerText => createElement("th", {}, headerText)
+                                    )
+                                )
+                            ),
+                            createElement("tbody")
+                        )
+                    ),
+                    createElement("div", {
+                            className: "popup-row",
+                            style: "display: flex; justify-content: flex-end; gap: 10px; margin: 10px 0;"},
+                        createElement("button", {id: "flashcardCsvDownload", className: "popup-button"}, "Export as CSV"),
+                        createElement("button", {id: "closeFlashcardPopupBtn", className: "popup-button"}, "Close")
+                    )
+                )
+            );
+            return popup;
+        }
+        
         function makeDraggable(element, handle) {
             let pos1 = 0, pos2 = 0, pos3 = 0, pos4 = 0;
             
@@ -2351,6 +2393,132 @@
             });
         }
         
+        function setupFlashcardPopupEventListeners() {
+            const flashcardButton = document.getElementById("flashcardManagerButton");
+            const flashcardPopup = document.getElementById("flashcardPopup");
+            const flashcardTableBody = flashcardPopup.querySelector("tbody");
+            const paginationContainer = document.getElementById("flashcardPagination");
+            const countLabel = document.getElementById("flashcardCount");
+            
+            let currentPage = 1;
+            const pageSize = 15;
+            let totalCount = 0;
+            const language = getLessonLanguage();
+            
+            flashcardButton.addEventListener("click", async () => {
+                flashcardPopup.style.display = "block";
+                makeDraggable(flashcardPopup, document.getElementById("flashcardDragHandle"));
+                loadFlashcardPage(currentPage);
+            });
+            
+            document.getElementById("closeFlashcardPopupBtn").addEventListener("click", () => {
+                flashcardPopup.style.display = "none";
+            });
+            
+            async function loadFlashcardPage(page) {
+                const from = (page - 1) * pageSize;
+                const to = from + pageSize - 1;
+                
+                const { count, error: countError } = await supabase
+                    .from("word_data")
+                    .select("*", { count: "exact", head: true })
+                    .eq("flashcard", true)
+                    .eq("language", language);
+                if (countError) {
+                    console.error(countError);
+                    return;
+                }
+                totalCount = count;
+                countLabel.textContent = `Flashcards: ${totalCount}`;
+                
+                const { data, error } = await supabase
+                    .from("word_data")
+                    .select("word, meaning, explanation")
+                    .eq("flashcard", true)
+                    .eq("language", language)
+                    .range(from, to)
+                    .order("idx", { ascending: false });
+                
+                if (error) {
+                    console.error("Flashcard fetch error:", error);
+                    return;
+                }
+                
+                flashcardTableBody.innerHTML = "";
+                data.forEach(row => {
+                    const tableRow = createElement("tr", {},
+                        createElement("td", { textContent: row.word || "", title: row.word || "" }),
+                        createElement("td", { textContent: row.meaning || "", title: row.meaning || "" }),
+                        createElement("td", { textContent: row.explanation || "", title: row.explanation || "" })
+                    );
+                    flashcardTableBody.appendChild(tableRow);
+                });
+                
+                drawPagination(page);
+            }
+            
+            function drawPagination(page) {
+                const totalPages = Math.ceil(totalCount / pageSize);
+                paginationContainer.innerHTML = "";
+                if (totalPages <= 1) return;
+                
+                const prev = createElement("button", { className: "popup-button", textContent: "<" });
+                prev.disabled = page === 1;
+                prev.addEventListener("click", () => {
+                    if (page > 1) {
+                        currentPage--;
+                        loadFlashcardPage(currentPage);
+                    }
+                });
+                paginationContainer.appendChild(prev);
+                
+                const pageInfo = createElement("span", { textContent: `${page} of ${totalPages}`});
+                paginationContainer.appendChild(pageInfo);
+                
+                const next = createElement("button", { className: "popup-button", textContent: ">" });
+                next.disabled = page >= totalPages;
+                next.addEventListener("click", () => {
+                    if (page < totalPages) {
+                        currentPage++;
+                        loadFlashcardPage(currentPage);
+                    }
+                });
+                paginationContainer.appendChild(next);
+            }
+            
+            document.getElementById("flashcardCsvDownload").addEventListener("click", async () => {
+                const { data, error } = await supabase
+                    .from("word_data")
+                    .select("*")
+                    .eq("flashcard", true)
+                    .eq("language", language)
+                    .order("idx", { ascending: true });
+                
+                if (error) {
+                    console.error("CSV export error:", error);
+                    showToast("Failed to export CSV", false);
+                    return;
+                }
+                
+                const headers = Object.keys(data[0] || {});
+                const rows = data.map(row =>
+                    Object.values(row).map(v =>
+                        typeof v === "string" ? `"${v.replace(/"/g, '""')}"` : v
+                    ).join(",")
+                );
+                const csv = [headers.join(","), ...rows].join("\n");
+                const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+                const link = createElement("a", {
+                    href: URL.createObjectURL(blob),
+                    download: `flashcards_${language}.csv`
+                });
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                showToast("CSV Downloaded!", true);
+            });
+        }
+        
         function generatePopupCSS() {
             return `
                 :root {
@@ -2477,6 +2645,62 @@
                 option {
                     background: var(--background-color) !important;
                 }
+                
+                #flashcardPopupHeader {
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                    margin: 10px 0;
+                }
+                
+                #flashcardPagination {
+                    display: flex;
+                    gap: 10px;
+                    align-items: center;
+                }
+                
+                #flashcardTableContainer {
+                    height: 500px;
+                    overflow-y: auto;
+                }
+                
+                #flashcardTable {
+                    table-layout: fixed;
+                    width: 100%;
+                    border-collapse: separate;
+                    border-spacing: 10px 5px;
+                }
+                
+                #flashcardTable thead {
+                    position: sticky;
+                    top: 0px;
+                    background: var(--background-color);
+                }
+                
+                #flashcardTable td {
+                    white-space: nowrap;
+                    overflow: hidden;
+                    text-overflow: ellipsis;
+                }
+                
+                #flashcardTable th:nth-child(1),
+                #flashcardTable td:nth-child(1) {
+                    width: 20%;
+                }
+                
+                #flashcardTable th:nth-child(2),
+                #flashcardTable td:nth-child(2) {
+                    width: 20%;
+                }
+                
+                #flashcardTable th:nth-child(3),
+                #flashcardTable td:nth-child(3) {
+                    width: 60%;
+                }
+                
+                #flashcardPopupButtons {
+                    display: flex; justify-content: flex-end; margin: 10px 0;
+                }
             `;
         }
         
@@ -2503,9 +2727,17 @@
             className: "nav-button"
         });
         
+        const flashcardManagerButton = createElement("button", {
+            id: "flashcardManagerButton",
+            textContent: "📝",
+            title: "Flashcard Manager",
+            className: "nav-button"
+        });
+        
         addElementToNavBar(settingsButton);
         addElementToNavBar(downloadWordsButton);
         addElementToNavBar(ttsPlaygroundButton);
+        addElementToNavBar(flashcardManagerButton);
         
         const settingsPopup = createSettingsPopup();
         document.body.appendChild(settingsPopup);
@@ -2516,11 +2748,15 @@
         const ttsPopup = createTTSPlaygroundPopup();
         document.body.appendChild(ttsPopup);
         
+        const flashcardPopup = createFlashcardPopup();
+        document.body.appendChild(flashcardPopup);
+        
         const popupCSS = generatePopupCSS();
         applyCSS(popupCSS);
         setupSettingEventListeners();
         setupDownloadWordsEventListeners();
         setupTTSPlaygroundEventListeners();
+        setupFlashcardPopupEventListeners();
     }
     
     function setupReader() {
@@ -3622,14 +3858,6 @@
         }
         
         async function setupLLMs() {
-            ({ createClient } = await import('https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm'));
-            try {
-                supabase = createClient(settings.dbUrl, settings.dbKey);
-                console.log('Supabase initialized.');
-            } catch (err) {
-                console.error('Supabase initialization failed:', err);
-                supabase = null;
-            }
             let [llmProvider, llmModel] = settings.llmProviderModel.split(" ");
             let llmApiKey = settings.llmApiKey;
             
@@ -4287,7 +4515,7 @@
                 Input will be given as: 'Input: "word or phrase" Context: "sentence including the word or phrase"'
                 1. Determine the base, dictionary form of the word or phrase. This means using the singular form for nouns (e.g., "cat" instead of "cats") and the infinitive form for verbs (e.g., "run" instead of "ran"). For phrases, use the standard dictionary form. Address and explain the base form of the word or phrase directly, even if the input is in a conjugated or inflected form (e.g., if the input is "書いていました", use the base form "書く" instead of "書いていました"). This is especially important for idioms.
                 2. Provide the IPA pronunciation for the base form of the word or phrase. The IPA should be enclosed in square brackets (e.g., [prəˌnʌnsiˈeɪʃən]).
-                3. Provide a concise dictionary definition of the word/phrase as it is used within the given context in ${userLanguage}. This definition should be very brief, akin to a quick lookup in a dictionary (e.g., for a verb: '달리다', '성취하다'; for a noun: '사과', '번역가'), typically just a few words or a short phrase, **not a full explanatory sentence**.
+                3. Provide a concise dictionary definition of the word/phrase as it is used within the given context only in ${userLanguage}. This definition must reflect only the specific meaning relevant to the context (one or at most two closely related senses), not all possible meanings of the word. The definition should be concise and dictionary-style, expressed in a single short phrase or a few words.
                 4. Explain the contextual meaning of the word/phrase with more details in ${userLanguage}.
                 5. Generate a penetrating example sentence in ${lessonLanguage} to highlight word/phrase usage. The example sentence should first appear in ${lessonLanguage}, then its translation in ${userLanguage}.
                 6. Use the HTML format structure (Part of Speech, definition, explanation, and translation of example sentence in ${userLanguage}; base form, and original example sentence in ${lessonLanguage} or as appropriate):
@@ -4318,7 +4546,7 @@
                 User Input:  'Input: "lograr", Context: "Debemos lograr nuestros objetivos."'
                 Assistant Output:
                 <b>lograr</b> <span>[loˈɣɾaɾ]</span> <i>(verb)</i>
-                <p>To achieve, to attain.</p>
+                <p>To achieve</p>
                 <hr>
                 <p>This means to successfully reach or accomplish a goal. In context, it suggests the necessity to achieve our objectives.</p>
                 <hr>
@@ -4330,7 +4558,7 @@
                 User Input: 'Input: "imstande sein", Context: "Er war imstande, das Problem zu lösen."'
                 Assistant Output:
                 <b>imstande sein</b> <span>[ɪmˈʃtandə zaɪ̯n]</span> <i>(expression)</i>
-                <p>Être capable de, être en mesure de.</p>
+                <p>Être capable de</p>
                 <hr>
                 <p>Cela signifie être capable ou apte à faire quelque chose. Dans ce contexte, cela indique qu'il avait la capacité de résoudre le problème.</p>
                 <hr>
@@ -4342,7 +4570,7 @@
                 User Input: 'Input: "入っていました", Context: "ぬいぐるみ も 入っていました 。 これ は ミッキー です 。 ミッキーの ぬいぐるみ です 。 この ミッキー は 喋ります 。 お腹 を 押すと 喋ります 。"'
                 Assistant Output:
                 <b>入る</b> <span>[haɪru]</span> <i>(동사)</i>
-                <p>들어가다.</p>
+                <p>들어가다</p>
                 <hr>
                 <p>이것은 무언가가 어떤 공간이나 용기 안으로 이동하거나, 그 안에 존재하게 되는 것을 나타내는 동사입니다. '入っていました'는 이 동사의 과거형 겸양어입니다.</p>
                 <hr>
@@ -5028,7 +5256,15 @@
         applyCSS(css);
     }
     
-    function init() {
+    async function init() {
+        try {
+            supabase = createClient(settings.dbUrl, settings.dbKey);
+            console.log('Supabase initialized.');
+        } catch (err) {
+            console.error('Supabase initialization failed:', err);
+            supabase = null;
+        }
+        
         const url = document.URL.split("?")[0];
         if (url.includes("lingq")) {
             fixBugs();
@@ -5047,6 +5283,5 @@
             setupYoutubeEmbeddedPlayer();
         }
     }
-    
     init();
 })();

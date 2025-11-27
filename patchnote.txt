@@ -61,4 +61,7 @@
 - 8.2: Fixed issues caused by the LingQ website's layout change.
 - 8.3: Implemented the copy-by-clicking feature.
 
-- 9.0: Implemented a flashcard-making feature.
+- 9.0: Implemented a flashcard-making feature. Ensure language‑specific ttsVoice is properly initialized and saved. Improves the flashcard count badge logic.
+- 9.1: Exclude sentence translation response from DB, preserve class on regeneration, improve Japanese AI dictionary quality.
+- 9.2: Make the meaning field of word-messages editable (Ctrl + click). Word-message features (click events, flash card making) are now applied to all corresponding messages, not only the first one.
+- 9.3: Implement flashcard manager and CSV export.
