@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      9.4.0
+// @version      9.4.1
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @namespace https://greasyfork.org/users/1458847
@@ -1690,12 +1690,11 @@
                 createElement("div", {id: "flashcardDragHandle", className: "popup-drag-handle"},
                     createElement("h3", {textContent: "Flashcard Manager"})
                 ),
-                createElement("div", {style: "padding: 0 10px; width: 800px;"},
+                createElement("div", {style: "padding: 0 15px; width: 800px;"},
                     createElement("div", {id: "flashcardPopupHeader"},
                         createElement("span", {id: "flashcardCount"}, "Flashcards:"),
-                        createElement("input", {id: "flashcardSearchInput", className: "popup-input", type: "text", placeholder: "Search word or meaning..."}),
-                        paginationContainer,
-                        createElement("div", {id: "flashcardPagination"})
+                        createElement("input", {id: "flashcardSearchInput", type: "text", placeholder: "Search word or meaning..."}),
+                        paginationContainer
                     ),
                     flashcardTableContainer,
                     createElement("div", {className: "popup-row", style: "display: flex; justify-content: flex-end; gap: 10px; margin: 10px 0;"},
@@ -2721,7 +2720,7 @@
                     display: flex;
                     justify-content: space-between;
                     align-items: center;
-                    gap: 10px;
+                    gap: 15px;
                     margin: 10px 0;
                     height: 45px;
                 }
@@ -2729,12 +2728,13 @@
                 #flashcardSearchInput {
                     width: 300px;
                     margin-left: auto;
-                    flex-grow: 0;
+                    border: 1px solid #444 !important;
+                    padding: 3px 8px !important;
+                    border-radius: 4px !important;
                 }
                 
                 #flashcardPagination {
                     display: flex;
-                    gap: 10px;
                     align-items: center;
                 }
                 
@@ -2747,7 +2747,7 @@
                     table-layout: fixed;
                     width: 100%;
                     border-collapse: separate;
-                    border-spacing: 10px 5px;
+                    border-spacing: 0 5px;
                 }
                 
                 #flashcardTable thead {
@@ -2766,6 +2766,10 @@
                     overflow: hidden;
                     text-overflow: ellipsis;
                     font-size: 0.9em;
+                }
+                
+                #flashcardTable td + td {
+                    padding-left: 10px;
                 }
                 
                 #flashcardTable th:nth-child(1),
