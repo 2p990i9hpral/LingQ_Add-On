@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      9.3.0
+// @version      9.4.0
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @namespace https://greasyfork.org/users/1458847
@@ -642,6 +642,14 @@
         if (!anchorElement) return;
         
         anchorElement.insertAdjacentElement('afterend', element);
+    }
+    
+    function debounce(func, wait = 100) {
+        let timeout;
+        return (...args) => {
+            clearTimeout(timeout);
+            timeout = setTimeout(() => func.apply(this, args), wait);
+        };
     }
     
     /* Modules */
@@ -1659,6 +1667,25 @@
         }
         
         function createFlashcardPopup() {
+            const paginationContainer = createElement("div", {id: "flashcardPagination", style: "display:flex; align-items:center; justify-content:flex-end;"},
+                createElement("button", {id: "flashcardPaginationPrev", className: "popup-button", disabled: true}, "<"),
+                createElement("span", {id: "flashcardPageInfo", style: "width: 50px; text-align: center;"}, "1/1",),
+                createElement("button", {id: "flashcardPaginationNext", className: "popup-button", disabled: true}, ">")
+            );
+            
+            const flashcardTableContainer =  createElement("div", {id: "flashcardTableContainer"},
+                createElement("table", {id: "flashcardTable"},
+                    createElement("thead", {},
+                        createElement("tr", {},
+                            ...["Word", "Meaning", "Explanation"]
+                                .map(headerText => createElement("th", {}, headerText)
+                                )
+                        )
+                    ),
+                    createElement("tbody")
+                )
+            );
+            
             const popup = createElement("div", {id: "flashcardPopup", className: "popup"},
                 createElement("div", {id: "flashcardDragHandle", className: "popup-drag-handle"},
                     createElement("h3", {textContent: "Flashcard Manager"})
@@ -1666,23 +1693,12 @@
                 createElement("div", {style: "padding: 0 10px; width: 800px;"},
                     createElement("div", {id: "flashcardPopupHeader"},
                         createElement("span", {id: "flashcardCount"}, "Flashcards:"),
+                        createElement("input", {id: "flashcardSearchInput", className: "popup-input", type: "text", placeholder: "Search word or meaning..."}),
+                        paginationContainer,
                         createElement("div", {id: "flashcardPagination"})
                     ),
-                    createElement("div", {id: "flashcardTableContainer"},
-                        createElement("table", {id: "flashcardTable"},
-                            createElement("thead", {},
-                                createElement("tr", {},
-                                    ...["Word", "Meaning", "Explanation"]
-                                        .map(headerText => createElement("th", {}, headerText)
-                                    )
-                                )
-                            ),
-                            createElement("tbody")
-                        )
-                    ),
-                    createElement("div", {
-                            className: "popup-row",
-                            style: "display: flex; justify-content: flex-end; gap: 10px; margin: 10px 0;"},
+                    flashcardTableContainer,
+                    createElement("div", {className: "popup-row", style: "display: flex; justify-content: flex-end; gap: 10px; margin: 10px 0;"},
                         createElement("button", {id: "flashcardCsvDownload", className: "popup-button"}, "Export as CSV"),
                         createElement("button", {id: "closeFlashcardPopupBtn", className: "popup-button"}, "Close")
                     )
@@ -2394,6 +2410,89 @@
         }
         
         function setupFlashcardPopupEventListeners() {
+            function drawPagination(page, total) {
+                const totalPages = total > 0 ? Math.ceil(total / pageSize) : 1;
+                
+                const prevBtn = document.getElementById("flashcardPaginationPrev");
+                const nextBtn = document.getElementById("flashcardPaginationNext");
+                const pageInfo = document.getElementById("flashcardPageInfo");
+                
+                const noData = total === 0;
+                prevBtn.disabled = noData || page <= 1;
+                nextBtn.disabled = noData || page >= totalPages;
+                
+                if (noData) {
+                    pageInfo.textContent = "0/0";
+                } else {
+                    pageInfo.textContent = `${Math.min(page, totalPages)}/${totalPages}`;
+                }
+                
+                prevBtn.onclick = null;
+                nextBtn.onclick = null;
+                if (!noData && totalPages > 1) {
+                    prevBtn.onclick = () => {
+                        if (page > 1) {
+                            currentPage--;
+                            loadFlashcardPage(currentPage);
+                        }
+                    };
+                    nextBtn.onclick = () => {
+                        if (page < totalPages) {
+                            currentPage++;
+                            loadFlashcardPage(currentPage);
+                        }
+                    };
+                }
+            }
+            
+            async function loadFlashcardPage(page) {
+                const from = (page - 1) * pageSize;
+                const to = from + pageSize - 1;
+                
+                let queryBase = supabase
+                    .from("word_data")
+                    .select("word, meaning, explanation", { count: "exact" })
+                    .eq("flashcard", true)
+                    .eq("language", language);
+                
+                if (searchKeyword)
+                    queryBase = queryBase.or(`word.ilike.%${searchKeyword}%,meaning.ilike.%${searchKeyword}%`);
+                
+                const { data, error, count } = await queryBase
+                    .order(currentSortField, { ascending: currentSortOrder === "asc" })
+                    .range(from, to);
+                
+                if (error) {
+                    console.error("Flashcard fetch error:", error);
+                    return;
+                }
+                
+                filteredCount = count || 0;
+                flashcardTableBody.innerHTML = "";
+                data.forEach(row => {
+                    const tableRow = createElement("tr", {},
+                        createElement("td", { textContent: row.word || "", title: row.word || "" }),
+                        createElement("td", { textContent: row.meaning || "", title: row.meaning || "" }),
+                        createElement("td", { textContent: row.explanation || "", title: row.explanation || "" })
+                    );
+                    flashcardTableBody.appendChild(tableRow);
+                });
+                
+                drawPagination(page, filteredCount);
+                
+                if (!totalCount) {
+                    supabase
+                        .from("word_data")
+                        .select("*", { count: "exact", head: true })
+                        .eq("flashcard", true)
+                        .eq("language", language)
+                        .then(({ count }) => {
+                            totalCount = count || 0;
+                            countLabel.textContent = `Flashcards: ${totalCount}`;
+                        });
+                }
+            }
+            
             const flashcardButton = document.getElementById("flashcardManagerButton");
             const flashcardPopup = document.getElementById("flashcardPopup");
             const flashcardTableBody = flashcardPopup.querySelector("tbody");
@@ -2403,6 +2502,7 @@
             let currentPage = 1;
             const pageSize = 15;
             let totalCount = 0;
+            let filteredCount = 0;
             const language = getLessonLanguage();
             
             flashcardButton.addEventListener("click", async () => {
@@ -2415,76 +2515,47 @@
                 flashcardPopup.style.display = "none";
             });
             
-            async function loadFlashcardPage(page) {
-                const from = (page - 1) * pageSize;
-                const to = from + pageSize - 1;
-                
-                const { count, error: countError } = await supabase
-                    .from("word_data")
-                    .select("*", { count: "exact", head: true })
-                    .eq("flashcard", true)
-                    .eq("language", language);
-                if (countError) {
-                    console.error(countError);
-                    return;
-                }
-                totalCount = count;
-                countLabel.textContent = `Flashcards: ${totalCount}`;
-                
-                const { data, error } = await supabase
-                    .from("word_data")
-                    .select("word, meaning, explanation")
-                    .eq("flashcard", true)
-                    .eq("language", language)
-                    .range(from, to)
-                    .order("idx", { ascending: false });
-                
-                if (error) {
-                    console.error("Flashcard fetch error:", error);
-                    return;
-                }
-                
-                flashcardTableBody.innerHTML = "";
-                data.forEach(row => {
-                    const tableRow = createElement("tr", {},
-                        createElement("td", { textContent: row.word || "", title: row.word || "" }),
-                        createElement("td", { textContent: row.meaning || "", title: row.meaning || "" }),
-                        createElement("td", { textContent: row.explanation || "", title: row.explanation || "" })
-                    );
-                    flashcardTableBody.appendChild(tableRow);
-                });
-                
-                drawPagination(page);
-            }
+            let currentSortField = "idx";
+            let currentSortOrder = "desc";
+            let searchKeyword = "";
             
-            function drawPagination(page) {
-                const totalPages = Math.ceil(totalCount / pageSize);
-                paginationContainer.innerHTML = "";
-                if (totalPages <= 1) return;
-                
-                const prev = createElement("button", { className: "popup-button", textContent: "<" });
-                prev.disabled = page === 1;
-                prev.addEventListener("click", () => {
-                    if (page > 1) {
-                        currentPage--;
-                        loadFlashcardPage(currentPage);
+            const searchInput = document.getElementById("flashcardSearchInput");
+            const debouncedSearch = debounce(() => {
+                currentPage = 1;
+                searchKeyword = searchInput.value.trim();
+                loadFlashcardPage(currentPage);
+            }, 400);
+            searchInput.addEventListener("input", debouncedSearch);
+            
+            const tableHeaders = document.querySelectorAll("#flashcardTable thead th");
+            tableHeaders.forEach(th => {
+                th.addEventListener("click", () => {
+                    const fieldMap = { Word: "word", Meaning: "meaning", Explanation: "explanation" };
+                    const field = fieldMap[th.textContent.replace(/[▲▼]/g, "").trim()];
+                    if (!field) return;
+                    
+                    if (currentSortField !== field) {
+                        currentSortField = field;
+                        currentSortOrder = "asc";
+                    } else if (currentSortOrder === "asc") {
+                        currentSortOrder = "desc";
+                    } else {
+                        currentSortField = "idx";
+                        currentSortOrder = "desc";
                     }
-                });
-                paginationContainer.appendChild(prev);
-                
-                const pageInfo = createElement("span", { textContent: `${page} of ${totalPages}`});
-                paginationContainer.appendChild(pageInfo);
-                
-                const next = createElement("button", { className: "popup-button", textContent: ">" });
-                next.disabled = page >= totalPages;
-                next.addEventListener("click", () => {
-                    if (page < totalPages) {
-                        currentPage++;
-                        loadFlashcardPage(currentPage);
+                    
+                    tableHeaders.forEach(header => {
+                        header.textContent = header.textContent.replace(/[▲▼]/g, "").trim();
+                    });
+                    
+                    if (["word", "meaning", "explanation"].includes(currentSortField)) {
+                        const arrow = currentSortOrder === "asc" ? " ▲" : " ▼";
+                        th.textContent = th.textContent + arrow;
                     }
+                    
+                    loadFlashcardPage(1);
                 });
-                paginationContainer.appendChild(next);
-            }
+            });
             
             document.getElementById("flashcardCsvDownload").addEventListener("click", async () => {
                 const { data, error } = await supabase
@@ -2650,7 +2721,15 @@
                     display: flex;
                     justify-content: space-between;
                     align-items: center;
+                    gap: 10px;
                     margin: 10px 0;
+                    height: 45px;
+                }
+                
+                #flashcardSearchInput {
+                    width: 300px;
+                    margin-left: auto;
+                    flex-grow: 0;
                 }
                 
                 #flashcardPagination {
@@ -2660,7 +2739,7 @@
                 }
                 
                 #flashcardTableContainer {
-                    height: 500px;
+                    height: 430px;
                     overflow-y: auto;
                 }
                 
@@ -2677,10 +2756,16 @@
                     background: var(--background-color);
                 }
                 
+                #flashcardTable thead th {
+                    cursor: pointer;
+                    user-select: none;
+                }
+                
                 #flashcardTable td {
                     white-space: nowrap;
                     overflow: hidden;
                     text-overflow: ellipsis;
+                    font-size: 0.9em;
                 }
                 
                 #flashcardTable th:nth-child(1),
