@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      9.4.3
+// @version      9.4.4
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @namespace https://greasyfork.org/users/1458847
@@ -4503,14 +4503,15 @@
                                 const textToCopy = (() => {
                                     const clone = botMessageDiv.cloneNode(true);
                                     clone.querySelector(".flashcard-count-badge")?.remove();
-                                    return botMessageDiv.textContent;
-                                });
+                                    return clone.textContent;
+                                })();
+                                
                                 navigator.clipboard.writeText(textToCopy)
                                     .then(() => {
-                                        showToast("Message Copied!", true)
+                                        showToast("Message Copied!", true);
                                     })
                                     .catch(() => {
-                                        showToast("Failed to copy message.", false)
+                                        showToast("Failed to copy message.", false);
                                     });
                             });
                             messageButtonContainer.appendChild(copyButton);
