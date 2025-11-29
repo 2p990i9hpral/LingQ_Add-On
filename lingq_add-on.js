@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      9.4.1
+// @version      9.4.3
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @namespace https://greasyfork.org/users/1458847
@@ -641,7 +641,14 @@
         const anchorElement = document.querySelector('#app > .main-wrapper > [data-slot="sidebar-wrapper"] > header > div > a');
         if (!anchorElement) return;
         
-        anchorElement.insertAdjacentElement('afterend', element);
+        const headerDiv = anchorElement.parentElement;
+        const existingButtons = headerDiv.querySelectorAll('.nav-button');
+        
+        if (existingButtons.length > 0) {
+            existingButtons[existingButtons.length - 1].insertAdjacentElement('afterend', element);
+        } else {
+            anchorElement.insertAdjacentElement('afterend', element);
+        }
     }
     
     function debounce(func, wait = 100) {
@@ -1677,7 +1684,7 @@
                 createElement("table", {id: "flashcardTable"},
                     createElement("thead", {},
                         createElement("tr", {},
-                            ...["Word", "Meaning", "Explanation"]
+                            ...["", "Word", "Meaning", "Explanation"]
                                 .map(headerText => createElement("th", {}, headerText)
                                 )
                         )
@@ -2450,12 +2457,11 @@
                 
                 let queryBase = supabase
                     .from("word_data")
-                    .select("word, meaning, explanation", { count: "exact" })
+                    .select("idx, word, meaning, explanation", { count: "exact" })
                     .eq("flashcard", true)
                     .eq("language", language);
                 
-                if (searchKeyword)
-                    queryBase = queryBase.or(`word.ilike.%${searchKeyword}%,meaning.ilike.%${searchKeyword}%`);
+                if (searchKeyword) queryBase = queryBase.or(`word.ilike.%${searchKeyword}%,meaning.ilike.%${searchKeyword}%`);
                 
                 const { data, error, count } = await queryBase
                     .order(currentSortField, { ascending: currentSortOrder === "asc" })
@@ -2469,11 +2475,93 @@
                 filteredCount = count || 0;
                 flashcardTableBody.innerHTML = "";
                 data.forEach(row => {
+                    const deleteBtn = createElement("button", {
+                        className: "delete-row-btn",
+                        innerHTML: `<svg viewBox="6 6 12 12" xmlns="http://www.w3.org/2000/svg" stroke="currentColor"><path d="M17 17L7 7.00002M17 7L7.00001 17" stroke-width="2" stroke-linecap="round"/></svg>`
+                    });
+                    const deleteTd = createElement("td", {}, deleteBtn);
+                    
+                    const meaningTd = createElement("td", { textContent: row.meaning || "", title: row.meaning || "", style: "cursor: pointer;" });
+                    
                     const tableRow = createElement("tr", {},
+                        deleteTd,
                         createElement("td", { textContent: row.word || "", title: row.word || "" }),
-                        createElement("td", { textContent: row.meaning || "", title: row.meaning || "" }),
+                        meaningTd,
                         createElement("td", { textContent: row.explanation || "", title: row.explanation || "" })
                     );
+                    
+                    deleteBtn.addEventListener("click", async (ev) => {
+                        ev.stopPropagation();
+                        
+                        deleteBtn.disabled = true;
+                        const { error: updateError } = await supabase
+                            .from("word_data")
+                            .update({ flashcard: false })
+                            .eq("idx", row.idx);
+                        
+                        if (updateError) {
+                            console.error("Flashcard delete error:", updateError);
+                            deleteBtn.disabled = false;
+                        } else {
+                            tableRow.remove();
+                            totalCount--;
+                            filteredCount--;
+                            countLabel.textContent = `Flashcards: ${totalCount}`;
+                            
+                            if (flashcardTableBody.children.length === 0 && currentPage > 1) {
+                                currentPage--;
+                                loadFlashcardPage(currentPage);
+                            } else {
+                                drawPagination(currentPage, filteredCount);
+                            }
+                        }
+                    });
+                    
+                    meaningTd.addEventListener("click", () => {
+                        if (meaningTd.querySelector("input")) return;
+                        
+                        const currentText = meaningTd.textContent;
+                        const input = createElement("input", {
+                            type: "text",
+                            value: currentText,
+                            style: "width: 100%; border: none; outline: none;",
+                        });
+                        
+                        const saveMeaning = async () => {
+                            const newValue = input.value.trim();
+                            
+                            if (newValue === currentText) {
+                                meaningTd.textContent = currentText;
+                                return;
+                            }
+                            
+                            const { error: updateError } = await supabase
+                                .from("word_data")
+                                .update({ meaning: newValue })
+                                .eq("idx", row.idx);
+                            
+                            if (updateError) {
+                                console.error("Meaning update error:", updateError);
+                                meaningTd.textContent = currentText;
+                            } else {
+                                meaningTd.textContent = newValue;
+                                row.meaning = newValue;
+                            }
+                        };
+                        
+                        meaningTd.textContent = "";
+                        meaningTd.appendChild(input);
+                        input.focus();
+                        
+                        input.addEventListener("blur", () => saveMeaning());
+                        
+                        input.addEventListener("keydown", (e) => {
+                            if (e.key === "Enter") {
+                                input.blur();
+                            }
+                        });
+                    });
+                    
                     flashcardTableBody.appendChild(tableRow);
                 });
                 
@@ -2495,7 +2583,6 @@
             const flashcardButton = document.getElementById("flashcardManagerButton");
             const flashcardPopup = document.getElementById("flashcardPopup");
             const flashcardTableBody = flashcardPopup.querySelector("tbody");
-            const paginationContainer = document.getElementById("flashcardPagination");
             const countLabel = document.getElementById("flashcardCount");
             
             let currentPage = 1;
@@ -2739,7 +2826,7 @@
                 }
                 
                 #flashcardTableContainer {
-                    height: 430px;
+                    height: 435px;
                     overflow-y: auto;
                 }
                 
@@ -2748,11 +2835,12 @@
                     width: 100%;
                     border-collapse: separate;
                     border-spacing: 0 5px;
+                    padding: 0 5px;
                 }
                 
                 #flashcardTable thead {
                     position: sticky;
-                    top: 0px;
+                    top: 0;
                     background: var(--background-color);
                 }
                 
@@ -2774,7 +2862,7 @@
                 
                 #flashcardTable th:nth-child(1),
                 #flashcardTable td:nth-child(1) {
-                    width: 20%;
+                    width: 20px;
                 }
                 
                 #flashcardTable th:nth-child(2),
@@ -2784,7 +2872,17 @@
                 
                 #flashcardTable th:nth-child(3),
                 #flashcardTable td:nth-child(3) {
+                    width: 20%;
+                }
+                
+                #flashcardTable th:nth-child(4),
+                #flashcardTable td:nth-child(4) {
                     width: 60%;
+                }
+                
+                #flashcardTable .delete-row-btn {
+                    width: 10px;
+                    height: 10px;
                 }
                 
                 #flashcardPopupButtons {
@@ -4142,7 +4240,7 @@
                                 return;
                             }
                             
-                            navigator.clipboard.writeText(meaning)
+                            navigator.clipboard.writeText(meaningElem?.textContent?.trim() || "")
                                 .then(() => showToast("Meaning Copied!", true))
                                 .catch(() => showToast("Failed to copy meaning.", false));
                             
@@ -4604,7 +4702,7 @@
                 Input will be given as: 'Input: "word or phrase" Context: "sentence including the word or phrase"'
                 1. Determine the base, dictionary form of the word or phrase. This means using the singular form for nouns (e.g., "cat" instead of "cats") and the infinitive form for verbs (e.g., "run" instead of "ran"). For phrases, use the standard dictionary form. Address and explain the base form of the word or phrase directly, even if the input is in a conjugated or inflected form (e.g., if the input is "書いていました", use the base form "書く" instead of "書いていました"). This is especially important for idioms.
                 2. Provide the IPA pronunciation for the base form of the word or phrase. The IPA should be enclosed in square brackets (e.g., [prəˌnʌnsiˈeɪʃən]).
-                3. Provide a concise dictionary definition of the word/phrase as it is used within the given context only in ${userLanguage}. This definition must reflect only the specific meaning relevant to the context (one or at most two closely related senses), not all possible meanings of the word. The definition should be concise and dictionary-style, expressed in a single short phrase or a few words.
+                3. Provide a concise dictionary definition of the word or phrase in ${userLanguage} strictly limited to the single specific meaning used within the given context. This definition must exclude multiple synonyms or alternative senses and should be expressed as a single short phrase or a few words.
                 4. Explain the contextual meaning of the word/phrase with more details in ${userLanguage}.
                 5. Generate a penetrating example sentence in ${lessonLanguage} to highlight word/phrase usage. The example sentence should first appear in ${lessonLanguage}, then its translation in ${userLanguage}.
                 6. Use the HTML format structure (Part of Speech, definition, explanation, and translation of example sentence in ${userLanguage}; base form, and original example sentence in ${lessonLanguage} or as appropriate):
