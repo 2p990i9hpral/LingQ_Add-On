@@ -176,7 +176,7 @@ Here, you can view, edit, and manage all flashcards stored.
 You can import the CSV into Anki using a matching card template.  
 Follow the steps below to install and use the Anki template:
 
-1. Download and open the provided `LingQ Flashcard Deck.apkg` file.  
+1. Download and open the provided [LingQ Flashcard Deck.apkg](https://github.com/2p990i9hpral/LingQ_Add-On/raw/refs/heads/main/LingQ%20Flashcard%20Deck.apkg) file.  
    This will automatically add the "LingQ Flashcard" note type to your Anki collection.
 2. In Anki, go to **File -> Import**, and select the exported CSV file.
 3. When the Import dialog appears, set the following options:
