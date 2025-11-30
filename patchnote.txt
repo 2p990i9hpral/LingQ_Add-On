@@ -65,3 +65,5 @@
 - 9.1: Exclude sentence translation response from DB, preserve class on regeneration, improve Japanese AI dictionary quality.
 - 9.2: Make the meaning field of word-messages editable (Ctrl + click). Word-message features (click events, flash card making) are now applied to all corresponding messages, not only the first one.
 - 9.3: Implement flashcard manager and CSV export.
+- 9.4: Implement sorting/searching/deleting in the flashcard manager.
+- 9.5: Add the formatted context column to the flashcard export csv. Make a anki flashcard template.

@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      9.5.0
+// @version      9.5.1
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @namespace https://greasyfork.org/users/1458847
@@ -2644,7 +2644,7 @@
             });
             
             document.getElementById("flashcardCsvDownload").addEventListener("click", async () => {
-                function formatContext(context, originalWord, padding = 50) {
+                function formatContext(context, originalWord, padding = 100) {
                     if (!context || !originalWord) return "";
                     
                     const escapedWord = originalWord.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -2701,7 +2701,7 @@
                 const processedData = data.map(row => {
                     return {
                         ...row,
-                        formatted_context: formatContext(row.context, row.original_word, 50)
+                        formatted_context: formatContext(row.context, row.original_word)
                     };
                 });
                 
