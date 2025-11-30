@@ -32,7 +32,9 @@ It offers customizable layouts, appearance settings, vocabulary downloading tool
     -   An AI-powered chat widget for interacting with the lesson content.
     -   An AI-powered flashcard generation.
     -   An AI-based TTS model that substitutes original one.
--   **Enhanced YouTube player**
+-   **Flashcard Management:**
+    -   Create flashcards with a single click based on AI response.   
+- **Enhanced YouTube player**
     -   Turns on caption default.
     -   Disables the player controller.
     -   Adds a video progress indicator synced with the audio player's progress.
@@ -161,6 +163,28 @@ Library Lessons are enhanced with an indicator for known words.
 ### Generate a Lesson Audio with AI-based TTS
 
 <img src="images/lesson audio generation.png" width=800></br>
+
+### Flashcard Manager
+
+<img src="images/flashcard manager.png" width=600></br>
+
+Click the "📝" button to open the Flashcard Manager.  
+Here, you can view, edit, and manage all flashcards stored.
+
+<img src="images/anki flashcard format.png" width=600></br>
+
+You can import the CSV into Anki using a matching card template.  
+Follow the steps below to install and use the Anki template:
+
+1. Download and open the provided `LingQ Flashcard Deck.apkg` file.  
+   This will automatically add the "LingQ Flashcard" note type to your Anki collection.
+2. In Anki, go to **File -> Import**, and select the exported CSV file.
+3. When the Import dialog appears, set the following options:
+    - <img src="images/anki import settings.png" width=600></br>
+    - **Allow HTML in fields:** Enabled
+    - **Note Type:** `LingQ Flashcard`
+    - **Field mapping:** Verify that columns align correctly with each field .
+
 
 ## License
 

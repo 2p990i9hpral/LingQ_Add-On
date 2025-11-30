@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      9.4.4
+// @version      9.5.0
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @namespace https://greasyfork.org/users/1458847
@@ -2644,6 +2644,48 @@
             });
             
             document.getElementById("flashcardCsvDownload").addEventListener("click", async () => {
+                function formatContext(context, originalWord, padding = 50) {
+                    if (!context || !originalWord) return "";
+                    
+                    const escapedWord = originalWord.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                    const match = context.match(new RegExp(escapedWord, 'i'));
+                    
+                    if (!match) return context;
+                    
+                    const foundWord = match[0];
+                    const wordStart = match.index;
+                    const wordEnd = wordStart + foundWord.length;
+                    const totalLen = context.length;
+                    
+                    let start = wordStart - padding;
+                    let end = wordEnd + padding;
+                    
+                    if (start < 0) {
+                        end += Math.abs(start);
+                        start = 0;
+                    }
+                    
+                    if (end > totalLen) {
+                        start -= (end - totalLen);
+                        if (start < 0) start = 0;
+                        end = totalLen;
+                    }
+                    
+                    const slicedText = context.substring(start, end);
+                    
+                    const relativeStart = wordStart - start;
+                    const relativeEnd = relativeStart + foundWord.length;
+                    
+                    const before = slicedText.substring(0, relativeStart);
+                    const target = slicedText.substring(relativeStart, relativeEnd);
+                    const after = slicedText.substring(relativeEnd);
+                    
+                    const prefix = start > 0 ? "..." : "";
+                    const suffix = end < totalLen ? "..." : "";
+                    
+                    return `${prefix}${before}<b>${target}</b>${after}${suffix}`;
+                }
+                
                 const { data, error } = await supabase
                     .from("word_data")
                     .select("*")
@@ -2653,16 +2695,23 @@
                 
                 if (error) {
                     console.error("CSV export error:", error);
-                    showToast("Failed to export CSV", false);
                     return;
                 }
                 
-                const headers = Object.keys(data[0] || {});
-                const rows = data.map(row =>
+                const processedData = data.map(row => {
+                    return {
+                        ...row,
+                        formatted_context: formatContext(row.context, row.original_word, 50)
+                    };
+                });
+                
+                const headers = Object.keys(processedData[0] || {});
+                const rows = processedData.map(row =>
                     Object.values(row).map(v =>
                         typeof v === "string" ? `"${v.replace(/"/g, '""')}"` : v
                     ).join(",")
                 );
+                
                 const csv = [headers.join(","), ...rows].join("\n");
                 const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
                 const link = createElement("a", {
@@ -2672,7 +2721,6 @@
                 document.body.appendChild(link);
                 link.click();
                 document.body.removeChild(link);
-                showToast("CSV Downloaded!", true);
             });
         }
         
