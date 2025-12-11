@@ -4,9 +4,10 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      9.5.1
+// @version      9.6.0
 // @grant       GM_setValue
 // @grant       GM_getValue
+// @grant       GM_xmlhttpRequest
 // @namespace https://greasyfork.org/users/1458847
 // @downloadURL https://update.greasyfork.org/scripts/533096/LingQ%20Addon.user.js
 // @updateURL https://update.greasyfork.org/scripts/533096/LingQ%20Addon.meta.js
@@ -659,6 +660,89 @@
         };
     }
     
+    async function gmFetch(url, options) {
+        return new Promise((resolve, reject) => {
+            GM_xmlhttpRequest({
+                method: options.method || 'GET',
+                url: url,
+                headers: options.headers || {},
+                data: options.body,
+                onload: (res) => {
+                    resolve({
+                        ok: res.status >= 200 && res.status < 300,
+                        status: res.status,
+                        statusText: res.statusText,
+                        json: () => Promise.resolve(JSON.parse(res.responseText)),
+                        text: () => Promise.resolve(res.responseText)
+                    });
+                },
+                onerror: (err) => {
+                    reject(new Error(`GM_xmlhttpRequest failed: ${err.statusText || 'Unknown error'}`));
+                }
+            });
+        });
+    }
+    
+    function gmStream(url, options, onChunkReceived, onStreamEnd, onError) {
+        GM_xmlhttpRequest({
+            method: options.method || 'POST',
+            url: url,
+            headers: options.headers || {},
+            data: options.body,
+            responseType: 'stream',
+            onloadstart: (res) => {
+                if (!res.response) {
+                    onError(new Error("No response stream available"));
+                    return;
+                }
+                
+                const reader = res.response.getReader();
+                const decoder = new TextDecoder('utf-8');
+                let buffer = '';
+                let fullContent = '';
+                
+                (async () => {
+                    try {
+                        while (true) {
+                            const { done, value } = await reader.read();
+                            if (done) break;
+                            
+                            const chunk = decoder.decode(value, { stream: true });
+                            buffer += chunk;
+                            
+                            const lines = buffer.split('\n');
+                            buffer = lines.pop();
+                            
+                            for (const line of lines) {
+                                const trimmedLine = line.trim();
+                                if (!trimmedLine || !trimmedLine.startsWith('data: ')) continue;
+                                
+                                const data = trimmedLine.slice(6).trim();
+                                if (data === '[DONE]') continue;
+                                
+                                try {
+                                    const json = JSON.parse(data);
+                                    onChunkReceived(json);
+                                    if (json.choices?.[0]?.delta?.content) {
+                                        fullContent += json.choices[0].delta.content;
+                                    }
+                                } catch (e) {
+                                    console.warn('Stream parse error:', e);
+                                }
+                            }
+                        }
+                        onStreamEnd(fullContent);
+                    } catch (err) {
+                        onError(err);
+                    }
+                })();
+            },
+            onerror: (err) => {
+                onError(err);
+            }
+        });
+    }
+    
     /* Modules */
     
     function stopPlayingAudio(autioContext) {
@@ -952,7 +1036,19 @@
     }
     
     async function getOpenAIResponse(provider, apiKey, model, history) {
-        const api_url = provider === "openai" ? `https://api.openai.com/v1/chat/completions` : (provider === "google" ? "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions" : "");
+        let api_url;
+        switch (provider) {
+            case "openai":
+                api_url = `https://api.openai.com/v1/chat/completions`;
+                break;
+            case "google":
+                api_url = "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions";
+                break;
+            case "deepseek":
+                api_url = "https://api.deepseek.com/chat/completions";
+                break;
+        }
+        
         const body = {
             model: model,
             temperature: 0.5,
@@ -967,44 +1063,52 @@
         }
         
         try {
-            const response = await fetch(
-                api_url,
-                {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${apiKey}`
-                    },
-                    body: JSON.stringify(body)
-                }
-            );
+            const response = await gmFetch(api_url, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${apiKey}`
+                },
+                body: JSON.stringify(body)
+            });
             
             if (!response.ok) {
                 const errorData = await response.json();
-                console.error('OpenAI API error:', errorData);
-                return errorData.error.message;
+                console.error('API error:', errorData);
+                return errorData.error?.message || JSON.stringify(errorData);
             }
             
             const data = await response.json();
-            
             const [inputPrice, outputPrice] = getLLMPricing(settings.llmProviderModel);
             
-            const cachedTokens = data.usage.prompt_tokens_details ? data.usage.prompt_tokens_details.cached_tokens : 0;
-            const inputTokens = data.usage.prompt_tokens - cachedTokens;
-            const outputTokens = data.usage.completion_tokens;
+            const usage = data.usage || {};
+            const cachedTokens = usage.prompt_tokens_details?.cached_tokens || usage.prompt_cache_hit_tokens || 0;
+            const inputTokens = (usage.prompt_tokens || 0) - cachedTokens;
+            const outputTokens = usage.completion_tokens || 0;
             const approxCost = (cachedTokens * (inputPrice / 4) + inputTokens * inputPrice + outputTokens * outputPrice);
             console.log('Chat', `${model}, tokens: (${cachedTokens}/${inputTokens}/${outputTokens}), cost: $${approxCost.toFixed(6)}`);
             
             return data.choices[0]?.message?.content || "Sorry, could not get a response.";
             
         } catch (error) {
-            console.error('OpenAI API call failed:', error);
-            return "Sorry, something went wrong communicating with OpenAI.";
+            console.error('API call failed:', error);
+            return `Sorry, something went wrong communicating with ${provider}.`;
         }
     }
     
     async function streamOpenAIResponse(provider, apiKey, model, history, onChunkReceived, onStreamEnd, onError) {
-        const api_url = provider === "openai" ? `https://api.openai.com/v1/chat/completions` : (provider === "google" ? "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions" : "");
+        let api_url;
+        switch (provider) {
+            case "openai":
+                api_url = `https://api.openai.com/v1/chat/completions`;
+                break;
+            case "google":
+                api_url = "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions";
+                break;
+            case "deepseek":
+                api_url = "https://api.deepseek.com/chat/completions";
+                break;
+        }
         
         const body = {
             model: model,
@@ -1020,55 +1124,21 @@
             }
         }
         
-        let buffer = '';
-        let fullContent = '';
-        
         try {
-            const response = await fetch(api_url, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${apiKey}`,
+            gmStream(
+                api_url,
+                {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${apiKey}`,
+                    },
+                    body: JSON.stringify(body),
                 },
-                body: JSON.stringify(body),
-            });
-            
-            if (!response.ok) {
-                const errorData = await response.json();
-                throw new Error(errorData.error ? errorData.error.message : JSON.stringify(errorData));
-            }
-            
-            const reader = response.body.getReader();
-            const decoder = new TextDecoder('utf-8');
-            
-            while (true) {
-                const {done, value} = await reader.read();
-                if (done) break;
-                
-                const chunk = decoder.decode(value, {stream: true});
-                buffer += chunk;
-                
-                const lines = buffer.split('\n');
-                buffer = lines.pop();
-                
-                for (const line of lines) {
-                    if (line.trim() === '') continue;
-                    if (line.startsWith('data: ')) {
-                        const data = line.substring(6).trim();
-                        if (data === '[DONE]') continue;
-                        
-                        try {
-                            const json = JSON.parse(data);
-                            onChunkReceived(json);
-                            
-                            if (json.choices && json.choices.length > 0 && json.choices[0].delta && json.choices[0].delta.content) fullContent += json.choices[0].delta.content;
-                        } catch (parseError) {
-                            onError(new Error(`JSON parsing error: ${parseError.message}, Data: ${data}`));
-                        }
-                    }
-                }
-            }
-            onStreamEnd(fullContent);
+                onChunkReceived,
+                onStreamEnd,
+                onError
+            );
         } catch (error) {
             onError(error);
         }
@@ -1368,7 +1438,8 @@
                 {value: "openai gpt-4.1-nano", text: "OpenAI GPT-4.1 nano ($0.1/$0.4)"},
                 {value: "google gemini-2.5-flash", text: "Google Gemini 2.5 Flash ($0.3/$2.5)"},
                 {value: "google gemini-2.5-flash-lite", text: "Google Gemini 2.5 Flash Light ($0.1/$0.4)"},
-                {value: "google gemini-2.0-flash", text: "Google Gemini 2.0 Flash ($0.1/$0.4)"}
+                {value: "google gemini-2.0-flash", text: "Google Gemini 2.0 Flash ($0.1/$0.4)"},
+                {value: "deepseek deepseek-chat", text: "Deepseek ($0.28/$0.42)"}
             ], settings.llmProviderModel);
             
             const apiKeyContainer = createElement("div", {className: "popup-row"});
