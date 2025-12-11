@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      9.6.0
+// @version      9.6.1
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @grant       GM_xmlhttpRequest
@@ -683,63 +683,87 @@
         });
     }
     
-    function gmStream(url, options, onChunkReceived, onStreamEnd, onError) {
-        GM_xmlhttpRequest({
-            method: options.method || 'POST',
-            url: url,
-            headers: options.headers || {},
-            data: options.body,
-            responseType: 'stream',
-            onloadstart: (res) => {
-                if (!res.response) {
-                    onError(new Error("No response stream available"));
-                    return;
-                }
+    function gmStream(url, options, onChunkReceived) {
+        return new Promise((resolve, reject) => {
+            let fullContent = '';
+            let isResolved = false;
+            
+            const finish = () => {
+                if (isResolved) return;
+                isResolved = true;
+                resolve(fullContent);
+            };
+            
+            const req = GM_xmlhttpRequest({
+                method: options.method || 'POST',
+                url: url,
+                headers: options.headers || {},
+                data: options.body,
+                responseType: 'stream',
                 
-                const reader = res.response.getReader();
-                const decoder = new TextDecoder('utf-8');
-                let buffer = '';
-                let fullContent = '';
-                
-                (async () => {
-                    try {
-                        while (true) {
-                            const { done, value } = await reader.read();
-                            if (done) break;
-                            
-                            const chunk = decoder.decode(value, { stream: true });
-                            buffer += chunk;
-                            
-                            const lines = buffer.split('\n');
-                            buffer = lines.pop();
-                            
-                            for (const line of lines) {
-                                const trimmedLine = line.trim();
-                                if (!trimmedLine || !trimmedLine.startsWith('data: ')) continue;
+                onloadstart: (res) => {
+                    if (!res.response) {
+                        return;
+                    }
+                    
+                    const reader = res.response.getReader();
+                    const decoder = new TextDecoder('utf-8');
+                    let buffer = '';
+                    
+                    (async () => {
+                        try {
+                            while (true) {
+                                const { done, value } = await reader.read();
                                 
-                                const data = trimmedLine.slice(6).trim();
-                                if (data === '[DONE]') continue;
+                                if (value) {
+                                    const chunk = decoder.decode(value, { stream: true });
+                                    buffer += chunk;
+                                    
+                                    const lines = buffer.split('\n');
+                                    buffer = lines.pop();
+                                    
+                                    lines.forEach(line => {
+                                        const trimmed = line.trim();
+                                        if (!trimmed.startsWith('data: ')) return;
+                                        
+                                        const data = trimmed.slice(6).trim();
+                                        if (data === '[DONE]') return;
+                                        
+                                        try {
+                                            const json = JSON.parse(data);
+                                            onChunkReceived(json);
+                                            
+                                            if (json.choices?.[0]?.delta?.content) {
+                                                fullContent += json.choices[0].delta.content;
+                                            }
+                                        } catch (e) {
+                                        }
+                                    });
+                                }
                                 
-                                try {
-                                    const json = JSON.parse(data);
-                                    onChunkReceived(json);
-                                    if (json.choices?.[0]?.delta?.content) {
-                                        fullContent += json.choices[0].delta.content;
-                                    }
-                                } catch (e) {
-                                    console.warn('Stream parse error:', e);
+                                if (done) {
+                                    finish();
+                                    break;
                                 }
                             }
+                        } catch (e) {
+                            console.warn("Stream reading paused/error", e);
                         }
-                        onStreamEnd(fullContent);
-                    } catch (err) {
-                        onError(err);
-                    }
-                })();
-            },
-            onerror: (err) => {
-                onError(err);
-            }
+                    })();
+                },
+                
+                onload: () => {
+                    finish();
+                },
+                
+                onerror: (err) => {
+                    if (!isResolved) reject(new Error("Network Error"));
+                },
+                
+                ontimeout: () => {
+                    if (!isResolved) reject(new Error("Request Timed Out"));
+                }
+            });
         });
     }
     
@@ -1099,46 +1123,31 @@
     async function streamOpenAIResponse(provider, apiKey, model, history, onChunkReceived, onStreamEnd, onError) {
         let api_url;
         switch (provider) {
-            case "openai":
-                api_url = `https://api.openai.com/v1/chat/completions`;
-                break;
-            case "google":
-                api_url = "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions";
-                break;
-            case "deepseek":
-                api_url = "https://api.deepseek.com/chat/completions";
-                break;
+            case "openai": api_url = "https://api.openai.com/v1/chat/completions"; break;
+            case "google": api_url = "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions"; break;
+            case "deepseek": api_url = "https://api.deepseek.com/chat/completions"; break;
         }
         
         const body = {
             model: model,
             temperature: 0.5,
             messages: history,
-            stream: true,
+            stream: true
         };
+        
         if (provider === "google" && model.includes("2.5")) body.reasoning_effort = "none";
-        if (provider === "openai" && model.includes("gpt-5")) {
-            if (model.includes("gpt-5-mini") || model.includes("gpt-5-nano")) {
-                body.reasoning_effort = "minimal";
-                body.temperature = 1;
-            }
-        }
         
         try {
-            gmStream(
-                api_url,
-                {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${apiKey}`,
-                    },
-                    body: JSON.stringify(body),
+            const finalContent = await gmStream(api_url, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${apiKey}`
                 },
-                onChunkReceived,
-                onStreamEnd,
-                onError
-            );
+                body: JSON.stringify(body)
+            }, onChunkReceived);
+            
+            onStreamEnd(finalContent);
         } catch (error) {
             onError(error);
         }
@@ -4568,8 +4577,7 @@
                     return messageDiv;
                 }
                 
-                async function callStreamOpenAI(botMessageDiv, chatContainer, focus, onStreamCompleted = () => {
-                }) {
+                async function callStreamOpenAI(botMessageDiv, chatContainer, focus, onStreamCompleted = () => {}) {
                     const userInput = document.getElementById("user-input");
                     const sendButton = document.getElementById("send-button");
                     
