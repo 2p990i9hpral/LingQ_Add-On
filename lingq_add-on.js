@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      9.6.2
+// @version      9.6.3
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @grant       GM_xmlhttpRequest
@@ -4340,6 +4340,10 @@
                                     meaningElem.textContent = newValue;
                                     
                                     if (save && newValue !== currentText) {
+                                        navigator.clipboard.writeText(newValue)
+                                            .then(() => showToast("Meaning Copied!", true))
+                                            .catch(() => showToast("Failed to copy meaning.", false));
+                                        
                                         const storedIdx = botMessageDiv.dataset.wordIdx;
                                         if (storedIdx) {
                                             const { error: updateError } = await supabase
@@ -5557,23 +5561,32 @@
     }
     
     function setupYoutubeEmbeddedPlayer() {
+        function isTargetOrigin() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const origin = urlParams.get('origin');
+            
+            return origin === 'https://www.lingq.com';
+        }
+        
+        if (!isTargetOrigin()) return;
+        
         const css = `
-            .ytp-pause-overlay-container{
+            #player-control-overlay > div > player-fullscreen-controls > player-fullscreen-action-menu > div > div {
                 display: none !important;
             }
-
-            .ytp-watermark{
+            #player-control-overlay > div > div.player-controls-background-container > div.player-controls-background {
                 display: none !important;
             }
-
-            .ytp-paid-content-overlay{
+            #player-control-overlay > div > div:nth-child(5) > player-middle-controls {
                 display: none !important;
             }
-
-            .caption-window {
-                display: unset !important;
+            .ytp-paid-content-overlay, .ytmPaidContentOverlayHost {
+                display: none !important;
             }
-            `;
+            #player-controls {
+                height: 60px;
+            }
+        `;
         applyCSS(css);
     }
     
