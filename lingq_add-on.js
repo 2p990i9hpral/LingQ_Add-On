@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      9.6.3
+// @version      9.6.4
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @grant       GM_xmlhttpRequest
@@ -17,6 +17,7 @@
 (function () {
     "use strict";
     
+    console.log("window.supabase 상태:", window.supabase);
     const createClient = window.supabase.createClient;
     
     const storage = {
@@ -1078,7 +1079,7 @@
             temperature: 0.5,
             messages: history
         };
-        if (provider === "google" && model.includes("2.5")) body.reasoning_effort = "none";
+        if (provider === "google" && (model.includes("2.5") || model.includes("3"))) body.reasoning_effort = "none";
         if (provider === "openai" && model.includes("gpt-5")) {
             if (model.includes("gpt-5-mini") || model.includes("gpt-5-nano")) {
                 body.reasoning_effort = "minimal";
@@ -1451,6 +1452,7 @@
                 {value: "openai gpt-5-nano", text: "OpenAI GPT-5 nano ($0.05/$0.4)"},
                 {value: "openai gpt-4.1-mini", text: "OpenAI GPT-4.1 mini ($0.4/$1.6)"},
                 {value: "openai gpt-4.1-nano", text: "OpenAI GPT-4.1 nano ($0.1/$0.4)"},
+                {value: "google gemini-3-flash-preview", text: "Google Gemini 3.0 Flash ($0.5/$3.0)"},
                 {value: "google gemini-2.5-flash", text: "Google Gemini 2.5 Flash ($0.3/$2.5)"},
                 {value: "google gemini-2.5-flash-lite", text: "Google Gemini 2.5 Flash Light ($0.1/$0.4)"},
                 {value: "google gemini-2.0-flash", text: "Google Gemini 2.0 Flash ($0.1/$0.4)"},
