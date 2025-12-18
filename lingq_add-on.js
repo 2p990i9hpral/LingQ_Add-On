@@ -4,21 +4,19 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      9.6.4
+// @version      9.6.5
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @grant       GM_xmlhttpRequest
+// @require https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js
 // @namespace https://greasyfork.org/users/1458847
 // @downloadURL https://update.greasyfork.org/scripts/533096/LingQ%20Addon.user.js
 // @updateURL https://update.greasyfork.org/scripts/533096/LingQ%20Addon.meta.js
-// @require https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js
 // ==/UserScript==
 
 (function () {
     "use strict";
-    
-    console.log("window.supabase 상태:", window.supabase);
-    const createClient = window.supabase.createClient;
+    const createClient = supabase.createClient;
     
     const storage = {
         get: (key, defaultValue) => {
@@ -102,7 +100,7 @@
         }
     });
     
-    let supabase;
+    let supabaseClient;
     
     const openaiVoiceOptions = [
         {value: "random", text: "Random"},
@@ -2145,7 +2143,7 @@
                         console.error("Connection test error:", error);
                         alert("❌ Invalid Supabase credentials or unable to connect.");
                     } else {
-                        supabase = supabaseTest;
+                        supabaseClient = supabaseTest;
                         alert("✅ Supabase connection successful!");
                     }
                 } catch (err) {
@@ -2543,7 +2541,7 @@
                 const from = (page - 1) * pageSize;
                 const to = from + pageSize - 1;
                 
-                let queryBase = supabase
+                let queryBase = supabaseClient
                     .from("word_data")
                     .select("idx, word, meaning, explanation", { count: "exact" })
                     .eq("flashcard", true)
@@ -2582,7 +2580,7 @@
                         ev.stopPropagation();
                         
                         deleteBtn.disabled = true;
-                        const { error: updateError } = await supabase
+                        const { error: updateError } = await supabaseClient
                             .from("word_data")
                             .update({ flashcard: false })
                             .eq("idx", row.idx);
@@ -2623,7 +2621,7 @@
                                 return;
                             }
                             
-                            const { error: updateError } = await supabase
+                            const { error: updateError } = await supabaseClient
                                 .from("word_data")
                                 .update({ meaning: newValue })
                                 .eq("idx", row.idx);
@@ -2656,7 +2654,7 @@
                 drawPagination(page, filteredCount);
                 
                 if (!totalCount) {
-                    supabase
+                    supabaseClient
                         .from("word_data")
                         .select("*", { count: "exact", head: true })
                         .eq("flashcard", true)
@@ -2774,7 +2772,7 @@
                     return `${prefix}${before}<b>${target}</b>${after}${suffix}`;
                 }
                 
-                const { data, error } = await supabase
+                const { data, error } = await supabaseClient
                     .from("word_data")
                     .select("*")
                     .eq("flashcard", true)
@@ -4348,7 +4346,7 @@
                                         
                                         const storedIdx = botMessageDiv.dataset.wordIdx;
                                         if (storedIdx) {
-                                            const { error: updateError } = await supabase
+                                            const { error: updateError } = await supabaseClient
                                                 .from("word_data")
                                                 .update({ meaning: newValue })
                                                 .eq("idx", storedIdx);
@@ -4409,12 +4407,12 @@
                             .catch(() => showToast("Failed to copy meaning.", false));
                     }
                     
-                    if (supabase) {
+                    if (supabaseClient) {
                         wordElem.addEventListener("click", async (e) => {
                             const existingPopup = document.getElementById("flashcard-popup");
                             if (existingPopup) existingPopup.remove();
                             
-                            const {data, error} = await supabase
+                            const {data, error} = await supabaseClient
                                 .from("word_data")
                                 .select("*")
                                 .eq("word", word)
@@ -4444,7 +4442,7 @@
                                     deleteBtn.addEventListener("click", async (ev) => {
                                         ev.stopPropagation();
                                         deleteBtn.disabled = true;
-                                        const {error: updateError} = await supabase
+                                        const {error: updateError} = await supabaseClient
                                             .from("word_data")
                                             .update({flashcard: false})
                                             .eq("idx", row.idx)
@@ -4487,7 +4485,7 @@
                             chatContainer.addEventListener("scroll", closePopup);
                         });
                         
-                        supabase
+                        supabaseClient
                             .from("word_data")
                             .select("*", {count: "exact", head: true})
                             .eq("word", word)
@@ -4521,7 +4519,7 @@
                             flashcard: false
                         };
                         
-                        supabase
+                        supabaseClient
                             .from("word_data")
                             .insert([newItem])
                             .select("idx")
@@ -4548,7 +4546,7 @@
                                         return;
                                     }
                                     
-                                    const { error: updateError } = await supabase
+                                    const { error: updateError } = await supabaseClient
                                         .from("word_data")
                                         .update({ flashcard: true })
                                         .eq("idx", targetIdx);
@@ -5594,11 +5592,11 @@
     
     async function init() {
         try {
-            supabase = createClient(settings.dbUrl, settings.dbKey);
+            supabaseClient = createClient(settings.dbUrl, settings.dbKey);
             console.log('Supabase initialized.');
         } catch (err) {
             console.error('Supabase initialization failed:', err);
-            supabase = null;
+            supabaseClient = null;
         }
         
         const url = document.URL.split("?")[0];
