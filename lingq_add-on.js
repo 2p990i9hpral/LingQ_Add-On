@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      9.6.5
+// @version      9.6.6
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @grant       GM_xmlhttpRequest
@@ -1133,8 +1133,7 @@
             messages: history,
             stream: true
         };
-        
-        if (provider === "google" && model.includes("2.5")) body.reasoning_effort = "none";
+        if (provider === "google" && (model.includes("2.5") || model.includes("3"))) body.reasoning_effort = "none";
         if (provider === "openai" && model.includes("gpt-5")) {
             if (model.includes("gpt-5-mini") || model.includes("gpt-5-nano")) {
                 body.reasoning_effort = "minimal";
