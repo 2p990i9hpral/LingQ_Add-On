@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      9.7.0
+// @version      9.7.1
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @grant       GM_xmlhttpRequest
@@ -3678,7 +3678,7 @@
         }
 
         .reader-component > :is(.nav--left, .nav--right) {
-            display: none;
+            visibility: hidden;
         }
 
         .reader-component > div > a.button > span {
