@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      9.6.6
+// @version      9.7.0
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @grant       GM_xmlhttpRequest
@@ -57,6 +57,7 @@
         autoFinishing: false,
         focusPlayingSentence: false,
         showTranslation: false,
+        useScroll: false,
         
         keyboardShortcut: false,
         shortcutVideoFullscreen: 'p',
@@ -1409,6 +1410,7 @@
             addCheckbox(container1, "autoFinishingCheckbox", "Finish Lesson Automatically", settings.autoFinishing);
             addCheckbox(container1, "focusPlayingSentenceCheckbox", "Focus on Playing Sentence", settings.focusPlayingSentence);
             addCheckbox(container1, "showTranslationCheckbox", "Show Translation Automatically", settings.showTranslation);
+            addCheckbox(container1, "useScrollCheckbox", "Use Scroll", settings.useScroll);
             
             columns.appendChild(container1);
             
@@ -2049,6 +2051,11 @@
                 settings.showTranslation = event.target.checked
             });
             
+            const useScrollCheckbox = document.getElementById("useScrollCheckbox");
+            useScrollCheckbox.addEventListener('change', (event) => {
+                settings.useScroll = event.target.checked
+            });
+            
             function setupShortcutInput(inputId, settingKey) {
                 const input = document.getElementById(inputId);
                 if (!input) return;
@@ -2232,6 +2239,7 @@
                 document.getElementById("autoFinishingCheckbox").checked = defaults.autoFinishing;
                 document.getElementById("focusPlayingSentenceCheckbox").checked = defaults.focusPlayingSentence;
                 document.getElementById("showTranslationCheckbox").checked = defaults.showTranslation;
+                document.getElementById("useScrollCheckbox").checked = defaults.useScroll;
                 
                 document.getElementById("keyboardShortcutCheckbox").value = defaults.keyboardShortcut;
                 document.getElementById("shortcutVideoFullscreenInput").value = defaults.shortcutVideoFullscreen;
@@ -3552,7 +3560,7 @@
         }
 
         .reader-container-wrapper {
-            height: 100% !important;
+            height: calc(${settings.useScroll ? '100%':  '100% - 30px'}) !important;
         }
 
         .widget-area {
@@ -3669,7 +3677,7 @@
             align-items: baseline;
         }
 
-        .reader-component > .nav--right {
+        .reader-component > :is(.nav--left, .nav--right) {
             display: none;
         }
 
@@ -3691,8 +3699,7 @@
         .reader-container {
             margin: 0 !important;
             float: left !important;
-            columns: unset !important;
-            overflow-y: scroll !important;
+            ${settings.useScroll? `columns: unset !important; overflow-y: scroll !important;` : ''}
             max-width: unset !important;
         }
 
@@ -3988,7 +3995,7 @@
                 src = src.replace("disablekb=1", "disablekb=0");
                 src = src.replace("autoplay=0", "autoplay=1");
                 src = src + "&cc_load_policy=1";
-                src = src + "&controls=0";
+                // src = src + "&controls=0";
                 iframe.setAttribute("src", src);
                 
                 const modalRelative = iframe.closest('.modal-content > .relative');
@@ -4169,6 +4176,20 @@
                         changeTranslationColor(node);
                         await waitForElement('.sentence-text p', 10000);
                         generateLessonSummary(node);
+                        
+                        const wrapper = await waitForElement('.reader-container-wrapper', 1000);
+                        if (wrapper) {
+                            const nextButton = createElement('button', {
+                                style: `display: flex; justify-content: center; width: 100%; stroke: var(--font-color)`,
+                                innerHTML: `
+                                <svg width="26" height="26" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+                                    <polyline fill="none" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" stroke-miterlimit="10" class="is-stroke" points="27.5,9.5 16.5,20.5 4.5,10.5">
+                                    </polyline>
+                                </svg>`,
+                            });
+                            nextButton.addEventListener('click', finishLesson);
+                            wrapper.appendChild(nextButton);
+                        }
                     });
                 });
             });
@@ -4988,10 +5009,11 @@
                 # Plain Text Input (Conversational/Freetext)
                 Remember the initial 'Input: "word or phrase" Context: "sentence..."' or 'Input: "sentence(s)"'. This initial input and its associated context are vital for understanding follow-up questions in this conversational phase.
                 ## Responsibility
-                - Ensure that all responses are in raw HTML as plain text. This means your entire response should be a string of HTML. Do not use Markdown syntax (e.g., '# H1', '**Bold**', '*Italic*', '> blockquote', '---', '[text](url)'), do not wrap your HTML in Markdown code blocks (e.g., \`\`\`html ... \`\`\`).
+                - Ensure that all responses are in raw HTML as plain text. This means your entire response should be a string of HTML. Markdown syntax (e.g., '# H1', '**Bold**', '*Italic*', '> blockquote', '---', '[text](url)'), do not wrap your HTML in Markdown code blocks (e.g., \`\`\`html ... \`\`\`) is not allowed.
                 ## Response
                 - If a user's plain text query refers to a word, phrase, concept, or asks a question that seems related to the initial structured input (the one with "Input:" and/or "Context:"), you MUST assume they are referring back to that specific initial input and its context, even if they don't explicitly state "in the previous context," "about the word we just discussed," or similar phrases. Use your knowledge of that initial input to provide a relevant and contextual answer.
                 - For general queries clearly not related to the initial input, answer as a general assistant.
+                - Do not start your response with a preface such as "Here's what I know:", "As a language model, " or "Here's what I think:".
                 ## Examples
                 ### Example 1: Plain Text Input (User Language: English) - General Query
                 User Input: "What's the weather like in London today?"
