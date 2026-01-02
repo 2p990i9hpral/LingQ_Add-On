@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      9.7.3
+// @version      9.8.0
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @grant       GM_xmlhttpRequest
@@ -69,6 +69,7 @@
         shortcutCopySelected: 'c',
         shortcutMeaningInput: '`',
         shortcutChatInput: 'q',
+        shortcutFlashcard: 'r',
         
         chatWidget: false,
         llmProviderModel: "openai gpt-4.1-nano",
@@ -1432,6 +1433,7 @@
             addShortcutInput(shortcutSection, "shortcutCopySelectedInput", "Copy Selected Text:", settings.shortcutCopySelected);
             addShortcutInput(shortcutSection, "shortcutMeaningInput", "Meaning Input Focus:", settings.shortcutMeaningInput);
             addShortcutInput(shortcutSection, "shortcutChatInput", "Chat Input Focus:", settings.shortcutChatInput);
+            addShortcutInput(shortcutSection, "shortcutFlashcard", "Make a flashcard:", settings.shortcutFlashcard);
             
             container2.appendChild(shortcutSection);
             
@@ -2089,6 +2091,7 @@
             setupShortcutInput("shortcutCopySelectedInput", "shortcutCopySelected");
             setupShortcutInput("shortcutMeaningInput", "shortcutMeaningInput");
             setupShortcutInput("shortcutChatInput", "shortcutChatInput");
+            setupShortcutInput("shortcutFlashcard", "shortcutFlashcard");
             
             const chatWidgetCheckbox = document.getElementById("chatWidgetCheckbox");
             chatWidgetCheckbox.addEventListener('change', (event) => {
@@ -2244,6 +2247,7 @@
                 document.getElementById("shortcutCopySelectedInput").value = defaults.shortcutCopySelected;
                 document.getElementById("shortcutMeaningInput").value = defaults.shortcutMeaningInput;
                 document.getElementById("shortcutChatInput").value = defaults.shortcutChatInput;
+                document.getElementById("shortcutFlashcard").value = defaults.shortcutFlashcard;
                 
                 document.getElementById("chatWidgetCheckbox").value = defaults.chatWidget;
                 document.getElementById("llmProviderModelSelector").value = defaults.llmProviderModel;
@@ -3961,6 +3965,7 @@
                     [settings.shortcutVideoFullscreen]: () => clickElement(".modal-section > div > button:nth-child(2)"), // video full screen toggle
                     [settings.shortcutMeaningInput]: () => focusElement(".reference-input-text"), // Move cursor to meaning input
                     [settings.shortcutChatInput]: () => focusElement("#user-input"), // Move cursor to the chat widget input
+                    [settings.shortcutFlashcard]: () => clickElement("#chat-container .word-message:last-child .save-flashcard-button"), // Make a flashcard
                     [settings.shortcutTTSPlay]: () => clickElement(".is-tts"), // Play tts audio
                     [settings.shortcutTranslator]: () => clickElement(".dictionary-resources > a:nth-last-child(1)"), // Open Translator
                     [settings.shortcutBackward5s]: () => clickElement(".audio-player--controllers > div:nth-child(1) > a"), // 5 sec Backward
@@ -4514,21 +4519,14 @@
                             flashcard: false
                         };
                         
-                        supabaseClient
-                            .from("word_data")
-                            .insert([newItem])
-                            .select("idx")
-                            .then(({data: inserted, error: insertError}) => {
-                                if (insertError) console.error("Insert error:", insertError);
-                                
-                                botMessageDiv.dataset.wordIdx = inserted[0].idx;
-                            });
-                        
                         const messageButtonContainer = botMessageDiv.querySelector(".message-button-container");
-                        if (!messageButtonContainer.querySelector(".save-flashcard-button")) {
-                            const saveFlashcardButton = createElement("button", {
+                        let saveFlashcardButton = messageButtonContainer.querySelector(".save-flashcard-button");
+                        
+                        if (!saveFlashcardButton) {
+                            saveFlashcardButton = createElement("button", {
                                 className: "message-button save-flashcard-button",
-                                innerHTML: `<svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="transparent" stroke="currentColor"><g id="SVGRepo_iconCarrier"> <path d="M16 3.98999H8C6.93913 3.98999 5.92178 4.41135 5.17163 5.1615C4.42149 5.91164 4 6.92912 4 7.98999V17.99C4 19.0509 4.42149 20.0682 5.17163 20.8184C5.92178 21.5685 6.93913 21.99 8 21.99H16C17.0609 21.99 18.0783 21.5685 18.8284 20.8184C19.5786 20.0682 20 19.0509 20 17.99V7.98999C20 6.92912 19.5786 5.91164 18.8284 5.1615C18.0783 4.41135 17.0609 3.98999 16 3.98999Z" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"></path> <path d="M9 2V7" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"></path> <path d="M15 2V7" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"></path> <path d="M8 16H14" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"></path> <path d="M8 12H16" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"></path> </g></svg>`
+                                innerHTML: `<svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="transparent" stroke="currentColor"><g id="SVGRepo_iconCarrier"> <path d="M16 3.98999H8C6.93913 3.98999 5.92178 4.41135 5.17163 5.1615C4.42149 5.91164 4 6.92912 4 7.98999V17.99C4 19.0509 4.42149 20.0682 5.17163 20.8184C5.92178 21.5685 6.93913 21.99 8 21.99H16C17.0609 21.99 18.0783 21.5685 18.8284 20.8184C19.5786 20.0682 20 19.0509 20 17.99V7.98999C20 6.92912 19.5786 5.91164 18.8284 5.1615C18.0783 4.41135 17.0609 3.98999 16 3.98999Z" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"></path> <path d="M9 2V7" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"></path> <path d="M15 2V7" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"></path> <path d="M8 16H14" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"></path> <path d="M8 12H16" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"></path> </g></svg>`,
+                                disabled: true
                             });
                             
                             saveFlashcardButton.addEventListener("click", async () => {
@@ -4566,6 +4564,20 @@
                             if (regenerateButton) messageButtonContainer.insertBefore(saveFlashcardButton, regenerateButton);
                             else messageButtonContainer.appendChild(saveFlashcardButton);
                         }
+                        
+                        supabaseClient
+                            .from("word_data")
+                            .insert([newItem])
+                            .select("idx")
+                            .then(({data: inserted, error: insertError}) => {
+                                if (insertError) {
+                                    console.error("Insert error:", insertError);
+                                    return;
+                                }
+                                
+                                botMessageDiv.dataset.wordIdx = inserted[0].idx;
+                                saveFlashcardButton.disabled = false;
+                            });
                     }
                 }
                 
