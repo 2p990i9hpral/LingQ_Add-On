@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      9.9.3
+// @version      9.9.5
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @grant       GM_xmlhttpRequest
@@ -3437,6 +3437,23 @@
                     padding: 10px 0;
                 }
                 
+                .summary-content {
+                    display: flex;
+                    flex-direction: column;
+                    gap: 10px;
+                }
+                
+                .summary-content b {
+                    font-size: 1.5rem;
+                }
+                
+                .close-summary-btn {
+                    padding: 5px 10px;
+                    border: 1px solid rgb(125, 125, 125, 50%);
+                    border-radius: 5px;
+                    margin: 0 10px 0 auto;
+                }
+                
                 .userToast {
                     position: absolute;
                     top: 15px;
@@ -3712,7 +3729,7 @@
                 columns: ${isPageMode ? "100vw auto" : "unset"} !important;
                 overflow-x: ${isPageMode ? "auto" : "unset"} !important;
                 overflow-y: ${isPageMode ? "visible" : "scroll"} !important;
-                height: ${isPageMode ? "100vh" : "100%"} !important;
+                height: ${isPageMode ? "calc((var(--article-height) - var(--header-height)) * 2)" : "100%"} !important;
             }
     
             /*video viewer*/
@@ -4165,18 +4182,17 @@
                             
                             const summaryElement = createElement("div", {
                                 className: "quick-summary",
-                                style: "position: relative;",
-                                innerHTML: quickSummary
+                                style: `position: relative; ${settings.prependSummary ? '': 'display: none;'}`
                             });
                             
-                            const closeButton = createElement("button", {
-                                className: "close-summary-btn",
-                                textContent: "✕",
-                                title: "Close Summary",
-                                style: "position: absolute; top: 10px; right: 15px; background: none; border: none; font-size: 1.2rem; color: var(--font-color); opacity: 0.5; cursor: pointer;"
+                            const contentWrapper = createElement("div", {
+                                className: "summary-content",
+                                innerHTML: quickSummary
                             });
+                            const closeButton = createElement("button", {className: "close-summary-btn"}, ["close"]);
+                            summaryElement.append(contentWrapper);
                             closeButton.addEventListener("click", () => {summaryElement.remove()});
-                            summaryElement.prepend(closeButton);
+                            summaryElement.append(closeButton);
                             
                             changeScrollAmount(".quick-summary", 0.2);
                             summaryElement.addEventListener('wheel', (event) => event.stopPropagation());
@@ -4198,7 +4214,12 @@
                             
                             const summaryElement = document.querySelector(".quick-summary");
                             if (summaryElement) {
-                                summaryElement.innerHTML = result;
+                                const contentWrapper = summaryElement.querySelector(".summary-content") || createElement("div", { className: "summary-content" });
+                                contentWrapper.innerHTML = result;
+                                
+                                if (!summaryElement.contains(contentWrapper)) {
+                                    summaryElement.appendChild(contentWrapper);
+                                }
                             }
                         }).catch(error => {
                         console.error("Failed to fetch summary:", error);
