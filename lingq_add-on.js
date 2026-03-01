@@ -4753,7 +4753,6 @@
                     const userInput = document.getElementById("user-input");
                     const sendButton = document.getElementById("send-button");
                     
-                    userInput.disabled = true;
                     sendButton.disabled = true;
                     
                     let fullBotResponse = '';
