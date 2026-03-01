@@ -4395,13 +4395,40 @@
                 }
                 
                 function getSelectedWithContext() {
+                    const TARGET_POSITION_RATIO = 0.2;
+                    const TARGET_CONTEXT_LENGTH = 200;
+                    
                     const selectedTextElement = document.querySelector(".reference-word");
-                    const contextElement = document.querySelector("span.selected-text, span.is-selected")?.closest(".sentence");
+                    const selectedEl = document.querySelector("span.is-selected, span.selected-text");
+                    const currentSentenceEl = selectedEl?.closest(".sentence");
                     
                     const selectedText = selectedTextElement ? extractTextFromDOM(selectedTextElement).trim() : "";
-                    const contextText = contextElement ? extractTextFromDOM(contextElement).trim() : "";
                     
-                    return {input: selectedText, context: contextText};
+                    if (!currentSentenceEl) return { input: selectedText, context: "" };
+                    
+                    const sentenceItems = [...currentSentenceEl.querySelectorAll(".sentence-item")];
+                    const positionRatio = sentenceItems.indexOf(selectedEl) / sentenceItems.length;
+                    const currentText = extractTextFromDOM(currentSentenceEl).trim();
+                    
+                    const allSentences = [...document.querySelectorAll(".sentence")];
+                    const currentIndex = allSentences.indexOf(currentSentenceEl);
+                    
+                    let prefixText = "";
+                    let suffixText = "";
+                    
+                    if (positionRatio < TARGET_POSITION_RATIO) {
+                        const prevText = extractTextFromDOM(allSentences[currentIndex - 1])?.trim() ?? "";
+                        prefixText = prevText.length > TARGET_CONTEXT_LENGTH ? prevText.slice(-TARGET_CONTEXT_LENGTH) : prevText;
+                    }
+                    
+                    if (positionRatio > 1 - TARGET_POSITION_RATIO) {
+                        const nextText = extractTextFromDOM(allSentences[currentIndex + 1])?.trim() ?? "";
+                        suffixText = nextText.length > TARGET_CONTEXT_LENGTH ? nextText.slice(0, TARGET_CONTEXT_LENGTH) : nextText;
+                    }
+                    
+                    const contextText = [prefixText, currentText, suffixText].filter(Boolean).join(" ");
+                    
+                    return { input: selectedText, context: contextText };
                 }
                 
                 let isProgrammaticReferenceWordUpdate = false;
@@ -4784,7 +4811,6 @@
                             botMessageDiv.innerHTML = cleanedContent;
                             
                             chatHistory = updateChatHistoryState(chatHistory, cleanedContent, "assistant");
-                            userInput.disabled = false;
                             sendButton.disabled = false;
                             if (focus) userInput.focus();
                             
@@ -4981,19 +5007,12 @@
                 # System Capabilities & Format Protocol
                 
                 ## Core Responsibility
-                You are an advanced linguistic assistant. Your goal is to provide precise, dictionary-grade instructional content.
                 - Tone: Objective, educational, and concise.
                 - Latency Control: Skip prefaces (e.g., "Here is the answer"). Output the result immediately.
                 
                 ## STRICT Output Formatting (HTML Only)
                 - Content Type: Raw HTML string.
                 - Forbidden: Markdown syntax (No \`\`\`html blocks, no bold, no # headers), conversational filler.
-                - Tag Usage:
-                  - <b>Target Terms</b>: Use for the base word, phrase, or key translation elements.
-                  - <i>Part of Speech</i>: Use for grammatical labels.
-                  - <p>Paragraphs</p>: Use for definitions and explanations.
-                  - <ul>/<li>Lists</li></ul>: Use for example sets.
-                  - <hr>: Use to separate logical sections.
                 - Spacing: Use <p> tags for structural spacing. Use <br> only for line breaks inside a specific block if absolutely necessary.
                 
                 ## Language Configuration
