@@ -3570,7 +3570,7 @@
             }
     
             .main-header section .dropdown-content {
-                position: fixed;
+                /*position: fixed;*/
             }
     
             .lesson-progress-section {
@@ -3729,7 +3729,7 @@
                 columns: ${isPageMode ? "100vw auto" : "unset"} !important;
                 overflow-x: ${isPageMode ? "auto" : "unset"} !important;
                 overflow-y: ${isPageMode ? "visible" : "scroll"} !important;
-                height: ${isPageMode ? "calc((var(--article-height) - var(--header-height)) * 2)" : "100%"} !important;
+                height: ${isPageMode ? "1800px" : "100%"} !important;
             }
     
             /*video viewer*/
@@ -4005,7 +4005,12 @@
                     [settings.shortcutVideoFullscreen]: () => clickElement(".modal-section > div > button:nth-child(2)"), // video full screen toggle
                     [settings.shortcutMeaningInput]: () => focusElement(".reference-input-text"), // Move cursor to meaning input
                     [settings.shortcutChatInput]: () => focusElement("#user-input"), // Move cursor to the chat widget input
-                    [settings.shortcutFlashcard]: () => clickElement("#chat-container .word-message:last-child .save-flashcard-button"), // Make a flashcard
+                    [settings.shortcutFlashcard]: () => {
+                        const wordMessages = document.querySelectorAll("#chat-container .word-message");
+                        if (wordMessages.length <= 0) return;
+                        const lastWordMessage = wordMessages[wordMessages.length - 1];
+                        lastWordMessage.querySelector(".save-flashcard-button")?.click();
+                    }, // Make a flashcard
                     [settings.shortcutTTSPlay]: () => clickElement(".is-tts"), // Play tts audio
                     [settings.shortcutTranslator]: () => clickElement(".dictionary-resources > a:nth-last-child(1)"), // Open Translator
                     [settings.shortcutBackward5s]: () => clickElement(".audio-player--controllers > div:nth-child(1) > a"), // 5 sec Backward
