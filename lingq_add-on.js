@@ -4252,19 +4252,36 @@
                     }, 150);
                 }
                 
-                // Click event
                 navSelectors.forEach((selector) => {
                     waitForElement(selector, 5000).then((button) => {
-                        if (!button) return;
-                        button.addEventListener("click", resetScroll);
+                        if (button) button.addEventListener("click", resetScroll);
                     });
                 });
                 
-                // Keyboard shortcut event (Shift + Arrow keys)
                 window.addEventListener("keydown", (event) => {
-                    if (event.shiftKey && (event.key === "ArrowRight" || event.key === "ArrowLeft")) {
-                        resetScroll();
-                    }
+                    if (event.shiftKey && (event.key === "ArrowRight" || event.key === "ArrowLeft")) resetScroll();
+                });
+            }
+            
+            function setupQuickSummaryCleanup() {
+                const navSelectors = [
+                    ".reader-component .nav--left a",
+                    ".reader-component .nav--right a"
+                ];
+                
+                function removeSummary() {
+                    const summaryElement = document.querySelector(".quick-summary");
+                    if (summaryElement) summaryElement.remove();
+                }
+                
+                navSelectors.forEach((selector) => {
+                    waitForElement(selector, 5000).then((button) => {
+                        if (button) button.addEventListener("click", removeSummary, true);
+                    });
+                });
+                
+                window.addEventListener("keydown", (event) => {
+                    if (event.shiftKey && (event.key === "ArrowRight" || event.key === "ArrowLeft")) removeSummary();
                 }, true);
             }
             
@@ -4311,6 +4328,7 @@
             observer.observe(sentenceText, { childList: true });
             
             setupNavigationScrollReset();
+            setupQuickSummaryCleanup();
         }
         
         async function setupLLMs() {
