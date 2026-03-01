@@ -4394,10 +4394,7 @@
                     return targetSectionHead;
                 }
                 
-                function getSelectedWithContext() {
-                    const TARGET_POSITION_RATIO = 0.2;
-                    const TARGET_CONTEXT_LENGTH = 200;
-                    
+                function getSelectedWithContext(targetPositionRatio = 0.2, minContextLength = 200) {
                     const selectedTextElement = document.querySelector(".reference-word");
                     const selectedEl = document.querySelector("span.is-selected, span.selected-text");
                     const currentSentenceEl = selectedEl?.closest(".sentence");
@@ -4413,23 +4410,56 @@
                     const allSentences = [...document.querySelectorAll(".sentence")];
                     const currentIndex = allSentences.indexOf(currentSentenceEl);
                     
-                    let prefixText = "";
-                    let suffixText = "";
+                    let prevOffset = 1;
+                    let nextOffset = 1;
+                    let prefixTexts = [];
+                    let suffixTexts = [];
                     
-                    if (positionRatio < TARGET_POSITION_RATIO) {
-                        const prevText = extractTextFromDOM(allSentences[currentIndex - 1])?.trim() ?? "";
-                        prefixText = prevText.length > TARGET_CONTEXT_LENGTH ? prevText.slice(-TARGET_CONTEXT_LENGTH) : prevText;
+                    const getTextAt = (offset) => extractTextFromDOM(allSentences[offset])?.trim() ?? "";
+                    
+                    const startFromPrev = positionRatio >= 0.5;
+                    let prevGuaranteed = positionRatio >= targetPositionRatio;
+                    let nextGuaranteed = positionRatio <= 1 - targetPositionRatio;
+                    let turn = startFromPrev ? "prev" : "next";
+                    let totalLength = currentText.length;
+                    
+                    while (totalLength < minContextLength || !prevGuaranteed || !nextGuaranteed) {
+                        const hasPrev = !!allSentences[currentIndex - prevOffset];
+                        const hasNext = !!allSentences[currentIndex + nextOffset];
+                        if (!hasPrev && !hasNext) break;
+                        
+                        if (turn === "prev") {
+                            turn = "next";
+                            if (!hasPrev) {
+                                prevGuaranteed = true;
+                                continue;
+                            }
+                            const text = getTextAt(currentIndex - prevOffset);
+                            const trimmed = totalLength >= minContextLength ? text.slice(-minContextLength) : text;
+                            prefixTexts.unshift(trimmed);
+                            totalLength += trimmed.length + 1;
+                            prevOffset++;
+                            prevGuaranteed = true;
+                        } else {
+                            turn = "prev";
+                            if (!hasNext) {
+                                nextGuaranteed = true;
+                                continue;
+                            }
+                            const text = getTextAt(currentIndex + nextOffset);
+                            const trimmed = totalLength >= minContextLength ? text.slice(0, minContextLength) : text;
+                            suffixTexts.push(trimmed);
+                            totalLength += trimmed.length + 1;
+                            nextOffset++;
+                            nextGuaranteed = true;
+                        }
                     }
                     
-                    if (positionRatio > 1 - TARGET_POSITION_RATIO) {
-                        const nextText = extractTextFromDOM(allSentences[currentIndex + 1])?.trim() ?? "";
-                        suffixText = nextText.length > TARGET_CONTEXT_LENGTH ? nextText.slice(0, TARGET_CONTEXT_LENGTH) : nextText;
-                    }
-                    
-                    const contextText = [prefixText, currentText, suffixText].filter(Boolean).join(" ");
-                    
+                    const contextText = [...prefixTexts, currentText, ...suffixTexts].filter(Boolean).join(" ");
+                    console.log(`Context: ${currentText.length} -> ${contextText.length}`);
                     return { input: selectedText, context: contextText };
                 }
+                
                 
                 let isProgrammaticReferenceWordUpdate = false;
                 
