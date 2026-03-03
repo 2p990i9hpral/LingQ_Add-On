@@ -1164,15 +1164,20 @@
         const DictionaryLocalePairs = await getDictionaryLocalePairs()
         const lessonLanguage = DictionaryLocalePairs[getLessonLanguage()];
         const summaryPrompt = `
-            # System Settings
-            - Summarize the content in original content's language (${lessonLanguage}). The summary needs to be consist of two to three paragraphs.
-            - This summary will be used as a quick summary presented before reading the full content.
-            - Start with '<b>summary</b>'. Place each paragraph within '<p>' tag.
-            - The result will be used as the innerHTML of a DOM element. So, Output raw HTML as plain text. This means your entire response should be a string of HTML. Do not use Markdown syntax, do not wrap your HTML in Markdown code blocks.
-            - Be objective and factual. Write only based on the given data.
-            - No preface and postface only include a summary.
-            - Recommended length is at most 150 words.
-            # Example Format
+            # Role
+            Summarize the lesson content, helping learners grasp the topic before reading.
+        
+            # Output Format
+            - Language: match the lesson's original language (${lessonLanguage})
+            - Structure: <b>summary</b> followed by 2–3 <p> paragraphs
+            - Render target: The result will be used as the innerHTML of a DOM element. So, output raw HTML as plain text; not use Markdown syntax or code blocks
+            - Length: 150 words max
+        
+            # Content Rules
+            - Objective and factual; base ONLY on the given content
+            - Summary body ONLY — no preface, title restatement, or closing remarks
+        
+            # Example
             <b>summary</b> <p>first paragraph</p> <p>second paragraph</p>`;
         
         const summary_history = [
@@ -1187,13 +1192,19 @@
     
     async function getLessonSummary(provider, apikey, model, content) {
         const summaryPrompt = `
-            # System Settings
-            - Summarize the content in ENGLISH even if the original content's language is non-English while retaining key information from the input.
-            - This summary will be used for understanding the lesson's context without referring to the original content.
-            - Do not omit key details from the original content.
-            - Be objective and factual. Write only based on the given data.
-            - No preface and postface only include a summary.
-            - Recommended length is at most 1000 words.`;
+            # Role
+            Generate a comprehensive English summary of the lesson content, serving as persistent context for downstream tasks — including Q&A about the lesson and AI dictionary lookups that require full contextual awareness.
+        
+            # Content Rules
+            - Objective and factual; base ONLY on the given content
+            - Preserve ALL key details, named entities, terminology, and plot/argument structure
+            - Retain original-language terms when translation would lose precision (e.g., proper nouns, culturally specific concepts)
+            - Summary body ONLY — no preface or closing remarks
+        
+            # Output Format
+            - Language: English; use original-language terms inline when necessary for fidelity
+            - Format: Markdown (headers, bullets, bold allowed)
+            - Length: 2,000 words max`;
         
         const summary_history = [
             {role: "system", content: removeIndent(summaryPrompt)},
@@ -4420,8 +4431,13 @@
                     const startFromPrev = positionRatio >= 0.5;
                     let prevGuaranteed = positionRatio >= targetPositionRatio;
                     let nextGuaranteed = positionRatio <= 1 - targetPositionRatio;
+                    
                     let turn = startFromPrev ? "prev" : "next";
                     let totalLength = currentText.length;
+                    if (totalLength < minContextLength) {
+                        if (prevGuaranteed) prevGuaranteed = startFromPrev;
+                        if (nextGuaranteed) nextGuaranteed = !startFromPrev;
+                    }
                     
                     while (totalLength < minContextLength || !prevGuaranteed || !nextGuaranteed) {
                         const hasPrev = !!allSentences[currentIndex - prevOffset];
@@ -4456,7 +4472,7 @@
                     }
                     
                     const contextText = [...prefixTexts, currentText, ...suffixTexts].filter(Boolean).join(" ");
-                    console.log(`Context: ${currentText.length} -> ${contextText.length}`);
+                    console.log(`Context: ${currentText.length} -> ${contextText.length} (${'+'.repeat(prefixTexts.length)}Selected${'+'.repeat(suffixTexts.length)})`);
                     return { input: selectedText, context: contextText };
                 }
                 
