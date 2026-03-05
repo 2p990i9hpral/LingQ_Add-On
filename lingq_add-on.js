@@ -1466,6 +1466,7 @@
                 {value: "openai gpt-4.1-mini", text: "OpenAI GPT-4.1 mini ($0.4/$1.6)"},
                 {value: "openai gpt-4.1-nano", text: "OpenAI GPT-4.1 nano ($0.1/$0.4)"},
                 {value: "google gemini-3-flash-preview", text: "Google Gemini 3.0 Flash ($0.5/$3.0)"},
+                {value: "google gemini-3.1-flash-lite-preview", text: "Google Gemini 3.1 Flash Light ($0.25/$1.5)"},
                 {value: "google gemini-2.5-flash", text: "Google Gemini 2.5 Flash ($0.3/$2.5)"},
                 {value: "google gemini-2.5-flash-lite", text: "Google Gemini 2.5 Flash Light ($0.1/$0.4)"},
                 {value: "google gemini-2.0-flash", text: "Google Gemini 2.0 Flash ($0.1/$0.4)"},
@@ -4405,7 +4406,7 @@
                     return targetSectionHead;
                 }
                 
-                function getSelectedWithContext(targetPositionRatio = 0.2, minContextLength = 200) {
+                function getSelectedWithContext(targetSideLength = 200) {
                     const selectedTextElement = document.querySelector(".reference-word");
                     const selectedEl = document.querySelector("span.is-selected, span.selected-text");
                     const currentSentenceEl = selectedEl?.closest(".sentence");
@@ -4415,67 +4416,58 @@
                     if (!currentSentenceEl) return { input: selectedText, context: "" };
                     
                     const sentenceItems = [...currentSentenceEl.querySelectorAll(".sentence-item")];
-                    const positionRatio = sentenceItems.indexOf(selectedEl) / sentenceItems.length;
-                    const currentText = extractTextFromDOM(currentSentenceEl).trim();
+                    const selectedIndex = sentenceItems.indexOf(selectedEl);
                     
+                    const positionRatio = sentenceItems.length > 0  ? Math.max(0, selectedIndex) / sentenceItems.length : 0.5;
+                    
+                    const currentText = extractTextFromDOM(currentSentenceEl).trim();
                     const allSentences = [...document.querySelectorAll(".sentence")];
                     const currentIndex = allSentences.indexOf(currentSentenceEl);
                     
-                    let prevOffset = 1;
-                    let nextOffset = 1;
-                    let prefixTexts = [];
-                    let suffixTexts = [];
+                    const leftLen = Math.floor(currentText.length * positionRatio);
+                    const rightLen = currentText.length - leftLen;
                     
-                    const getTextAt = (offset) => extractTextFromDOM(allSentences[offset])?.trim() ?? "";
+                    let remainingLeft = Math.max(0, targetSideLength - leftLen);
+                    let remainingRight = Math.max(0, targetSideLength - rightLen);
                     
-                    const startFromPrev = positionRatio >= 0.5;
-                    let prevGuaranteed = positionRatio >= targetPositionRatio;
-                    let nextGuaranteed = positionRatio <= 1 - targetPositionRatio;
+                    // Prepend sentences
+                    const prefixTexts = [];
+                    let prevIdx = currentIndex - 1;
                     
-                    let turn = startFromPrev ? "prev" : "next";
-                    let totalLength = currentText.length;
-                    if (totalLength < minContextLength) {
-                        if (prevGuaranteed) prevGuaranteed = startFromPrev;
-                        if (nextGuaranteed) nextGuaranteed = !startFromPrev;
+                    while (remainingLeft > 0 && prevIdx >= 0) {
+                        const text = extractTextFromDOM(allSentences[prevIdx])?.trim();
+                        if (text) {
+                            const takeLen = Math.min(text.length, remainingLeft);
+                            const chunk = text.slice(-takeLen);
+                            prefixTexts.unshift(chunk);
+                            remainingLeft -= takeLen;
+                        }
+                        prevIdx--;
                     }
                     
-                    while (totalLength < minContextLength || !prevGuaranteed || !nextGuaranteed) {
-                        const hasPrev = !!allSentences[currentIndex - prevOffset];
-                        const hasNext = !!allSentences[currentIndex + nextOffset];
-                        if (!hasPrev && !hasNext) break;
-                        
-                        if (turn === "prev") {
-                            turn = "next";
-                            if (!hasPrev) {
-                                prevGuaranteed = true;
-                                continue;
-                            }
-                            const text = getTextAt(currentIndex - prevOffset);
-                            const trimmed = totalLength >= minContextLength ? text.slice(-minContextLength) : text;
-                            prefixTexts.unshift(trimmed);
-                            totalLength += trimmed.length + 1;
-                            prevOffset++;
-                            prevGuaranteed = true;
-                        } else {
-                            turn = "prev";
-                            if (!hasNext) {
-                                nextGuaranteed = true;
-                                continue;
-                            }
-                            const text = getTextAt(currentIndex + nextOffset);
-                            const trimmed = totalLength >= minContextLength ? text.slice(0, minContextLength) : text;
-                            suffixTexts.push(trimmed);
-                            totalLength += trimmed.length + 1;
-                            nextOffset++;
-                            nextGuaranteed = true;
+                    // Append sentences
+                    const suffixTexts = [];
+                    let nextIdx = currentIndex + 1;
+                    
+                    while (remainingRight > 0 && nextIdx < allSentences.length) {
+                        const text = extractTextFromDOM(allSentences[nextIdx])?.trim();
+                        if (text) {
+                            const takeLen = Math.min(text.length, remainingRight);
+                            const chunk = text.slice(0, takeLen);
+                            suffixTexts.push(chunk);
+                            remainingRight -= takeLen;
                         }
+                        nextIdx++;
                     }
                     
                     const contextText = [...prefixTexts, currentText, ...suffixTexts].filter(Boolean).join(" ");
-                    console.log(`Context: ${currentText.length} -> ${contextText.length} (${'+'.repeat(prefixTexts.length)}Selected${'+'.repeat(suffixTexts.length)})`);
+                    
+                    const prefixLog = prefixTexts.length > 0 ? '+'.repeat(prefixTexts.length) : '';
+                    const suffixLog = suffixTexts.length > 0 ? '+'.repeat(suffixTexts.length) : '';
+                    console.log(`Context: ${currentText.length} -> ${contextText.length} (${prefixLog}Selected${suffixLog})`);
+                    
                     return { input: selectedText, context: contextText };
                 }
-                
                 
                 let isProgrammaticReferenceWordUpdate = false;
                 
