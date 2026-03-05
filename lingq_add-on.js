@@ -5045,7 +5045,7 @@
                 # System Capabilities & Format Protocol
                 
                 ## Core Responsibility
-                - Tone: Objective, educational, and concise.
+                - Tone: Objective and concise.
                 - Latency Control: Skip prefaces (e.g., "Here is the answer"). Output the result immediately.
                 
                 ## STRICT Output Formatting (HTML Only)
@@ -5078,9 +5078,11 @@
                    - Ensure the output represents the standard, dictionary-style pronunciation, not a precise phonetic realization.
                 
                 3. Contextual Definition
-                   - Identify the single standard dictionary definition of the Base Form in ${userLanguage} that corresponds to the sense used in the Context.
+                   - Identify a single standard dictionary definition of the Base Form in ${userLanguage} that best covers the sense used in the Context.
+                   - Select the definition at the correct semantic granularity: broad enough to reflect the word's general dictionary entry, yet specific enough to distinguish it from other listed senses.
+                   - Prioritize formal equivalence: if the target language has a direct lexical counterpart (e.g., a cognate or loanword), prefer it over a paraphrase or a semantically narrowed synonym.
                    - Do not use parentheses for alternative meanings or additional explanation. Do not provide a comma-separated list of synonyms.
-                   - Output must be a definitive, short phrase or single word perfectly substituting the term in the context.
+                   - Output must be a definitive, short phrase or single word.
                 
                 4. Contextual Explanation
                    - This is where you bridge the "Standard Definition" and the "Specific Context".
@@ -5135,7 +5137,7 @@
                 User Input: 'Input: "anstellen", Context: "Was hast du mit der Schere angestellt?"'
                 Assistant Output:
                 <b>anstellen</b> <span>[ˈanˌʃtɛlən]</span> <i>(verb)</i>
-                <p>Faire (quelque chose de mal)</p>
+                <p>Faire</p>
                 <hr>
                 <p>Bien que "anstellen" puisse signifier "employer", dans ce contexte, il signifie "commettre" ou "faire" une bêtise. C'est le sens standard utilisé pour des actions négatives ou maladroites.</p>
                 <hr>
@@ -5161,9 +5163,9 @@
                 User Input: 'Input: "入っていました", Context: "箱の中に手紙が入っていました。"'
                 Assistant Output:
                 <b>入る</b> <span>[haiɾɯ]</span> <i>(동사)</i>
-                <p>들어있다</p>
+                <p>들어가다</p>
                 <hr>
-                <p>사전적으로는 '밖에서 안으로 이동하다' 또는 '안에 존재하다'를 의미합니다. 이 문맥에서는 '이동'보다는 편지가 상자 안에 이미 존재하는 '상태'를 나타내는 의미로 쓰였습니다.</p>
+                <p>문맥에서는 편지가 상자 안에 이미 존재하는 '상태'를 나타냅니다. 이는 어휘 자체의 의미가 아니라 '〜ている' 문법 구조가 동작의 결과로 지속되는 상태를 표현하기 때문입니다.</p>
                 <hr>
                 <ul>
                   <li>カバンに本が入る。</li>
