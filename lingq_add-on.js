@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      9.9.5
+// @version      10.0.1
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @grant       GM_xmlhttpRequest
@@ -5169,7 +5169,7 @@
                 <hr>
                 <ul>
                   <li>カバンに本が入る。</li>
-                  <li>가방에 책이 들어간다 (들어있다).</li>
+                  <li>가방에 책이 들어있다.</li>
                 </ul>
                 `;
                 
