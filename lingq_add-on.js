@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      10.0.1
+// @version      10.1.0
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @grant       GM_xmlhttpRequest
@@ -5683,12 +5683,9 @@
                 textContent: "Generate Lesson Audio"
             }));
             
-            const control = createElement("div", {
-                className: "control",
-                style: "display: flex; flex-direction: column; gap: 5px;"
-            });
-            const field = createElement("div", {className: "field is-grouped"});
-            const navItem = createElement("div", {className: "nav-item"});
+            const control = createElement("div", {className: "control"});
+            const field = createElement("span", {className: "text-xs"});
+            const navItem = createElement("div", {className: "flex items-center gap-1 text-xs text-ash"});
             
             const progressBar = createElement("progress", {
                 id: "lessonAudioProgressBar",
@@ -5708,7 +5705,9 @@
             field.appendChild(control);
             navItem.appendChild(field);
             
-            let mainNav = await waitForElement(".nav--left");
+            let mainNav = await waitForElement(`#\\:r7\\:-form-item > .grid`, 10000);
+            mainNav.style.height = "auto";
+            
             mainNav.appendChild(createElement("hr", {className: "divider my-3"}));
             mainNav.appendChild(navItem);
         }
