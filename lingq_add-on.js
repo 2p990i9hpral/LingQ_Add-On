@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      10.1.0
+// @version      10.2.0
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @grant       GM_xmlhttpRequest
@@ -4127,8 +4127,7 @@
                         await waitForElement('.modal-container .modal-section', 5000);
                         clickElement('.modal-section button:nth-child(2)[title="Expand"]');
                         
-                        const isPageMode = document.querySelector('#lesson-reader').matches('.is-page-mode');
-                        if (isPageMode) setupSliderObserver();
+                        setupSliderObserver();
                     }
                 }
             });
@@ -4297,6 +4296,16 @@
                 }, true);
             }
             
+            function preventHorizontalScroll(selector) {
+                const element = document.querySelector(selector);
+                if (!element) return;
+                
+                element.setAttribute('tabindex', '-1');
+                element.addEventListener('keydown', (event) => {
+                    if (['ArrowLeft', 'ArrowRight'].includes(event.key)) event.preventDefault();
+                }, { passive: false });
+            }
+            
             const observer = new MutationObserver(function (mutations) {
                 mutations.forEach((mutation) => {
                     mutation.addedNodes.forEach(async (node) => {
@@ -4314,6 +4323,9 @@
                                 }
                             }, { passive: false });
                         }
+                        
+                        preventHorizontalScroll('.reader-container-wrapper');
+                        preventHorizontalScroll('.reader-container');
                         
                         const scrollTarget = isPageMode ? ".reader-container-wrapper" : ".reader-container";
                         changeScrollAmount(scrollTarget, 0.3);
