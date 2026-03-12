@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      10.2.0
+// @version      10.3.0
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @grant       GM_xmlhttpRequest
@@ -2705,6 +2705,7 @@
                 flashcardPopup.style.display = "block";
                 makeDraggable(flashcardPopup, document.getElementById("flashcardDragHandle"));
                 loadFlashcardPage(currentPage);
+                focusElement('#flashcardSearchInput');
             });
             
             document.getElementById("closeFlashcardPopupBtn").addEventListener("click", () => {
@@ -4520,6 +4521,13 @@
                 function enhanceWordMessage(botMessageDiv, selectedData) {
                     if (!isWordMessageStructure(botMessageDiv)) return;
                     
+                    const detailsEl = botMessageDiv.querySelector("details");
+                    if (detailsEl) {
+                        detailsEl.remove();
+                        const chatContainer = document.getElementById("chat-container");
+                        addMessageToUI(`<p>${detailsEl.innerHTML}</p>`, "bot-message", chatContainer, true);
+                    }
+                    
                     if (!botMessageDiv.classList.contains("word-message")) botMessageDiv.classList.add("word-message");
                     
                     const safeSelectedData = selectedData || {input: "", context: ""};
@@ -4958,7 +4966,7 @@
                     if (!userMessage) return;
                     userInput.value = '';
                     
-                    if (chatHistory.findIndex(item => item.role === "system-plain") !== -1) chatHistory = chatHistory.filter(item => (item.role !== "system-word" && item.role !== "system-sentence"));
+                    // if (chatHistory.findIndex(item => item.role === "system-plain") !== -1) chatHistory = chatHistory.filter(item => (item.role !== "system-word" && item.role !== "system-sentence"));
                     
                     addMessageToUI(userMessage, 'user-message', chatContainer, true);
                     chatHistory = updateChatHistoryState(chatHistory, userMessage, "user");
@@ -5283,6 +5291,7 @@
                 1. Identify the Error: Determine what part of the previous structured output (Base form, IPA, Definition, or Example) needs fixing based on user input.
                 2. Re-generate Structure: You MUST output the correction using the exact HTML structure used for the previous original response (word or sentence mode).
                 3. No Conversational Filler: DO NOT say "Sorry," "Here is the fixed version," or "I understood." Just output the corrected HTML code block.
+                4. If you need to provide a supplementary note or explanation alongside the correction, wrap it in a <details> tag placed AFTER the full word/sentence card structure.
                 
                 ### Condition B: Referential Query
                 Trigger: User asks "What does that mean implied?" or "Can you explain specifically?"
@@ -5307,7 +5316,22 @@
                   <li>彼は楽しそうに遊んだ。</li>
                 </ul>
                 
-                ### Example 2: General Conversation
+                ### Example 2: Strict Correction with Supplementary Note
+                Scenario: Previous output for "入っていました" showed IPA [haiɾɯ]. User points out the pronunciation.
+                User Input: "It seems that the pronunciation is incorrect.."
+                Assistant Output:
+                <b>入る</b> <span>[iɾɯ]</span> <i>(동사)</i>
+                <p>들어가다</p>
+                <hr>
+                <p>문맥에서는 편지가 상자 안에 이미 존재하는 '상태'를 나타냅니다.</p>
+                <hr>
+                <ul>
+                  <li>カバンに本が入る。</li>
+                  <li>가방에 책이 들어있다.</li>
+                </ul>
+                <details>「入る」의 표준 IPA는 [iɾɯ]입니다. [haiɾɯ]는 「入る(はいる)」의 발음으로, 이 문맥에서는 [iɾɯ]가 올바릅니다.</details>
+                
+                ### Example 3: General Conversation
                 User Input: "Why is English so hard?"
                 Assistant Output:
                 <p>English can be difficult due to its inconsistent spelling rules and vast vocabulary borrowed from multiple languages.</p>
