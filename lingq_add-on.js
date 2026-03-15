@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      10.3.0
+// @version      10.3.1
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @grant       GM_xmlhttpRequest
@@ -3743,6 +3743,7 @@
                 overflow-x: ${isPageMode ? "auto" : "unset"} !important;
                 overflow-y: ${isPageMode ? "visible" : "scroll"} !important;
                 height: ${isPageMode ? "1800px" : "100%"} !important;
+                outline: none !important;
             }
     
             /*video viewer*/
@@ -5050,6 +5051,8 @@
                             }
                         );
                         
+                        chatHistory = updateChatHistoryState(chatHistory, removeIndent(plainTextPrompt), "system-plain");
+                    } else {
                         chatHistory = updateChatHistoryState(chatHistory, removeIndent(plainTextPrompt), "system-plain");
                     }
                 }
