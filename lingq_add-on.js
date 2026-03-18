@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      10.4.0
+// @version      10.5.0
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @grant       GM_xmlhttpRequest
@@ -4016,6 +4016,26 @@
                         event.stopPropagation();
                         return;
                     }
+                }
+                
+                if (eventKey === ' ' && withoutModifierKeys && !isTextInput) {
+                    preventPropagation(event);
+                    const playButtonSelector = ".section--player > div:nth-child(1) > button";
+                    const svgEl = document.querySelector(`${playButtonSelector} > span > svg`);
+                    const getState = (el) => el?.classList.contains('svg-icon--pause') ? 'playing' : 'pause';
+                    const stateBefore = getState(svgEl);
+                    
+                    setTimeout(() => {
+                        const svgElAfter = document.querySelector(`${playButtonSelector} > span > svg`);
+                        const stateAfter = getState(svgElAfter);
+                        
+                        if (stateAfter === stateBefore) {
+                            console.log('Space', 'State unchanged — triggering click fallback.');
+                            clickElement(playButtonSelector);
+                        } else {
+                            console.log('Space', 'State changed — no fallback needed.');
+                        }
+                    }, 100);
                 }
                 
                 const shortcuts = {
