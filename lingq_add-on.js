@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      10.5.0
+// @version      10.6.0
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @grant       GM_xmlhttpRequest
@@ -76,7 +76,7 @@
         llmProviderModel: "openai gpt-4.1-nano",
         llmApiKey: "",
         askSelected: false,
-        prependSummary: false,
+        prependSummary: {},
         dbUrl: "",
         dbKey: "",
         
@@ -1491,7 +1491,7 @@
             chatWidgetSection.appendChild(apiKeyContainer);
             
             addCheckbox(chatWidgetSection, "askSelectedCheckbox", "Enable asking with selected text", settings.askSelected);
-            addCheckbox(chatWidgetSection, "prependSummaryCheckbox", "Prepend the Summary", settings.prependSummary);
+            addCheckbox(chatWidgetSection, "prependSummaryCheckbox", "Prepend a quick Summary", settings.prependSummary[getLessonLanguage()] ?? false);
             
             const dbUrlContainer = createElement("div", {
                 className: "popup-row",
@@ -2137,9 +2137,10 @@
                 settings.askSelected = event.target.checked
             });
             
-            const prependSummaryCheckbox = document.getElementById("prependSummaryCheckbox");
             prependSummaryCheckbox.addEventListener('change', (event) => {
-                settings.prependSummary = event.target.checked
+                const prependSummaries = typeof settings.prependSummary === "object" ? { ...settings.prependSummary } : {};
+                prependSummaries[getLessonLanguage()] = event.target.checked;
+                settings.prependSummary = prependSummaries;
             });
             
             const dbUrlInput = document.getElementById("dbUrlInput");
@@ -4223,7 +4224,7 @@
                             
                             const summaryElement = createElement("div", {
                                 className: "quick-summary",
-                                style: `position: relative; ${settings.prependSummary ? '': 'display: none;'}`
+                                style: `position: relative; ${(settings.prependSummary[getLessonLanguage()] ?? false) ? '' : 'display: none;'}`
                             });
                             
                             const contentWrapper = createElement("div", {
@@ -4248,7 +4249,7 @@
                 [llmProvider, llmModel] = settings.llmProviderModel.split(" ");
                 llmApiKey = settings.llmApiKey;
                 
-                if (settings.prependSummary) {
+                if (settings.prependSummary[getLessonLanguage()] ?? false) {
                     getQuickSummary(llmProvider, llmApiKey, llmModel, lessonContent)
                         .then(result => {
                             quickSummary = result;
