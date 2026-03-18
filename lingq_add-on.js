@@ -4730,7 +4730,7 @@
                                     });
                                     
                                     rowDiv.appendChild(deleteBtn);
-                                    rowDiv.appendChild(createElement("b", {innerHTML: `${row.word}`}));
+                                    rowDiv.appendChild(createElement("span", {innerHTML: `${row.pronunciation}`}));
                                     rowDiv.appendChild(createElement("span", {innerHTML: `${row.meaning}`}));
                                     popup.appendChild(rowDiv);
                                 });
