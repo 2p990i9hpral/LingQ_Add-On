@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      10.3.1
+// @version      10.4.0
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @grant       GM_xmlhttpRequest
@@ -27,7 +27,7 @@
     };
     
     const defaults = {
-        styleType: "video",
+        styleType: {},
         heightBig: 400,
         sentenceHeight: 400,
         sentenceAutoplay: false,
@@ -1368,13 +1368,13 @@
             const columns = createElement("div", {style: "display: flex; flex-direction: row;"});
             
             const container1 = createElement("div", {style: "padding: 5px; width: 350px;"});
-            
+
             addSelect(container1, "styleTypeSelector", "Layout Style:", [
                 {value: "video", text: "Video"},
                 {value: "video2", text: "Video2"},
                 {value: "audio", text: "Audio"},
                 {value: "off", text: "Off"}
-            ], settings.styleType);
+            ], (settings.styleType[getLessonLanguage()] ?? "video"));
             
             const videoSettings = createElement("div", {
                 id: "videoSettings",
@@ -2034,7 +2034,9 @@
             const styleTypeSelector = document.getElementById("styleTypeSelector");
             styleTypeSelector.addEventListener("change", (event) => {
                 const selectedStyleType = event.target.value;
-                settings.styleType = selectedStyleType;
+                const styleTypes = typeof settings.styleType === "object" ? { ...settings.styleType } : {};
+                styleTypes[getLessonLanguage()] = selectedStyleType;
+                settings.styleType = styleTypes;
                 document.getElementById("videoSettings").style.display = selectedStyleType === "video" ? "block" : "none";
                 document.getElementById("sentenceVideoSettings").style.display = selectedStyleType === "off" ? "block" : "none";
             });
@@ -3141,7 +3143,7 @@
                     break;
             }
             
-            switch (settings.styleType) {
+            switch (settings.styleType[getLessonLanguage()] ?? "video") {
                 case "video":
                     specificCSS = generateVideoCSS();
                     break;
@@ -3609,6 +3611,7 @@
             }
     
             .sentence-text {
+                max-width: 1500px !important;
                 height: calc(var(--article-height) - var(--header-height)) !important;
                 padding: 0 0 20px !important;
             }
