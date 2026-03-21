@@ -4,11 +4,12 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      10.7.0
+// @version      11.0.0
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @grant       GM_xmlhttpRequest
 // @require https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js
+// @require https://cdn.jsdelivr.net/npm/chart.js
 // @namespace https://greasyfork.org/users/1458847
 // @downloadURL https://update.greasyfork.org/scripts/533096/LingQ%20Addon.user.js
 // @updateURL https://update.greasyfork.org/scripts/533096/LingQ%20Addon.meta.js
@@ -1795,6 +1796,15 @@
                 )
             );
             
+            const statsContainer = createElement("div", { id: "flashcardStatsContainer" },
+                createElement("div", { id: "flashcardStatsHeader" },
+                    createElement("span", {}, "Flashcards Created per Week"),
+                ),
+                createElement("div", { className: "flashcard-chart-wrapper" },
+                    createElement("canvas", { id: "flashcardStatsChart" })
+                )
+            );
+            
             const popup = createElement("div", {id: "flashcardPopup", className: "popup"},
                 createElement("div", {id: "flashcardDragHandle", className: "popup-drag-handle"},
                     createElement("h3", {textContent: "Flashcard Manager"})
@@ -1806,6 +1816,7 @@
                         paginationContainer
                     ),
                     flashcardTableContainer,
+                    statsContainer,
                     createElement("div", {className: "popup-row", style: "display: flex; justify-content: flex-end; gap: 10px; margin: 10px 0;"},
                         createElement("button", {id: "flashcardCsvDownload", className: "popup-button"}, "Export as CSV"),
                         createElement("button", {id: "closeFlashcardPopupBtn", className: "popup-button"}, "Close")
@@ -2691,6 +2702,8 @@
                             countLabel.textContent = `Flashcards: ${totalCount}`;
                         });
                 }
+                
+                await loadFlashcardStats();
             }
             
             const flashcardButton = document.getElementById("flashcardManagerButton");
@@ -2800,24 +2813,34 @@
                     return `${prefix}${before}<b>${target}</b>${after}${suffix}`;
                 }
                 
-                const { data, error } = await supabaseClient
-                    .from("word_data")
-                    .select("*")
-                    .eq("flashcard", true)
-                    .eq("language", language)
-                    .order("idx", { ascending: true });
+                const batchSize = 1000;
+                let allData = [];
+                let from = 0;
+                let hasMore = true;
                 
-                if (error) {
-                    console.error("CSV export error:", error);
-                    return;
+                while (hasMore) {
+                    const { data, error } = await supabaseClient
+                        .from("word_data")
+                        .select("*")
+                        .eq("flashcard", true)
+                        .eq("language", language)
+                        .order("idx", { ascending: true })
+                        .range(from, from + batchSize - 1);
+                    
+                    if (error) {
+                        console.error("CSV export error:", error);
+                        return;
+                    }
+                    
+                    allData = allData.concat(data);
+                    hasMore = data.length === batchSize;
+                    from += batchSize;
                 }
                 
-                const processedData = data.map(row => {
-                    return {
-                        ...row,
-                        formatted_context: formatContext(row.context, row.original_word)
-                    };
-                });
+                const processedData = allData.map(row => ({
+                    ...row,
+                    formatted_context: formatContext(row.context, row.original_word)
+                }));
                 
                 const headers = Object.keys(processedData[0] || {});
                 const rows = processedData.map(row =>
@@ -2836,6 +2859,155 @@
                 link.click();
                 document.body.removeChild(link);
             });
+            
+            let flashcardStatsChart = null;
+            
+            async function loadFlashcardStats() {
+                const batchSize = 1000;
+                let allDates = [];
+                let from = 0;
+                let hasMore = true;
+                
+                while (hasMore) {
+                    const { data, error } = await supabaseClient
+                        .from("word_data")
+                        .select("created_at")
+                        .eq("flashcard", true)
+                        .eq("language", language)
+                        .order("created_at", { ascending: true })
+                        .range(from, from + batchSize - 1);
+                    
+                    if (error) {
+                        console.error("Flashcard stats fetch error:", error);
+                        return;
+                    }
+                    
+                    allDates = allDates.concat(data);
+                    hasMore = data.length === batchSize;
+                    from += batchSize;
+                }
+                
+                function buildChartData(allDates) {
+                    const weekCount = (() => {
+                        const first = new Date(allDates[0].created_at);
+                        const last = new Date(allDates[allDates.length - 1].created_at);
+                        return Math.ceil((last - first) / (7 * 24 * 60 * 60 * 1000));
+                    })();
+                    
+                    // Switch to monthly if data spans more than 2 years (52*2 weeks)
+                    const useMonthly = weekCount > 52*2;
+                    
+                    const bucketMap = {};
+                    allDates.forEach(({ created_at }) => {
+                        const key = useMonthly
+                            ? created_at.slice(0, 7)
+                            : getWeekStartKey(new Date(created_at));
+                        bucketMap[key] = (bucketMap[key] || 0) + 1;
+                    });
+                    
+                    const labels = Object.keys(bucketMap).sort();
+                    const periodicData = labels.map(k => bucketMap[k]);
+                    const cumulativeData = periodicData.reduce((acc, v, i) => {
+                        acc.push((acc[i - 1] || 0) + v);
+                        return acc;
+                    }, []);
+                    
+                    return { labels, periodicData, cumulativeData, useMonthly };
+                }
+                
+                const { labels, periodicData, cumulativeData, useMonthly } = buildChartData(allDates);
+                drawFlashcardStatsChart(labels, periodicData, cumulativeData, useMonthly);
+            }
+            
+            function getWeekStartKey(date) {
+                const d = new Date(date);
+                d.setHours(0, 0, 0, 0);
+                d.setDate(d.getDate() - d.getDay()); // Sunday as week start
+                return d.toISOString().slice(0, 10);
+            }
+            
+            function drawFlashcardStatsChart(labels, periodicData, cumulativeData, useMonthly) {
+                const periodLabel = useMonthly ? "Monthly" : "Weekly";
+                const titleText = `Flashcards Created per ${useMonthly ? "Month" : "Week"}`;
+                
+                document.querySelector("#flashcardStatsHeader span").textContent = titleText;
+                
+                const ctx = document.getElementById("flashcardStatsChart").getContext("2d");
+                
+                if (flashcardStatsChart) {
+                    flashcardStatsChart.data.labels = labels;
+                    flashcardStatsChart.data.datasets[0].data = periodicData;
+                    flashcardStatsChart.data.datasets[0].label = periodLabel;
+                    flashcardStatsChart.data.datasets[1].data = cumulativeData;
+                    flashcardStatsChart.options.scales.yPeriodic.title.text = periodLabel;
+                    
+                    flashcardStatsChart.update();
+                    return;
+                }
+                
+                flashcardStatsChart = new Chart(ctx, {
+                    data: {
+                        labels,
+                        datasets: [
+                            {
+                                type: "bar",
+                                label: periodLabel,
+                                yAxisID: "yPeriodic",
+                                data: periodicData,
+                                backgroundColor: "#7f8fa6",
+                                borderRadius: 4,
+                                barPercentage: 0.6,
+                            },
+                            {
+                                type: "line",
+                                label: "Cumulative",
+                                yAxisID: "yCumulative",
+                                data: cumulativeData,
+                                borderColor: "#b07c6a",
+                                backgroundColor: "#b07c6a25",
+                                fill: true,
+                                tension: 0.3,
+                                pointRadius: 2,
+                            },
+                        ],
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        interaction: { mode: "index", intersect: false },
+                        plugins: { legend: { display: true } },
+                        scales: {
+                            x: {
+                                grid: { display: false },
+                                ticks: {
+                                    autoSkip: true,
+                                    callback: function(val, index) {
+                                        const label = this.getLabelForValue(val);
+                                        if (useMonthly) return label;
+                                        const parts = label.split('-');
+                                        return `${parts[1]}/${parts[2]}`;
+                                    }
+                                }
+                            },
+                            yPeriodic: {
+                                type: "linear",
+                                position: "left",
+                                beginAtZero: true,
+                                title: { display: true, text: periodLabel },
+                                ticks: { precision: 0 },
+                            },
+                            yCumulative: {
+                                type: "linear",
+                                position: "right",
+                                beginAtZero: true,
+                                grid: { drawOnChartArea: false },
+                                title: { display: true, text: "Cumulative" },
+                                ticks: { precision: 0 },
+                            },
+                        },
+                    },
+                });
+            }
         }
         
         function generatePopupCSS() {
@@ -3040,6 +3212,23 @@
                 #flashcardTable th:nth-child(4),
                 #flashcardTable td:nth-child(4) {
                     width: 60%;
+                }
+                
+                #flashcardStatsContainer {
+                    padding: 10px 0;
+                    margin: 5px 0;
+                    border-top: 1px solid rgb(125 125 125 / 20%);
+                    border-bottom: 1px solid rgb(125 125 125 / 20%);
+                }
+                
+                #flashcardStatsHeader {
+                    font-size: 0.9em;
+                    color: var(--font-color);
+                }
+                
+                .flashcard-chart-wrapper {
+                    height: 150px;
+                    width: 100%;
                 }
                 
                 #flashcardTable .delete-row-btn {
@@ -3612,7 +3801,6 @@
             }
     
             .sentence-text {
-                max-width: 1500px !important;
                 height: calc(var(--article-height) - var(--header-height)) !important;
                 padding: 0 0 20px !important;
             }
