@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      11.0.1
+// @version      11.0.2
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @grant       GM_xmlhttpRequest
@@ -2540,6 +2540,59 @@
         }
         
         function setupFlashcardPopupEventListeners() {
+            const flashcardButton = document.getElementById("flashcardManagerButton");
+            const flashcardPopup = document.getElementById("flashcardPopup");
+            const flashcardTableBody = flashcardPopup.querySelector("tbody");
+            const countLabel = document.getElementById("flashcardCount");
+            const searchInput = document.getElementById("flashcardSearchInput");
+            
+            let currentPage = 1;
+            const pageSize = 15;
+            let totalCount = 0;
+            let filteredCount = 0;
+            const language = getLessonLanguage();
+            
+            let currentSortField = "idx";
+            let currentSortOrder = "desc";
+            let searchKeyword = "";
+            
+            let flashcardStatsChart = null;
+            
+            async function fetchFlashcardsInBatches(language, columns, sortBy) {
+                let allData = [];
+                let from = 0;
+                let batchSize = 10000;
+                let hasMore = true;
+                
+                while (hasMore) {
+                    const { data, error } = await supabaseClient
+                        .from("word_data")
+                        .select(columns)
+                        .eq("flashcard", true)
+                        .eq("language", language)
+                        .order(sortBy, { ascending: true })
+                        .range(from, from + batchSize - 1);
+                    
+                    if (error) {
+                        console.error("Batch fetch error:", error);
+                        return allData;
+                    }
+                    
+                    allData = allData.concat(data);
+                    
+                    if (data.length === 0) {
+                        hasMore = false;
+                    } else if (data.length < batchSize) {
+                        batchSize = data.length;
+                        from += batchSize;
+                    } else {
+                        from += batchSize;
+                    }
+                }
+                
+                return allData;
+            }
+            
             function drawPagination(page, total) {
                 const totalPages = total > 0 ? Math.ceil(total / pageSize) : 1;
                 
@@ -2706,226 +2759,6 @@
                 await loadFlashcardStats();
             }
             
-            const flashcardButton = document.getElementById("flashcardManagerButton");
-            const flashcardPopup = document.getElementById("flashcardPopup");
-            const flashcardTableBody = flashcardPopup.querySelector("tbody");
-            const countLabel = document.getElementById("flashcardCount");
-            
-            let currentPage = 1;
-            const pageSize = 15;
-            let totalCount = 0;
-            let filteredCount = 0;
-            const language = getLessonLanguage();
-            
-            flashcardButton.addEventListener("click", async () => {
-                flashcardPopup.style.display = "block";
-                makeDraggable(flashcardPopup, document.getElementById("flashcardDragHandle"));
-                loadFlashcardPage(currentPage);
-                focusElement('#flashcardSearchInput');
-            });
-            
-            document.getElementById("closeFlashcardPopupBtn").addEventListener("click", () => {
-                flashcardPopup.style.display = "none";
-            });
-            
-            let currentSortField = "idx";
-            let currentSortOrder = "desc";
-            let searchKeyword = "";
-            
-            const searchInput = document.getElementById("flashcardSearchInput");
-            const debouncedSearch = debounce(() => {
-                currentPage = 1;
-                searchKeyword = searchInput.value.trim();
-                loadFlashcardPage(currentPage);
-            }, 400);
-            searchInput.addEventListener("input", debouncedSearch);
-            
-            const tableHeaders = document.querySelectorAll("#flashcardTable thead th");
-            tableHeaders.forEach(th => {
-                th.addEventListener("click", () => {
-                    const fieldMap = { Word: "word", Meaning: "meaning", Explanation: "explanation" };
-                    const field = fieldMap[th.textContent.replace(/[▲▼]/g, "").trim()];
-                    if (!field) return;
-                    
-                    if (currentSortField !== field) {
-                        currentSortField = field;
-                        currentSortOrder = "asc";
-                    } else if (currentSortOrder === "asc") {
-                        currentSortOrder = "desc";
-                    } else {
-                        currentSortField = "idx";
-                        currentSortOrder = "desc";
-                    }
-                    
-                    tableHeaders.forEach(header => {
-                        header.textContent = header.textContent.replace(/[▲▼]/g, "").trim();
-                    });
-                    
-                    if (["word", "meaning", "explanation"].includes(currentSortField)) {
-                        const arrow = currentSortOrder === "asc" ? " ▲" : " ▼";
-                        th.textContent = th.textContent + arrow;
-                    }
-                    
-                    loadFlashcardPage(1);
-                });
-            });
-            
-            document.getElementById("flashcardCsvDownload").addEventListener("click", async () => {
-                function formatContext(context, originalWord, padding = 100) {
-                    if (!context || !originalWord) return "";
-                    
-                    const escapedWord = originalWord.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-                    const match = context.match(new RegExp(escapedWord, 'i'));
-                    
-                    if (!match) return context;
-                    
-                    const foundWord = match[0];
-                    const wordStart = match.index;
-                    const wordEnd = wordStart + foundWord.length;
-                    const totalLen = context.length;
-                    
-                    let start = wordStart - padding;
-                    let end = wordEnd + padding;
-                    
-                    if (start < 0) {
-                        end += Math.abs(start);
-                        start = 0;
-                    }
-                    
-                    if (end > totalLen) {
-                        start -= (end - totalLen);
-                        if (start < 0) start = 0;
-                        end = totalLen;
-                    }
-                    
-                    const slicedText = context.substring(start, end);
-                    
-                    const relativeStart = wordStart - start;
-                    const relativeEnd = relativeStart + foundWord.length;
-                    
-                    const before = slicedText.substring(0, relativeStart);
-                    const target = slicedText.substring(relativeStart, relativeEnd);
-                    const after = slicedText.substring(relativeEnd);
-                    
-                    const prefix = start > 0 ? "..." : "";
-                    const suffix = end < totalLen ? "..." : "";
-                    
-                    return `${prefix}${before}<b>${target}</b>${after}${suffix}`;
-                }
-                
-                const batchSize = 1000;
-                let allData = [];
-                let from = 0;
-                let hasMore = true;
-                
-                while (hasMore) {
-                    const { data, error } = await supabaseClient
-                        .from("word_data")
-                        .select("*")
-                        .eq("flashcard", true)
-                        .eq("language", language)
-                        .order("idx", { ascending: true })
-                        .range(from, from + batchSize - 1);
-                    
-                    if (error) {
-                        console.error("CSV export error:", error);
-                        return;
-                    }
-                    
-                    allData = allData.concat(data);
-                    hasMore = data.length === batchSize;
-                    from += batchSize;
-                }
-                
-                const processedData = allData.map(row => ({
-                    ...row,
-                    formatted_context: formatContext(row.context, row.original_word)
-                }));
-                
-                const headers = Object.keys(processedData[0] || {});
-                const rows = processedData.map(row =>
-                    Object.values(row).map(v =>
-                        typeof v === "string" ? `"${v.replace(/"/g, '""')}"` : v
-                    ).join(",")
-                );
-                
-                const csv = [headers.join(","), ...rows].join("\n");
-                const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-                const link = createElement("a", {
-                    href: URL.createObjectURL(blob),
-                    download: `flashcards_${language}.csv`
-                });
-                document.body.appendChild(link);
-                link.click();
-                document.body.removeChild(link);
-            });
-            
-            let flashcardStatsChart = null;
-            
-            async function loadFlashcardStats() {
-                const batchSize = 1000;
-                let allDates = [];
-                let from = 0;
-                let hasMore = true;
-                
-                while (hasMore) {
-                    const { data, error } = await supabaseClient
-                        .from("word_data")
-                        .select("created_at")
-                        .eq("flashcard", true)
-                        .eq("language", language)
-                        .order("created_at", { ascending: true })
-                        .range(from, from + batchSize - 1);
-                    
-                    if (error) {
-                        console.error("Flashcard stats fetch error:", error);
-                        return;
-                    }
-                    
-                    allDates = allDates.concat(data);
-                    hasMore = data.length === batchSize;
-                    from += batchSize;
-                }
-                
-                function buildChartData(allDates) {
-                    const weekCount = (() => {
-                        const first = new Date(allDates[0].created_at);
-                        const last = new Date(allDates[allDates.length - 1].created_at);
-                        return Math.ceil((last - first) / (7 * 24 * 60 * 60 * 1000));
-                    })();
-                    
-                    // Switch to monthly if data spans more than 2 years (52*2 weeks)
-                    const useMonthly = weekCount > 52*2;
-                    
-                    const bucketMap = {};
-                    allDates.forEach(({ created_at }) => {
-                        const key = useMonthly
-                            ? created_at.slice(0, 7)
-                            : getWeekStartKey(new Date(created_at));
-                        bucketMap[key] = (bucketMap[key] || 0) + 1;
-                    });
-                    
-                    const labels = Object.keys(bucketMap).sort();
-                    const periodicData = labels.map(k => bucketMap[k]);
-                    const cumulativeData = periodicData.reduce((acc, v, i) => {
-                        acc.push((acc[i - 1] || 0) + v);
-                        return acc;
-                    }, []);
-                    
-                    return { labels, periodicData, cumulativeData, useMonthly };
-                }
-                
-                const { labels, periodicData, cumulativeData, useMonthly } = buildChartData(allDates);
-                drawFlashcardStatsChart(labels, periodicData, cumulativeData, useMonthly);
-            }
-            
-            function getWeekStartKey(date) {
-                const d = new Date(date);
-                d.setHours(0, 0, 0, 0);
-                d.setDate(d.getDate() - d.getDay()); // Sunday as week start
-                return d.toISOString().slice(0, 10);
-            }
-            
             function drawFlashcardStatsChart(labels, periodicData, cumulativeData, useMonthly) {
                 const periodLabel = useMonthly ? "Monthly" : "Weekly";
                 const titleText = `Flashcards Created per ${useMonthly ? "Month" : "Week"}`;
@@ -3008,6 +2841,171 @@
                     },
                 });
             }
+            
+            async function loadFlashcardStats() {
+                function getWeekStartKey(date) {
+                    const d = new Date(date);
+                    d.setHours(0, 0, 0, 0);
+                    d.setDate(d.getDate() - d.getDay()); // Sunday as week start
+                    return d.toISOString().slice(0, 10);
+                }
+                
+                function buildChartData(allDates) {
+                    const firstDate = new Date(allDates[0].created_at);
+                    const lastDate = new Date(allDates[allDates.length - 1].created_at);
+                    const weekCount = Math.ceil((lastDate - firstDate) / (7 * 24 * 60 * 60 * 1000));
+                    
+                    // Switch to monthly if data spans more than 2 years (52*2 weeks)
+                    const useMonthly = weekCount > 52*2;
+                    const bucketMap = {};
+                    
+                    allDates.forEach(({ created_at }) => {
+                        const key = useMonthly
+                            ? created_at.slice(0, 7)
+                            : getWeekStartKey(new Date(created_at));
+                        bucketMap[key] = (bucketMap[key] || 0) + 1;
+                    });
+                    
+                    const labels = Object.keys(bucketMap).sort();
+                    const periodicData = labels.map(k => bucketMap[k]);
+                    
+                    const cumulativeData = periodicData.reduce((acc, count) => {
+                        const previousTotal = acc.length > 0 ? acc[acc.length - 1] : 0;
+                        acc.push(previousTotal + count);
+                        return acc;
+                    }, []);
+                    
+                    return { labels, periodicData, cumulativeData, useMonthly };
+                }
+                
+                const allDates = await fetchFlashcardsInBatches(language, "created_at", "created_at");
+                
+                if (!allDates.length) return;
+                
+                const { labels, periodicData, cumulativeData, useMonthly } = buildChartData(allDates);
+                drawFlashcardStatsChart(labels, periodicData, cumulativeData, useMonthly);
+            }
+            
+            flashcardButton.addEventListener("click", async () => {
+                flashcardPopup.style.display = "block";
+                makeDraggable(flashcardPopup, document.getElementById("flashcardDragHandle"));
+                loadFlashcardPage(currentPage);
+                focusElement('#flashcardSearchInput');
+            });
+            
+            document.getElementById("closeFlashcardPopupBtn").addEventListener("click", () => {
+                flashcardPopup.style.display = "none";
+            });
+            
+            const debouncedSearch = debounce(() => {
+                currentPage = 1;
+                searchKeyword = searchInput.value.trim();
+                loadFlashcardPage(currentPage);
+            }, 400);
+            
+            searchInput.addEventListener("input", debouncedSearch);
+            
+            const tableHeaders = document.querySelectorAll("#flashcardTable thead th");
+            tableHeaders.forEach(th => {
+                th.addEventListener("click", () => {
+                    const fieldMap = { Word: "word", Meaning: "meaning", Explanation: "explanation" };
+                    const field = fieldMap[th.textContent.replace(/[▲▼]/g, "").trim()];
+                    if (!field) return;
+                    
+                    if (currentSortField !== field) {
+                        currentSortField = field;
+                        currentSortOrder = "asc";
+                    } else if (currentSortOrder === "asc") {
+                        currentSortOrder = "desc";
+                    } else {
+                        currentSortField = "idx";
+                        currentSortOrder = "desc";
+                    }
+                    
+                    tableHeaders.forEach(header => {
+                        header.textContent = header.textContent.replace(/[▲▼]/g, "").trim();
+                    });
+                    
+                    if (["word", "meaning", "explanation"].includes(currentSortField)) {
+                        const arrow = currentSortOrder === "asc" ? " ▲" : " ▼";
+                        th.textContent = th.textContent + arrow;
+                    }
+                    
+                    loadFlashcardPage(1);
+                });
+            });
+            
+            document.getElementById("flashcardCsvDownload").addEventListener("click", async () => {
+                function formatContext(context, originalWord, padding = 100) {
+                    if (!context || !originalWord) return "";
+                    
+                    const escapedWord = originalWord.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                    const match = context.match(new RegExp(escapedWord, 'i'));
+                    
+                    if (!match) return context;
+                    
+                    const foundWord = match[0];
+                    const wordStart = match.index;
+                    const wordEnd = wordStart + foundWord.length;
+                    const totalLen = context.length;
+                    
+                    let start = wordStart - padding;
+                    let end = wordEnd + padding;
+                    
+                    if (start < 0) {
+                        end += Math.abs(start);
+                        start = 0;
+                    }
+                    
+                    if (end > totalLen) {
+                        start -= (end - totalLen);
+                        if (start < 0) start = 0;
+                        end = totalLen;
+                    }
+                    
+                    const slicedText = context.substring(start, end);
+                    
+                    const relativeStart = wordStart - start;
+                    const relativeEnd = relativeStart + foundWord.length;
+                    
+                    const before = slicedText.substring(0, relativeStart);
+                    const target = slicedText.substring(relativeStart, relativeEnd);
+                    const after = slicedText.substring(relativeEnd);
+                    
+                    const prefix = start > 0 ? "..." : "";
+                    const suffix = end < totalLen ? "..." : "";
+                    
+                    return `${prefix}${before}<b>${target}</b>${after}${suffix}`;
+                }
+                
+                const allData = await fetchFlashcardsInBatches(language, "*", "idx");
+                
+                if (!allData.length) return;
+                
+                const processedData = allData.map(row => ({
+                    ...row,
+                    formatted_context: formatContext(row.context, row.original_word)
+                }));
+                
+                const headers = Object.keys(processedData[0] || {});
+                const rows = processedData.map(row =>
+                    Object.values(row)
+                        .map(v => typeof v === "string" ? `"${v.replace(/"/g, '""')}"` : v) // Process escape
+                        .join(",")
+                );
+                
+                const csv = [headers.join(","), ...rows].join("\n");
+                const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+                
+                const link = createElement("a", {
+                    href: URL.createObjectURL(blob),
+                    download: `flashcards_${language}.csv`
+                });
+                
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+            });
         }
         
         function generatePopupCSS() {

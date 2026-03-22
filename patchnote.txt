@@ -66,4 +66,19 @@
 - 9.2: Make the meaning field of word-messages editable (Ctrl + click). Word-message features (click events, flash card making) are now applied to all corresponding messages, not only the first one.
 - 9.3: Implement flashcard manager and CSV export.
 - 9.4: Implement sorting/searching/deleting in the flashcard manager.
-- 9.5: Add the formatted context column to the flashcard export csv. Make a anki flashcard template.
+- 9.5: Add the formatted context colum to the flashcard export csv. Make an anki flashcard template.
+- 9.6: Support DeepSeek and Gemini 3 Flash models. Cleaned the embedded YouTube player.
+- 9.7: Improve system prompts. Cleaned the embedded YouTube player.
+- 9.8: Add a 'Make a flashcard' shortcut. Improve system prompts.
+- 9.9: Develop a paging mode. Added a close button for summaries.
+
+- 10.0: Improve system prompts. Enhance the flashcard context-extension logic. Support DeepSeek and Gemini 3.1 flash light model.
+- 10.1: Updated the editor page styles.
+- 10.2: Improve system prompts.
+- 10.3: Disabled arrow key scrolling to prevent navigation interference.
+- 10.4: Remove a redundant word display from the flashcard popup, and show pronunciation instead.
+- 10.5: Make each language have its own quick summary setting.
+- 10.6: Fix an issue where the space key sometimes doesn't work. When audio is being played
+- 10.7: Make each language have its own layout setting.
+
+- 11.0: Append a flashcard generation history plot to the flashcard manager popup.
