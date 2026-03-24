@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      11.0.2
+// @version      11.0.3
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @grant       GM_xmlhttpRequest
@@ -3805,7 +3805,7 @@
     
             .reader-container-wrapper {
                 height: 100% !important;
-                overflow-y: ${isPageMode ? "scroll" : "visible"} !important;
+                overflow-y: ${isPageMode ? "auto" : "visible"} !important;
             }
     
             .widget-area {
@@ -3930,9 +3930,9 @@
                 float: left !important;
                 max-width: unset !important;
                 columns: ${isPageMode ? "100vw auto" : "unset"} !important;
-                overflow-x: ${isPageMode ? "auto" : "unset"} !important;
+                overflow-x: ${isPageMode ? "visiblea" : "unset"} !important;
                 overflow-y: ${isPageMode ? "visible" : "scroll"} !important;
-                height: ${isPageMode ? "1800px" : "100%"} !important;
+                height: ${isPageMode ? "1750px" : "100%"} !important;
                 outline: none !important;
             }
     
@@ -4732,7 +4732,7 @@
                 function enhanceWordMessage(botMessageDiv, selectedData) {
                     if (!isWordMessageStructure(botMessageDiv)) return;
                     
-                    const detailsEl = botMessageDiv.querySelector("details");
+                    const detailsEl = botMessageDiv.querySelector("aside");
                     if (detailsEl) {
                         detailsEl.remove();
                         const chatContainer = document.getElementById("chat-container");
@@ -5492,30 +5492,25 @@
                 
                 ## Context Awareness
                 You are in a follow-up state. The user has either:
-                1. Asked a question about the previous analysis.
-                2. Requested a correction/fix for the previous analysis.
-                3. Asked a general question.
+                1. Explicitly requested a correction to the previous analysis.
+                2. Asked a general or referential question.
                 
                 ## Logic Branching via Intent Detection
                 
-                ### Condition A: Correction Request (Priority)
-                Trigger: User phrases like "Wrong word," "Base form is incorrect," "Fix the meaning," "Use X instead of Y," or points out an error.
+                ### Condition A: Correction Request
+                Trigger: Only when the user explicitly requests a fix of the previously replied word card using direct commands such as "Wrong word", "Fix the base form", "Use X instead of Y", "Correct the IPA".
                 Action:
-                1. Identify the Error: Determine what part of the previous structured output (Base form, IPA, Definition, or Example) needs fixing based on user input.
-                2. Re-generate Structure: You MUST output the correction using the exact HTML structure used for the previous original response (word or sentence mode).
-                3. No Conversational Filler: DO NOT say "Sorry," "Here is the fixed version," or "I understood." Just output the corrected HTML code block.
-                4. If you need to provide a supplementary note or explanation alongside the correction, wrap it in a <details> tag placed AFTER the full word/sentence card structure.
+                1. Identify the Error: Determine what part of the previous word card needs fixing.
+                2. Re-generate Structure: Output the correction using the exact HTML structure of the previous response.
+                3. Supplementary Note: Append a <aside> tag ONLY when the correction alone is insufficient to prevent misunderstanding
+                  — specifically, when the corrected value conflicts with a common assumption or requires disambiguation. DO NOT use <aside> for general elaboration.
                 
-                ### Condition B: Referential Query
-                Trigger: User asks "What does that mean implied?" or "Can you explain specifically?"
-                Action: Answer in HTML <p> text referencing the initial context.
-                
-                ### Condition C: General Query
-                Action: Answer helpfuly in HTML <p> text.
+                ### Condition B: General or Referential Query
+                Action: Answer helpfully in HTML <p> text.
                 
                 ## Examples
                 
-                ### Example 1: Strict Correction (User forces Adverb form)
+                ### Example 1: Strict Correction (no supplementary note needed)
                 Scenario: Previous output for "happily" showed base form "happy". User complains.
                 User Input: "The basae form should be the adverb, not adjective."
                 Assistant Output:
@@ -5542,7 +5537,7 @@
                   <li>カバンに本が入る。</li>
                   <li>가방에 책이 들어있다.</li>
                 </ul>
-                <details>「入る」의 표준 IPA는 [iɾɯ]입니다. [haiɾɯ]는 「入る(はいる)」의 발음으로, 이 문맥에서는 [iɾɯ]가 올바릅니다.</details>
+                <aside>「入る」의 표준 IPA는 [iɾɯ]입니다. [haiɾɯ]는 「入る(はいる)」의 발음으로, 이 문맥에서는 [iɾɯ]가 올바릅니다.</details>
                 
                 ### Example 3: General Conversation
                 User Input: "Why is English so hard?"
