@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      11.1.0
+// @version      11.1.1
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @grant       GM_xmlhttpRequest
@@ -5049,7 +5049,10 @@
                 }
                 
                 function addMessageToUI(message, messageClass, container, initial = false) {
-                    const messageDiv = createElement("div", {className: `chat-message ${messageClass}`});
+                    const classList = typeof messageClass === 'string' ? messageClass.split(' ') : Array.from(messageClass);
+                    const uniqueClasses = [...new Set(['chat-message', ...classList])].join(' ').trim();
+                    
+                    const messageDiv = createElement("div", {className: uniqueClasses});
                     if (initial) messageDiv.innerHTML = message;
                     container.appendChild(messageDiv);
                     
