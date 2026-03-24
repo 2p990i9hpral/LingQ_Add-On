@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      11.0.4
+// @version      11.1.0
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @grant       GM_xmlhttpRequest
@@ -3523,6 +3523,18 @@
 
                 .bot-message {
                     background-color: rgb(125 125 125 / 15%);
+                    min-height: 30px;
+                }
+                
+                .bot-message:empty {
+                    background: linear-gradient(90deg, #7d7d7d26 25%, #7d7d7d40 50%, #7d7d7d26 75%);
+                    background-size: 200% 100%;
+                    animation: shimmerAnim 1.5s linear infinite;
+                }
+                
+                @keyframes shimmerAnim {
+                    0% { background-position: 100% 0; }
+                    100% { background-position: -100% 0; }
                 }
 
                 #chat-container .word-message b:nth-of-type(1) {
