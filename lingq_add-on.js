@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      11.0.3
+// @version      11.0.4
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @grant       GM_xmlhttpRequest
@@ -3930,7 +3930,7 @@
                 float: left !important;
                 max-width: unset !important;
                 columns: ${isPageMode ? "100vw auto" : "unset"} !important;
-                overflow-x: ${isPageMode ? "visiblea" : "unset"} !important;
+                overflow-x: ${isPageMode ? "visible" : "unset"} !important;
                 overflow-y: ${isPageMode ? "visible" : "scroll"} !important;
                 height: ${isPageMode ? "1750px" : "100%"} !important;
                 outline: none !important;
