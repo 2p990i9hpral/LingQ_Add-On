@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      11.2.0
+// @version      11.3.0
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @grant       GM_xmlhttpRequest
@@ -1175,62 +1175,6 @@
         } catch (error) {
             onError(error);
         }
-    }
-    
-    async function getQuickSummary(provider, apikey, model, content) {
-        const DictionaryLocalePairs = await getDictionaryLocalePairs()
-        const lessonLanguage = DictionaryLocalePairs[getLessonLanguage()];
-        const summaryPrompt = `
-            # Role
-            Summarize the lesson content, helping learners grasp the topic before reading.
-        
-            # Output Format
-            - Language: match the lesson's original language (${lessonLanguage})
-            - Structure: <b>summary</b> followed by 2–3 <p> paragraphs
-            - Render target: The result will be used as the innerHTML of a DOM element. So, output raw HTML as plain text; not use Markdown syntax or code blocks
-            - Length: 150 words max
-        
-            # Content Rules
-            - Objective and factual; base ONLY on the given content
-            - Summary body ONLY — no preface, title restatement, or closing remarks
-        
-            # Example
-            <b>summary</b> <p>first paragraph</p> <p>second paragraph</p>`;
-        
-        const summary_history = [
-            {role: "system", content: removeIndent(summaryPrompt)},
-            {role: "user", content: content}
-        ]
-        const summary = await getOpenAIResponse(provider, apikey, model, summary_history);
-        console.log(`Quick summary: \n${summary}`);
-        
-        return summary;
-    }
-    
-    async function getLessonSummary(provider, apikey, model, content) {
-        const summaryPrompt = `
-            # Role
-            Generate a comprehensive English summary of the lesson content, serving as persistent context for downstream tasks — including Q&A about the lesson and AI dictionary lookups that require full contextual awareness.
-        
-            # Content Rules
-            - Objective and factual; base ONLY on the given content
-            - Preserve ALL key details, named entities, terminology, and plot/argument structure
-            - Retain original-language terms when translation would lose precision (e.g., proper nouns, culturally specific concepts)
-            - Summary body ONLY — no preface or closing remarks
-        
-            # Output Format
-            - Language: English; use original-language terms inline when necessary for fidelity
-            - Format: Markdown (headers, bullets, bold allowed)
-            - Length: 2,000 words max`;
-        
-        const summary_history = [
-            {role: "system", content: removeIndent(summaryPrompt)},
-            {role: "user", content: content}
-        ]
-        const summary = await getOpenAIResponse(provider, apikey, model, summary_history);
-        console.log(`Lesson summary: \n${summary}`);
-        
-        return summary;
     }
     
     /* Features */
@@ -4432,6 +4376,74 @@
             }
             
             async function generateLessonSummary(readerContainer) {
+                async function getLessonSummary(provider, apikey, model, content) {
+                    const summaryPrompt = `
+                        # Role
+                        Generate a comprehensive English summary of the lesson content, serving as persistent context for downstream tasks — including Q&A about the lesson and AI dictionary lookups that require full contextual awareness.
+                    
+                        # Content Rules
+                        - Objective and factual; base ONLY on the given content
+                        - Preserve ALL key details, named entities, terminology, and plot/argument structure
+                        - Retain original-language terms when translation would lose precision (e.g., proper nouns, culturally specific concepts)
+                        - Summary body ONLY — no preface or closing remarks
+                    
+                        # Output Format
+                        - Language: English; use original-language terms inline when necessary for fidelity
+                        - Format: Markdown (headers, bullets, bold allowed)
+                        - Length: 2,000 words max`;
+                    
+                    const summary_history = [
+                        {role: "system", content: removeIndent(summaryPrompt)},
+                        {role: "user", content: content}
+                    ]
+                    const summary = await getOpenAIResponse(provider, apikey, model, summary_history);
+                    console.log(`Lesson summary: \n${summary}`);
+                    
+                    return summary;
+                }
+                
+                async function getQuickSummary(provider, apikey, model, content) {
+                    const DictionaryLocalePairs = await getDictionaryLocalePairs()
+                    const lessonLanguage = DictionaryLocalePairs[getLessonLanguage()];
+                    const summaryPrompt = `
+                        # Role
+                        Summarize the lesson content, helping learners grasp the topic before reading.
+                    
+                        # Output Format
+                        - Language: match the lesson's original language (${lessonLanguage})
+                        - Structure: 2–3 <p> paragraphs
+                        - Render target: The result will be used as the innerHTML of a DOM element. So, output raw HTML as plain text; not use Markdown syntax or code blocks
+                        - Length: 150 words max
+                    
+                        # Content Rules
+                        - Objective and factual; base ONLY on the given content
+                        - Summary body ONLY — no preface, title restatement, or closing remarks
+                    
+                        # Example
+                        <p>first paragraph</p> <p>second paragraph</p>`;
+                    
+                    const summary_history = [
+                        {role: "system", content: removeIndent(summaryPrompt)},
+                        {role: "user", content: content}
+                    ]
+                    
+                    await streamOpenAIResponse(
+                        provider, apikey, model, summary_history,
+                        (chunk) => {
+                            quickSummary += chunk;
+                            const summaryContent = document.querySelector(".quick-summary .summary-content");
+                            if (summaryContent) summaryContent.innerHTML = quickSummary;
+                        },
+                        (finalContent) => {
+                            quickSummary = finalContent;
+                            console.log(`Quick summary: \n${finalContent}`);
+                        },
+                        (error) => {
+                            console.error("Failed to fetch summary:", error);
+                        }
+                    );
+                }
+                
                 const observer = new MutationObserver((mutations) => {
                     for (const mutation of mutations) {
                         for (const node of mutation.addedNodes) {
@@ -4440,14 +4452,15 @@
                             const summaryElement = createElement("div", {
                                 className: "quick-summary",
                                 style: `position: relative; ${(settings.prependSummary[getLessonLanguage()] ?? false) ? '' : 'display: none;'}`
-                            });
+                            }, createElement("b", {}, "Summary"));
                             
                             const contentWrapper = createElement("div", {
                                 className: "summary-content",
                                 innerHTML: quickSummary
                             });
-                            const closeButton = createElement("button", {className: "close-summary-btn"}, ["close"]);
                             summaryElement.append(contentWrapper);
+                            
+                            const closeButton = createElement("button", {className: "close-summary-btn"}, ["close"]);
                             closeButton.addEventListener("click", () => {summaryElement.remove()});
                             summaryElement.append(closeButton);
                             
@@ -4465,27 +4478,12 @@
                 llmApiKey = settings.llmApiKey;
                 
                 if (settings.prependSummary[getLessonLanguage()] ?? false) {
-                    getQuickSummary(llmProvider, llmApiKey, llmModel, lessonContent)
-                        .then(result => {
-                            quickSummary = result;
-                            
-                            const summaryElement = document.querySelector(".quick-summary");
-                            if (summaryElement) {
-                                const contentWrapper = summaryElement.querySelector(".summary-content") || createElement("div", { className: "summary-content" });
-                                contentWrapper.innerHTML = result;
-                                
-                                if (!summaryElement.contains(contentWrapper)) {
-                                    summaryElement.appendChild(contentWrapper);
-                                }
-                            }
-                        }).catch(error => {
-                        console.error("Failed to fetch summary:", error);
-                    });
+                    await getQuickSummary(llmProvider, llmApiKey, llmModel, lessonContent);
                 }
                 
-                getLessonSummary(llmProvider, llmApiKey, llmModel, lessonContent).then(summary => {
-                    lessonSummary = summary
-                })
+                getLessonSummary(llmProvider, llmApiKey, llmModel, lessonContent)
+                    .then(summary => { lessonSummary = summary; });
+                
             }
             
             function setupNavigationScrollReset() {
@@ -4577,7 +4575,7 @@
                         changeTranslationColor(node);
                         
                         await waitForElement('.sentence-text p', 10000);
-                        generateLessonSummary(node);
+                        await generateLessonSummary(node);
                         
                         const summaryElement = node.querySelector(".quick-summary");
                         if (summaryElement) {
@@ -5265,7 +5263,7 @@
                     }, true);
                     sendButton.addEventListener('click', handleSendMessage);
                     
-                    chatHistory = updateChatHistoryState(chatHistory, `This is the summary of this lesson. You can refer to this when you response. \n[Lesson Summary] ${lessonSummary}`, "user");
+                    chatHistory = updateChatHistoryState(chatHistory, `<summary>${lessonSummary}</summary>`, "user");
                     chatHistory = updateChatHistoryState(chatHistory, removeIndent(systemPrompt), "system-main");
                     
                     if (settings.askSelected && sectionHead.matches(".section-widget--head")) {
