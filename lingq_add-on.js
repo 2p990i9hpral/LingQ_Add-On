@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      11.1.1
+// @version      11.2.0
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @grant       GM_xmlhttpRequest
@@ -739,8 +739,10 @@
                                             if (json.choices?.[0]?.delta?.content) {
                                                 fullContent += json.choices[0].delta.content;
                                             }
-                                        } catch (e) {
-                                        }
+                                            if (json.type === "content_block_delta" && json.delta?.text) {
+                                                fullContent += json.delta.text;
+                                            }
+                                        } catch (e) {}
                                     });
                                 }
                                 
@@ -1062,60 +1064,91 @@
         return [inputPrice, outputPrice];
     }
     
-    async function getOpenAIResponse(provider, apiKey, model, history) {
+    function buildRequestConfig(provider, apiKey) {
         let api_url;
+        let headers = {'Content-Type': 'application/json'};
+        
         switch (provider) {
             case "openai":
-                api_url = `https://api.openai.com/v1/chat/completions`;
+                api_url = "https://api.openai.com/v1/chat/completions";
+                headers['Authorization'] = `Bearer ${apiKey}`;
                 break;
             case "google":
                 api_url = "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions";
+                headers['Authorization'] = `Bearer ${apiKey}`;
+                break;
+            case "anthropic":
+                api_url = "https://api.anthropic.com/v1/messages";
+                headers['x-api-key'] = apiKey;
+                headers['anthropic-version'] = '2023-06-01';
                 break;
             case "deepseek":
                 api_url = "https://api.deepseek.com/chat/completions";
+                headers['Authorization'] = `Bearer ${apiKey}`;
                 break;
         }
         
-        const body = {
-            model: model,
-            temperature: 1.0,
-            messages: history
-        };
-        if (provider === "google" && (model.includes("2.5") || model.includes("3"))) body.reasoning_effort = "none";
+        return {api_url, headers};
+    }
+    
+    function buildRequestBody(provider, model, history, stream = false) {
+        let body = { model, temperature: 1.0, messages: history };
+        
+        if (stream) body.stream = true;
+        
         if (provider === "openai" && model.includes("gpt-5")) {
             if (model.includes("gpt-5-mini") || model.includes("gpt-5-nano")) {
                 body.reasoning_effort = "minimal";
                 body.temperature = 1;
             }
         }
+        if (provider === "google" && (model.includes("2.5") || model.includes("3"))) body.reasoning_effort = "none";
+        if (provider === "anthropic") {
+            body.max_tokens = 8192;
+            
+            const systemMessages = history.filter(m => m.role === "system");
+            body.system = systemMessages.map(m => m.content).join("\n\n---\n\n");
+            
+            const nonSystem = history.filter(m => m.role !== "system");
+            const merged = [];
+            for (const msg of nonSystem) {
+                const last = merged[merged.length - 1];
+                if (last && last.role === msg.role) {
+                    last.content += `\n\n${msg.content}`;
+                } else {
+                    merged.push({ role: msg.role, content: msg.content });
+                }
+            }
+            body.messages = merged;
+        }
+        
+        return body;
+    }
+    
+    async function getOpenAIResponse(provider, apiKey, model, history) {
+        const { api_url, headers } = buildRequestConfig(provider, apiKey);
+        const body = buildRequestBody(provider, model, history);
         
         try {
-            const response = await gmFetch(api_url, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${apiKey}`
-                },
-                body: JSON.stringify(body)
-            });
+            const response = await gmFetch(api_url, { method: 'POST', headers, body: JSON.stringify(body) });
             
             if (!response.ok) {
                 const errorData = await response.json();
-                console.error('API error:', errorData);
                 return errorData.error?.message || JSON.stringify(errorData);
             }
             
             const data = await response.json();
-            const [inputPrice, outputPrice] = getLLMPricing(settings.llmProviderModel);
-            
+            const content = provider === "anthropic" ? data.content[0]?.text : data.choices[0]?.message?.content;
             const usage = data.usage || {};
-            const cachedTokens = usage.prompt_tokens_details?.cached_tokens || usage.prompt_cache_hit_tokens || 0;
-            const inputTokens = (usage.prompt_tokens || 0) - cachedTokens;
-            const outputTokens = usage.completion_tokens || 0;
-            const approxCost = (cachedTokens * (inputPrice / 4) + inputTokens * inputPrice + outputTokens * outputPrice);
+            
+            const [inputPrice, outputPrice] = getLLMPricing(settings.llmProviderModel);
+            const cachedTokens = usage.prompt_tokens_details?.cached_tokens || usage.prompt_cache_hit_tokens || usage.cache_read_input_tokens || 0;
+            const inputTokens = (usage.prompt_tokens || usage.input_tokens || 0) - cachedTokens;
+            const outputTokens = usage.completion_tokens || usage.output_tokens || 0;
+            const approxCost = cachedTokens * (inputPrice / 4) + inputTokens * inputPrice + outputTokens * outputPrice;
             console.log('Chat', `${model}, tokens: (${cachedTokens}/${inputTokens}/${outputTokens}), cost: $${approxCost.toFixed(6)}`);
             
-            return data.choices[0]?.message?.content || "Sorry, could not get a response.";
+            return content || "Sorry, could not get a response.";
             
         } catch (error) {
             console.error('API call failed:', error);
@@ -1124,36 +1157,19 @@
     }
     
     async function streamOpenAIResponse(provider, apiKey, model, history, onChunkReceived, onStreamEnd, onError) {
-        let api_url;
-        switch (provider) {
-            case "openai": api_url = "https://api.openai.com/v1/chat/completions"; break;
-            case "google": api_url = "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions"; break;
-            case "deepseek": api_url = "https://api.deepseek.com/chat/completions"; break;
-        }
-        
-        const body = {
-            model: model,
-            temperature: 1.0,
-            messages: history,
-            stream: true
-        };
-        if (provider === "google" && (model.includes("2.5") || model.includes("3"))) body.reasoning_effort = "none";
-        if (provider === "openai" && model.includes("gpt-5")) {
-            if (model.includes("gpt-5-mini") || model.includes("gpt-5-nano")) {
-                body.reasoning_effort = "minimal";
-                body.temperature = 1;
-            }
-        }
+        const { api_url, headers } = buildRequestConfig(provider, apiKey);
+        if (provider === "anthropic") headers['Accept'] = 'text/event-stream';
+        const body = buildRequestBody(provider, model, history, true);
         
         try {
-            const finalContent = await gmStream(api_url, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${apiKey}`
-                },
-                body: JSON.stringify(body)
-            }, onChunkReceived);
+            const finalContent = await gmStream(api_url, { method: 'POST', headers, body: JSON.stringify(body) }, (json) => {
+                if (provider === "anthropic") {
+                    if (json.type === "content_block_delta" && json.delta?.text) onChunkReceived(json.delta.text);
+                } else {
+                    const content = json.choices?.[0]?.delta?.content || "";
+                    if (content) onChunkReceived(content);
+                }
+            });
             
             onStreamEnd(finalContent);
         } catch (error) {
@@ -1471,7 +1487,8 @@
                 {value: "google gemini-2.5-flash", text: "Google Gemini 2.5 Flash ($0.3/$2.5)"},
                 {value: "google gemini-2.5-flash-lite", text: "Google Gemini 2.5 Flash Light ($0.1/$0.4)"},
                 {value: "google gemini-2.0-flash", text: "Google Gemini 2.0 Flash ($0.1/$0.4)"},
-                {value: "deepseek deepseek-chat", text: "Deepseek ($0.28/$0.42)"}
+                {value: "anthropic claude-haiku-4-5", text: "Claude Haiku 4.5 ($1.0/$5.0)"},
+                {value: "deepseek deepseek-chat", text: "Deepseek Chat ($0.28/$0.42)"}
             ], settings.llmProviderModel);
             
             const apiKeyContainer = createElement("div", {className: "popup-row"});
@@ -5081,13 +5098,11 @@
                         llmModel,
                         chatHistory.map(item => ({role: item.role.split("-")[0], content: item.content})),
                         (chunk) => {
-                            if (chunk.choices && chunk.choices.length > 0) {
-                                const delta = chunk.choices[0].delta;
-                                if (delta.content) {
-                                    fullBotResponse += delta.content;
-                                    botMessageDiv.innerHTML = fullBotResponse;
-                                    smoothScrollTo(chatContainer, chatContainer.scrollHeight, 100);
-                                }
+                            const content = typeof chunk === "string" ? chunk : chunk.choices?.[0]?.delta?.content;
+                            if (content) {
+                                fullBotResponse += content;
+                                botMessageDiv.innerHTML = fullBotResponse;
+                                smoothScrollTo(chatContainer, chatContainer.scrollHeight, 100);
                             }
                         },
                         (finalContent) => {
