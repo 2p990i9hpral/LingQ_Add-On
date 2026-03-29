@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      11.3.0
+// @version      11.4.0
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @grant       GM_xmlhttpRequest
@@ -3423,15 +3423,20 @@
                 }
 
                 /*Chat*/
-
+                
+                #chat-widget {
+                    display: flex;
+                    flex-direction: column;
+                    min-height: 180px;
+                    max-height: 330px;
+                }
+                
                 #chat-container {
+                    flex: 1;
                     margin-bottom:5px;
                     border: 1px solid rgb(125 125 125 / 35%);
                     border-radius: 5px;
-                    min-height: 100px;
-                    max-height: 300px;
                     overflow-y: auto;
-                    resize: vertical;
                     padding: 5px !important;
                     scrollbar-width: none !important;
                 }
@@ -3449,6 +3454,9 @@
                     font-size: 0.9rem;
                     background: none !important;
                     outline: none;
+                    resize: none;
+                    field-sizing: content;
+                    max-height: 4lh;
                 }
 
                 #user-input::placeholder {
@@ -4818,12 +4826,23 @@
                                     meaningElem.textContent = newValue;
                                     
                                     if (save && newValue !== currentText) {
-                                        navigator.clipboard.writeText(newValue)
-                                            .then(() => showToast("Meaning Copied!", true))
-                                            .catch(() => showToast("Failed to copy meaning.", false));
-                                        
                                         const storedIdx = botMessageDiv.dataset.wordIdx;
                                         if (storedIdx) {
+                                            const { data: existing } = await supabaseClient
+                                                .from("word_data")
+                                                .select("idx")
+                                                .eq("word", word)
+                                                .eq("meaning", newValue)
+                                                .eq("flashcard", true)
+                                                .neq("idx", storedIdx)
+                                                .limit(1);
+                                            
+                                            if (existing && existing.length > 0) {
+                                                meaningElem.textContent = currentText;
+                                                showToast("Same Flashcard Exists", false);
+                                                return;
+                                            }
+                                            
                                             const { error: updateError } = await supabaseClient
                                                 .from("word_data")
                                                 .update({ meaning: newValue })
@@ -4837,6 +4856,10 @@
                                         } else {
                                             console.warn("No stored idx - cannot update meaning.");
                                         }
+                                        
+                                        navigator.clipboard.writeText(newValue)
+                                            .then(() => showToast("Meaning Copied!", true))
+                                            .catch(() => showToast("Failed to copy meaning.", false));
                                     }
                                 };
                                 
@@ -4923,8 +4946,7 @@
                                         const {error: updateError} = await supabaseClient
                                             .from("word_data")
                                             .update({flashcard: false})
-                                            .eq("idx", row.idx)
-                                            .eq("word", row.word);
+                                            .eq("idx", row.idx);
                                         if (updateError) {
                                             console.error("Flashcard delete error:", updateError);
                                             deleteBtn.disabled = false;
@@ -5017,6 +5039,21 @@
                                         return;
                                     }
                                     
+                                    const { data: existing } = await supabaseClient
+                                        .from("word_data")
+                                        .select("idx")
+                                        .eq("word", word)
+                                        .eq("meaning", meaningElem?.textContent?.trim() || "")
+                                        .eq("flashcard", true)
+                                        .neq("idx", targetIdx)
+                                        .limit(1);
+                                    
+                                    if (existing && existing.length > 0) {
+                                        showToast("Same Flashcard Exists", false);
+                                        saveFlashcardButton.disabled = false;
+                                        return;
+                                    }
+                                    
                                     const { error: updateError } = await supabaseClient
                                         .from("word_data")
                                         .update({ flashcard: true })
@@ -5100,7 +5137,8 @@
                             if (content) {
                                 fullBotResponse += content;
                                 botMessageDiv.innerHTML = fullBotResponse;
-                                smoothScrollTo(chatContainer, chatContainer.scrollHeight, 100);
+                                const isNearBottom = chatContainer.scrollTop + chatContainer.clientHeight >= chatContainer.scrollHeight - 80;
+                                if (isNearBottom) smoothScrollTo(chatContainer, chatContainer.scrollHeight, 100);
                             }
                         },
                         (finalContent) => {
@@ -5187,7 +5225,8 @@
                             messageButtonContainer.appendChild(regenerateButton);
                             
                             botMessageDiv.appendChild(messageButtonContainer);
-                            smoothScrollTo(chatContainer, chatContainer.scrollHeight, 100);
+                            const isNearBottom = chatContainer.scrollTop + chatContainer.clientHeight >= chatContainer.scrollHeight - 80;
+                            if (isNearBottom) smoothScrollTo(chatContainer, chatContainer.scrollHeight, 100);
                             
                             onStreamCompleted(cleanedContent);
                         },
@@ -5222,11 +5261,8 @@
                 async function updateChatWidget() {
                     if (!settings.chatWidget) return;
                     
-                    const chatWrapper = createElement("div", {id: "chat-widget", style: "margin-top: 5px 0 10px;"});
                     const chatContainer = createElement("div", {id: "chat-container"});
-                    const inputContainer = createElement("div", {className: "input-container"});
-                    const userInput = createElement("input", {
-                        type: "text",
+                    const userInput = createElement("textarea", {
                         id: "user-input",
                         placeholder: "Ask anything"
                     });
@@ -5234,11 +5270,13 @@
                         id: "send-button",
                         innerHTML: `<svg width="17" height="17" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" xmlns:xlink="http://www.w3.org/1999/xlink"><path fill="currentColor" d="M481.508,210.336L68.414,38.926c-17.403-7.222-37.064-4.045-51.309,8.287C2.86,59.547-3.098,78.551,1.558,96.808 L38.327,241h180.026c8.284,0,15.001,6.716,15.001,15.001c0,8.284-6.716,15.001-15.001,15.001H38.327L1.558,415.193 c-4.656,18.258,1.301,37.262,15.547,49.595c14.274,12.357,33.937,15.495,51.31,8.287l413.094-171.409 C500.317,293.862,512,276.364,512,256.001C512,235.638,500.317,218.139,481.508,210.336z"></path></svg>`
                     });
-                    
-                    inputContainer.appendChild(userInput);
-                    inputContainer.appendChild(sendButton);
-                    chatWrapper.appendChild(chatContainer);
-                    chatWrapper.appendChild(inputContainer);
+                    const chatWrapper = createElement("div", {id: "chat-widget", style: "margin-top: 5px 0 10px;"},
+                        chatContainer,
+                        createElement("div", {className: "input-container"},
+                            userInput,
+                            sendButton
+                        )
+                    );
                     
                     const sectionHead = getSectionHead();
                     const existingChatWidget = document.getElementById('chat-widget');
@@ -5252,7 +5290,7 @@
                     
                     changeScrollAmount("#chat-container", 0.2)
                     userInput.addEventListener('keydown', (event) => {
-                        if (event.key === 'Enter') {
+                        if (event.key === 'Enter' && !event.shiftKey) {
                             event.preventDefault();
                             handleSendMessage();
                         } else if (event.key === 'Escape') {
