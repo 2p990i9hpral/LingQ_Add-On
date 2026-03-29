@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      11.4.0
+// @version      11.4.1
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @grant       GM_xmlhttpRequest
@@ -5246,7 +5246,7 @@
                     
                     // if (chatHistory.findIndex(item => item.role === "system-plain") !== -1) chatHistory = chatHistory.filter(item => (item.role !== "system-word" && item.role !== "system-sentence"));
                     
-                    addMessageToUI(userMessage, 'user-message', chatContainer, true);
+                    addMessageToUI(userMessage.replaceAll('\n', '<br>'), 'user-message', chatContainer, true);
                     chatHistory = updateChatHistoryState(chatHistory, userMessage, "user");
                     
                     const botMessageDiv = addMessageToUI("", "bot-message", chatContainer, false);
