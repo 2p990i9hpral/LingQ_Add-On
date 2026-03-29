@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      11.4.1
+// @version      11.5.0
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @grant       GM_xmlhttpRequest
@@ -770,6 +770,34 @@
                 }
             });
         });
+    }
+    
+    function shouldConvertToHTML(content) {
+        const hasHtml = /<[a-z][\s\S]*>/i.test(content);
+        const hasMarkdown = /[#*\-]\s|[*_]{2}/.test(content);
+        
+        return !hasHtml || (hasMarkdown && content.length > 0);
+    }
+    
+    function convertMarkdownToHTML(text) {
+        const codePlaceholders = [];
+        
+        return text
+            .trim()
+            // Protect inline code content from being affected by other regexes
+            .replace(/`([^`]+)`/g, (_, code) => {
+                codePlaceholders.push(`<code>${code}</code>`);
+                return `\x00${codePlaceholders.length - 1}\x00`;
+            })
+            .replace(/^---$/gm, '<hr>')
+            .replace(/^#+ (.+)$/gm, '<b><u>$1</u></b>')
+            .replace(/\*\*(.+?)\*\*/gs, '<b>$1</b>')
+            .replace(/\*(.+?)\*/gs, '<i>$1</i>')
+            .replace(/^\s*[-*]\s+(.+)$/gm, '<li>$1</li>')
+            .replace(/(<li>.*<\/li>)/s, '<ul>$1</ul>')
+            .replace(/\n+/g, '<br><span class="line-spacer"></span>')
+            // Restore protected inline code
+            .replace(/\x00(\d+)\x00/g, (_, i) => codePlaceholders[Number(i)]);
     }
     
     /* Modules */
@@ -3587,6 +3615,11 @@
                     height: 1px;
                     background-color: rgb(125 125 125 / 50%);
                 }
+                
+                #chat-container .line-spacer {
+                    display: block;
+                    height: 0.5rem;
+                }
 
                 .message-button-container {
                     display: flex;
@@ -5142,7 +5175,8 @@
                             }
                         },
                         (finalContent) => {
-                            const cleanedContent = finalContent.replace(/^```(?:\w+\n)?/, '').replace(/```\s*$/, '');
+                            const stripped = finalContent.replace(/^```(?:\w+\n)?/, '').replace(/```\s*$/, '');
+                            const cleanedContent = shouldConvertToHTML(stripped) ? convertMarkdownToHTML(stripped) : stripped;
                             botMessageDiv.innerHTML = cleanedContent;
                             
                             chatHistory = updateChatHistoryState(chatHistory, cleanedContent, "assistant");
