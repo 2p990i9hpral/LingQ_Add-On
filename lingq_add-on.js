@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      11.5.1
+// @version      11.6.0
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @grant       GM_xmlhttpRequest
@@ -305,7 +305,7 @@
     
     function createElement(tag, props = {}, ...children) {
         const element = document.createElement(tag);
-        const { dataset, style, ...restProps } = props || {};
+        const {dataset, style, ...restProps} = props || {};
         
         Object.assign(element, restProps);
         
@@ -716,10 +716,10 @@
                     (async () => {
                         try {
                             while (true) {
-                                const { done, value } = await reader.read();
+                                const {done, value} = await reader.read();
                                 
                                 if (value) {
-                                    const chunk = decoder.decode(value, { stream: true });
+                                    const chunk = decoder.decode(value, {stream: true});
                                     buffer += chunk;
                                     
                                     const lines = buffer.split('\n');
@@ -742,7 +742,8 @@
                                             if (json.type === "content_block_delta" && json.delta?.text) {
                                                 fullContent += json.delta.text;
                                             }
-                                        } catch (e) {}
+                                        } catch (e) {
+                                        }
                                     });
                                 }
                                 
@@ -1132,7 +1133,7 @@
     }
     
     function buildRequestBody(provider, model, history, stream = false) {
-        let body = { model, temperature: 1.0, messages: history };
+        let body = {model, temperature: 1.0, messages: history};
         
         if (stream) body.stream = true;
         
@@ -1156,7 +1157,7 @@
                 if (last && last.role === msg.role) {
                     last.content += `\n\n${msg.content}`;
                 } else {
-                    merged.push({ role: msg.role, content: msg.content });
+                    merged.push({role: msg.role, content: msg.content});
                 }
             }
             body.messages = merged;
@@ -1166,11 +1167,11 @@
     }
     
     async function getOpenAIResponse(provider, apiKey, model, history) {
-        const { api_url, headers } = buildRequestConfig(provider, apiKey);
+        const {api_url, headers} = buildRequestConfig(provider, apiKey);
         const body = buildRequestBody(provider, model, history);
         
         try {
-            const response = await gmFetch(api_url, { method: 'POST', headers, body: JSON.stringify(body) });
+            const response = await gmFetch(api_url, {method: 'POST', headers, body: JSON.stringify(body)});
             
             if (!response.ok) {
                 const errorData = await response.json();
@@ -1197,12 +1198,16 @@
     }
     
     async function streamOpenAIResponse(provider, apiKey, model, history, onChunkReceived, onStreamEnd, onError) {
-        const { api_url, headers } = buildRequestConfig(provider, apiKey);
+        const {api_url, headers} = buildRequestConfig(provider, apiKey);
         if (provider === "anthropic") headers['Accept'] = 'text/event-stream';
         const body = buildRequestBody(provider, model, history, true);
         
         try {
-            const finalContent = await gmStream(api_url, { method: 'POST', headers, body: JSON.stringify(body) }, (json) => {
+            const finalContent = await gmStream(api_url, {
+                method: 'POST',
+                headers,
+                body: JSON.stringify(body)
+            }, (json) => {
                 if (provider === "anthropic") {
                     if (json.type === "content_block_delta" && json.delta?.text) onChunkReceived(json.delta.text);
                 } else {
@@ -1369,7 +1374,7 @@
             const columns = createElement("div", {style: "display: flex; flex-direction: row;"});
             
             const container1 = createElement("div", {style: "padding: 5px; width: 350px;"});
-
+            
             addSelect(container1, "styleTypeSelector", "Layout Style:", [
                 {value: "video", text: "Video"},
                 {value: "video2", text: "Video2"},
@@ -1778,13 +1783,20 @@
         }
         
         function createFlashcardPopup() {
-            const paginationContainer = createElement("div", {id: "flashcardPagination", style: "display:flex; align-items:center; justify-content:flex-end;"},
-                createElement("button", {id: "flashcardPaginationPrev", className: "popup-button", disabled: true}, "<"),
+            const paginationContainer = createElement("div", {
+                    id: "flashcardPagination",
+                    style: "display:flex; align-items:center; justify-content:flex-end;"
+                },
+                createElement("button", {
+                    id: "flashcardPaginationPrev",
+                    className: "popup-button",
+                    disabled: true
+                }, "<"),
                 createElement("span", {id: "flashcardPageInfo", style: "width: 50px; text-align: center;"}, "1/1",),
                 createElement("button", {id: "flashcardPaginationNext", className: "popup-button", disabled: true}, ">")
             );
             
-            const flashcardTableContainer =  createElement("div", {id: "flashcardTableContainer"},
+            const flashcardTableContainer = createElement("div", {id: "flashcardTableContainer"},
                 createElement("table", {id: "flashcardTable"},
                     createElement("thead", {},
                         createElement("tr", {},
@@ -1797,12 +1809,18 @@
                 )
             );
             
-            const statsContainer = createElement("div", { id: "flashcardStatsContainer" },
-                createElement("div", { id: "flashcardStatsHeader" },
-                    createElement("span", {}, "Flashcards Created per Week"),
+            const statsContainer = createElement("div", {id: "flashcardStatsContainer"},
+                createElement("div", {id: "flashcardStatsHeader"},
+                    createElement("span", {id: "flashcardStatsTitle"}, "Flashcards Created per Week"),
+                    createElement("div", {className: "flashcard-period-tabs"},
+                        createElement("button", {className: "btn-ghost active", dataset: {period: "week"}}, "Week"),
+                        createElement("button", {className: "btn-ghost", dataset: {period: "month"}}, "Month"),
+                        createElement("button", {className: "btn-ghost", dataset: {period: "year"}}, "Year"),
+                        createElement("button", {className: "btn-ghost", dataset: {period: "all"}}, "All"),
+                    )
                 ),
-                createElement("div", { className: "flashcard-chart-wrapper" },
-                    createElement("canvas", { id: "flashcardStatsChart" })
+                createElement("div", {className: "flashcard-chart-wrapper"},
+                    createElement("canvas", {id: "flashcardStatsChart"})
                 )
             );
             
@@ -1813,13 +1831,23 @@
                 createElement("div", {style: "padding: 0 15px; width: 800px;"},
                     createElement("div", {id: "flashcardPopupHeader"},
                         createElement("span", {id: "flashcardCount"}, "Flashcards:"),
-                        createElement("input", {id: "flashcardSearchInput", type: "text", placeholder: "Search word or meaning..."}),
+                        createElement("input", {
+                            id: "flashcardSearchInput",
+                            type: "text",
+                            placeholder: "Search word or meaning..."
+                        }),
                         paginationContainer
                     ),
                     flashcardTableContainer,
                     statsContainer,
-                    createElement("div", {className: "popup-row", style: "display: flex; justify-content: flex-end; gap: 10px; margin: 10px 0;"},
-                        createElement("button", {id: "flashcardCsvDownload", className: "popup-button"}, "Export as CSV"),
+                    createElement("div", {
+                            className: "popup-row",
+                            style: "display: flex; justify-content: flex-end; gap: 10px; margin: 10px 0;"
+                        },
+                        createElement("button", {
+                            id: "flashcardCsvDownload",
+                            className: "popup-button"
+                        }, "Export as CSV"),
                         createElement("button", {id: "closeFlashcardPopupBtn", className: "popup-button"}, "Close")
                     )
                 )
@@ -2046,7 +2074,7 @@
             const styleTypeSelector = document.getElementById("styleTypeSelector");
             styleTypeSelector.addEventListener("change", (event) => {
                 const selectedStyleType = event.target.value;
-                const styleTypes = typeof settings.styleType === "object" ? { ...settings.styleType } : {};
+                const styleTypes = typeof settings.styleType === "object" ? {...settings.styleType} : {};
                 styleTypes[getLessonLanguage()] = selectedStyleType;
                 settings.styleType = styleTypes;
                 document.getElementById("videoSettings").style.display = selectedStyleType === "video" ? "block" : "none";
@@ -2150,7 +2178,7 @@
             });
             
             prependSummaryCheckbox.addEventListener('change', (event) => {
-                const prependSummaries = typeof settings.prependSummary === "object" ? { ...settings.prependSummary } : {};
+                const prependSummaries = typeof settings.prependSummary === "object" ? {...settings.prependSummary} : {};
                 prependSummaries[getLessonLanguage()] = event.target.checked;
                 settings.prependSummary = prependSummaries;
             });
@@ -2208,7 +2236,7 @@
             
             const ttsVoiceSelector = document.getElementById("ttsVoiceSelector");
             ttsVoiceSelector.addEventListener("change", (event) => {
-                const voices = typeof settings.ttsVoice === "object" ? { ...settings.ttsVoice } : {};
+                const voices = typeof settings.ttsVoice === "object" ? {...settings.ttsVoice} : {};
                 voices[getLessonLanguage()] = event.target.value;
                 settings.ttsVoice = voices;
             });
@@ -2558,6 +2586,7 @@
             let searchKeyword = "";
             
             let flashcardStatsChart = null;
+            let flashcardAllDates = [];
             
             async function fetchFlashcardsInBatches(language, columns, sortBy) {
                 let allData = [];
@@ -2566,12 +2595,12 @@
                 let hasMore = true;
                 
                 while (hasMore) {
-                    const { data, error } = await supabaseClient
+                    const {data, error} = await supabaseClient
                         .from("word_data")
                         .select(columns)
                         .eq("flashcard", true)
                         .eq("language", language)
-                        .order(sortBy, { ascending: true })
+                        .order(sortBy, {ascending: true})
                         .range(from, from + batchSize - 1);
                     
                     if (error) {
@@ -2635,14 +2664,14 @@
                 
                 let queryBase = supabaseClient
                     .from("word_data")
-                    .select("idx, word, meaning, explanation", { count: "exact" })
+                    .select("idx, word, meaning, explanation", {count: "exact"})
                     .eq("flashcard", true)
                     .eq("language", language);
                 
                 if (searchKeyword) queryBase = queryBase.or(`word.ilike.%${searchKeyword}%,meaning.ilike.%${searchKeyword}%`);
                 
-                const { data, error, count } = await queryBase
-                    .order(currentSortField, { ascending: currentSortOrder === "asc" })
+                const {data, error, count} = await queryBase
+                    .order(currentSortField, {ascending: currentSortOrder === "asc"})
                     .range(from, to);
                 
                 if (error) {
@@ -2659,22 +2688,26 @@
                     });
                     const deleteTd = createElement("td", {}, deleteBtn);
                     
-                    const meaningTd = createElement("td", { textContent: row.meaning || "", title: row.meaning || "", style: "cursor: pointer;" });
+                    const meaningTd = createElement("td", {
+                        textContent: row.meaning || "",
+                        title: row.meaning || "",
+                        style: "cursor: pointer;"
+                    });
                     
                     const tableRow = createElement("tr", {},
                         deleteTd,
-                        createElement("td", { textContent: row.word || "", title: row.word || "" }),
+                        createElement("td", {textContent: row.word || "", title: row.word || ""}),
                         meaningTd,
-                        createElement("td", { textContent: row.explanation || "", title: row.explanation || "" })
+                        createElement("td", {textContent: row.explanation || "", title: row.explanation || ""})
                     );
                     
                     deleteBtn.addEventListener("click", async (ev) => {
                         ev.stopPropagation();
                         
                         deleteBtn.disabled = true;
-                        const { error: updateError } = await supabaseClient
+                        const {error: updateError} = await supabaseClient
                             .from("word_data")
-                            .update({ flashcard: false })
+                            .update({flashcard: false})
                             .eq("idx", row.idx);
                         
                         if (updateError) {
@@ -2713,9 +2746,9 @@
                                 return;
                             }
                             
-                            const { error: updateError } = await supabaseClient
+                            const {error: updateError} = await supabaseClient
                                 .from("word_data")
-                                .update({ meaning: newValue })
+                                .update({meaning: newValue})
                                 .eq("idx", row.idx);
                             
                             if (updateError) {
@@ -2748,10 +2781,10 @@
                 if (!totalCount) {
                     supabaseClient
                         .from("word_data")
-                        .select("*", { count: "exact", head: true })
+                        .select("*", {count: "exact", head: true})
                         .eq("flashcard", true)
                         .eq("language", language)
-                        .then(({ count }) => {
+                        .then(({count}) => {
                             totalCount = count || 0;
                             countLabel.textContent = `Flashcards: ${totalCount}`;
                         });
@@ -2760,11 +2793,33 @@
                 await loadFlashcardStats();
             }
             
-            function drawFlashcardStatsChart(labels, periodicData, cumulativeData, useMonthly) {
-                const periodLabel = useMonthly ? "Monthly" : "Weekly";
-                const titleText = `Flashcards Created per ${useMonthly ? "Month" : "Week"}`;
+            function drawFlashcardStatsChart(labels, periodicData, cumulativeData, selectedPeriod, periodicLabelOverride) {
+                const titleMap = {
+                    week: "Flashcards Created per Week",
+                    month: "Flashcards Created per Month",
+                    year: "Flashcards Created per Year",
+                    all: "Flashcards Created (All Time)",
+                };
                 
-                document.querySelector("#flashcardStatsHeader span").textContent = titleText;
+                const defaultPeriodLabelMap = {
+                    week: "Daily",
+                    month: "Daily",
+                    year: "Monthly",
+                    all: "Monthly",
+                };
+                
+                const periodLabel = periodicLabelOverride || defaultPeriodLabelMap[selectedPeriod] || "Daily";
+                const titleText = titleMap[selectedPeriod] || titleMap.week;
+                
+                document.getElementById("flashcardStatsTitle").textContent = titleText;
+                
+                function formatTickLabel(label) {
+                    return label;
+                }
+                
+                const tickCallback = function (val) {
+                    return formatTickLabel(this.getLabelForValue(val));
+                };
                 
                 const ctx = document.getElementById("flashcardStatsChart").getContext("2d");
                 
@@ -2773,8 +2828,8 @@
                     flashcardStatsChart.data.datasets[0].data = periodicData;
                     flashcardStatsChart.data.datasets[0].label = periodLabel;
                     flashcardStatsChart.data.datasets[1].data = cumulativeData;
+                    flashcardStatsChart.options.scales.x.ticks.callback = tickCallback;
                     flashcardStatsChart.options.scales.yPeriodic.title.text = periodLabel;
-                    
                     flashcardStatsChart.update();
                     return;
                 }
@@ -2808,35 +2863,30 @@
                     options: {
                         responsive: true,
                         maintainAspectRatio: false,
-                        interaction: { mode: "index", intersect: false },
-                        plugins: { legend: { display: true } },
+                        interaction: {mode: "index", intersect: false},
+                        plugins: {legend: {display: true}},
                         scales: {
                             x: {
-                                grid: { display: false },
+                                grid: {display: false},
                                 ticks: {
                                     autoSkip: true,
-                                    callback: function(val, index) {
-                                        const label = this.getLabelForValue(val);
-                                        if (useMonthly) return label;
-                                        const parts = label.split('-');
-                                        return `${parts[1]}/${parts[2]}`;
-                                    }
-                                }
+                                    callback: tickCallback,
+                                },
                             },
                             yPeriodic: {
                                 type: "linear",
                                 position: "left",
                                 beginAtZero: true,
-                                title: { display: true, text: periodLabel },
-                                ticks: { precision: 0 },
+                                title: {display: true, text: periodLabel},
+                                ticks: {precision: 0},
                             },
                             yCumulative: {
                                 type: "linear",
                                 position: "right",
                                 beginAtZero: true,
-                                grid: { drawOnChartArea: false },
-                                title: { display: true, text: "Cumulative" },
-                                ticks: { precision: 0 },
+                                grid: {drawOnChartArea: false},
+                                title: {display: true, text: "Cumulative"},
+                                ticks: {precision: 0},
                             },
                         },
                     },
@@ -2844,47 +2894,147 @@
             }
             
             async function loadFlashcardStats() {
+                function getLocalDateKey(date) {
+                    const year = date.getFullYear();
+                    const month = String(date.getMonth() + 1).padStart(2, "0");
+                    const day = String(date.getDate()).padStart(2, "0");
+                    return `${year}-${month}-${day}`;
+                }
+                
                 function getWeekStartKey(date) {
                     const d = new Date(date);
                     d.setHours(0, 0, 0, 0);
-                    d.setDate(d.getDate() - d.getDay()); // Sunday as week start
+                    d.setDate(d.getDate() - d.getDay());
                     return d.toISOString().slice(0, 10);
                 }
                 
-                function buildChartData(allDates) {
-                    const firstDate = new Date(allDates[0].created_at);
-                    const lastDate = new Date(allDates[allDates.length - 1].created_at);
-                    const weekCount = Math.ceil((lastDate - firstDate) / (7 * 24 * 60 * 60 * 1000));
-                    
-                    // Switch to monthly if data spans more than 2 years (52*2 weeks)
-                    const useMonthly = weekCount > 52*2;
-                    const bucketMap = {};
-                    
-                    allDates.forEach(({ created_at }) => {
-                        const key = useMonthly
-                            ? created_at.slice(0, 7)
-                            : getWeekStartKey(new Date(created_at));
-                        bucketMap[key] = (bucketMap[key] || 0) + 1;
-                    });
-                    
-                    const labels = Object.keys(bucketMap).sort();
-                    const periodicData = labels.map(k => bucketMap[k]);
-                    
-                    const cumulativeData = periodicData.reduce((acc, count) => {
-                        const previousTotal = acc.length > 0 ? acc[acc.length - 1] : 0;
-                        acc.push(previousTotal + count);
-                        return acc;
-                    }, []);
-                    
-                    return { labels, periodicData, cumulativeData, useMonthly };
+                function buildCreatedDateMap() {
+                    return flashcardAllDates.reduce((map, {created_at}) => {
+                        const key = getLocalDateKey(new Date(created_at));
+                        map[key] = (map[key] || 0) + 1;
+                        return map;
+                    }, {});
                 }
                 
-                const allDates = await fetchFlashcardsInBatches(language, "created_at", "created_at");
+                function getDayCount(createdDateMap, date) {
+                    return createdDateMap[getLocalDateKey(date)] || 0;
+                }
                 
-                if (!allDates.length) return;
+                function getMonthCount(createdDateMap, year, month, endDate) {
+                    let sum = 0;
+                    for (let d = new Date(year, month, 1); d <= endDate; d.setDate(d.getDate() + 1)) {
+                        sum += getDayCount(createdDateMap, d);
+                    }
+                    return sum;
+                }
                 
-                const { labels, periodicData, cumulativeData, useMonthly } = buildChartData(allDates);
-                drawFlashcardStatsChart(labels, periodicData, cumulativeData, useMonthly);
+                function buildChartData(selectedPeriod) {
+                    const today = new Date();
+                    today.setHours(0, 0, 0, 0);
+                    
+                    const createdDateMap = buildCreatedDateMap();
+                    const labels = [];
+                    const periodicData = [];
+                    const cumulativeData = [];
+                    let runningTotal = 0;
+                    let periodicLabel = "Daily";
+                    
+                    function pushPoint(label, value) {
+                        runningTotal += value;
+                        labels.push(label);
+                        periodicData.push(value);
+                        cumulativeData.push(runningTotal);
+                    }
+                    
+                    if (selectedPeriod === "week") {
+                        periodicLabel = "Daily";
+                        
+                        const start = new Date(today);
+                        start.setDate(today.getDate() - 6);
+                        
+                        for (let d = new Date(start); d <= today; d.setDate(d.getDate() + 1)) {
+                            pushPoint(
+                                d.toLocaleString("en-US", {weekday: "short"}),
+                                getDayCount(createdDateMap, d)
+                            );
+                        }
+                    } else if (selectedPeriod === "month") {
+                        periodicLabel = "Daily";
+                        
+                        const start = new Date(today);
+                        start.setMonth(today.getMonth() - 1);
+                        
+                        if (start.getDate() !== today.getDate()) {
+                            start.setDate(0);
+                        }
+                        start.setDate(start.getDate() + 1);
+                        
+                        for (let d = new Date(start); d <= today; d.setDate(d.getDate() + 1)) {
+                            pushPoint(String(d.getDate()), getDayCount(createdDateMap, d));
+                        }
+                    } else if (selectedPeriod === "year") {
+                        periodicLabel = "Monthly";
+                        
+                        const startMonth = new Date(today.getFullYear(), today.getMonth() - 11, 1);
+                        
+                        for (let m = new Date(startMonth); m <= today; m.setMonth(m.getMonth() + 1)) {
+                            const year = m.getFullYear();
+                            const month = m.getMonth();
+                            const endOfMonth = new Date(year, month + 1, 0);
+                            const endDate = endOfMonth > today ? today : endOfMonth;
+                            const value = getMonthCount(createdDateMap, year, month, endDate);
+                            
+                            pushPoint(m.toLocaleString("en-US", {month: "short"}), value);
+                        }
+                    } else {
+                        const firstDate = new Date(flashcardAllDates[0].created_at);
+                        const lastDate = new Date(flashcardAllDates[flashcardAllDates.length - 1].created_at);
+                        const weekCount = Math.ceil((lastDate - firstDate) / (7 * 24 * 60 * 60 * 1000));
+                        const useMonthly = weekCount > 52 * 2;
+                        
+                        periodicLabel = useMonthly ? "Monthly" : "Weekly";
+                        
+                        const bucketMap = {};
+                        flashcardAllDates.forEach(({created_at}) => {
+                            const key = useMonthly
+                                ? created_at.slice(0, 7)
+                                : getWeekStartKey(new Date(created_at));
+                            
+                            bucketMap[key] = (bucketMap[key] || 0) + 1;
+                        });
+                        
+                        Object.keys(bucketMap).sort().forEach(key => {
+                            pushPoint(key, bucketMap[key]);
+                        });
+                    }
+                    
+                    return {labels, periodicData, cumulativeData, periodicLabel};
+                }
+                
+                function updateChart(selectedPeriod) {
+                    const {labels, periodicData, cumulativeData, periodicLabel} = buildChartData(selectedPeriod);
+                    drawFlashcardStatsChart(labels, periodicData, cumulativeData, selectedPeriod, periodicLabel);
+                }
+                
+                flashcardAllDates = await fetchFlashcardsInBatches(language, "created_at", "created_at");
+                if (!flashcardAllDates.length) return;
+                
+                const container = document.getElementById("flashcardStatsContainer");
+                const tabs = container.querySelectorAll(".flashcard-period-tabs .btn-ghost");
+                
+                if (!container.dataset.initialized) {
+                    tabs.forEach(btn => {
+                        btn.addEventListener("click", () => {
+                            tabs.forEach(tab => tab.classList.remove("active"));
+                            btn.classList.add("active");
+                            updateChart(btn.dataset.period);
+                        });
+                    });
+                    container.dataset.initialized = "1";
+                }
+                
+                const activeTab = container.querySelector(".flashcard-period-tabs .btn-ghost.active");
+                updateChart(activeTab?.dataset.period || "week");
             }
             
             flashcardButton.addEventListener("click", async () => {
@@ -2909,7 +3059,7 @@
             const tableHeaders = document.querySelectorAll("#flashcardTable thead th");
             tableHeaders.forEach(th => {
                 th.addEventListener("click", () => {
-                    const fieldMap = { Word: "word", Meaning: "meaning", Explanation: "explanation" };
+                    const fieldMap = {Word: "word", Meaning: "meaning", Explanation: "explanation"};
                     const field = fieldMap[th.textContent.replace(/[▲▼]/g, "").trim()];
                     if (!field) return;
                     
@@ -2996,7 +3146,7 @@
                 );
                 
                 const csv = [headers.join(","), ...rows].join("\n");
-                const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+                const blob = new Blob([csv], {type: "text/csv;charset=utf-8;"});
                 
                 const link = createElement("a", {
                     href: URL.createObjectURL(blob),
@@ -3221,8 +3371,32 @@
                 }
                 
                 #flashcardStatsHeader {
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                }
+                
+                #flashcardStatsTitle {
                     font-size: 0.9em;
                     color: var(--font-color);
+                }
+                
+                .flashcard-period-tabs {
+                    display: flex;
+                    gap: 5px;
+                    justify-content: space-between;
+                }
+                
+                .flashcard-period-tabs .btn-ghost {
+                    flex: 1;
+                    padding: 0 5px;
+                    color: var(--font-color);
+                    border-radius: 5px;
+                }
+                
+                .flashcard-period-tabs .btn-ghost.active {
+                    background-color: var(--border);
+                    font-weight: bold;
                 }
                 
                 .flashcard-chart-wrapper {
@@ -3381,7 +3555,6 @@
             
             addElementToNavBar(completeLessonButton);
         }
-        
         
         
         function generateBaseCSS(colorSettings) {
@@ -4509,7 +4682,9 @@
                             summaryElement.append(contentWrapper);
                             
                             const closeButton = createElement("button", {className: "close-summary-btn"}, ["close"]);
-                            closeButton.addEventListener("click", () => {summaryElement.remove()});
+                            closeButton.addEventListener("click", () => {
+                                summaryElement.remove()
+                            });
                             summaryElement.append(closeButton);
                             
                             changeScrollAmount(".quick-summary", 0.2);
@@ -4530,7 +4705,9 @@
                 }
                 
                 getLessonSummary(llmProvider, llmApiKey, llmModel, lessonContent)
-                    .then(summary => { lessonSummary = summary; });
+                    .then(summary => {
+                        lessonSummary = summary;
+                    });
                 
             }
             
@@ -4590,7 +4767,7 @@
                 element.setAttribute('tabindex', '-1');
                 element.addEventListener('keydown', (event) => {
                     if (['ArrowLeft', 'ArrowRight'].includes(event.key)) event.preventDefault();
-                }, { passive: false });
+                }, {passive: false});
             }
             
             const observer = new MutationObserver(function (mutations) {
@@ -4608,7 +4785,7 @@
                                     wrapper.scrollTop += event.deltaY;
                                     event.preventDefault();
                                 }
-                            }, { passive: false });
+                            }, {passive: false});
                         }
                         
                         preventHorizontalScroll('.reader-container-wrapper');
@@ -4629,14 +4806,14 @@
                         if (summaryElement) {
                             summaryElement.addEventListener('wheel', (event) => {
                                 event.stopPropagation();
-                            }, { passive: false });
+                            }, {passive: false});
                         }
                     });
                 });
             });
             
             const sentenceText = await waitForElement('.sentence-text', 10000);
-            observer.observe(sentenceText, { childList: true });
+            observer.observe(sentenceText, {childList: true});
             
             setupNavigationScrollReset();
             setupQuickSummaryCleanup();
@@ -4712,12 +4889,12 @@
                     
                     const selectedText = selectedTextElement ? extractTextFromDOM(selectedTextElement).trim() : "";
                     
-                    if (!currentSentenceEl) return { input: selectedText, context: "" };
+                    if (!currentSentenceEl) return {input: selectedText, context: ""};
                     
                     const sentenceItems = [...currentSentenceEl.querySelectorAll(".sentence-item")];
                     const selectedIndex = sentenceItems.indexOf(selectedEl);
                     
-                    const positionRatio = sentenceItems.length > 0  ? Math.max(0, selectedIndex) / sentenceItems.length : 0.5;
+                    const positionRatio = sentenceItems.length > 0 ? Math.max(0, selectedIndex) / sentenceItems.length : 0.5;
                     
                     const currentText = extractTextFromDOM(currentSentenceEl).trim();
                     const allSentences = [...document.querySelectorAll(".sentence")];
@@ -4765,7 +4942,7 @@
                     const suffixLog = suffixTexts.length > 0 ? '+'.repeat(suffixTexts.length) : '';
                     console.log(`Context: ${currentText.length} -> ${contextText.length} (${prefixLog}Selected${suffixLog})`);
                     
-                    return { input: selectedText, context: contextText };
+                    return {input: selectedText, context: contextText};
                 }
                 
                 let isProgrammaticReferenceWordUpdate = false;
@@ -4855,7 +5032,11 @@
                                 
                                 const currentText = meaningElem.textContent.trim();
                                 
-                                const input = createElement("input", {type: "text", value: currentText, className: "meaning-edit-input",});
+                                const input = createElement("input", {
+                                    type: "text",
+                                    value: currentText,
+                                    className: "meaning-edit-input",
+                                });
                                 
                                 meaningElem.textContent = "";
                                 meaningElem.appendChild(input);
@@ -4868,7 +5049,7 @@
                                     if (save && newValue !== currentText) {
                                         const storedIdx = botMessageDiv.dataset.wordIdx;
                                         if (storedIdx) {
-                                            const { data: existing } = await supabaseClient
+                                            const {data: existing} = await supabaseClient
                                                 .from("word_data")
                                                 .select("idx")
                                                 .eq("word", word)
@@ -4883,9 +5064,9 @@
                                                 return;
                                             }
                                             
-                                            const { error: updateError } = await supabaseClient
+                                            const {error: updateError} = await supabaseClient
                                                 .from("word_data")
-                                                .update({ meaning: newValue })
+                                                .update({meaning: newValue})
                                                 .eq("idx", storedIdx);
                                             if (updateError) {
                                                 console.error("Meaning update error:", updateError);
@@ -5079,7 +5260,7 @@
                                         return;
                                     }
                                     
-                                    const { data: existing } = await supabaseClient
+                                    const {data: existing} = await supabaseClient
                                         .from("word_data")
                                         .select("idx")
                                         .eq("word", word)
@@ -5094,9 +5275,9 @@
                                         return;
                                     }
                                     
-                                    const { error: updateError } = await supabaseClient
+                                    const {error: updateError} = await supabaseClient
                                         .from("word_data")
-                                        .update({ flashcard: true })
+                                        .update({flashcard: true})
                                         .eq("idx", targetIdx);
                                     
                                     if (updateError) {
@@ -5106,7 +5287,10 @@
                                     } else {
                                         const badge = wordElem.querySelector(".flashcard-count-badge");
                                         if (badge) badge.textContent = +badge.textContent + 1;
-                                        else wordElem.appendChild(createElement("span", {className: "flashcard-count-badge", textContent: "1"}));
+                                        else wordElem.appendChild(createElement("span", {
+                                            className: "flashcard-count-badge",
+                                            textContent: "1"
+                                        }));
                                         showToast("Saved to Flashcard!", true);
                                     }
                                 } catch (err) {
@@ -5152,7 +5336,8 @@
                     return messageDiv;
                 }
                 
-                async function callStreamOpenAI(botMessageDiv, chatContainer, focus, onStreamCompleted = () => {}) {
+                async function callStreamOpenAI(botMessageDiv, chatContainer, focus, onStreamCompleted = () => {
+                }) {
                     const userInput = document.getElementById("user-input");
                     const sendButton = document.getElementById("send-button");
                     
@@ -6268,5 +6453,6 @@
             setupYoutubeEmbeddedPlayer();
         }
     }
+    
     init();
 })();
