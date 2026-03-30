@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      11.5.0
+// @version      11.5.1
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @grant       GM_xmlhttpRequest
@@ -782,21 +782,33 @@
     function convertMarkdownToHTML(text) {
         const codePlaceholders = [];
         
-        return text
-            .trim()
-            // Protect inline code content from being affected by other regexes
-            .replace(/`([^`]+)`/g, (_, code) => {
-                codePlaceholders.push(`<code>${code}</code>`);
-                return `\x00${codePlaceholders.length - 1}\x00`;
-            })
-            .replace(/^---$/gm, '<hr>')
-            .replace(/^#+ (.+)$/gm, '<b><u>$1</u></b>')
+        const protectedText = text.trim().replace(/`([^`]+)`/g, (_, code) => {
+            codePlaceholders.push(`<code>${code}</code>`);
+            return `\x00${codePlaceholders.length - 1}\x00`;
+        });
+        
+        const blocks = protectedText.split(/\n\n+/);
+        
+        const htmlContent = blocks.map(block => {
+            if (/^---$/m.test(block)) return '<hr>';
+            if (/^#+ /m.test(block)) {
+                const content = block
+                    .replace(/^#+ (.+)$/gm, '<b><u>$1</u></b>')
+                    .replace(/\n/g, '<br>');
+                return `<p>${content}</p>`;
+            }
+            if (/^\s*[-*]\s+/m.test(block)) {
+                const items = block.split('\n')
+                    .map(line => line.replace(/^\s*[-*]\s+(.+)$/, '<li>$1</li>'))
+                    .join('');
+                return `<ul>${items}</ul>`;
+            }
+            return `<p>${block.replace(/\n/g, '<br>')}</p>`;
+        }).join('');
+        
+        return htmlContent
             .replace(/\*\*(.+?)\*\*/gs, '<b>$1</b>')
             .replace(/\*(.+?)\*/gs, '<i>$1</i>')
-            .replace(/^\s*[-*]\s+(.+)$/gm, '<li>$1</li>')
-            .replace(/(<li>.*<\/li>)/s, '<ul>$1</ul>')
-            .replace(/\n+/g, '<br><span class="line-spacer"></span>')
-            // Restore protected inline code
             .replace(/\x00(\d+)\x00/g, (_, i) => codePlaceholders[Number(i)]);
     }
     
@@ -3605,7 +3617,7 @@
                     list-style: inside !important;
                 }
 
-                #chat-container ui {
+                #chat-container ul {
                     margin-top: 0.5rem;
                 }
 
@@ -3616,11 +3628,6 @@
                     background-color: rgb(125 125 125 / 50%);
                 }
                 
-                #chat-container .line-spacer {
-                    display: block;
-                    height: 0.5rem;
-                }
-
                 .message-button-container {
                     display: flex;
                     gap: 5px;
