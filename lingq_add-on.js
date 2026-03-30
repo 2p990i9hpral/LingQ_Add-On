@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      11.6.0
+// @version      11.6.1
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @grant       GM_xmlhttpRequest
@@ -4551,20 +4551,18 @@
                     const wrapper = document.querySelector(".reader-container-wrapper");
                     const container = document.querySelector(".reader-container");
                     
-                    const verticalTarget = isPageMode ? wrapper : container;
-                    if (!verticalTarget || !container) return;
+                    const scrollTarget = isPageMode ? wrapper : container;
+                    if (!scrollTarget || !container) return;
                     
                     const offsetTop = playingSentence.parentElement.matches(".has-translation")
                         ? playingSentence.parentElement.offsetTop
                         : playingSentence.offsetTop;
                     
-                    const containerHalfWidth = Math.floor(verticalTarget.offsetHeight / 2);
-                    const targetScrollTop = offsetTop + Math.floor(playingSentence.offsetHeight / 2) - containerHalfWidth;
-                    smoothScrollTo(verticalTarget, targetScrollTop, 300);
+                    const containerHalfHeight = Math.floor(scrollTarget.offsetHeight / 2);
+                    const targetScrollTop = offsetTop + Math.floor(playingSentence.offsetHeight / 2) - containerHalfHeight;
+                    smoothScrollTo(scrollTarget, targetScrollTop, 300);
                     
-                    if (isPageMode) {
-                        smoothScrollTo(container, playingSentence.offsetLeft, 300, true);
-                    }
+                    if (isPageMode) smoothScrollTo(scrollTarget, playingSentence.offsetLeft, 300, true);
                 }
                 
                 const observer = new MutationObserver((mutations) => {
