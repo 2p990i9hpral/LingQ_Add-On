@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      11.6.1
+// @version      11.7.0
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @grant       GM_xmlhttpRequest
@@ -446,7 +446,7 @@
         }, 1500);
     }
     
-    function finishLesson() {
+    function moveNextPage() {
         clickElement(".reader-component > .nav--right > a");
     }
     
@@ -3472,7 +3472,7 @@
     
     function setupReader() {
         function setupLessonCompletion() {
-            document.getElementById("lingqLessonComplete").addEventListener("click", finishLesson);
+            document.getElementById("lingqLessonComplete").addEventListener("click", moveNextPage);
         }
         
         function getColorSettings(colorMode) {
@@ -4410,12 +4410,7 @@
                         const svgElAfter = document.querySelector(`${playButtonSelector} > span > svg`);
                         const stateAfter = getState(svgElAfter);
                         
-                        if (stateAfter === stateBefore) {
-                            console.log('Space', 'State unchanged — triggering click fallback.');
-                            clickElement(playButtonSelector);
-                        } else {
-                            console.log('Space', 'State changed — no fallback needed.');
-                        }
+                        if (stateAfter === stateBefore) clickElement(playButtonSelector);
                     }, 100);
                 }
                 
@@ -4511,7 +4506,7 @@
                         const isLessonFinished = ((progressPercentage >= 99) && isVideoStopped) || (progressPercentage >= 99.95);
                         if (isLessonFinished && settings.autoFinishing) {
                             console.log('Slider', 'lesson finished.')
-                            setTimeout(finishLesson, 1000);
+                            setTimeout(moveNextPage, 1000);
                             sliderObserver.disconnect();
                         }
                     }
@@ -4546,6 +4541,12 @@
             let llmApiKey = settings.llmApiKey;
             
             function setupSentenceFocus(readerContainer) {
+                function isPlayerPlaying() {
+                    const playButtonSelector = ".section--player > div:nth-child(1) > button";
+                    const svgEl = document.querySelector(`${playButtonSelector} > span > svg`);
+                    return svgEl?.classList.contains('svg-icon--pause') ?? false;
+                }
+                
                 function focusPlayingSentence(playingSentence) {
                     const isPageMode = settings.usePageMode;
                     const wrapper = document.querySelector(".reader-container-wrapper");
@@ -4565,14 +4566,54 @@
                     if (isPageMode) smoothScrollTo(scrollTarget, playingSentence.offsetLeft, 300, true);
                 }
                 
+                function checkAndAdvancePage(sentence) {
+                    const container = document.querySelector(".reader-container");
+                    if (!container) return;
+                    
+                    const allSentences = container.querySelectorAll(".sentence");
+                    const lastSentence = allSentences[allSentences.length - 1];
+                    if (sentence !== lastSentence) return;
+                    console.log('[PageAdvance] Last sentence detected.');
+                    
+                    const playing = isPlayerPlaying();
+                    if (!playing) {
+                        console.log('[PageAdvance] Player is paused — skip.');
+                        return;
+                    }
+                    
+                    const otherPlaying = container.querySelector(".sentence.is-playing");
+                    if (otherPlaying) {
+                        console.log('[PageAdvance] Another sentence is playing — user went back, skip.');
+                        return;
+                    }
+                    
+                    console.log('[PageAdvance] ✅ All conditions passed — advance to next page.');
+                    moveNextPage();
+                }
+                
                 const observer = new MutationObserver((mutations) => {
                     mutations.forEach((mutation) => {
                         const target = mutation.target;
-                        if (!(target.matches(".sentence.is-playing") && settings.focusPlayingSentence)) return;
-                        focusPlayingSentence(target);
+                        const hadIsPlaying = mutation.oldValue?.split(' ').includes('is-playing');
+                        const hasIsPlaying = target.classList.contains('is-playing');
+                        
+                        if (hasIsPlaying && settings.focusPlayingSentence) {
+                            focusPlayingSentence(target);
+                            return;
+                        }
+                        
+                        if (hadIsPlaying && !hasIsPlaying && settings.usePageMode) {
+                            checkAndAdvancePage(target);
+                        }
                     });
                 });
-                observer.observe(readerContainer, {attributes: true, subtree: true, attributeFilter: ['class']});
+                
+                observer.observe(readerContainer, {
+                    attributes: true,
+                    subtree: true,
+                    attributeFilter: ['class'],
+                    attributeOldValue: true
+                });
             }
             
             function changeTranslationColor(readerContainer) {
