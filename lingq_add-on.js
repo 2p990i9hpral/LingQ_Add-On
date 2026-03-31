@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      11.7.0
+// @version      12.0.0
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @grant       GM_xmlhttpRequest
@@ -78,6 +78,7 @@
         llmApiKey: "",
         askSelected: false,
         prependSummary: {},
+        useCentralDb: true,
         dbUrl: "",
         dbKey: "",
         
@@ -104,6 +105,13 @@
     });
     
     let supabaseClient;
+    
+    const CENTRAL_SUPABASE_URL = "https://hzmjdmliorfotjbbkrni.supabase.co";
+    const CENTRAL_ANON_KEY = "sb_publishable_Plp6a27hTp5D9llOnwapXA_ZU8VKqsB";
+    
+    let centralClient;
+    let centralUserId = null;
+    let centralUserEmail = "";
     
     const openaiVoiceOptions = [
         {value: "random", text: "Random"},
@@ -813,6 +821,18 @@
             .replace(/\x00(\d+)\x00/g, (_, i) => codePlaceholders[Number(i)]);
     }
     
+    function getDbClient() {
+        return settings.useCentralDb ? centralClient : supabaseClient;
+    }
+    
+    function getTableName() {
+        return settings.useCentralDb ? "word_data_central" : "word_data";
+    }
+    
+    function isDbReady() {
+        return settings.useCentralDb ? centralUserId : supabaseClient;
+    }
+    
     /* Modules */
     
     function stopPlayingAudio(autioContext) {
@@ -1500,6 +1520,39 @@
             addCheckbox(chatWidgetSection, "askSelectedCheckbox", "Enable asking with selected text", settings.askSelected);
             addCheckbox(chatWidgetSection, "prependSummaryCheckbox", "Prepend a quick Summary", settings.prependSummary[getLessonLanguage()] ?? false);
             
+            const dbModeRow = createElement("div", {
+                    className: "popup-row",
+                    style: "display: flex; align-items: center; gap: 15px;"
+                },
+                createElement("label", {textContent: "DB Type:"}));
+            
+            const dbModeOptions = createElement("div", {
+                style: "flex-grow: 1; display: flex; justify-content: space-around;"
+            });
+            
+            [
+                {value: "central", text: "Built-in"},
+                {value: "personal", text: "Custom"}
+            ].forEach(({value, text}) => {
+                const label = createElement("label",
+                    {style: "display: flex; gap: 5px; cursor: pointer;"},
+                    text,
+                    createElement("input", {
+                        type: "radio",
+                        name: "dbMode",
+                        id: `dbMode_${value}`,
+                        value,
+                        checked: value === (settings.useCentralDb ? "central" : "personal")
+                    })
+                );
+                dbModeOptions.appendChild(label);
+            });
+            dbModeRow.appendChild(dbModeOptions);
+            chatWidgetSection.appendChild(dbModeRow);
+            
+            const personalDbSection = createElement("div", {id: "personalDbSection"});
+            if (settings.useCentralDb) personalDbSection.style.display = "none";
+            
             const dbUrlContainer = createElement("div", {
                 className: "popup-row",
                 style: "display: flex; justify-content: space-between; align-items: center;"
@@ -1521,14 +1574,12 @@
             });
             const dbSetupGuide = createElement("a", {
                 href: "https://github.com/2p990i9hpral/LingQ_Add-On?tab=readme-ov-file#supabase-db-optional",
-                target: "_blank",
-                textContent: "Setup",
+                target: "_blank", textContent: "Setup",
                 style: "font-size: 0.9em; color: var(--blue-500); margin: 0 auto;"
             });
-            dbUrlInputGroup.appendChild(dbUrlInput);
-            dbUrlInputGroup.appendChild(dbSetupGuide);
+            dbUrlInputGroup.append(dbUrlInput, dbSetupGuide);
             dbUrlContainer.appendChild(dbUrlInputGroup);
-            chatWidgetSection.appendChild(dbUrlContainer);
+            personalDbSection.appendChild(dbUrlContainer);
             
             const dbKeyContainer = createElement("div", {
                 className: "popup-row",
@@ -1539,9 +1590,7 @@
                 textContent: "DB Key: ",
                 style: "width: 25%;"
             }));
-            const dbKeyInputGroup = createElement("div", {
-                style: "display: flex; align-items: center; gap: 5px; flex: 1;"
-            });
+            const dbKeyInputGroup = createElement("div", {style: "display: flex; align-items: center; gap: 5px; flex: 1;"});
             const dbKeyInput = createElement("input", {
                 type: "password",
                 id: "dbKeyInput",
@@ -1554,12 +1603,65 @@
                 textContent: "Save",
                 className: "popup-button",
                 style: "margin: 0 auto;"
-            })
-            
-            dbKeyInputGroup.appendChild(dbKeyInput);
-            dbKeyInputGroup.appendChild(testDBConnectionButton);
+            });
+            dbKeyInputGroup.append(dbKeyInput, testDBConnectionButton);
             dbKeyContainer.appendChild(dbKeyInputGroup);
-            chatWidgetSection.appendChild(dbKeyContainer);
+            personalDbSection.appendChild(dbKeyContainer);
+            chatWidgetSection.appendChild(personalDbSection);
+            
+            const centralDbSection = createElement("div", {
+                id: "centralDbSection",
+                style: `display: ${settings.useCentralDb ? "unset" : "none"}`
+            });
+            
+            const centralEmailRow = createElement("div", {
+                    id: "centralEmailRow",
+                    className: "popup-row",
+                    style: `display: ${centralUserId ? "none" : "flex"}; align-items: center; gap: 5px;`
+                },
+                createElement("input", {
+                    type: "email",
+                    id: "centralEmailInput",
+                    className: "popup-input",
+                    style: "padding: 0 5px;",
+                    placeholder: "Email"
+                }),
+                createElement("button", {
+                    id: "sendOtpButton",
+                    className: "popup-button",
+                    style: "margin: 0px auto;",
+                    textContent: "Send OTP"
+                }));
+            
+            const centralOtpRow = createElement("div", {
+                    id: "centralOtpRow",
+                    className: "popup-row",
+                    style: "display: none; align-items: center; gap: 5px;"
+                },
+                createElement("input", {
+                    type: "text",
+                    id: "centralOtpInput",
+                    className: "popup-input",
+                    placeholder: "Login Code",
+                    style: "padding: 0 5px;"
+                }),
+                createElement("button", {id: "verifyOtpButton", textContent: "Verify", className: "popup-button"})
+            );
+            
+            const centralLoggedInRow = createElement("div", {
+                    id: "centralLoggedInRow",
+                    className: "popup-row",
+                    style: `display: ${centralUserId ? "flex" : "none"}; gap: 5px; align-items: center; justify-content: space-between;`
+                },
+                createElement("span", {
+                    id: "centralEmailDisplay",
+                    textContent: centralUserEmail,
+                    style: "flex-grow: 1; font-size: 0.8em; overflow-x: hidden;"
+                }),
+                createElement("button", {id: "signOutButton", textContent: "Logout", className: "popup-button"}));
+            
+            centralDbSection.append(centralEmailRow, centralOtpRow, centralLoggedInRow);
+            chatWidgetSection.appendChild(centralDbSection);
             
             container2.appendChild(chatWidgetSection);
             
@@ -2177,33 +2279,44 @@
                 settings.askSelected = event.target.checked
             });
             
+            const prependSummaryCheckbox = document.getElementById("prependSummaryCheckbox");
             prependSummaryCheckbox.addEventListener('change', (event) => {
                 const prependSummaries = typeof settings.prependSummary === "object" ? {...settings.prependSummary} : {};
                 prependSummaries[getLessonLanguage()] = event.target.checked;
                 settings.prependSummary = prependSummaries;
             });
             
+            document.getElementById("dbMode_personal").addEventListener("change", () => {
+                settings.useCentralDb = false;
+                document.getElementById("personalDbSection").style.display = "";
+                document.getElementById("centralDbSection").style.display = "none";
+            });
+            
+            document.getElementById("dbMode_central").addEventListener("change", () => {
+                settings.useCentralDb = true;
+                document.getElementById("personalDbSection").style.display = "none";
+                document.getElementById("centralDbSection").style.display = "";
+            });
+            
             const dbUrlInput = document.getElementById("dbUrlInput");
             dbUrlInput.addEventListener("change", (event) => {
-                settings.dbUrl = event.target.value
+                settings.dbUrl = event.target.value;
             });
             
             const dbKeyInput = document.getElementById("dbKeyInput");
             dbKeyInput.addEventListener("change", (event) => {
-                settings.dbKey = event.target.value
+                settings.dbKey = event.target.value;
             });
             
             const testDBConnectionButton = document.getElementById("testDBConnectionButton");
-            testDBConnectionButton.addEventListener("click", async (event) => {
+            testDBConnectionButton.addEventListener("click", async () => {
                 if (!settings.dbUrl || !settings.dbKey) {
                     alert("Please enter both Supabase URL and Key.");
                     return;
                 }
-                
                 try {
                     const supabaseTest = createClient(settings.dbUrl, settings.dbKey);
-                    const {data, error} = await supabaseTest.from("word_data").select("*").limit(1);
-                    
+                    const {data, error} = await supabaseTest.from(getTableName()).select("*").limit(1);
                     if (error) {
                         console.error("Connection test error:", error);
                         alert("❌ Invalid Supabase credentials or unable to connect.");
@@ -2215,7 +2328,58 @@
                     console.error("Unexpected connection test error:", err);
                     alert("❌ Connection failed. Please check URL and API key.");
                 }
-            })
+            });
+            
+            let otpEmail = "";
+            
+            document.getElementById("sendOtpButton").addEventListener("click", async (event) => {
+                const email = document.getElementById("centralEmailInput").value.trim();
+                if (!email) return;
+                
+                const sendOtpBtn = event.currentTarget;
+                sendOtpBtn.disabled = true;
+                
+                const { error } = await centralClient.auth.signInWithOtp({ email });
+                if (error) {
+                    alert(`❌ ${error.message}`);
+                    sendOtpBtn.disabled = false;
+                    return;
+                }
+                
+                otpEmail = email;
+                document.getElementById("centralEmailRow").style.display = "none";
+                document.getElementById("centralOtpRow").style.display = "flex";
+            });
+            
+            document.getElementById("verifyOtpButton").addEventListener("click", async (event) => {
+                const token = document.getElementById("centralOtpInput").value.trim();
+                if (!token) return;
+                
+                const verifyOtpBtn = event.currentTarget;
+                verifyOtpBtn.disabled = true;
+                
+                const { data, error } = await centralClient.auth.verifyOtp({ email: otpEmail, token, type: "email" });
+                if (error) {
+                    alert(`❌ ${error.message}`);
+                    verifyOtpBtn.disabled = false;
+                    return;
+                }
+                
+                document.getElementById("centralOtpRow").style.display = "none";
+                document.getElementById("centralLoggedInRow").style.display = "flex";
+                document.getElementById("centralEmailDisplay").textContent = centralUserEmail;
+            });
+            
+            document.getElementById("signOutButton").addEventListener("click", async () => {
+                await centralClient.auth.signOut();
+                otpEmail = "";
+                document.getElementById("sendOtpButton").disabled = false;
+                document.getElementById("verifyOtpButton").disabled = false;
+                document.getElementById("centralLoggedInRow").style.display = "none";
+                document.getElementById("centralEmailRow").style.display = "flex";
+                document.getElementById("centralEmailInput").value = "";
+                document.getElementById("centralOtpInput").value = "";
+            });
             
             const ttsCheckbox = document.getElementById("ttsCheckbox");
             ttsCheckbox.addEventListener('change', (event) => {
@@ -2595,8 +2759,8 @@
                 let hasMore = true;
                 
                 while (hasMore) {
-                    const {data, error} = await supabaseClient
-                        .from("word_data")
+                    const {data, error} = await getDbClient()
+                        .from(getTableName())
                         .select(columns)
                         .eq("flashcard", true)
                         .eq("language", language)
@@ -2662,8 +2826,8 @@
                 const from = (page - 1) * pageSize;
                 const to = from + pageSize - 1;
                 
-                let queryBase = supabaseClient
-                    .from("word_data")
+                let queryBase = getDbClient()
+                    .from(getTableName())
                     .select("idx, word, meaning, explanation", {count: "exact"})
                     .eq("flashcard", true)
                     .eq("language", language);
@@ -2705,8 +2869,8 @@
                         ev.stopPropagation();
                         
                         deleteBtn.disabled = true;
-                        const {error: updateError} = await supabaseClient
-                            .from("word_data")
+                        const {error: updateError} = await getDbClient()
+                            .from(getTableName())
                             .update({flashcard: false})
                             .eq("idx", row.idx);
                         
@@ -2746,8 +2910,8 @@
                                 return;
                             }
                             
-                            const {error: updateError} = await supabaseClient
-                                .from("word_data")
+                            const {error: updateError} = await getDbClient()
+                                .from(getTableName())
                                 .update({meaning: newValue})
                                 .eq("idx", row.idx);
                             
@@ -2779,8 +2943,8 @@
                 drawPagination(page, filteredCount);
                 
                 if (!totalCount) {
-                    supabaseClient
-                        .from("word_data")
+                    getDbClient()
+                        .from(getTableName())
                         .select("*", {count: "exact", head: true})
                         .eq("flashcard", true)
                         .eq("language", language)
@@ -3801,6 +3965,10 @@
                     background-color: rgb(125 125 125 / 50%);
                 }
                 
+                #chat-container p {
+                    margin: 0.3rem 0;
+                }
+                
                 .message-button-container {
                     display: flex;
                     gap: 5px;
@@ -4762,7 +4930,7 @@
                         const container = document.querySelector(".reader-container");
                         
                         if (wrapper) wrapper.scrollTop = 0;
-                        if (container) container.scrollLeft = 0;
+                        if (container) wrapper.scrollLeft = 0;
                     }, 150);
                 }
                 
@@ -5088,8 +5256,8 @@
                                     if (save && newValue !== currentText) {
                                         const storedIdx = botMessageDiv.dataset.wordIdx;
                                         if (storedIdx) {
-                                            const {data: existing} = await supabaseClient
-                                                .from("word_data")
+                                            const {data: existing} = await getDbClient()
+                                                .from(getTableName())
                                                 .select("idx")
                                                 .eq("word", word)
                                                 .eq("meaning", newValue)
@@ -5103,8 +5271,8 @@
                                                 return;
                                             }
                                             
-                                            const {error: updateError} = await supabaseClient
-                                                .from("word_data")
+                                            const {error: updateError} = await getDbClient()
+                                                .from(getTableName())
                                                 .update({meaning: newValue})
                                                 .eq("idx", storedIdx);
                                             if (updateError) {
@@ -5168,13 +5336,13 @@
                             .catch(() => showToast("Failed to copy meaning.", false));
                     }
                     
-                    if (supabaseClient) {
+                    if (isDbReady()) {
                         wordElem.addEventListener("click", async (e) => {
                             const existingPopup = document.getElementById("flashcard-popup");
                             if (existingPopup) existingPopup.remove();
                             
-                            const {data, error} = await supabaseClient
-                                .from("word_data")
+                            const {data, error} = await getDbClient()
+                                .from(getTableName())
                                 .select("*")
                                 .eq("word", word)
                                 .eq("flashcard", true);
@@ -5203,8 +5371,8 @@
                                     deleteBtn.addEventListener("click", async (ev) => {
                                         ev.stopPropagation();
                                         deleteBtn.disabled = true;
-                                        const {error: updateError} = await supabaseClient
-                                            .from("word_data")
+                                        const {error: updateError} = await getDbClient()
+                                            .from(getTableName())
                                             .update({flashcard: false})
                                             .eq("idx", row.idx);
                                         if (updateError) {
@@ -5245,8 +5413,8 @@
                             chatContainer.addEventListener("scroll", closePopup);
                         });
                         
-                        supabaseClient
-                            .from("word_data")
+                        getDbClient()
+                            .from(getTableName())
                             .select("*", {count: "exact", head: true})
                             .eq("word", word)
                             .eq("flashcard", true)
@@ -5267,6 +5435,7 @@
                             });
                         
                         const newItem = {
+                            ...(settings.useCentralDb && {user_id: centralUserId}),
                             language: getLessonLanguage(),
                             original_word: safeSelectedData.input,
                             context: safeSelectedData.context,
@@ -5299,8 +5468,8 @@
                                         return;
                                     }
                                     
-                                    const {data: existing} = await supabaseClient
-                                        .from("word_data")
+                                    const {data: existing} = await getDbClient()
+                                        .from(getTableName())
                                         .select("idx")
                                         .eq("word", word)
                                         .eq("meaning", meaningElem?.textContent?.trim() || "")
@@ -5314,8 +5483,8 @@
                                         return;
                                     }
                                     
-                                    const {error: updateError} = await supabaseClient
-                                        .from("word_data")
+                                    const {error: updateError} = await getDbClient()
+                                        .from(getTableName())
                                         .update({flashcard: true})
                                         .eq("idx", targetIdx);
                                     
@@ -5343,8 +5512,8 @@
                             else messageButtonContainer.appendChild(saveFlashcardButton);
                         }
                         
-                        supabaseClient
-                            .from("word_data")
+                        getDbClient()
+                            .from(getTableName())
                             .insert([newItem])
                             .select("idx")
                             .then(({data: inserted, error: insertError}) => {
@@ -6466,6 +6635,15 @@
     }
     
     async function init() {
+        centralClient = createClient(CENTRAL_SUPABASE_URL, CENTRAL_ANON_KEY);
+        const updateAuth = (session) => {
+            centralUserId = session?.user?.id ?? null;
+            centralUserEmail = session?.user?.email ?? "";
+        };
+        centralClient.auth.onAuthStateChange((_event, session) => updateAuth(session));
+        const { data: { session } } = await centralClient.auth.getSession();
+        updateAuth(session);
+        
         try {
             supabaseClient = createClient(settings.dbUrl, settings.dbKey);
             console.log('Supabase initialized.');
