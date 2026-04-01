@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      12.0.0
+// @version      12.1.0
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @grant       GM_xmlhttpRequest
@@ -2762,7 +2762,6 @@
                     const {data, error} = await getDbClient()
                         .from(getTableName())
                         .select(columns)
-                        .eq("flashcard", true)
                         .eq("language", language)
                         .order(sortBy, {ascending: true})
                         .range(from, from + batchSize - 1);
@@ -2829,7 +2828,6 @@
                 let queryBase = getDbClient()
                     .from(getTableName())
                     .select("idx, word, meaning, explanation", {count: "exact"})
-                    .eq("flashcard", true)
                     .eq("language", language);
                 
                 if (searchKeyword) queryBase = queryBase.or(`word.ilike.%${searchKeyword}%,meaning.ilike.%${searchKeyword}%`);
@@ -2871,7 +2869,7 @@
                         deleteBtn.disabled = true;
                         const {error: updateError} = await getDbClient()
                             .from(getTableName())
-                            .update({flashcard: false})
+                            .delete()
                             .eq("idx", row.idx);
                         
                         if (updateError) {
@@ -2946,7 +2944,6 @@
                     getDbClient()
                         .from(getTableName())
                         .select("*", {count: "exact", head: true})
-                        .eq("flashcard", true)
                         .eq("language", language)
                         .then(({count}) => {
                             totalCount = count || 0;
@@ -5249,46 +5246,43 @@
                                 meaningElem.appendChild(input);
                                 input.focus();
                                 
-                                const finishEdit = async (save) => {
+                                const finishEdit = async () => {
                                     const newValue = input.value.trim();
                                     meaningElem.textContent = newValue;
                                     
-                                    if (save && newValue !== currentText) {
-                                        const storedIdx = botMessageDiv.dataset.wordIdx;
-                                        if (storedIdx) {
-                                            const {data: existing} = await getDbClient()
-                                                .from(getTableName())
-                                                .select("idx")
-                                                .eq("word", word)
-                                                .eq("meaning", newValue)
-                                                .eq("flashcard", true)
-                                                .neq("idx", storedIdx)
-                                                .limit(1);
-                                            
-                                            if (existing && existing.length > 0) {
-                                                meaningElem.textContent = currentText;
-                                                showToast("Same Flashcard Exists", false);
-                                                return;
-                                            }
-                                            
-                                            const {error: updateError} = await getDbClient()
-                                                .from(getTableName())
-                                                .update({meaning: newValue})
-                                                .eq("idx", storedIdx);
-                                            if (updateError) {
-                                                console.error("Meaning update error:", updateError);
-                                                showToast("Failed to update meaning.", false);
-                                            } else {
-                                                showToast("Meaning updated!", true);
-                                            }
-                                        } else {
-                                            console.warn("No stored idx - cannot update meaning.");
-                                        }
-                                        
-                                        navigator.clipboard.writeText(newValue)
-                                            .then(() => showToast("Meaning Copied!", true))
-                                            .catch(() => showToast("Failed to copy meaning.", false));
+                                    if (newValue === currentText) return;
+                                    
+                                    const storedIdx = botMessageDiv.dataset.wordIdx;
+                                    if (!storedIdx) return;
+                                    
+                                    const {data: existing} = await getDbClient()
+                                        .from(getTableName())
+                                        .select("idx")
+                                        .eq("word", word)
+                                        .eq("meaning", newValue)
+                                        .limit(1);
+                                    
+                                    if (existing && existing.length > 0) {
+                                        meaningElem.textContent = currentText;
+                                        showToast("Same Flashcard Exists", false);
+                                        return;
                                     }
+                                    
+                                    const {error: updateError} = await getDbClient()
+                                        .from(getTableName())
+                                        .update({meaning: newValue})
+                                        .eq("idx", storedIdx);
+                                    
+                                    if (updateError) {
+                                        console.error("Meaning update error:", updateError);
+                                        showToast("Failed to update meaning.", false);
+                                    } else {
+                                        showToast("Meaning updated!", true);
+                                    }
+                                    
+                                    navigator.clipboard.writeText(newValue)
+                                        .then(() => showToast("Meaning Copied!", true))
+                                        .catch(() => showToast("Failed to copy meaning.", false));
                                 };
                                 
                                 input.addEventListener("keydown", async (event) => {
@@ -5301,7 +5295,7 @@
                                 });
                                 
                                 input.addEventListener("blur", async () => {
-                                    await finishEdit(true);
+                                    await finishEdit();
                                 });
                                 
                                 return;
@@ -5344,8 +5338,7 @@
                             const {data, error} = await getDbClient()
                                 .from(getTableName())
                                 .select("*")
-                                .eq("word", word)
-                                .eq("flashcard", true);
+                                .eq("word", word);
                             
                             if (error) {
                                 console.error("Flashcard fetch error:", error);
@@ -5373,7 +5366,7 @@
                                         deleteBtn.disabled = true;
                                         const {error: updateError} = await getDbClient()
                                             .from(getTableName())
-                                            .update({flashcard: false})
+                                            .delete()
                                             .eq("idx", row.idx);
                                         if (updateError) {
                                             console.error("Flashcard delete error:", updateError);
@@ -5417,7 +5410,6 @@
                             .from(getTableName())
                             .select("*", {count: "exact", head: true})
                             .eq("word", word)
-                            .eq("flashcard", true)
                             .then(({count, error}) => {
                                 if (error) {
                                     console.error("Flashcard count error:", error);
@@ -5444,8 +5436,7 @@
                             meaning,
                             explanation,
                             example_sentence: exampleSentence,
-                            example_translation: exampleTranslation,
-                            flashcard: false
+                            example_translation: exampleTranslation
                         };
                         
                         const messageButtonContainer = botMessageDiv.querySelector(".message-button-container");
@@ -5455,26 +5446,18 @@
                             saveFlashcardButton = createElement("button", {
                                 className: "message-button save-flashcard-button",
                                 innerHTML: `<svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="transparent" stroke="currentColor"><g id="SVGRepo_iconCarrier"> <path d="M16 3.98999H8C6.93913 3.98999 5.92178 4.41135 5.17163 5.1615C4.42149 5.91164 4 6.92912 4 7.98999V17.99C4 19.0509 4.42149 20.0682 5.17163 20.8184C5.92178 21.5685 6.93913 21.99 8 21.99H16C17.0609 21.99 18.0783 21.5685 18.8284 20.8184C19.5786 20.0682 20 19.0509 20 17.99V7.98999C20 6.92912 19.5786 5.91164 18.8284 5.1615C18.0783 4.41135 17.0609 3.98999 16 3.98999Z" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"></path> <path d="M9 2V7" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"></path> <path d="M15 2V7" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"></path> <path d="M8 16H14" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"></path> <path d="M8 12H16" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"></path> </g></svg>`,
-                                disabled: true
                             });
                             
                             saveFlashcardButton.addEventListener("click", async () => {
                                 saveFlashcardButton.disabled = true;
                                 try {
-                                    const targetIdx = botMessageDiv.dataset.wordIdx;
-                                    if (!targetIdx) {
-                                        console.error("No stored idx for this message.");
-                                        saveFlashcardButton.disabled = false;
-                                        return;
-                                    }
+                                    const currentMeaning = meaningElem?.textContent?.trim() || "";
                                     
                                     const {data: existing} = await getDbClient()
                                         .from(getTableName())
                                         .select("idx")
                                         .eq("word", word)
-                                        .eq("meaning", meaningElem?.textContent?.trim() || "")
-                                        .eq("flashcard", true)
-                                        .neq("idx", targetIdx)
+                                        .eq("meaning", currentMeaning)
                                         .limit(1);
                                     
                                     if (existing && existing.length > 0) {
@@ -5483,16 +5466,17 @@
                                         return;
                                     }
                                     
-                                    const {error: updateError} = await getDbClient()
+                                    const {data: inserted, error: insertError} = await getDbClient()
                                         .from(getTableName())
-                                        .update({flashcard: true})
-                                        .eq("idx", targetIdx);
+                                        .insert([{...newItem, meaning: currentMeaning}])
+                                        .select("idx");
                                     
-                                    if (updateError) {
-                                        console.error("Flashcard update error:", updateError);
+                                    if (insertError) {
+                                        console.error("Flashcard insert error:", insertError);
                                         showToast("Failed to save flashcard.", false);
                                         saveFlashcardButton.disabled = false;
                                     } else {
+                                        botMessageDiv.dataset.wordIdx = inserted[0].idx;
                                         const badge = wordElem.querySelector(".flashcard-count-badge");
                                         if (badge) badge.textContent = +badge.textContent + 1;
                                         else wordElem.appendChild(createElement("span", {
@@ -5511,20 +5495,6 @@
                             if (regenerateButton) messageButtonContainer.insertBefore(saveFlashcardButton, regenerateButton);
                             else messageButtonContainer.appendChild(saveFlashcardButton);
                         }
-                        
-                        getDbClient()
-                            .from(getTableName())
-                            .insert([newItem])
-                            .select("idx")
-                            .then(({data: inserted, error: insertError}) => {
-                                if (insertError) {
-                                    console.error("Insert error:", insertError);
-                                    return;
-                                }
-                                
-                                botMessageDiv.dataset.wordIdx = inserted[0].idx;
-                                saveFlashcardButton.disabled = false;
-                            });
                     }
                 }
                 
@@ -6635,7 +6605,9 @@
     }
     
     async function init() {
-        centralClient = createClient(CENTRAL_SUPABASE_URL, CENTRAL_ANON_KEY);
+        centralClient = createClient(CENTRAL_SUPABASE_URL, CENTRAL_ANON_KEY, {
+            auth: { storageKey: "central-auth-token" }
+        });;
         const updateAuth = (session) => {
             centralUserId = session?.user?.id ?? null;
             centralUserEmail = session?.user?.email ?? "";
