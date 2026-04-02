@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      12.1.1
+// @version      12.1.2
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @grant       GM_xmlhttpRequest
@@ -74,6 +74,7 @@
         shortcutFlashcard: 'r',
         
         chatWidget: false,
+        chatWidgetHeight: 350,
         llmProviderModel: "openai gpt-4.1-nano",
         llmApiKey: "",
         askSelected: false,
@@ -1498,6 +1499,8 @@
                 style: `${settings.chatWidget ? "" : "display: none"}`
             });
             
+            addSlider(chatWidgetSection, "chatWidgetHeightSlider", "Chat Widget Height", "chatWidgetHeightValue", settings.chatWidgetHeight, "", 150, 500, 10);
+            
             addSelect(chatWidgetSection, "llmProviderModelSelector", "Chat Provider: (Price per 1M tokens)", [
                 {value: "openai gpt-5-chat-latest", text: "OpenAI GPT-5 Chat ($1.25/$10)"},
                 {value: "openai gpt-5-mini", text: "OpenAI GPT-5 mini ($0.25/$2.0)"},
@@ -2277,6 +2280,8 @@
                 settings.chatWidget = checked;
             });
             
+            setupSlider("chatWidgetHeightSlider", "chatWidgetHeightValue", "chatWidgetHeight", "px", "--chat-widget-height", (val) => `${val}px`);
+            
             const llmProviderModelSelector = document.getElementById("llmProviderModelSelector");
             llmProviderModelSelector.addEventListener("change", (event) => {
                 settings.llmProviderModel = event.target.value
@@ -2491,6 +2496,7 @@
                 document.getElementById("shortcutFlashcard").value = defaults.shortcutFlashcard;
                 
                 document.getElementById("chatWidgetCheckbox").value = defaults.chatWidget;
+                document.getElementById("chatWidgetHeightSlider").value = defaults.chatWidgetHeight;
                 document.getElementById("llmProviderModelSelector").value = defaults.llmProviderModel;
                 document.getElementById("llmApiKeyInput").value = defaults.llmApiKey;
                 document.getElementById("askSelectedCheckbox").value = defaults.askSelected;
@@ -3814,8 +3820,8 @@
                 #chat-widget {
                     display: flex;
                     flex-direction: column;
-                    min-height: 180px;
-                    max-height: 330px;
+                    min-height: 150px;
+                    max-height: var(--chat-widget-height);
                 }
                 
                 #chat-container {
