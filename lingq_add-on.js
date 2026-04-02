@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      12.1.2
+// @version      12.2.0
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @grant       GM_xmlhttpRequest
@@ -4061,6 +4061,7 @@
                 --article-height: calc(var(--app-height) - var(--height-big));
                 --header-height: 50px;
                 --widget-width: ${settings.widgetWidth}px;
+                --chat-widget-height: ${settings.chatWidgetHeight}px;
                 --footer-height: 80px;
                 --reader-layout-columns: 1fr var(--widget-width);
                 --reader-layout-rows: var(--article-height) calc(var(--height-big) - var(--footer-height)) var(--footer-height);
@@ -5040,6 +5041,25 @@
             
             setupNavigationScrollReset();
             setupQuickSummaryCleanup();
+            
+            // Close the video after finishing a lesson.
+            // #lesson-reader -> #radix-\:r2\:-content-lessonCompleted
+            function observeLessonCompleted() {
+                const lessonReader = document.querySelector("#lesson-reader");
+                const observer = new MutationObserver((mutations) => {
+                    mutations.forEach((mutation) => {
+                        mutation.addedNodes.forEach((node) => {
+                            if (node.nodeType !== Node.ELEMENT_NODE) return;
+                            const target = document.getElementById("radix-:r2:-content-lessonCompleted");
+                            if (!target || !node.contains(target)) return;
+                            console.log("Observer:", "lessonCompleted appeared.");
+                            clickElement("div.player-wrapper > div.player-close a"); // close media player.
+                        });
+                    });
+                });
+                observer.observe(lessonReader, { childList: true, subtree: true });
+            }
+            observeLessonCompleted();
         }
         
         async function setupLLMs() {
