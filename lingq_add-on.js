@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      12.1.0
+// @version      12.1.1
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @grant       GM_xmlhttpRequest
@@ -78,7 +78,7 @@
         llmApiKey: "",
         askSelected: false,
         prependSummary: {},
-        useCentralDb: true,
+        useCentralDb: false,
         dbUrl: "",
         dbKey: "",
         
@@ -781,11 +781,26 @@
         });
     }
     
+    function hasBlockLevelHTML(content) {
+        return /<(p|ul|li|hr)[\s>]/i.test(content);
+    }
+    
     function shouldConvertToHTML(content) {
-        const hasHtml = /<[a-z][\s\S]*>/i.test(content);
-        const hasMarkdown = /[#*\-]\s|[*_]{2}/.test(content);
+        const hasBlockMarkdown = /^#{1,6}\s|^\s*[-*]\s+|^---$/m.test(content);
+        return !hasBlockLevelHTML(content) && hasBlockMarkdown;
+    }
+    
+    function applyInlineMarkdown(text) {
+        const codePlaceholders = [];
         
-        return !hasHtml || (hasMarkdown && content.length > 0);
+        return text
+            .replace(/`([^`]+)`/g, (_, code) => {
+                codePlaceholders.push(`<code>${code}</code>`);
+                return `\x00${codePlaceholders.length - 1}\x00`;
+            })
+            .replace(/\*\*(.+?)\*\*/gs, '<b>$1</b>')
+            .replace(/\*(.+?)\*/gs, '<i>$1</i>')
+            .replace(/\x00(\d+)\x00/g, (_, i) => codePlaceholders[Number(i)]);
     }
     
     function convertMarkdownToHTML(text) {
@@ -796,9 +811,7 @@
             return `\x00${codePlaceholders.length - 1}\x00`;
         });
         
-        const blocks = protectedText.split(/\n\n+/);
-        
-        const htmlContent = blocks.map(block => {
+        const htmlContent = protectedText.split(/\n\n+/).map(block => {
             if (/^---$/m.test(block)) return '<hr>';
             if (/^#+ /m.test(block)) {
                 const content = block
@@ -1531,8 +1544,8 @@
             });
             
             [
-                {value: "central", text: "Built-in"},
-                {value: "personal", text: "Custom"}
+                {value: "personal", text: "Custom"},
+                {value: "central", text: "Built-in"}
             ].forEach(({value, text}) => {
                 const label = createElement("label",
                     {style: "display: flex; gap: 5px; cursor: pointer;"},
@@ -1642,7 +1655,7 @@
                     type: "text",
                     id: "centralOtpInput",
                     className: "popup-input",
-                    placeholder: "Login Code",
+                    placeholder: "Sign-in Code",
                     style: "padding: 0 5px;"
                 }),
                 createElement("button", {id: "verifyOtpButton", textContent: "Verify", className: "popup-button"})
@@ -5514,8 +5527,7 @@
                     return messageDiv;
                 }
                 
-                async function callStreamOpenAI(botMessageDiv, chatContainer, focus, onStreamCompleted = () => {
-                }) {
+                async function callStreamOpenAI(botMessageDiv, chatContainer, focus, onStreamCompleted = () => {}) {
                     const userInput = document.getElementById("user-input");
                     const sendButton = document.getElementById("send-button");
                     
@@ -5546,7 +5558,9 @@
                         },
                         (finalContent) => {
                             const stripped = finalContent.replace(/^```(?:\w+\n)?/, '').replace(/```\s*$/, '');
-                            const cleanedContent = shouldConvertToHTML(stripped) ? convertMarkdownToHTML(stripped) : stripped;
+                            const cleanedContent = shouldConvertToHTML(stripped)
+                                ? convertMarkdownToHTML(stripped)
+                                : applyInlineMarkdown(stripped);
                             botMessageDiv.innerHTML = cleanedContent;
                             
                             chatHistory = updateChatHistoryState(chatHistory, cleanedContent, "assistant");
