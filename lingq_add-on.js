@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      12.2.0
+// @version      12.2.1
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @grant       GM_xmlhttpRequest
@@ -4185,6 +4185,7 @@
             .reader-container-wrapper {
                 height: 100% !important;
                 overflow-y: ${isPageMode ? "auto" : "visible"} !important;
+                outline: none !important;
             }
     
             .widget-area {
@@ -4407,6 +4408,10 @@
     
             .audio-player--controllers span {
                 height: 25px !important;
+            }
+            
+            #lesson-reader > div.h-full.absolute > div[dir=ltr] > header {
+                margin-top: 60px;
             }
             `;
         }
@@ -4679,6 +4684,8 @@
                 const videoSliderTrack = sliderContainer.querySelector(".rc-slider-track");
                 videoContainer.appendChild(sliderContainer);
                 
+                const isVideoStopped = document.querySelector(`.shared-player div[data-original-title="Play video"]`);
+                
                 const sliderObserver = new MutationObserver(function (mutations) {
                     for (const mutation of mutations) {
                         videoSliderTrack.style.cssText = sliderTrack.style.cssText;
@@ -4687,7 +4694,6 @@
                         lastCompletedPercentage = updateLessonProgress(lessonId, lessonInfo, progressPercentage, lastCompletedPercentage);
                         console.debug('Observer:', `Slider Changed. Progress: ${progressPercentage}`);
                         
-                        const isVideoStopped = document.querySelector(`.shared-player div[data-original-title="Play video"]`);
                         const isLessonFinished = ((progressPercentage >= 99) && isVideoStopped) || (progressPercentage >= 99.95);
                         if (isLessonFinished && settings.autoFinishing) {
                             console.log('Slider', 'lesson finished.')
@@ -4834,7 +4840,7 @@
                     
                         # Output Format
                         - Language: English; use original-language terms inline when necessary for fidelity
-                        - Format: Markdown (headers, bullets, bold allowed)
+                        - Format: plain text, not a HTML or Markdown format.
                         - Length: 2,000 words max`;
                     
                     const summary_history = [
@@ -4889,35 +4895,42 @@
                     );
                 }
                 
+                function createAndPrependSummaryElement(section) {
+                    if (section.parentNode.querySelector(".quick-summary")) return;
+                    
+                    const summaryElement = createElement("div", {
+                        className: "quick-summary",
+                        style: `position: relative; ${(settings.prependSummary[getLessonLanguage()] ?? false) ? '' : 'display: none;'}`
+                    }, createElement("b", {}, "Summary"));
+                    
+                    const contentWrapper = createElement("div", {
+                        className: "summary-content",
+                        innerHTML: quickSummary
+                    });
+                    summaryElement.append(contentWrapper);
+                    
+                    const closeButton = createElement("button", { className: "close-summary-btn" }, ["close"]);
+                    closeButton.addEventListener("click", () => summaryElement.remove());
+                    summaryElement.append(closeButton);
+                    
+                    changeScrollAmount(".quick-summary", 0.2);
+                    summaryElement.addEventListener('wheel', (event) => event.stopPropagation());
+                    section.parentNode.prepend(summaryElement);
+                }
+                
+                quickSummary = "";
+                const existingSection = readerContainer.querySelector('section');
+                if (existingSection) createAndPrependSummaryElement(existingSection);
+                
                 const observer = new MutationObserver((mutations) => {
                     for (const mutation of mutations) {
                         for (const node of mutation.addedNodes) {
                             if (!(node.nodeType === Node.ELEMENT_NODE && node.matches('section'))) continue;
-                            
-                            const summaryElement = createElement("div", {
-                                className: "quick-summary",
-                                style: `position: relative; ${(settings.prependSummary[getLessonLanguage()] ?? false) ? '' : 'display: none;'}`
-                            }, createElement("b", {}, "Summary"));
-                            
-                            const contentWrapper = createElement("div", {
-                                className: "summary-content",
-                                innerHTML: quickSummary
-                            });
-                            summaryElement.append(contentWrapper);
-                            
-                            const closeButton = createElement("button", {className: "close-summary-btn"}, ["close"]);
-                            closeButton.addEventListener("click", () => {
-                                summaryElement.remove()
-                            });
-                            summaryElement.append(closeButton);
-                            
-                            changeScrollAmount(".quick-summary", 0.2);
-                            summaryElement.addEventListener('wheel', (event) => event.stopPropagation());
-                            node.parentNode.prepend(summaryElement);
+                            createAndPrependSummaryElement(node);
                         }
                     }
                 });
-                observer.observe(readerContainer, {childList: true, subtree: true});
+                observer.observe(readerContainer, { childList: true, subtree: true });
                 
                 const lessonContent = extractTextFromDOM(readerContainer).trim();
                 
@@ -4935,7 +4948,7 @@
                 
             }
             
-            function setupNavigationScrollReset() {
+            function setupNavClickListeners() {
                 const navSelectors = [
                     ".reader-component .nav--left a",
                     ".reader-component .nav--right a"
@@ -4945,42 +4958,50 @@
                     setTimeout(() => {
                         const wrapper = document.querySelector(".reader-container-wrapper");
                         const container = document.querySelector(".reader-container");
-                        
                         if (wrapper) wrapper.scrollTop = 0;
                         if (container) wrapper.scrollLeft = 0;
                     }, 150);
                 }
                 
-                navSelectors.forEach((selector) => {
-                    waitForElement(selector, 5000).then((button) => {
-                        if (button) button.addEventListener("click", resetScroll);
-                    });
-                });
-                
-                window.addEventListener("keydown", (event) => {
-                    if (event.shiftKey && (event.key === "ArrowRight" || event.key === "ArrowLeft")) resetScroll();
-                });
-            }
-            
-            function setupQuickSummaryCleanup() {
-                const navSelectors = [
-                    ".reader-component .nav--left a",
-                    ".reader-component .nav--right a"
-                ];
-                
                 function removeSummary() {
-                    const summaryElement = document.querySelector(".quick-summary");
-                    if (summaryElement) summaryElement.remove();
+                    document.querySelector(".quick-summary")?.remove();
+                }
+                
+                function closeVideoPlayer() {
+                    waitForElement("#radix-\\:r2\\:-content-lessonCompleted", 5000).then((element) => {
+                        if (!element) return;
+                        clickElement("div.player-wrapper > div.player-close a");
+                    });
                 }
                 
                 navSelectors.forEach((selector) => {
                     waitForElement(selector, 5000).then((button) => {
-                        if (button) button.addEventListener("click", removeSummary, true);
+                        if (!button) return;
+                        button.addEventListener("click", resetScroll);
+                        button.addEventListener("click", removeSummary, true);
+                        button.addEventListener("click", closeVideoPlayer, true);
                     });
                 });
-                
+            }
+            
+            function setupKeyboardListeners() {
                 window.addEventListener("keydown", (event) => {
-                    if (event.shiftKey && (event.key === "ArrowRight" || event.key === "ArrowLeft")) removeSummary();
+                    if (!event.shiftKey) return;
+                    if (event.key === "ArrowRight" || event.key === "ArrowLeft") {
+                        setTimeout(() => {
+                            const wrapper = document.querySelector(".reader-container-wrapper");
+                            const container = document.querySelector(".reader-container");
+                            if (wrapper) wrapper.scrollTop = 0;
+                            if (container) wrapper.scrollLeft = 0;
+                        }, 150);
+                        document.querySelector(".quick-summary")?.remove();
+                    }
+                    if (event.key === "ArrowRight") {
+                        waitForElement("#radix-\\:r2\\:-content-lessonCompleted", 5000).then((element) => {
+                            if (!element) return;
+                            clickElement("div.player-wrapper > div.player-close a");
+                        });
+                    }
                 }, true);
             }
             
@@ -4994,72 +5015,58 @@
                 }, {passive: false});
             }
             
+            async function handleLoadedContent(node) {
+                const isPageMode = settings.usePageMode;
+                if (isPageMode) {
+                    const readerContainer = node.querySelector(".reader-container");
+                    readerContainer?.addEventListener("wheel", (event) => {
+                        const wrapper = readerContainer.closest(".reader-container-wrapper");
+                        if (wrapper) {
+                            wrapper.scrollTop += event.deltaY;
+                            event.preventDefault();
+                        }
+                    }, {passive: false});
+                }
+                
+                preventHorizontalScroll('.reader-container-wrapper');
+                preventHorizontalScroll('.reader-container');
+                
+                const scrollTarget = isPageMode ? ".reader-container-wrapper" : ".reader-container";
+                changeScrollAmount(scrollTarget, 0.3);
+                
+                setupSentenceFocus(node);
+                
+                if (settings.showTranslation) showTranslation();
+                changeTranslationColor(node);
+                
+                await waitForElement('.sentence-text p', 10000);
+                await generateLessonSummary(node);
+                
+                const summaryElement = node.querySelector(".quick-summary");
+                if (summaryElement) {
+                    summaryElement.addEventListener('wheel', (event) => {
+                        event.stopPropagation();
+                    }, {passive: false});
+                }
+                
+                setupNavClickListeners();
+            }
+            
+            setupKeyboardListeners();
+            
             const observer = new MutationObserver(function (mutations) {
                 mutations.forEach((mutation) => {
-                    mutation.addedNodes.forEach(async (node) => {
+                    mutation.addedNodes.forEach((node) => {
                         if (node.nodeType !== Node.ELEMENT_NODE) return;
                         if (!node.matches(".loadedContent")) return;
-                        
-                        const isPageMode = settings.usePageMode;
-                        if (isPageMode) {
-                            const readerContainer = node.querySelector(".reader-container");
-                            readerContainer?.addEventListener("wheel", (event) => {
-                                const wrapper = readerContainer.closest(".reader-container-wrapper");
-                                if (wrapper) {
-                                    wrapper.scrollTop += event.deltaY;
-                                    event.preventDefault();
-                                }
-                            }, {passive: false});
-                        }
-                        
-                        preventHorizontalScroll('.reader-container-wrapper');
-                        preventHorizontalScroll('.reader-container');
-                        
-                        const scrollTarget = isPageMode ? ".reader-container-wrapper" : ".reader-container";
-                        changeScrollAmount(scrollTarget, 0.3);
-                        
-                        setupSentenceFocus(node);
-                        
-                        if (settings.showTranslation) showTranslation();
-                        changeTranslationColor(node);
-                        
-                        await waitForElement('.sentence-text p', 10000);
-                        await generateLessonSummary(node);
-                        
-                        const summaryElement = node.querySelector(".quick-summary");
-                        if (summaryElement) {
-                            summaryElement.addEventListener('wheel', (event) => {
-                                event.stopPropagation();
-                            }, {passive: false});
-                        }
+                        handleLoadedContent(node);
                     });
                 });
             });
             
             const sentenceText = await waitForElement('.sentence-text', 10000);
+            sentenceText.querySelectorAll(".loadedContent").forEach(handleLoadedContent);
             observer.observe(sentenceText, {childList: true});
-            
-            setupNavigationScrollReset();
-            setupQuickSummaryCleanup();
-            
-            // Close the video after finishing a lesson.
-            // #lesson-reader -> #radix-\:r2\:-content-lessonCompleted
-            function observeLessonCompleted() {
-                const lessonReader = document.querySelector("#lesson-reader");
-                const observer = new MutationObserver((mutations) => {
-                    mutations.forEach((mutation) => {
-                        mutation.addedNodes.forEach((node) => {
-                            if (node.nodeType !== Node.ELEMENT_NODE) return;
-                            const target = document.getElementById("radix-:r2:-content-lessonCompleted");
-                            if (!target || !node.contains(target)) return;
-                            console.log("Observer:", "lessonCompleted appeared.");
-                            clickElement("div.player-wrapper > div.player-close a"); // close media player.
-                        });
-                    });
-                });
-                observer.observe(lessonReader, { childList: true, subtree: true });
-            }
-            observeLessonCompleted();
         }
         
         async function setupLLMs() {
@@ -6647,7 +6654,7 @@
     async function init() {
         centralClient = createClient(CENTRAL_SUPABASE_URL, CENTRAL_ANON_KEY, {
             auth: { storageKey: "central-auth-token" }
-        });;
+        });
         const updateAuth = (session) => {
             centralUserId = session?.user?.id ?? null;
             centralUserEmail = session?.user?.email ?? "";
