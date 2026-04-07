@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      12.2.1
+// @version      12.3.0
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @grant       GM_xmlhttpRequest
@@ -4410,7 +4410,7 @@
                 height: 25px !important;
             }
             
-            #lesson-reader > div.h-full.absolute > div[dir=ltr] > header {
+            #lesson-reader > div.h-full > div[dir=ltr] > header {
                 margin-top: 60px;
             }
             `;
@@ -4968,7 +4968,7 @@
                 }
                 
                 function closeVideoPlayer() {
-                    waitForElement("#radix-\\:r2\\:-content-lessonCompleted", 5000).then((element) => {
+                    waitForElement('[id$="-content-lessonCompleted"]', 5000).then((element) => {
                         if (!element) return;
                         clickElement("div.player-wrapper > div.player-close a");
                     });
@@ -4987,21 +4987,34 @@
             function setupKeyboardListeners() {
                 window.addEventListener("keydown", (event) => {
                     if (!event.shiftKey) return;
-                    if (event.key === "ArrowRight" || event.key === "ArrowLeft") {
-                        setTimeout(() => {
-                            const wrapper = document.querySelector(".reader-container-wrapper");
-                            const container = document.querySelector(".reader-container");
-                            if (wrapper) wrapper.scrollTop = 0;
-                            if (container) wrapper.scrollLeft = 0;
-                        }, 150);
-                        document.querySelector(".quick-summary")?.remove();
-                    }
-                    if (event.key === "ArrowRight") {
+                    if (!(event.key === "ArrowRight" || event.key === "ArrowLeft")) return;
+                    
+                    setTimeout(() => { // reset scrolls
+                        const wrapper = document.querySelector(".reader-container-wrapper");
+                        const container = document.querySelector(".reader-container");
+                        if (wrapper) wrapper.scrollTop = 0;
+                        if (container) wrapper.scrollLeft = 0;
+                    }, 150);
+                    // document.querySelector(".quick-summary")?.remove();
+                    
+                    const nextBtn = document.querySelector("#lesson-reader > div.h-full > div > header > div.col-3 > button");
+                    const prevBtn = document.querySelector("#lesson-reader > div.h-full > div > header > div:nth-child(1) > button");
+                    
+                    if (event.key === "ArrowRight" && nextBtn) {
+                        event.stopImmediatePropagation();
+                        event.preventDefault();
+                        
                         waitForElement("#radix-\\:r2\\:-content-lessonCompleted", 5000).then((element) => {
-                            if (!element) return;
-                            clickElement("div.player-wrapper > div.player-close a");
+                            if (element) clickElement("div.player-wrapper > div.player-close a");
                         });
+                        nextBtn.click();
+                        
+                    } else if (event.key === "ArrowLeft" && prevBtn) {
+                        event.stopImmediatePropagation();
+                        event.preventDefault();
+                        prevBtn.click();
                     }
+                    
                 }, true);
             }
             
@@ -6616,39 +6629,77 @@
         function isTargetOrigin() {
             const urlParams = new URLSearchParams(window.location.search);
             const origin = urlParams.get('origin');
-            
             return origin === 'https://www.lingq.com';
         }
         
         if (!isTargetOrigin()) return;
         
         const css = `
-            #player-control-overlay > div > player-fullscreen-controls > player-fullscreen-action-menu > div > div {
-                display: none !important;
-            }
-            #player-control-overlay > div > div.player-controls-background-container > div.player-controls-background {
-                display: none !important;
-            }
-            #player-control-overlay > div > div:nth-child(5) > player-middle-controls {
-                display: none !important;
-            }
-            .ytp-paid-content-overlay, .ytmPaidContentOverlayHost {
+            #player-control-overlay > div > player-fullscreen-controls > player-fullscreen-action-menu > div > div,
+            #player-control-overlay > div > div.player-controls-background-container > div.player-controls-background,
+            #player-control-overlay > div > div:nth-child(5) > player-middle-controls,
+            .ytp-paid-content-overlay, .ytmPaidContentOverlayHost,
+            .ytp-pause-overlay-container, .ytp-watermark {
                 display: none !important;
             }
             #player-controls {
                 height: 60px;
             }
-            .ytp-pause-overlay-container {
-                display: none !important;
-            }
-            .ytp-watermark {
-                display: none !important;
-            }
-            .caption-window {
+            
+            .caption-window.ytp-caption-window-bottom {
                 display: unset !important;
+                width: 90% !important;
+                left: 5% !important;
+                margin-left: 0 !important;
+                bottom: var(--custom-caption-bottom, 10%) !important;
+                top: var(--custom-caption-top, auto) !important;
+                margin-bottom: 0 !important;
+            }
+            .ytp-caption-segment {
+                font-size: 2.75em !important;
             }
         `;
         applyCSS(css);
+        
+        const placeInside = false;
+        
+        const adjustCaptionPosition = debounce(() => {
+            console.log('caption relocated!')
+            const video = document.querySelector('video.html5-main-video');
+            const player = document.querySelector('.html5-video-player');
+            
+            if (!video || !player) return;
+            
+            const pRect = player.getBoundingClientRect();
+            const vRect = video.getBoundingClientRect();
+            
+            // If the video almost fills the player, reset custom properties
+            if (Math.abs(pRect.height - vRect.height) < 10) {
+                player.style.removeProperty('--custom-caption-bottom');
+                player.style.removeProperty('--custom-caption-top');
+                return;
+            }
+            
+            const gap = (pRect.height - vRect.height) / 2;
+            
+            if (placeInside) {
+                // Anchor to the bottom of the video
+                const targetBottom = gap + 10;
+                const percentBottom = (targetBottom / pRect.height) * 100;
+                
+                player.style.setProperty('--custom-caption-bottom', `${percentBottom}%`);
+                player.style.setProperty('--custom-caption-top', 'auto');
+            } else {
+                // Anchor to the top (just below the video) to bypass height calculation
+                const targetTop = pRect.height - gap + 5;
+                const percentTop = (targetTop / pRect.height) * 100;
+                
+                player.style.setProperty('--custom-caption-top', `${percentTop}%`);
+                player.style.setProperty('--custom-caption-bottom', 'auto');
+            }
+        }, 100);
+        
+        adjustCaptionPosition();
     }
     
     async function init() {
