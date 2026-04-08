@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      12.3.0
+// @version      12.4.0
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @grant       GM_xmlhttpRequest
@@ -33,8 +33,8 @@
         sentenceHeight: 400,
         sentenceAutoplay: false,
         widgetWidth: 400,
-        fontSize: 1.1,
-        lineHeight: 1.7,
+        fontSize: {},
+        lineHeight: {},
         
         colorMode: "white",
         white_fontColor: "rgb(0, 0, 0)",
@@ -91,6 +91,40 @@
         ttsWord: false,
         ttsSentence: false,
     };
+    
+    const languageScopedDefaults = {
+        styleType: "video",
+        prependSummary: false,
+        fontSize: 1.1,
+        lineHeight: 1.7,
+    };
+    
+    function ensureLanguageScopedSetting(settingKey, language) {
+        const scopedSettings = typeof settings[settingKey] === "object" && settings[settingKey] !== null
+            ? settings[settingKey]
+            : {};
+        
+        if (Object.hasOwn(scopedSettings, language)) return;
+        
+        settings[settingKey] = {
+            ...scopedSettings,
+            [language]: languageScopedDefaults[settingKey]
+        };
+    }
+    
+    function ensureLanguageSettings(language) {
+        Object.keys(languageScopedDefaults).forEach((settingKey) => {
+            ensureLanguageScopedSetting(settingKey, language);
+        });
+    }
+    
+    function resetLanguageScopedSettings(language) {
+        Object.entries(languageScopedDefaults).forEach(([settingKey, defaultValue]) => {
+            settings[settingKey] = {
+                [language]: defaultValue
+            };
+        });
+    }
     
     const settings = new Proxy({}, {
         get: (target, key) => {
@@ -1414,18 +1448,18 @@
                 {value: "video2", text: "Video2"},
                 {value: "audio", text: "Audio"},
                 {value: "off", text: "Off"}
-            ], (settings.styleType[getLessonLanguage()] ?? "video"));
+            ], settings.styleType[language]);
             
             const videoSettings = createElement("div", {
                 id: "videoSettings",
-                style: `${settings.styleType === "video" ? "" : "display: none"}`
+                style: `${settings.styleType[language] === "video" ? "" : "display: none"}`
             });
             addSlider(videoSettings, "heightBigSlider", "Video Height:", "heightBigValue", settings.heightBig, "px", 300, 800, 10);
             container1.appendChild(videoSettings);
             
             const sentenceVideoSettings = createElement("div", {
                 id: "sentenceVideoSettings",
-                style: `${settings.styleType === "off" ? "" : "display: none"}`
+                style: `${settings.styleType[language] === "off" ? "" : "display: none"}`
             });
             addSlider(sentenceVideoSettings, "sentenceHeightSlider", "Sentence View Video Height:", "sentenceHeightValue", settings.sentenceHeight, "px", 300, 600, 10);
             addCheckbox(sentenceVideoSettings, "sentenceAutoplayCheckbox", "Autoplay in Sentence View", settings.sentenceAutoplay);
@@ -1433,8 +1467,8 @@
             
             addSlider(container1, "widgetWidthSlider", "Widget Width:", "widgetWidthValue", settings.widgetWidth, "px", 330, 500, 10);
             
-            addSlider(container1, "fontSizeSlider", "Font Size:", "fontSizeValue", settings.fontSize, "rem", 0.8, 1.8, 0.05);
-            addSlider(container1, "lineHeightSlider", "Line Height:", "lineHeightValue", settings.lineHeight, "", 1.2, 3.0, 0.1);
+            addSlider(container1, "fontSizeSlider", "Font Size:", "fontSizeValue", settings.fontSize[language], "rem", 0.8, 1.8, 0.05);
+            addSlider(container1, "lineHeightSlider", "Line Height:", "lineHeightValue", settings.lineHeight[language], "", 1.2, 3.0, 0.1);
             
             const colorSection = createElement("div", {className: "popup-section"});
             
@@ -1534,7 +1568,7 @@
             chatWidgetSection.appendChild(apiKeyContainer);
             
             addCheckbox(chatWidgetSection, "askSelectedCheckbox", "Enable asking with selected text", settings.askSelected);
-            addCheckbox(chatWidgetSection, "prependSummaryCheckbox", "Prepend a quick Summary", settings.prependSummary[getLessonLanguage()] ?? false);
+            addCheckbox(chatWidgetSection, "prependSummaryCheckbox", "Prepend a quick Summary", settings.prependSummary[language]);
             
             const dbModeRow = createElement("div", {
                     className: "popup-row",
@@ -2174,7 +2208,10 @@
                     const transformedValue = valueTransform(value);
                     
                     valueDisplay.textContent = transformedValue.toString().replace(unit, '');
-                    settings[settingKey] = value;
+                    
+                    settings[settingKey] = (settingKey in languageScopedDefaults) ?
+                        {...settings[settingKey], [language]: value} : value;
+                    
                     document.documentElement.style.setProperty(cssVar, transformedValue);
                 });
             }
@@ -2192,9 +2229,9 @@
             const styleTypeSelector = document.getElementById("styleTypeSelector");
             styleTypeSelector.addEventListener("change", (event) => {
                 const selectedStyleType = event.target.value;
-                const styleTypes = typeof settings.styleType === "object" ? {...settings.styleType} : {};
-                styleTypes[getLessonLanguage()] = selectedStyleType;
-                settings.styleType = styleTypes;
+                
+                settings.styleType = {...settings.styleType, [language]: selectedStyleType};
+                
                 document.getElementById("videoSettings").style.display = selectedStyleType === "video" ? "block" : "none";
                 document.getElementById("sentenceVideoSettings").style.display = selectedStyleType === "off" ? "block" : "none";
             });
@@ -2299,9 +2336,7 @@
             
             const prependSummaryCheckbox = document.getElementById("prependSummaryCheckbox");
             prependSummaryCheckbox.addEventListener('change', (event) => {
-                const prependSummaries = typeof settings.prependSummary === "object" ? {...settings.prependSummary} : {};
-                prependSummaries[getLessonLanguage()] = event.target.checked;
-                settings.prependSummary = prependSummaries;
+                settings.prependSummary = {...settings.prependSummary, [language]: event.target.checked};
             });
             
             document.getElementById("dbMode_personal").addEventListener("change", () => {
@@ -2419,7 +2454,7 @@
             const ttsVoiceSelector = document.getElementById("ttsVoiceSelector");
             ttsVoiceSelector.addEventListener("change", (event) => {
                 const voices = typeof settings.ttsVoice === "object" ? {...settings.ttsVoice} : {};
-                voices[getLessonLanguage()] = event.target.value;
+                voices[language] = event.target.value;
                 settings.ttsVoice = voices;
             });
             
@@ -2451,7 +2486,7 @@
                 const currentColorMode = document.getElementById("colorModeSelector").value;
                 const defaultColorSettings = getColorSettings(currentColorMode);
                 
-                document.getElementById("styleTypeSelector").value = defaults.styleType;
+                document.getElementById("styleTypeSelector").value = languageScopedDefaults.styleType;
                 document.getElementById("heightBigSlider").value = defaults.heightBig;
                 document.getElementById("heightBigValue").textContent = defaults.heightBig;
                 document.getElementById("sentenceHeightSlider").value = defaults.sentenceHeight;
@@ -2466,8 +2501,8 @@
                 updateColorInputs(defaultColorSettings);
                 updateColorPickerBackgrounds(defaultColorSettings);
                 
-                document.getElementById("videoSettings").style.display = defaults.styleType === "video" ? "block" : "none";
-                document.getElementById("sentenceVideoSettings").style.display = defaults.styleType === "off" ? "block" : "none";
+                document.getElementById("videoSettings").style.display = languageScopedDefaults.styleType === "video" ? "block" : "none";
+                document.getElementById("sentenceVideoSettings").style.display = languageScopedDefaults.styleType === "off" ? "block" : "none";
                 
                 document.documentElement.style.setProperty("--font-size", `${defaults.fontSize}rem`);
                 document.documentElement.style.setProperty("--line-height", defaults.lineHeight);
@@ -2500,7 +2535,7 @@
                 document.getElementById("llmProviderModelSelector").value = defaults.llmProviderModel;
                 document.getElementById("llmApiKeyInput").value = defaults.llmApiKey;
                 document.getElementById("askSelectedCheckbox").value = defaults.askSelected;
-                document.getElementById("prependSummaryCheckbox").value = defaults.prependSummary;
+                document.getElementById("prependSummaryCheckbox").checked = languageScopedDefaults.prependSummary;
                 
                 document.getElementById("ttsCheckbox").value = defaults.tts;
                 document.getElementById("ttsAutoplayCheckbox").value = defaults.ttsAutoplay;
@@ -2510,9 +2545,12 @@
                 document.getElementById("ttsWordCheckbox").value = defaults.ttsWord;
                 document.getElementById("ttsSentenceCheckbox").value = defaults.ttsSentence;
                 
-                for (const [key, value] of Object.entries(defaults)) {
-                    settings[key] = value
-                }
+                resetLanguageScopedSettings(language);
+                Object.entries(defaults)
+                    .filter(([key]) => !(key in languageScopedDefaults))
+                    .forEach(([key, value]) => {
+                        settings[key] = value;
+                    });
             }
             
             document.getElementById("resetSettingsBtn").addEventListener("click", resetSettings);
@@ -2736,7 +2774,7 @@
                 
                 ttsPlayer.style.display = "none";
                 ttsGenerationButton.disabled = true;
-                const audioData = await getTTSResponse(settings.ttsProvider, settings.ttsApiKey, (settings.ttsVoice[getLessonLanguage()] ?? "random"), ttsTextareaText, ttsInstructionsText);
+                const audioData = await getTTSResponse(settings.ttsProvider, settings.ttsApiKey, (settings.ttsVoice[language] ?? "random"), ttsTextareaText, ttsInstructionsText);
                 const audioURL = URL.createObjectURL(new Blob([audioData], {type: 'audio/mp3'}))
                 ttsGenerationButton.disabled = false;
                 
@@ -3595,6 +3633,9 @@
             `;
         }
         
+        const language = getLessonLanguage();
+        ensureLanguageSettings(language);
+        
         const colorSettings = getColorSettings(settings.colorMode);
         
         const settingsButton = createElement("button", {
@@ -3686,7 +3727,7 @@
                     break;
             }
             
-            switch (settings.styleType[getLessonLanguage()] ?? "video") {
+            switch (settings.styleType[language]) {
                 case "video":
                     specificCSS = generateVideoCSS();
                     break;
@@ -3740,8 +3781,8 @@
         function generateBaseCSS(colorSettings) {
             return `
                 :root {
-                    --font-size: ${settings.fontSize}rem;
-                    --line-height: ${settings.lineHeight};
+                    --font-size: ${settings.fontSize[language]}rem;
+                    --line-height: ${settings.lineHeight[language]};
 
                     --font-color: ${colorSettings.fontColor};
                     --lingq-background: ${colorSettings.lingqBackground};
@@ -3945,6 +3986,14 @@
                     font-size: 10px;
                     border-radius: 3px;
                     line-height: 1;
+                    
+                    pointer-events: none;
+                    user-select: none;
+                    -webkit-user-select: none;
+                }
+                
+                .flashcard-count-badge::after {
+                    content: attr(data-display);
                 }
                 
                 .flashcard-row {
@@ -4840,7 +4889,7 @@
                     
                         # Output Format
                         - Language: English; use original-language terms inline when necessary for fidelity
-                        - Format: plain text, not a HTML or Markdown format.
+                        - Format: plain text only, not HTML or Markdown format.
                         - Length: 2,000 words max`;
                     
                     const summary_history = [
@@ -4855,7 +4904,7 @@
                 
                 async function getQuickSummary(provider, apikey, model, content) {
                     const DictionaryLocalePairs = await getDictionaryLocalePairs()
-                    const lessonLanguage = DictionaryLocalePairs[getLessonLanguage()];
+                    const lessonLanguage = DictionaryLocalePairs[language];
                     const summaryPrompt = `
                         # Role
                         Summarize the lesson content, helping learners grasp the topic before reading.
@@ -4900,7 +4949,7 @@
                     
                     const summaryElement = createElement("div", {
                         className: "quick-summary",
-                        style: `position: relative; ${(settings.prependSummary[getLessonLanguage()] ?? false) ? '' : 'display: none;'}`
+                        style: `position: relative; ${(settings.prependSummary[language]) ? '' : 'display: none;'}`
                     }, createElement("b", {}, "Summary"));
                     
                     const contentWrapper = createElement("div", {
@@ -4937,7 +4986,7 @@
                 [llmProvider, llmModel] = settings.llmProviderModel.split(" ");
                 llmApiKey = settings.llmApiKey;
                 
-                if (settings.prependSummary[getLessonLanguage()] ?? false) {
+                if (settings.prependSummary[language]) {
                     await getQuickSummary(llmProvider, llmApiKey, llmModel, lessonContent);
                 }
                 
@@ -5098,7 +5147,7 @@
                     }
                     
                     ttsButton.disabled = true;
-                    let audioData = await getTTSResponse(settings.ttsProvider, settings.ttsApiKey, (settings.ttsVoice[getLessonLanguage()] ?? "random"), selectedText);
+                    let audioData = await getTTSResponse(settings.ttsProvider, settings.ttsApiKey, (settings.ttsVoice[lessonLanguage] ?? "random"), selectedText);
                     if (audioData == null) {
                         console.log("audioData can't be got.")
                         return;
@@ -5244,6 +5293,12 @@
                     return true;
                 }
                 
+                function syncFlashcardBadge(badge, count) {
+                    if (!badge) return;
+                    badge.dataset.count = String(count);
+                    badge.dataset.display = count > 9 ? "9+" : String(count);
+                }
+                
                 function enhanceWordMessage(botMessageDiv, selectedData) {
                     if (!isWordMessageStructure(botMessageDiv)) return;
                     
@@ -5266,12 +5321,7 @@
                     const exampleSentenceElem = exampleListElem?.querySelector("li:nth-child(1)");
                     const exampleTranslationElem = exampleListElem?.querySelector("li:nth-child(2)");
                     
-                    const word = (() => {
-                        if (!wordElem) return "";
-                        const clone = wordElem.cloneNode(true);
-                        clone.querySelector(".flashcard-count-badge")?.remove();
-                        return clone.textContent.trim();
-                    })();
+                    const word = wordElem?.textContent?.trim() || "";
                     const pronunciation = pronunciationElem?.textContent?.trim() || "";
                     const meaning = meaningElem?.textContent?.trim() || "";
                     const explanation = explanationElem?.textContent?.trim() || "";
@@ -5437,7 +5487,8 @@
                                             }
                                             const badge = wordElem.querySelector(".flashcard-count-badge");
                                             if (badge) {
-                                                if (+badge.textContent > 1) badge.textContent = +badge.textContent - 1;
+                                                const nextCount = Number(badge.dataset.count || 0) - 1;
+                                                if (nextCount > 0) syncFlashcardBadge(badge, nextCount);
                                                 else badge.remove();
                                             }
                                             showToast("Flashcard removed.", true);
@@ -5479,8 +5530,9 @@
                                     if (existingBadge) return;
                                     const badge = createElement("span", {
                                         className: "flashcard-count-badge",
-                                        textContent: count > 9 ? "9+" : count
+                                        ariaHidden: "true",
                                     });
+                                    syncFlashcardBadge(badge, count);
                                     wordElem.appendChild(badge);
                                 }
                             });
@@ -5537,11 +5589,16 @@
                                     } else {
                                         botMessageDiv.dataset.wordIdx = inserted[0].idx;
                                         const badge = wordElem.querySelector(".flashcard-count-badge");
-                                        if (badge) badge.textContent = +badge.textContent + 1;
-                                        else wordElem.appendChild(createElement("span", {
-                                            className: "flashcard-count-badge",
-                                            textContent: "1"
-                                        }));
+                                        if (badge) {
+                                            syncFlashcardBadge(badge, Number(badge.dataset.count || 0) + 1);
+                                        } else {
+                                            const newBadge = createElement("span", {
+                                                className: "flashcard-count-badge",
+                                            });
+                                            newBadge.setAttribute("aria-hidden", "true");
+                                            syncFlashcardBadge(newBadge, 1);
+                                            wordElem.appendChild(newBadge);
+                                        }
                                         showToast("Saved to Flashcard!", true);
                                     }
                                 } catch (err) {
@@ -5623,11 +5680,7 @@
                                 innerHTML: `<svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="transparent" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-copy"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"></rect><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"></path></svg>`,
                             });
                             copyButton.addEventListener('click', async () => {
-                                const textToCopy = (() => {
-                                    const clone = botMessageDiv.cloneNode(true);
-                                    clone.querySelector(".flashcard-count-badge")?.remove();
-                                    return clone.textContent;
-                                })();
+                                const textToCopy = botMessageDiv.textContent.trim();
                                 
                                 navigator.clipboard.writeText(textToCopy)
                                     .then(() => {
@@ -5653,7 +5706,7 @@
                                 }
                                 
                                 ttsButton.disabled = true;
-                                const audioData = await getTTSResponse(settings.ttsProvider, settings.ttsApiKey, (settings.ttsVoice[getLessonLanguage()] ?? "random"), textToTTS);
+                                const audioData = await getTTSResponse(settings.ttsProvider, settings.ttsApiKey, (settings.ttsVoice[lessonLanguage] ?? "random"), textToTTS);
                                 if (audioData == null) {
                                     console.log("audioData can't be got.")
                                     return;
@@ -6117,7 +6170,7 @@
             
             const userDictionaryLang = await getDictionaryLanguage();
             const DictionaryLocalePairs = await getDictionaryLocalePairs()
-            const lessonLanguage = DictionaryLocalePairs[getLessonLanguage()];
+            const lessonLanguage = DictionaryLocalePairs[language];
             const userLanguage = DictionaryLocalePairs[userDictionaryLang];
             const lessonReader = document.getElementById('lesson-reader');
             
@@ -6156,6 +6209,9 @@
         let styleElement = null;
         let lessonSummary = "";
         let quickSummary = "";
+        
+        const language = getLessonLanguage();
+        ensureLanguageSettings(language);
         
         createReaderUI();
         setupStyleEventListeners();
