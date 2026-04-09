@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      12.4.0
+// @version      12.5.0
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @grant       GM_xmlhttpRequest
@@ -59,6 +59,8 @@
         focusPlayingSentence: false,
         showTranslation: false,
         usePageMode: false,
+        skipEndPage: false,
+        relocateCaption: 'default',
         
         keyboardShortcut: false,
         shortcutVideoFullscreen: 'p',
@@ -881,6 +883,10 @@
         return settings.useCentralDb ? centralUserId : supabaseClient;
     }
     
+    function sleep(ms) {
+        return new Promise(resolve => setTimeout(resolve, ms));
+    }
+    
     /* Modules */
     
     function stopPlayingAudio(autioContext) {
@@ -1438,6 +1444,42 @@
                 return container;
             }
             
+            function addRadioGroup(parent, groupName, labelText, options, selectedValue) {
+                const container = createElement("div", {
+                    className: "popup-row",
+                    style: "display: flex; align-items: center; gap: 15px;"
+                });
+                
+                container.appendChild(createElement("label", {textContent: labelText}));
+                
+                const optionsContainer = createElement("div", {
+                    style: "flex-grow: 1; display: flex; justify-content: space-around;"
+                });
+                
+                options.forEach(({value, text}) => {
+                    const optionLabel = createElement("label", {
+                        style: "display: flex; gap: 5px; cursor: pointer;"
+                    });
+                    
+                    const input = createElement("input", {
+                        type: "radio",
+                        name: groupName,
+                        id: `${groupName}_${value}`,
+                        value,
+                        checked: value === selectedValue
+                    });
+                    
+                    optionLabel.appendChild(input);
+                    optionLabel.appendChild(document.createTextNode(text));
+                    optionsContainer.appendChild(optionLabel);
+                });
+                
+                container.appendChild(optionsContainer);
+                parent.appendChild(container);
+                
+                return container;
+            }
+            
             const popupLayout = createElement("div");
             const columns = createElement("div", {style: "display: flex; flex-direction: row;"});
             
@@ -1472,7 +1514,7 @@
             
             const colorSection = createElement("div", {className: "popup-section"});
             
-            addSelect(colorSection, "colorModeSelector", "Color Mode:", [
+            addRadioGroup(colorSection, "colorMode", "Color Mode:", [
                 {value: "white", text: "White"},
                 {value: "dark", text: "Dark"}
             ], settings.colorMode);
@@ -1498,6 +1540,12 @@
             addCheckbox(container1, "focusPlayingSentenceCheckbox", "Focus on Playing Sentence", settings.focusPlayingSentence);
             addCheckbox(container1, "showTranslationCheckbox", "Show Translation Automatically", settings.showTranslation);
             addCheckbox(container1, "usePageModeCheckbox", "Use Paging Mode", settings.usePageMode);
+            addCheckbox(container1, "skipEndPageCheckbox", "Skip End Page", settings.skipEndPage);
+            addRadioGroup(container1, "relocateCaption", "Video Caption:", [
+                {value: "default", text: "Default"},
+                {value: "inside", text: "Inside"},
+                {value: "below", text: "Below"}
+            ], settings.relocateCaption);
             
             columns.appendChild(container1);
             
@@ -1570,35 +1618,10 @@
             addCheckbox(chatWidgetSection, "askSelectedCheckbox", "Enable asking with selected text", settings.askSelected);
             addCheckbox(chatWidgetSection, "prependSummaryCheckbox", "Prepend a quick Summary", settings.prependSummary[language]);
             
-            const dbModeRow = createElement("div", {
-                    className: "popup-row",
-                    style: "display: flex; align-items: center; gap: 15px;"
-                },
-                createElement("label", {textContent: "DB Type:"}));
-            
-            const dbModeOptions = createElement("div", {
-                style: "flex-grow: 1; display: flex; justify-content: space-around;"
-            });
-            
-            [
+            addRadioGroup(chatWidgetSection, "dbMode", "DB Type:", [
                 {value: "personal", text: "Custom"},
                 {value: "central", text: "Built-in"}
-            ].forEach(({value, text}) => {
-                const label = createElement("label",
-                    {style: "display: flex; gap: 5px; cursor: pointer;"},
-                    text,
-                    createElement("input", {
-                        type: "radio",
-                        name: "dbMode",
-                        id: `dbMode_${value}`,
-                        value,
-                        checked: value === (settings.useCentralDb ? "central" : "personal")
-                    })
-                );
-                dbModeOptions.appendChild(label);
-            });
-            dbModeRow.appendChild(dbModeOptions);
-            chatWidgetSection.appendChild(dbModeRow);
+            ], settings.useCentralDb ? "central" : "personal");
             
             const personalDbSection = createElement("div", {id: "personalDbSection"});
             if (settings.useCentralDb) personalDbSection.style.display = "none";
@@ -2057,7 +2080,7 @@
             function initializePickrs() {
                 function setupRGBAPickr(pickerId, textId, settingKey, cssVar) {
                     function saveColorSetting(key, value) {
-                        const currentColorMode = document.getElementById("colorModeSelector").value;
+                        const currentColorMode = document.querySelector('input[name="colorMode"]:checked')?.value;
                         const prefix = currentColorMode === "dark" ? "dark_" : "white_";
                         settings[prefix + key] = value;
                     }
@@ -2187,8 +2210,7 @@
             function updateColorMode(event) {
                 event.stopPropagation();
                 
-                const selectedColorMode = this.value;
-                
+                const selectedColorMode = event.currentTarget.value;
                 settings.colorMode = selectedColorMode;
                 document.documentElement.style.setProperty("--background-color", selectedColorMode === "dark" ? "#2a2c2e" : "#ffffff");
                 
@@ -2246,7 +2268,9 @@
             setupSlider("fontSizeSlider", "fontSizeValue", "fontSize", "rem", "--font-size", (val) => `${val}rem`);
             setupSlider("lineHeightSlider", "lineHeightValue", "lineHeight", "", "--line-height", (val) => val);
             
-            document.getElementById("colorModeSelector").addEventListener("change", updateColorMode);
+            document.querySelectorAll('input[name="colorMode"]').forEach((radio) => {
+                radio.addEventListener("change", updateColorMode);
+            });
             
             const autoFinishingCheckbox = document.getElementById("autoFinishingCheckbox");
             autoFinishingCheckbox.addEventListener('change', (event) => {
@@ -2266,6 +2290,17 @@
             const usePageModeCheckbox = document.getElementById("usePageModeCheckbox");
             usePageModeCheckbox.addEventListener('change', (event) => {
                 settings.usePageMode = event.target.checked;
+            });
+            
+            const skipEndPageCheckbox = document.getElementById("skipEndPageCheckbox");
+            skipEndPageCheckbox.addEventListener('change', (event) => {
+                settings.skipEndPage = event.target.checked;
+            });
+            
+            document.querySelectorAll('input[name="relocateCaption"]').forEach((radio) => {
+                radio.addEventListener("change", (event) => {
+                    settings.relocateCaption = event.currentTarget.value;
+                });
             });
             
             function setupShortcutInput(inputId, settingKey) {
@@ -2339,16 +2374,14 @@
                 settings.prependSummary = {...settings.prependSummary, [language]: event.target.checked};
             });
             
-            document.getElementById("dbMode_personal").addEventListener("change", () => {
-                settings.useCentralDb = false;
-                document.getElementById("personalDbSection").style.display = "";
-                document.getElementById("centralDbSection").style.display = "none";
-            });
-            
-            document.getElementById("dbMode_central").addEventListener("change", () => {
-                settings.useCentralDb = true;
-                document.getElementById("personalDbSection").style.display = "none";
-                document.getElementById("centralDbSection").style.display = "";
+            document.querySelectorAll('input[name="dbMode"]').forEach((radio) => {
+                radio.addEventListener("change", (event) => {
+                    const isCentralDb = event.currentTarget.value === "central";
+                    
+                    settings.useCentralDb = isCentralDb;
+                    document.getElementById("personalDbSection").style.display = isCentralDb ? "none" : "";
+                    document.getElementById("centralDbSection").style.display = isCentralDb ? "" : "none";
+                });
             });
             
             const dbUrlInput = document.getElementById("dbUrlInput");
@@ -2392,7 +2425,7 @@
                 const sendOtpBtn = event.currentTarget;
                 sendOtpBtn.disabled = true;
                 
-                const { error } = await centralClient.auth.signInWithOtp({ email });
+                const {error} = await centralClient.auth.signInWithOtp({email});
                 if (error) {
                     alert(`❌ ${error.message}`);
                     sendOtpBtn.disabled = false;
@@ -2411,7 +2444,7 @@
                 const verifyOtpBtn = event.currentTarget;
                 verifyOtpBtn.disabled = true;
                 
-                const { data, error } = await centralClient.auth.verifyOtp({ email: otpEmail, token, type: "email" });
+                const {data, error} = await centralClient.auth.verifyOtp({email: otpEmail, token, type: "email"});
                 if (error) {
                     alert(`❌ ${error.message}`);
                     verifyOtpBtn.disabled = false;
@@ -2483,7 +2516,7 @@
             function resetSettings() {
                 if (!confirm("Reset all settings to default?")) return;
                 
-                const currentColorMode = document.getElementById("colorModeSelector").value;
+                const currentColorMode = document.querySelector('input[name="colorMode"]:checked')?.value;
                 const defaultColorSettings = getColorSettings(currentColorMode);
                 
                 document.getElementById("styleTypeSelector").value = languageScopedDefaults.styleType;
@@ -2516,6 +2549,10 @@
                 document.getElementById("focusPlayingSentenceCheckbox").checked = defaults.focusPlayingSentence;
                 document.getElementById("showTranslationCheckbox").checked = defaults.showTranslation;
                 document.getElementById("usePageModeCheckbox").checked = defaults.usePageMode;
+                document.getElementById("skipEndPageCheckbox").checked = defaults.skipEndPage;
+                document.querySelectorAll('input[name="relocateCaption"]').forEach((radio) => {
+                    radio.checked = radio.value === defaults.relocateCaption;
+                });
                 
                 document.getElementById("keyboardShortcutCheckbox").value = defaults.keyboardShortcut;
                 document.getElementById("shortcutVideoFullscreenInput").value = defaults.shortcutVideoFullscreen;
@@ -2536,6 +2573,12 @@
                 document.getElementById("llmApiKeyInput").value = defaults.llmApiKey;
                 document.getElementById("askSelectedCheckbox").value = defaults.askSelected;
                 document.getElementById("prependSummaryCheckbox").checked = languageScopedDefaults.prependSummary;
+                
+                document.querySelectorAll('input[name="dbMode"]').forEach((radio) => {
+                    radio.checked = radio.value === (settings.useCentralDb ? "central" : "personal");
+                });
+                document.getElementById("dbUrlInput").value = "";
+                document.getElementById("llmApiKeyInput").value = "";
                 
                 document.getElementById("ttsCheckbox").value = defaults.tts;
                 document.getElementById("ttsAutoplayCheckbox").value = defaults.ttsAutoplay;
@@ -3755,7 +3798,7 @@
             const styleTypeSelector = document.getElementById("styleTypeSelector");
             styleTypeSelector.addEventListener("change", (event) => {
                 const selectedStyleType = event.target.value;
-                applyStyles(selectedStyleType, document.getElementById("colorModeSelector").value);
+                applyStyles(selectedStyleType, document.querySelector('input[name="colorMode"]:checked')?.value);
             });
             
             const usePageModeCheckbox = document.getElementById("usePageModeCheckbox");
@@ -3764,6 +3807,10 @@
                     applyStyles();
                 });
             }
+            
+            document.querySelectorAll('input[name="colorMode"]').forEach((radio) => {
+                radio.addEventListener("change", applyStyles);
+            });
         }
         
         function createReaderUI() {
@@ -4958,7 +5005,7 @@
                     });
                     summaryElement.append(contentWrapper);
                     
-                    const closeButton = createElement("button", { className: "close-summary-btn" }, ["close"]);
+                    const closeButton = createElement("button", {className: "close-summary-btn"}, ["close"]);
                     closeButton.addEventListener("click", () => summaryElement.remove());
                     summaryElement.append(closeButton);
                     
@@ -4979,7 +5026,7 @@
                         }
                     }
                 });
-                observer.observe(readerContainer, { childList: true, subtree: true });
+                observer.observe(readerContainer, {childList: true, subtree: true});
                 
                 const lessonContent = extractTextFromDOM(readerContainer).trim();
                 
@@ -5023,18 +5070,41 @@
                     });
                 }
                 
+                async function skipEndPages() {
+                    waitForElement('[id$="-content-lessonCompleted"]', 5000).then(async (element) => {
+                        if (!element) return;
+                        
+                        clickElement("div.player-wrapper > div.player-close a");
+                        document.dispatchEvent(new KeyboardEvent("keydown", {key: "Escape"}));
+                        
+                        const nextBtn = document.querySelector("#lesson-reader > div.h-full > div > header > div.col-3 > button");
+                        if (!nextBtn) return;
+                        
+                        if (settings.skipEndPage) {
+                            for (let i = 0; i < 2; i++) {
+                                const current = document.querySelector('[id$="-content-lessonCompleted"]');
+                                if (current?.getAttribute("data-state") === "active") break;
+                                
+                                nextBtn.click();
+                                await sleep(500);
+                            }
+                        }
+                    });
+                }
+                
                 navSelectors.forEach((selector) => {
                     waitForElement(selector, 5000).then((button) => {
                         if (!button) return;
                         button.addEventListener("click", resetScroll);
                         button.addEventListener("click", removeSummary, true);
                         button.addEventListener("click", closeVideoPlayer, true);
+                        button.addEventListener("click", skipEndPages, true);
                     });
                 });
             }
             
             function setupKeyboardListeners() {
-                window.addEventListener("keydown", (event) => {
+                window.addEventListener("keydown", async (event) => {
                     if (!event.shiftKey) return;
                     if (!(event.key === "ArrowRight" || event.key === "ArrowLeft")) return;
                     
@@ -5046,19 +5116,28 @@
                     }, 150);
                     // document.querySelector(".quick-summary")?.remove();
                     
+                    const isLessonFinished = await waitForElement('[id$="-content-lessonCompleted"]', 5000);
+                    if (!isLessonFinished) return;
                     const nextBtn = document.querySelector("#lesson-reader > div.h-full > div > header > div.col-3 > button");
                     const prevBtn = document.querySelector("#lesson-reader > div.h-full > div > header > div:nth-child(1) > button");
                     
-                    if (event.key === "ArrowRight" && nextBtn) {
+                    if (event.key === "ArrowRight") {
                         event.stopImmediatePropagation();
                         event.preventDefault();
                         
-                        waitForElement("#radix-\\:r2\\:-content-lessonCompleted", 5000).then((element) => {
-                            if (element) clickElement("div.player-wrapper > div.player-close a");
-                        });
-                        nextBtn.click();
+                        clickElement("div.player-wrapper > div.player-close a");
+                        document.dispatchEvent(new KeyboardEvent("keydown", {key: "Escape"}));
                         
-                    } else if (event.key === "ArrowLeft" && prevBtn) {
+                        if (settings.skipEndPage) {
+                            for (let i = 0; i < 2; i++) {
+                                const current = document.querySelector('[id$="-content-lessonCompleted"]');
+                                if (current?.getAttribute("data-state") === "active") break;
+                                
+                                nextBtn.click();
+                                await sleep(500);
+                            }
+                        }
+                    } else if (event.key === "ArrowLeft") {
                         event.stopImmediatePropagation();
                         event.preventDefault();
                         prevBtn.click();
@@ -5630,7 +5709,8 @@
                     return messageDiv;
                 }
                 
-                async function callStreamOpenAI(botMessageDiv, chatContainer, focus, onStreamCompleted = () => {}) {
+                async function callStreamOpenAI(botMessageDiv, chatContainer, focus, onStreamCompleted = () => {
+                }) {
                     const userInput = document.getElementById("user-input");
                     const sendButton = document.getElementById("send-button");
                     
@@ -6717,12 +6797,9 @@
         `;
         applyCSS(css);
         
-        const placeInside = false;
-        
-        const adjustCaptionPosition = debounce(() => {
-            console.log('caption relocated!')
-            const video = document.querySelector('video.html5-main-video');
-            const player = document.querySelector('.html5-video-player');
+        async function adjustCaptionPosition() {
+            const video = await waitForElement('video.html5-main-video', 5000);
+            const player = await waitForElement('.html5-video-player', 5000);
             
             if (!video || !player) return;
             
@@ -6738,7 +6815,7 @@
             
             const gap = (pRect.height - vRect.height) / 2;
             
-            if (placeInside) {
+            if (settings.relocateCaption === "inside") {
                 // Anchor to the bottom of the video
                 const targetBottom = gap + 10;
                 const percentBottom = (targetBottom / pRect.height) * 100;
@@ -6753,21 +6830,21 @@
                 player.style.setProperty('--custom-caption-top', `${percentTop}%`);
                 player.style.setProperty('--custom-caption-bottom', 'auto');
             }
-        }, 100);
+        }
         
-        adjustCaptionPosition();
+        if (settings.relocateCaption !== "default") adjustCaptionPosition();
     }
     
     async function init() {
         centralClient = createClient(CENTRAL_SUPABASE_URL, CENTRAL_ANON_KEY, {
-            auth: { storageKey: "central-auth-token" }
+            auth: {storageKey: "central-auth-token"}
         });
         const updateAuth = (session) => {
             centralUserId = session?.user?.id ?? null;
             centralUserEmail = session?.user?.email ?? "";
         };
         centralClient.auth.onAuthStateChange((_event, session) => updateAuth(session));
-        const { data: { session } } = await centralClient.auth.getSession();
+        const {data: {session}} = await centralClient.auth.getSession();
         updateAuth(session);
         
         try {
