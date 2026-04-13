@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      12.6.0
+// @version      12.6.1
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @grant       GM_xmlhttpRequest
@@ -100,6 +100,7 @@
         prependSummary: false,
         fontSize: 1.1,
         lineHeight: 1.7,
+        ttsVoice: "random"
     };
     
     function ensureLanguageScopedSetting(settingKey, language) {
@@ -1773,7 +1774,7 @@
                 {value: "google cloud", text: "Google Cloud"}
             ], settings.ttsProvider);
             
-            addSelect(ttsSection, "ttsVoiceSelector", "TTS Voice:", voiceOptionsObject[settings.ttsProvider], settings.ttsVoice);
+            addSelect(ttsSection, "ttsVoiceSelector", "TTS Voice:", voiceOptionsObject[settings.ttsProvider], settings.ttsVoice[language]);
             
             addCheckbox(ttsSection, "ttsWordCheckbox", "Enable AI-TTS for words", settings.ttsWord);
             addCheckbox(ttsSection, "ttsSentenceCheckbox", "Enable AI-TTS for sentences", settings.ttsSentence);
@@ -2490,9 +2491,7 @@
             
             const ttsVoiceSelector = document.getElementById("ttsVoiceSelector");
             ttsVoiceSelector.addEventListener("change", (event) => {
-                const voices = typeof settings.ttsVoice === "object" ? {...settings.ttsVoice} : {};
-                voices[language] = event.target.value;
-                settings.ttsVoice = voices;
+                settings.ttsVoice = {...settings.ttsVoice, [language]: event.target.value};
             });
             
             const ttsProviderSelector = document.getElementById("ttsProviderSelector");
@@ -2589,7 +2588,7 @@
                 document.getElementById("ttsAutoplayCheckbox").value = defaults.ttsAutoplay;
                 document.getElementById("ttsApiKeyInput").value = defaults.ttsApiKey;
                 document.getElementById("ttsProviderSelector").value = defaults.ttsProvider;
-                document.getElementById("ttsVoiceSelector").value = defaults.ttsVoice;
+                document.getElementById("ttsVoiceSelector").value = languageScopedDefaults.ttsVoice;
                 document.getElementById("ttsWordCheckbox").value = defaults.ttsWord;
                 document.getElementById("ttsSentenceCheckbox").value = defaults.ttsSentence;
                 
@@ -2822,7 +2821,7 @@
                 
                 ttsPlayer.style.display = "none";
                 ttsGenerationButton.disabled = true;
-                const audioData = await getTTSResponse(settings.ttsProvider, settings.ttsApiKey, (settings.ttsVoice[language] ?? "random"), ttsTextareaText, ttsInstructionsText);
+                const audioData = await getTTSResponse(settings.ttsProvider, settings.ttsApiKey, (settings.ttsVoice[language]), ttsTextareaText, ttsInstructionsText);
                 const audioURL = URL.createObjectURL(new Blob([audioData], {type: 'audio/mp3'}))
                 ttsGenerationButton.disabled = false;
                 
@@ -5243,7 +5242,7 @@
                     }
                     
                     ttsButton.disabled = true;
-                    let audioData = await getTTSResponse(settings.ttsProvider, settings.ttsApiKey, (settings.ttsVoice[lessonLanguage] ?? "random"), selectedText);
+                    let audioData = await getTTSResponse(settings.ttsProvider, settings.ttsApiKey, (settings.ttsVoice[lessonLanguage]), selectedText);
                     if (audioData == null) {
                         console.log("audioData can't be got.")
                         return;
@@ -5803,7 +5802,7 @@
                                 }
                                 
                                 ttsButton.disabled = true;
-                                const audioData = await getTTSResponse(settings.ttsProvider, settings.ttsApiKey, (settings.ttsVoice[lessonLanguage] ?? "random"), textToTTS);
+                                const audioData = await getTTSResponse(settings.ttsProvider, settings.ttsApiKey, (settings.ttsVoice[lessonLanguage]), textToTTS);
                                 if (audioData == null) {
                                     console.log("audioData can't be got.")
                                     return;
@@ -6555,7 +6554,7 @@
                     setTimeout(async () => {
                         updateProgress(progressBar, progressText, `Calling TTS for sentence ${i + 1}/${totalSentences}`, processedSentences, totalSentences * 2);
                         
-                        const audioArrayBuffer = await getTTSResponse(ttsProvider, settings.ttsApiKey, (settings.ttsVoice[getLessonLanguage()] ?? "random"), text);
+                        const audioArrayBuffer = await getTTSResponse(ttsProvider, settings.ttsApiKey, (settings.ttsVoice[getLessonLanguage()]), text);
                         audioDataBuffers[i] = await decodeAudioData(audioContext, audioArrayBuffer);
                         resolve();
                         processedSentences += 1;
