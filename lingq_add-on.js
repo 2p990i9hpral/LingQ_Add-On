@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      12.5.0
+// @version      12.6.0
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @grant       GM_xmlhttpRequest
@@ -61,6 +61,7 @@
         usePageMode: false,
         skipEndPage: false,
         relocateCaption: 'default',
+        captionFontsize: 2.75,
         
         keyboardShortcut: false,
         shortcutVideoFullscreen: 'p',
@@ -1546,6 +1547,7 @@
                 {value: "inside", text: "Inside"},
                 {value: "below", text: "Below"}
             ], settings.relocateCaption);
+            addSlider(container1, "captionFontsizeSlider", "Video Caption Font Size", "captionFontsizeValue", settings.captionFontsize, "em", 1.5, 3.5, 0.25);
             
             columns.appendChild(container1);
             
@@ -2303,6 +2305,8 @@
                 });
             });
             
+            setupSlider("captionFontsizeSlider", "captionFontsizeValue", "captionFontsize", "em", "--caption-font-size", (val) => `${val}em`);
+            
             function setupShortcutInput(inputId, settingKey) {
                 const input = document.getElementById(inputId);
                 if (!input) return;
@@ -2553,6 +2557,7 @@
                 document.querySelectorAll('input[name="relocateCaption"]').forEach((radio) => {
                     radio.checked = radio.value === defaults.relocateCaption;
                 });
+                document.getElementById("captionFontsizeSlider").value = defaults.captionFontsize;
                 
                 document.getElementById("keyboardShortcutCheckbox").value = defaults.keyboardShortcut;
                 document.getElementById("shortcutVideoFullscreenInput").value = defaults.shortcutVideoFullscreen;
@@ -3788,6 +3793,18 @@
             
             baseCSS += layoutCSS;
             baseCSS += specificCSS;
+            if(settings.skipEndPage) {
+                baseCSS += `
+                [id$="-content-lessonCompleted"] > div.pb-24 > div:nth-child(1) > div.gap-2,
+                [id$="-content-lessonCompleted"] > div.pb-24 > div:nth-child(3),
+                [id$="-content-lessonCompleted"] > div.pb-24 > div.mb-6:last-child > div:nth-child(1),
+                [id$="-content-lessonCompleted"] > div.pb-24 > div.mb-6:last-child > div:nth-child(2),
+                [id$="-content-lessonCompleted"] > div.pb-24 > div.mb-6:last-child > div:nth-child(3),
+                [id$="-content-lessonCompleted"] > div.pb-24 > div.mb-6:last-child > div:nth-child(5) {
+                    display: none !important;
+                }
+                `;
+            }
             
             if (styleElement) styleElement.remove();
             styleElement = createElement("style", {textContent: baseCSS});
@@ -6770,7 +6787,7 @@
         
         if (!isTargetOrigin()) return;
         
-        const css = `
+        const youtubeLayoutCSS = `
             #player-control-overlay > div > player-fullscreen-controls > player-fullscreen-action-menu > div > div,
             #player-control-overlay > div > div.player-controls-background-container > div.player-controls-background,
             #player-control-overlay > div > div:nth-child(5) > player-middle-controls,
@@ -6781,23 +6798,26 @@
             #player-controls {
                 height: 60px;
             }
-            
-            .caption-window.ytp-caption-window-bottom {
-                display: unset !important;
-                width: 90% !important;
-                left: 5% !important;
-                margin-left: 0 !important;
-                bottom: var(--custom-caption-bottom, 10%) !important;
-                top: var(--custom-caption-top, auto) !important;
-                margin-bottom: 0 !important;
-            }
-            .ytp-caption-segment {
-                font-size: 2.75em !important;
-            }
         `;
-        applyCSS(css);
+        applyCSS(youtubeLayoutCSS);
         
         async function adjustCaptionPosition() {
+            const youtubeCaptionCSS = `
+                .caption-window.ytp-caption-window-bottom {
+                    display: unset !important;
+                    width: 90% !important;
+                    left: 5% !important;
+                    margin-left: 0 !important;
+                    bottom: var(--custom-caption-bottom, 10%) !important;
+                    top: var(--custom-caption-top, auto) !important;
+                    margin-bottom: 0 !important;
+                }
+                .ytp-caption-segment {
+                    font-size: ${settings.captionFontsize}em !important;
+                }
+            `;
+            applyCSS(youtubeCaptionCSS);
+            
             const video = await waitForElement('video.html5-main-video', 5000);
             const player = await waitForElement('.html5-video-player', 5000);
             
