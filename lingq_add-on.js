@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      12.6.1
+// @version      12.7.0
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @grant       GM_xmlhttpRequest
@@ -35,6 +35,7 @@
         widgetWidth: 400,
         fontSize: {},
         lineHeight: {},
+        customFont: {},
         
         colorMode: "white",
         white_fontColor: "rgb(0, 0, 0)",
@@ -97,6 +98,7 @@
     
     const languageScopedDefaults = {
         styleType: "video",
+        customFont: "",
         prependSummary: false,
         fontSize: 1.1,
         lineHeight: 1.7,
@@ -1298,6 +1300,34 @@
         }
     }
     
+    function applyCustomFont(fontName) {
+        function escapeFontFamily(name) {
+            return name.trim().replace(/\s+/g, "+");
+        }
+        
+        if (!fontName) {
+            document.documentElement.style.removeProperty("--custom-font");
+            document.getElementById("custom-font-link")?.remove();
+            return;
+        }
+        
+        document.getElementById("custom-font-link")?.remove();
+        
+        document.documentElement.style.setProperty("--custom-font", `"${fontName}"`);
+        
+        const link = createElement("link", {
+            id: "custom-font-link",
+            rel: "stylesheet",
+            href: `https://fonts.googleapis.com/css2?family=${escapeFontFamily(fontName)}&display=swap`
+        });
+        
+        link.onerror = () => {
+            document.documentElement.style.removeProperty("--custom-font");
+        };
+        
+        document.head.appendChild(link);
+    }
+    
     /* Features */
     
     function fixBugs() {
@@ -1513,6 +1543,30 @@
             
             addSlider(container1, "fontSizeSlider", "Font Size:", "fontSizeValue", settings.fontSize[language], "rem", 0.8, 1.8, 0.05);
             addSlider(container1, "lineHeightSlider", "Line Height:", "lineHeightValue", settings.lineHeight[language], "", 1.2, 3.0, 0.1);
+            
+            const customFontContainer = createElement("div", {className: "popup-row"});
+            customFontContainer.appendChild(createElement("label", {
+                htmlFor: "customFontInput",
+                textContent: "Google Web Font Name:"
+            }));
+            const customFontInputGroup = createElement("div", {
+                style: "display: flex; align-items: center; gap: 5px; flex: 1;"
+            });
+            const customFontInput = createElement("input", {
+                type: "text",
+                id: "customFontInput",
+                value: settings.customFont[language],
+                className: "popup-input",
+                style: "width: 70%; flex-grow: unset;"
+            });
+            const customFontLibrary = createElement("a", {
+                href: "https://fonts.google.com",
+                target: "_blank", textContent: "Font Library",
+                style: "font-size: 0.9em; color: var(--blue-500); margin: 0 auto;"
+            });
+            customFontInputGroup.append(customFontInput, customFontLibrary);
+            customFontContainer.appendChild(customFontInputGroup);
+            container1.appendChild(customFontContainer);
             
             const colorSection = createElement("div", {className: "popup-section"});
             
@@ -2271,6 +2325,13 @@
             setupSlider("fontSizeSlider", "fontSizeValue", "fontSize", "rem", "--font-size", (val) => `${val}rem`);
             setupSlider("lineHeightSlider", "lineHeightValue", "lineHeight", "", "--line-height", (val) => val);
             
+            const customFontInput = document.getElementById("customFontInput");
+            customFontInput.addEventListener("change", (event) => {
+                const value = event.target.value;
+                settings.customFont = {...settings.customFont, [language]: value};
+                applyCustomFont(value);
+            });
+            
             document.querySelectorAll('input[name="colorMode"]').forEach((radio) => {
                 radio.addEventListener("change", updateColorMode);
             });
@@ -2533,6 +2594,7 @@
                 document.getElementById("fontSizeValue").textContent = defaults.fontSize;
                 document.getElementById("lineHeightSlider").value = defaults.lineHeight;
                 document.getElementById("lineHeightValue").textContent = defaults.lineHeight;
+                document.getElementById("customFontInput").value = defaults.customFont;
                 
                 updateColorInputs(defaultColorSettings);
                 updateColorPickerBackgrounds(defaultColorSettings);
@@ -2544,6 +2606,7 @@
                 document.documentElement.style.setProperty("--line-height", defaults.lineHeight);
                 document.documentElement.style.setProperty("--height-big", `${defaults.heightBig}px`);
                 document.documentElement.style.setProperty("--sentence-height", `${defaults.sentenceHeight}px`);
+                document.documentElement.style.setProperty("--custom-font", defaults.lineHeight);
                 document.getElementById("sentenceAutoplayCheckbox").checked = defaults.sentenceAutoplay;
                 document.documentElement.style.setProperty("--widget-width", `${defaults.widgetWidth}px`);
                 updateCssColorVariables(defaultColorSettings);
@@ -3515,6 +3578,7 @@
                     flex-grow: 1;
                     border: 1px solid rgb(125 125 125 / 50%);
                     border-radius: 5px;
+                    padding: 0 5px;
                 }
 
                 #downloadProgressContainer {
@@ -3808,6 +3872,8 @@
             if (styleElement) styleElement.remove();
             styleElement = createElement("style", {textContent: baseCSS});
             document.querySelector("head").appendChild(styleElement);
+            
+            applyCustomFont(settings.customFont[language]);
         }
         
         function setupStyleEventListeners() {
@@ -3925,7 +3991,7 @@
                     display: flex;
                     flex-direction: column;
                     min-height: 150px;
-                    max-height: var(--chat-widget-height);
+                    max-height: var(--chat-widget-height, 100px);
                 }
                 
                 #chat-container {
@@ -4182,6 +4248,7 @@
             /*font settings*/
     
             .reader-container {
+                font-family: var(--custom-font, inherit) !important;
                 line-height: var(--line-height) !important;
                 font-size: var(--font-size) !important;
             }
