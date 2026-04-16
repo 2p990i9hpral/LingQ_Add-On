@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      12.7.0
+// @version      12.7.1
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @grant       GM_xmlhttpRequest
@@ -1017,7 +1017,7 @@
             return view.buffer;
         }
         
-        const modelId = "gemini-2.5-flash-preview-tts";
+        const modelId = "gemini-3.1-flash-tts-preview";
         const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${modelId}:generateContent?key=${API_KEY}`;
         
         if (!API_KEY) throw new Error("Invalid or missing Google API key. Please set the API_KEY");
@@ -4491,8 +4491,12 @@
                 columns: ${isPageMode ? "100vw auto" : "unset"} !important;
                 overflow-x: ${isPageMode ? "visible" : "unset"} !important;
                 overflow-y: ${isPageMode ? "visible" : "scroll"} !important;
-                height: ${isPageMode ? "1750px" : "100%"} !important;
+                height: ${isPageMode ? "1800px" : "100%"} !important;
                 outline: none !important;
+            }
+            
+            .reader-container .sentence-item--transliteration:not(.has-furigana) {
+                margin-bottom: 0 !important;
             }
     
             /*video viewer*/
@@ -4628,8 +4632,8 @@
                 --height-big: calc(100vh - 65px);
     
                 --reader-layout-columns: 1fr var(--widget-width) 1fr;
-                --reader-layout-rows: var(--article-height) var(--footer-height);
-                --article-height: calc(var(--app-height) - var(--footer-height));
+                --reader-layout-rows: calc(var(--article-height) - var(--footer-height)) var(--footer-height);
+                --article-height: var(--app-height);
             }
     
             #lesson-reader {
@@ -4637,9 +4641,9 @@
             }
     
             .main-content {
-                grid-area: 1 / 1 / 2 / 2 !important;
+                grid-area: 1 / 1 / 3 / 2 !important;
             }
-    
+            
             .widget-area {
                 grid-area: 1 / 2 / 2 / 3 !important;
             }
@@ -5309,7 +5313,7 @@
                     }
                     
                     ttsButton.disabled = true;
-                    let audioData = await getTTSResponse(settings.ttsProvider, settings.ttsApiKey, (settings.ttsVoice[lessonLanguage]), selectedText);
+                    let audioData = await getTTSResponse(settings.ttsProvider, settings.ttsApiKey, (settings.ttsVoice[language]), selectedText);
                     if (audioData == null) {
                         console.log("audioData can't be got.")
                         return;
@@ -5869,7 +5873,7 @@
                                 }
                                 
                                 ttsButton.disabled = true;
-                                const audioData = await getTTSResponse(settings.ttsProvider, settings.ttsApiKey, (settings.ttsVoice[lessonLanguage]), textToTTS);
+                                const audioData = await getTTSResponse(settings.ttsProvider, settings.ttsApiKey, (settings.ttsVoice[language]), textToTTS);
                                 if (audioData == null) {
                                     console.log("audioData can't be got.")
                                     return;
@@ -6893,11 +6897,11 @@
             const vRect = video.getBoundingClientRect();
             
             // If the video almost fills the player, reset custom properties
-            if (Math.abs(pRect.height - vRect.height) < 10) {
-                player.style.removeProperty('--custom-caption-bottom');
-                player.style.removeProperty('--custom-caption-top');
-                return;
-            }
+            // if (Math.abs(pRect.height - vRect.height) < 10) {
+            //     player.style.removeProperty('--custom-caption-bottom');
+            //     player.style.removeProperty('--custom-caption-top');
+            //     return;
+            // }
             
             const gap = (pRect.height - vRect.height) / 2;
             
