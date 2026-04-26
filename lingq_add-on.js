@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      12.7.1
+// @version      12.8.0
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @grant       GM_xmlhttpRequest
@@ -1216,12 +1216,11 @@
         if (stream) body.stream = true;
         
         if (provider === "openai" && model.includes("gpt-5")) {
-            if (model.includes("gpt-5-mini") || model.includes("gpt-5-nano")) {
-                body.reasoning_effort = "minimal";
-                body.temperature = 1;
-            }
+            body.reasoning_effort = "none";
         }
-        if (provider === "google" && (model.includes("2.5") || model.includes("3"))) body.reasoning_effort = "none";
+        if (provider === "google") {
+            body.reasoning_effort = "none";
+        }
         if (provider === "anthropic") {
             body.max_tokens = 8192;
             
@@ -1239,6 +1238,9 @@
                 }
             }
             body.messages = merged;
+        }
+        if (provider === "deepseek") {
+            body.thinking = {type: "disabled"}
         }
         
         return body;
@@ -1641,18 +1643,17 @@
             addSlider(chatWidgetSection, "chatWidgetHeightSlider", "Chat Widget Height", "chatWidgetHeightValue", settings.chatWidgetHeight, "", 150, 500, 10);
             
             addSelect(chatWidgetSection, "llmProviderModelSelector", "Chat Provider: (Price per 1M tokens)", [
-                {value: "openai gpt-5-chat-latest", text: "OpenAI GPT-5 Chat ($1.25/$10)"},
-                {value: "openai gpt-5-mini", text: "OpenAI GPT-5 mini ($0.25/$2.0)"},
-                {value: "openai gpt-5-nano", text: "OpenAI GPT-5 nano ($0.05/$0.4)"},
-                {value: "openai gpt-4.1-mini", text: "OpenAI GPT-4.1 mini ($0.4/$1.6)"},
-                {value: "openai gpt-4.1-nano", text: "OpenAI GPT-4.1 nano ($0.1/$0.4)"},
-                {value: "google gemini-3-flash-preview", text: "Google Gemini 3.0 Flash ($0.5/$3.0)"},
+                {value: "openai gpt-5.5", text: "OpenAI GPT-5.5 ($5/$30)"},
+                {value: "openai gpt-5.4", text: "OpenAI GPT-5.4 ($2.5/$15)"},
+                {value: "openai gpt-5.4-mini", text: "OpenAI GPT-5.4 mini ($0.75/$4.5)"},
+                {value: "google gemini-3-flash-preview", text: "Google Gemini 3.0 Flash ($0.5/$3)"},
                 {value: "google gemini-3.1-flash-lite-preview", text: "Google Gemini 3.1 Flash Light ($0.25/$1.5)"},
                 {value: "google gemini-2.5-flash", text: "Google Gemini 2.5 Flash ($0.3/$2.5)"},
                 {value: "google gemini-2.5-flash-lite", text: "Google Gemini 2.5 Flash Light ($0.1/$0.4)"},
-                {value: "google gemini-2.0-flash", text: "Google Gemini 2.0 Flash ($0.1/$0.4)"},
-                {value: "anthropic claude-haiku-4-5", text: "Claude Haiku 4.5 ($1.0/$5.0)"},
-                {value: "deepseek deepseek-chat", text: "Deepseek Chat ($0.28/$0.42)"}
+                {value: "anthropic claude-sonnet-4-6", text: "Claude Sonnet 4.6 ($3.0/$15)"},
+                {value: "anthropic claude-haiku-4-5", text: "Claude Haiku 4.5 ($1/$5)"},
+                {value: "deepseek deepseek-v4-pro", text: "Deepseek v4 Pro ($1.74/$0.3.48)"},
+                {value: "deepseek deepseek-v4-flash", text: "Deepseek v4 Flash ($0.14/$0.28)"}
             ], settings.llmProviderModel);
             
             const apiKeyContainer = createElement("div", {className: "popup-row"});
@@ -5211,6 +5212,7 @@
                     if (event.key === "ArrowRight") {
                         event.stopImmediatePropagation();
                         event.preventDefault();
+                        nextBtn.click();
                         
                         clickElement("div.player-wrapper > div.player-close a");
                         document.dispatchEvent(new KeyboardEvent("keydown", {key: "Escape"}));
