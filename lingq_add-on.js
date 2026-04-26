@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      12.8.0
+// @version      12.8.1
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @grant       GM_xmlhttpRequest
@@ -1652,7 +1652,7 @@
                 {value: "google gemini-2.5-flash-lite", text: "Google Gemini 2.5 Flash Light ($0.1/$0.4)"},
                 {value: "anthropic claude-sonnet-4-6", text: "Claude Sonnet 4.6 ($3.0/$15)"},
                 {value: "anthropic claude-haiku-4-5", text: "Claude Haiku 4.5 ($1/$5)"},
-                {value: "deepseek deepseek-v4-pro", text: "Deepseek v4 Pro ($1.74/$0.3.48)"},
+                {value: "deepseek deepseek-v4-pro", text: "Deepseek v4 Pro ($1.74/$3.48)"},
                 {value: "deepseek deepseek-v4-flash", text: "Deepseek v4 Flash ($0.14/$0.28)"}
             ], settings.llmProviderModel);
             
