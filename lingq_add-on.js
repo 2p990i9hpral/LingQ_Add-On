@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      12.9.1
+// @version      12.9.2
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @grant       GM_xmlhttpRequest
@@ -3379,6 +3379,7 @@
                 flashcardPopup.style.display = "block";
                 makeDraggable(flashcardPopup, document.getElementById("flashcardDragHandle"));
                 loadFlashcardPage(currentPage);
+                document.getElementById("flashcardDragHandle").value = "";
                 focusElement('#flashcardSearchInput');
             });
             
@@ -4443,8 +4444,20 @@
                 grid-gap: 10px !important;
             }
     
-            .reference-helpers {
+            .reference-helper-coin-value {
                 display: none !important;
+            }
+            
+            .section-widget--head .reference-helpers {
+                grid-template-columns: 1fr !important;
+            }
+            
+            .section-widget--head .reference-helpers:not(:has(.reference-helper-tags)) {
+                display: none !important;
+                min-height: 0 !important;
+                padding: 0 !important;
+                margin: 0 !important;
+                border: none !important;
             }
     
             .main-footer {
@@ -5477,34 +5490,33 @@
                 }
                 
                 function enhanceWordMessage(botMessageDiv, selectedData) {
-                    const wordCardWrapper = botMessageDiv.querySelector(".word-card");
-                    let isWordCard = false;
+                    const wordCardWrapper = botMessageDiv.querySelector('.word-card');
+                    const buttonContainer = botMessageDiv.querySelector('.message-button-container');
+                    const isWordCardFormat = isWordMessageStructure(botMessageDiv);
+                    
+                    if (!wordCardWrapper && !isWordCardFormat) return;
+                    
+                    if (buttonContainer) buttonContainer.remove();
                     
                     if (wordCardWrapper) {
-                        isWordCard = true;
                         wordCardWrapper.remove();
-                        
                         const prefaceContent = botMessageDiv.innerHTML.trim();
                         
                         if (prefaceContent) {
-                            const chatContainer = document.getElementById("chat-container");
-                            const prefaceMessageDiv = createElement("div", {
-                                className: "chat-message bot-message",
+                            const chatContainer = document.getElementById('chat-container');
+                            const prefaceMessageDiv = createElement('div', {
+                                className: 'chat-message bot-message',
                                 innerHTML: prefaceContent
                             });
                             chatContainer.insertBefore(prefaceMessageDiv, botMessageDiv);
                         }
                         
                         botMessageDiv.innerHTML = wordCardWrapper.innerHTML;
-                    } else if (isWordMessageStructure(botMessageDiv)) {
-                        isWordCard = true;
                     }
                     
-                    if (!isWordCard || !isWordMessageStructure(botMessageDiv)) return;
+                    if (!botMessageDiv.classList.contains('word-message')) botMessageDiv.classList.add('word-message');
                     
-                    if (!botMessageDiv.classList.contains("word-message")) {
-                        botMessageDiv.classList.add("word-message");
-                    }
+                    if (buttonContainer) botMessageDiv.appendChild(buttonContainer);
                     
                     const safeSelectedData = selectedData || {input: "", context: ""};
                     
