@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      12.8.2
+// @version      12.9.0
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @grant       GM_xmlhttpRequest
@@ -852,21 +852,30 @@
             return `\x00${codePlaceholders.length - 1}\x00`;
         });
         
-        const htmlContent = protectedText.split(/\n\n+/).map(block => {
-            if (/^---$/m.test(block)) return '<hr>';
+        const htmlContent = protectedText.split(/\n\n+/).map((block) => {
+            if (block.trim() === '---') return '<hr>';
+            
             if (/^#+ /m.test(block)) {
                 const content = block
                     .replace(/^#+ (.+)$/gm, '<b><u>$1</u></b>')
                     .replace(/\n/g, '<br>');
                 return `<p>${content}</p>`;
             }
+            
             if (/^\s*[-*]\s+/m.test(block)) {
                 const items = block.split('\n')
-                    .map(line => line.replace(/^\s*[-*]\s+(.+)$/, '<li>$1</li>'))
+                    .map((line) => line.replace(/^\s*[-*]\s+(.+)$/, '<li>$1</li>'))
                     .join('');
                 return `<ul>${items}</ul>`;
             }
-            return `<p>${block.replace(/\n/g, '<br>')}</p>`;
+            
+            return block
+                .split(/^---$/m)
+                .map((subBlock) => {
+                    const trimmedSubBlock = subBlock.trim();
+                    return trimmedSubBlock ? `<p>${trimmedSubBlock.replace(/\n/g, '<br>')}</p>` : '';
+                })
+                .join('<hr>');
         }).join('');
         
         return htmlContent
@@ -5783,8 +5792,28 @@
                     }
                 }
                 
-                function updateChatHistoryState(currentHistory, message, role) {
-                    return [...currentHistory, {role: role, content: message}];
+                function generateUniqueId() {
+                    return Date.now().toString(36) + Math.random().toString(36).substring(2);
+                }
+                
+                function createDeleteButton(messageDiv, messageId) {
+                    const deleteButton = createElement("button", {
+                        className: "message-button delete-button",
+                        innerHTML: `<svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="transparent" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-trash-2"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/></svg>`
+                    });
+                    
+                    deleteButton.addEventListener("click", () => {
+                        messageDiv.remove();
+                        chatHistory = chatHistory.filter((item) => item.id !== messageId);
+                    });
+                    
+                    return deleteButton;
+                }
+                
+                function updateChatHistoryState(currentHistory, message, role, id = null) {
+                    const newItem = { role: role, content: message };
+                    if (id) newItem.id = id;
+                    return [...currentHistory, newItem];
                 }
                 
                 function addMessageToUI(message, messageClass, container, initial = false) {
@@ -5836,7 +5865,8 @@
                                 : applyInlineMarkdown(stripped);
                             botMessageDiv.innerHTML = cleanedContent;
                             
-                            chatHistory = updateChatHistoryState(chatHistory, cleanedContent, "assistant");
+                            const botMessageId = generateUniqueId();
+                            chatHistory = updateChatHistoryState(chatHistory, cleanedContent, "assistant", botMessageId);
                             sendButton.disabled = false;
                             if (focus) userInput.focus();
                             
@@ -5911,6 +5941,9 @@
                             });
                             messageButtonContainer.appendChild(regenerateButton);
                             
+                            const deleteButton = createDeleteButton(botMessageDiv, botMessageId);
+                            messageButtonContainer.appendChild(deleteButton);
+                            
                             botMessageDiv.appendChild(messageButtonContainer);
                             const isNearBottom = chatContainer.scrollTop + chatContainer.clientHeight >= chatContainer.scrollHeight - 80;
                             if (isNearBottom) smoothScrollTo(chatContainer, chatContainer.scrollHeight, 100);
@@ -5934,9 +5967,14 @@
                     // if (chatHistory.findIndex(item => item.role === "system-plain") !== -1) chatHistory = chatHistory.filter(item => (item.role !== "system-word" && item.role !== "system-sentence"));
                     
                     const formattedUserMessage = convertMarkdownToHTML(userMessage);
+                    const userMessageDiv = addMessageToUI(formattedUserMessage, "user-message", chatContainer, true);
                     
-                    addMessageToUI(formattedUserMessage, 'user-message', chatContainer, true);
-                    chatHistory = updateChatHistoryState(chatHistory, formattedUserMessage, "user");
+                    const userMessageId = generateUniqueId();
+                    chatHistory = updateChatHistoryState(chatHistory, formattedUserMessage, "user", userMessageId);
+                    
+                    const userButtonContainer = createElement("div", { className: "message-button-container" });
+                    userButtonContainer.appendChild(createDeleteButton(userMessageDiv, userMessageId));
+                    userMessageDiv.appendChild(userButtonContainer);
                     
                     const botMessageDiv = addMessageToUI("", "bot-message", chatContainer, false);
                     await callStreamOpenAI(botMessageDiv, chatContainer, true,
