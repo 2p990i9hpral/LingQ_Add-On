@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      12.9.0
+// @version      12.9.1
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @grant       GM_xmlhttpRequest
@@ -5136,7 +5136,7 @@
                 
                 getLessonSummary(llmProvider, llmApiKey, llmModel, lessonContent)
                     .then(summary => {
-                        lessonSummary = summary;
+                        lessonSummary = convertMarkdownToHTML(summary);
                     });
                 
             }
@@ -5477,17 +5477,34 @@
                 }
                 
                 function enhanceWordMessage(botMessageDiv, selectedData) {
-                    if (!isWordMessageStructure(botMessageDiv)) return;
+                    const wordCardWrapper = botMessageDiv.querySelector(".word-card");
+                    let isWordCard = false;
                     
-                    const detailsEl = botMessageDiv.querySelector("aside");
-                    if (detailsEl) {
-                        detailsEl.remove();
-                        const chatContainer = document.getElementById("chat-container");
+                    if (wordCardWrapper) {
+                        isWordCard = true;
+                        wordCardWrapper.remove();
                         
-                        addMessageToUI(`<p>${detailsEl.innerHTML}</p>`, "bot-message", chatContainer, true);
+                        const prefaceContent = botMessageDiv.innerHTML.trim();
+                        
+                        if (prefaceContent) {
+                            const chatContainer = document.getElementById("chat-container");
+                            const prefaceMessageDiv = createElement("div", {
+                                className: "chat-message bot-message",
+                                innerHTML: prefaceContent
+                            });
+                            chatContainer.insertBefore(prefaceMessageDiv, botMessageDiv);
+                        }
+                        
+                        botMessageDiv.innerHTML = wordCardWrapper.innerHTML;
+                    } else if (isWordMessageStructure(botMessageDiv)) {
+                        isWordCard = true;
                     }
                     
-                    if (!botMessageDiv.classList.contains("word-message")) botMessageDiv.classList.add("word-message");
+                    if (!isWordCard || !isWordMessageStructure(botMessageDiv)) return;
+                    
+                    if (!botMessageDiv.classList.contains("word-message")) {
+                        botMessageDiv.classList.add("word-message");
+                    }
                     
                     const safeSelectedData = selectedData || {input: "", context: ""};
                     
@@ -6120,83 +6137,96 @@
                    - Ensure the usage helps the user understand the general applicability of this specific sense.
                 
                 ## Output Structure (HTML)
-
-                <b>[Base Form in ${lessonLanguage}]</b> <span>/[IPA]/</span> <i>([Part of Speech in ${userLanguage}])</i>
-                <p>[Standard Dictionary Definition in ${userLanguage}]</p>
-                <hr>
-                <p>[Contextual Explanation in ${userLanguage}]</p>
-                <hr>
-                <ul>
-                  <li>[New Example Sentence in ${lessonLanguage}]</li>
-                  <li>[Translation in ${userLanguage}]</li>
-                </ul>
+                - Any conversational text, prefaces, or explanations must be placed outside and before <div class="word-card">.
+                
+                <div class="word-card">
+                    <b>[Base Form in ${lessonLanguage}]</b> <span>/[IPA]/</span> <i>([Part of Speech in ${userLanguage}])</i>
+                    <p>[Standard Dictionary Definition in ${userLanguage}]</p>
+                    <hr>
+                    <p>[Contextual Explanation in ${userLanguage}]</p>
+                    <hr>
+                    <ul>
+                      <li>[New Example Sentence in ${lessonLanguage}]</li>
+                      <li>[Translation in ${userLanguage}]</li>
+                    </ul>
+                </div>
                 
                 ## Examples
                 
                 ### Example 1: Noun (Original: English, User: Korean)
                 User Input: 'Input: "translators", Context: "However, the ESV translators chose to translate that same word as 'servant'."'
                 Assistant Output:
-                <b>translator</b> <span>[trænsˈleɪtər]</span> <i>(명사)</i>
-                <p>번역가</p>
-                <hr>
-                <p>한 언어로 된 텍스트나 말을 다른 언어로 바꾸는 사람을 뜻하는 일반적인 단어입니다. 문맥에서는 성경 번역을 담당한 특정 그룹을 지칭하고 있습니다.</p>
-                <hr>
-                <ul>
-                  <li>Many translators work freely.</li>
-                  <li>많은 번역가들이 자유롭게 일합니다.</li>
-                </ul>
+                <div class="word-card">
+                    <b>translator</b> <span>[trænsˈleɪtər]</span> <i>(명사)</i>
+                    <p>번역가</p>
+                    <hr>
+                    <p>한 언어로 된 텍스트나 말을 다른 언어로 바꾸는 사람을 뜻하는 일반적인 단어입니다. 문맥에서는 성경 번역을 담당한 특정 그룹을 지칭하고 있습니다.</p>
+                    <hr>
+                    <ul>
+                      <li>Many translators work freely.</li>
+                      <li>많은 번역가들이 자유롭게 일합니다.</li>
+                    </ul>
+                </div>
                 
                 ### Example 2: Verb (Original: Spanish, User: English)
                 User Input: 'Input: "lograr", Context: "Debemos lograr nuestros objetivos."'
                 Assistant Output:
-                <b>lograr</b> <span>[loˈɣɾaɾ]</span> <i>(verb)</i>
-                <p>To achieve</p>
-                <hr>
-                <p>Refers to the act of reaching a goal or result, typically through effort. The context highlights obtaining specific objectives.</p>
-                <hr>
-                <ul>
-                  <li>Espero lograr todas mis metas.</li>
-                  <li>I hope to achieve all my goals.</li>
-                </ul>
+                <div class="word-card">
+                    <b>lograr</b> <span>[loˈɣɾaɾ]</span> <i>(verb)</i>
+                    <p>To achieve</p>
+                    <hr>
+                    <p>Refers to the act of reaching a goal or result, typically through effort. The context highlights obtaining specific objectives.</p>
+                    <hr>
+                    <ul>
+                      <li>Espero lograr todas mis metas.</li>
+                      <li>I hope to achieve all my goals.</li>
+                    </ul>
+                </div>
                 
                 ### Example 3: Context-Specific Sense (Original: German, User: French)
                 User Input: 'Input: "anstellen", Context: "Was hast du mit der Schere angestellt?"'
                 Assistant Output:
-                <b>anstellen</b> <span>[ˈanˌʃtɛlən]</span> <i>(verb)</i>
-                <p>Faire</p>
-                <hr>
-                <p>Bien que "anstellen" puisse signifier "employer", dans ce contexte, il signifie "commettre" ou "faire" une bêtise. C'est le sens standard utilisé pour des actions négatives ou maladroites.</p>
-                <hr>
-                <ul>
-                  <li>Er hat wieder etwas Dummes angestellt.</li>
-                  <li>Il a encore fait quelque chose de stupide.</li>
-                </ul>
+                <div class="word-card">
+                    <b>anstellen</b> <span>[ˈanˌʃtɛlən]</span> <i>(verb)</i>
+                    <p>Faire</p>
+                    <hr>
+                    <p>Bien que "anstellen" puisse signifier "employer", dans ce contexte, il signifie "commettre" ou "faire" une bêtise. C'est le sens standard utilisé pour des actions négatives ou maladroites.</p>
+                    <hr>
+                    <ul>
+                      <li>Er hat wieder etwas Dummes angestellt.</li>
+                      <li>Il a encore fait quelque chose de stupide.</li>
+                    </ul>
+                </div>
                 
                 ### Example 4: Adverb Retention (Original: English, User: Japanese)
                 User Input: 'Input: "recklessly", Context: "He drove recklessly through the rain."'
                 Assistant Output:
-                <b>recklessly</b> <span>[ˈrɛklɪsli]</span> <i>(副詞)</i>
-                <p>無謀に</p>
-                <hr>
-                <p>危険や結果を十分に考えずに行動することを指す定義です。文脈では運転という行為が安全を無視して行われたことを説明しています。</p>
-                <hr>
-                <ul>
-                  <li>She spent money recklessly.</li>
-                  <li>彼女は無謀にお金を使った。</li>
-                </ul>
+                <div class="word-card">
+                    <b>recklessly</b> <span>[ˈrɛklɪsli]</span> <i>(副詞)</i>
+                    <p>無謀に</p>
+                    <hr>
+                    <p>危険や結果を十分に考えずに行動することを指す定義です。文脈では運転という行為が安全を無視して行われたことを説明しています。</p>
+                    <hr>
+                    <ul>
+                      <li>She spent money recklessly.</li>
+                      <li>彼女は無謀にお金を使った。</li>
+                    </ul>
+                </div>
                 
                 ### Example 5: Conjugated Verb (Original: Japanese, User: Korean)
                 User Input: 'Input: "入っていました", Context: "箱の中に手紙が入っていました。"'
                 Assistant Output:
-                <b>入る</b> <span>[haiɾɯ]</span> <i>(동사)</i>
-                <p>들어가다</p>
-                <hr>
-                <p>문맥에서는 편지가 상자 안에 이미 존재하는 '상태'를 나타냅니다. 이는 어휘 자체의 의미가 아니라 '〜ている' 문법 구조가 동작의 결과로 지속되는 상태를 표현하기 때문입니다.</p>
-                <hr>
-                <ul>
-                  <li>カバンに本が入る。</li>
-                  <li>가방에 책이 들어있다.</li>
-                </ul>
+                <div class="word-card">
+                    <b>入る</b> <span>[haiɾɯ]</span> <i>(동사)</i>
+                    <p>들어가다</p>
+                    <hr>
+                    <p>문맥에서는 편지가 상자 안에 이미 존재하는 '상태'를 나타냅니다. 이는 어휘 자체의 의미가 아니라 '〜ている' 문법 구조가 동작의 결과로 지속되는 상태를 표현하기 때문입니다.</p>
+                    <hr>
+                    <ul>
+                      <li>カバンに本が入る。</li>
+                      <li>가방에 책이 들어있다.</li>
+                    </ul>
+                </div>
                 `;
                 
                 const sentencePrompt = `
@@ -6291,45 +6321,47 @@
                 ## Logic Branching via Intent Detection
                 
                 ### Condition A: Correction Request
-                Trigger: Only when the user explicitly requests a fix of the previously replied word card using direct commands such as "Wrong word", "Fix the base form", "Use X instead of Y", "Correct the IPA".
-                Action:
-                1. Supplementary Note (Optional): prepend an <aside> tag at the very beginning of your response ONLY when the correction alone is insufficient to prevent misunderstanding (e.g., when the corrected value conflicts with a common assumption). DO NOT use <aside> for general elaboration or conversational filler.
-                2. Identify the Error: Determine what part of the previous word card needs fixing.
-                3. Re-generate Structure: Output the correction using the exact HTML structure of the previous response immediately after the <aside> tag (if used).
+                Trigger: Only when the user explicitly requests a fix of the previously replied word card.
+                Action: Output your conversational explanation first, then output the corrected word card wrapped strictly inside <div class="word-card">.
                 
                 ### Condition B: General or Referential Query
-                Action: Answer helpfully in HTML <p> text.
+                Trigger: The user asks a question or makes a general comment.
+                Action: Answer helpfully in HTML. If you introduce a new vocabulary using the Word Card format, you MUST wrap the card inside <div class="word-card"> and place your conversational explanation outside it.
                 
                 ## Examples
                 
-                ### Example 1: Strict Correction (no supplementary note needed)
+                ### Example 1: Strict Correction (no preface needed)
                 Scenario: Previous output for "happily" showed base form "happy". User complains.
-                User Input: "The basae form should be the adverb, not adjective."
+                User Input: "The basa form should be the adverb, not adjective."
                 Assistant Output:
-                <b>happily</b> <span>[ˈhæpɪli]</span> <i>(adverb)</i>
-                <p>In a happy way</p>
-                <hr>
-                <p>Used to describe an action performed with joy. The user context emphasizes the manner of action.</p>
-                <hr>
-                <ul>
-                  <li>He played happily.</li>
-                  <li>彼は楽しそうに遊んだ。</li>
-                </ul>
+                <div class="word-card">
+                    <b>happily</b> <span>[ˈhæpɪli]</span> <i>(adverb)</i>
+                    <p>In a happy way</p>
+                    <hr>
+                    <p>Used to describe an action performed with joy. The user context emphasizes the manner of action.</p>
+                    <hr>
+                    <ul>
+                        <li>He played happily.</li>
+                        <li>彼は楽しそうに遊んだ。</li>
+                    </ul>
+                </div>
                 
-                ### Example 2: Strict Correction with Supplementary Note
+                ### Example 2: Strict Correction with Preface
                 Scenario: Previous output for "入っていました" showed IPA [haiɾɯ]. User points out the pronunciation.
                 User Input: "It seems that the pronunciation is incorrect.."
                 Assistant Output:
-                <aside>「入る」의 표준 IPA는 [iɾɯ]입니다. [haiɾɯ]는 「入る(はいる)」의 발음으로, 이 문맥에서는 [iɾɯ]가 올바릅니다.</aside>
-                <b>入る</b> <span>[iɾɯ]</span> <i>(동사)</i>
-                <p>들어가다</p>
-                <hr>
-                <p>문맥에서는 편지가 상자 안에 이미 존재하는 '상태'를 나타냅니다.</p>
-                <hr>
-                <ul>
-                  <li>カバンに本が入る。</li>
-                  <li>가방에 책이 들어있다.</li>
-                </ul>
+                <p>「入る」의 표준 IPA는 [iɾɯ]입니다. [haiɾɯ]는 「入る(はいる)」의 발음으로, 이 문맥에서는 [iɾɯ]가 올바릅니다.</p>
+                <div class="word-card">
+                    <b>入る</b> <span>[iɾɯ]</span> <i>(동사)</i>
+                    <p>들어가다</p>
+                    <hr>
+                    <p>문맥에서는 편지가 상자 안에 이미 존재하는 '상태'를 나타냅니다.</p>
+                    <hr>
+                    <ul>
+                        <li>カバンに本が入る。</li>
+                        <li>가방에 책이 들어있다.</li>
+                    </ul>
+                </div>
                 
                 ### Example 3: General Conversation
                 User Input: "Why is English so hard?"
