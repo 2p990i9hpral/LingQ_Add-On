@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      12.8.1
+// @version      12.8.2
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @grant       GM_xmlhttpRequest
@@ -5474,6 +5474,7 @@
                     if (detailsEl) {
                         detailsEl.remove();
                         const chatContainer = document.getElementById("chat-container");
+                        
                         addMessageToUI(`<p>${detailsEl.innerHTML}</p>`, "bot-message", chatContainer, true);
                     }
                     
@@ -5932,8 +5933,10 @@
                     
                     // if (chatHistory.findIndex(item => item.role === "system-plain") !== -1) chatHistory = chatHistory.filter(item => (item.role !== "system-word" && item.role !== "system-sentence"));
                     
-                    addMessageToUI(userMessage.replaceAll('\n', '<br>'), 'user-message', chatContainer, true);
-                    chatHistory = updateChatHistoryState(chatHistory, userMessage, "user");
+                    const formattedUserMessage = convertMarkdownToHTML(userMessage);
+                    
+                    addMessageToUI(formattedUserMessage, 'user-message', chatContainer, true);
+                    chatHistory = updateChatHistoryState(chatHistory, formattedUserMessage, "user");
                     
                     const botMessageDiv = addMessageToUI("", "bot-message", chatContainer, false);
                     await callStreamOpenAI(botMessageDiv, chatContainer, true,
@@ -6252,10 +6255,9 @@
                 ### Condition A: Correction Request
                 Trigger: Only when the user explicitly requests a fix of the previously replied word card using direct commands such as "Wrong word", "Fix the base form", "Use X instead of Y", "Correct the IPA".
                 Action:
-                1. Identify the Error: Determine what part of the previous word card needs fixing.
-                2. Re-generate Structure: Output the correction using the exact HTML structure of the previous response.
-                3. Supplementary Note: Append a <aside> tag ONLY when the correction alone is insufficient to prevent misunderstanding
-                  — specifically, when the corrected value conflicts with a common assumption or requires disambiguation. DO NOT use <aside> for general elaboration.
+                1. Supplementary Note (Optional): prepend an <aside> tag at the very beginning of your response ONLY when the correction alone is insufficient to prevent misunderstanding (e.g., when the corrected value conflicts with a common assumption). DO NOT use <aside> for general elaboration or conversational filler.
+                2. Identify the Error: Determine what part of the previous word card needs fixing.
+                3. Re-generate Structure: Output the correction using the exact HTML structure of the previous response immediately after the <aside> tag (if used).
                 
                 ### Condition B: General or Referential Query
                 Action: Answer helpfully in HTML <p> text.
@@ -6280,6 +6282,7 @@
                 Scenario: Previous output for "入っていました" showed IPA [haiɾɯ]. User points out the pronunciation.
                 User Input: "It seems that the pronunciation is incorrect.."
                 Assistant Output:
+                <aside>「入る」의 표준 IPA는 [iɾɯ]입니다. [haiɾɯ]는 「入る(はいる)」의 발음으로, 이 문맥에서는 [iɾɯ]가 올바릅니다.</aside>
                 <b>入る</b> <span>[iɾɯ]</span> <i>(동사)</i>
                 <p>들어가다</p>
                 <hr>
@@ -6289,7 +6292,6 @@
                   <li>カバンに本が入る。</li>
                   <li>가방에 책이 들어있다.</li>
                 </ul>
-                <aside>「入る」의 표준 IPA는 [iɾɯ]입니다. [haiɾɯ]는 「入る(はいる)」의 발음으로, 이 문맥에서는 [iɾɯ]가 올바릅니다.</details>
                 
                 ### Example 3: General Conversation
                 User Input: "Why is English so hard?"
