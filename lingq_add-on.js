@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      12.9.2
+// @version      12.9.1
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @grant       GM_xmlhttpRequest
@@ -5509,8 +5509,8 @@
                                 innerHTML: prefaceContent
                             });
                             chatContainer.insertBefore(prefaceMessageDiv, botMessageDiv);
+                            botMessageDiv.relatedPrefaceNode = prefaceMessageDiv;
                         }
-                        
                         botMessageDiv.innerHTML = wordCardWrapper.innerHTML;
                     }
                     
@@ -5832,6 +5832,8 @@
                     });
                     
                     deleteButton.addEventListener("click", () => {
+                        if (messageDiv.relatedPrefaceNode) messageDiv.relatedPrefaceNode.remove();
+                        
                         messageDiv.remove();
                         chatHistory = chatHistory.filter((item) => item.id !== messageId);
                     });
