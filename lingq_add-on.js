@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      12.9.2
+// @version      12.9.3
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @grant       GM_xmlhttpRequest
@@ -3379,8 +3379,11 @@
                 flashcardPopup.style.display = "block";
                 makeDraggable(flashcardPopup, document.getElementById("flashcardDragHandle"));
                 loadFlashcardPage(currentPage);
-                document.getElementById("flashcardDragHandle").value = "";
-                focusElement('#flashcardSearchInput');
+                
+                const searchInput = document.getElementById("flashcardSearchInput");
+                searchInput.value = "";
+                searchInput.dispatchEvent(new Event("input"));
+                searchInput.focus();
             });
             
             document.getElementById("closeFlashcardPopupBtn").addEventListener("click", () => {
@@ -3398,8 +3401,9 @@
             const tableHeaders = document.querySelectorAll("#flashcardTable thead th");
             tableHeaders.forEach(th => {
                 th.addEventListener("click", () => {
-                    const fieldMap = {Word: "word", Meaning: "meaning", Explanation: "explanation"};
-                    const field = fieldMap[th.textContent.replace(/[▲▼]/g, "").trim()];
+                    const fieldMap = {"": "idx", Word: "word", Meaning: "meaning", Explanation: "explanation"};
+                    const headerText = th.textContent.replace(/[▲▼]/g, "").trim();
+                    const field = fieldMap[headerText];
                     if (!field) return;
                     
                     if (currentSortField !== field) {
@@ -3408,17 +3412,27 @@
                     } else if (currentSortOrder === "asc") {
                         currentSortOrder = "desc";
                     } else {
-                        currentSortField = "idx";
-                        currentSortOrder = "desc";
+                        if (field === "idx") {
+                            currentSortOrder = "asc";
+                        } else {
+                            currentSortField = "idx";
+                            currentSortOrder = "desc";
+                        }
                     }
                     
                     tableHeaders.forEach(header => {
                         header.textContent = header.textContent.replace(/[▲▼]/g, "").trim();
                     });
                     
-                    if (["word", "meaning", "explanation"].includes(currentSortField)) {
-                        const arrow = currentSortOrder === "asc" ? " ▲" : " ▼";
-                        th.textContent = th.textContent + arrow;
+                    let arrow = "";
+                    if (!(currentSortField === "idx" && currentSortOrder === "desc")) {
+                        arrow = currentSortOrder === "asc" ? " ▲" : " ▼";
+                    }
+                    
+                    if (currentSortField === field) {
+                        th.textContent = headerText + arrow;
+                    } else {
+                        tableHeaders[0].textContent = tableHeaders[0].textContent.replace(/[▲▼]/g, "").trim() + arrow;
                     }
                     
                     loadFlashcardPage(1);
@@ -4140,6 +4154,7 @@
                     display:flex;
                     align-items:center;
                     gap:5px;
+                    cursor: pointer;
                 }
                 
                 .popup-delete-button {
@@ -5700,6 +5715,19 @@
                                             }
                                             showToast("Flashcard removed.", true);
                                         }
+                                    });
+                                    
+                                    rowDiv.addEventListener("click", (ev) => {
+                                        if (ev.target.closest(".popup-delete-button")) return;
+                                        if (window.getSelection().toString().length > 0) return;
+                                        
+                                        document.getElementById("flashcardManagerButton")?.click();
+                                        const searchInput = document.getElementById("flashcardSearchInput");
+                                        if (searchInput) {
+                                            searchInput.value = word;
+                                            searchInput.dispatchEvent(new Event("input"));
+                                        }
+                                        
                                     });
                                     
                                     rowDiv.appendChild(deleteBtn);
