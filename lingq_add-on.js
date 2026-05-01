@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      12.9.5
+// @version      12.10.0
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @grant       GM_xmlhttpRequest
@@ -63,6 +63,7 @@
         skipEndPage: false,
         relocateCaption: 'default',
         captionFontsize: 2.75,
+        showMemoWidget: false,
         
         keyboardShortcut: false,
         shortcutVideoFullscreen: 'p',
@@ -1614,6 +1615,7 @@
                 {value: "below", text: "Below"}
             ], settings.relocateCaption);
             addSlider(container1, "captionFontsizeSlider", "Video Caption Font Size", "captionFontsizeValue", settings.captionFontsize, "em", 1.5, 3.5, 0.25);
+            addCheckbox(container1, "showMemoWidgetCheckbox", "Show Memo Widget", settings.showMemoWidget);
             
             columns.appendChild(container1);
             
@@ -2378,6 +2380,11 @@
             });
             
             setupSlider("captionFontsizeSlider", "captionFontsizeValue", "captionFontsize", "em", "--caption-font-size", (val) => `${val}em`);
+            
+            const showMemoWidgetCheckbox = document.getElementById("showMemoWidgetCheckbox");
+            showMemoWidgetCheckbox.addEventListener('change', (event) => {
+                settings.showMemoWidget = event.target.checked;
+            });
             
             function setupShortcutInput(inputId, settingKey) {
                 const input = document.getElementById(inputId);
@@ -4397,8 +4404,8 @@
                 padding: var(--header-height) 0 10px !important;
                 margin: 0 10px !important;
                 height: 100% !important;
-                justify-content: center;
                 display: flex;
+                flex-direction: column;
             }
     
             .reader-widget {
@@ -4409,6 +4416,7 @@
                 height: fit-content !important;
                 max-width: none !important;
                 scrollbar-width: none !important;
+                margin-bottom: 15px !important;
             }
     
             .reader-widget:not(.reader-widget--resources) {
@@ -4417,6 +4425,10 @@
     
             .reader-widget.reader-widget--resources {
                 padding: 10px 15px !important;
+            }
+            
+            .reader-widget--resources-content {
+                height: 40vh !important;
             }
     
             .reference-main {
@@ -4441,6 +4453,23 @@
             .reference-input-text {
                 font-size: 0.9rem !important;
                 scrollbar-width: none !important;
+            }
+            
+            #memo-widget-container {
+                display: flex;
+                background-color: var(--readerWidgetBoxBackground);
+                padding: 10px;
+                border-radius: 1.25rem;
+            }
+            
+            .memo-textarea {
+                width: 100%;
+                min-height: 2.5em;
+                max-height: 150px;
+                padding: 5px 10px;
+                border-radius: 5px;
+                border: 1px solid rgba(125, 125, 125, 0.35);
+                outline: none;
             }
     
             .section-widget--foot {
@@ -6055,8 +6084,42 @@
                     );
                 }
                 
+                function updateMemoWidget() {
+                    if (!settings.showMemoWidget) return;
+                    
+                    const widgetArea = document.querySelector("#lesson-reader .widget-area");
+                    if (!widgetArea) return;
+                    
+                    const existingMemoWidget = document.getElementById("memo-widget-container");
+                    if (existingMemoWidget) return;
+                    
+                    const lessonIdMatch = window.location.pathname.match(/\/(\d+)/);
+                    const lessonId = lessonIdMatch ? lessonIdMatch[1] : "unknown";
+                    const storageKey = `lingq_memo_${lessonId}`;
+                    
+                    const memoTextarea = createElement("textarea", {
+                        className: "memo-textarea",
+                        placeholder: "Lesson notes..."
+                    });
+                    
+                    const savedMemo = localStorage.getItem(storageKey);
+                    if (savedMemo) memoTextarea.value = savedMemo;
+                    
+                    memoTextarea.addEventListener("input", debounce((event) => {
+                        const content = event.target.value;
+                        if (content.trim() === "") localStorage.removeItem(storageKey);
+                        else localStorage.setItem(storageKey, content);
+                    }, 500));
+                    
+                    const memoContainer = createElement("div", {id: "memo-widget-container"}, memoTextarea);
+                    
+                    const readerWidget = widgetArea.querySelector(".reader-widget");
+                    if (readerWidget) readerWidget.insertAdjacentElement("afterend", memoContainer);
+                    else widgetArea.appendChild(memoContainer);
+                }
+                
                 async function updateChatWidget() {
-                    if (!settings.chatWidget) return;
+                    if (!settings.showMemoWidget) return;
                     
                     const chatContainer = createElement("div", {id: "chat-container"});
                     const userInput = createElement("textarea", {
@@ -6425,6 +6488,7 @@
                 
                 updateReferenceWord();
                 updateChatWidget();
+                updateMemoWidget();
                 stopPlayingAudio(audioContext);
                 updateTTS(settings.ttsAutoplay);
                 
@@ -6437,6 +6501,7 @@
                             console.debug('Observer:', `Widget changed from word/sentence. ${mutation.type}, ${mutation.attributeName}`);
                             updateReferenceWord();
                             updateChatWidget();
+                            updateMemoWidget();
                             stopPlayingAudio(audioContext);
                             updateTTS(false);
                         });
@@ -6453,6 +6518,7 @@
                             console.debug('Observer:', `Widget changed from resource. ${mutation.type}, ${mutation.addedNodes}`);
                             updateReferenceWord();
                             updateChatWidget();
+                            updateMemoWidget();
                             stopPlayingAudio(audioContext);
                             updateTTS(settings.ttsAutoplay);
                         });
