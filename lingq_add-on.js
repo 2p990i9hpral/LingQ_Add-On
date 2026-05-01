@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      12.9.3
+// @version      12.9.4
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @grant       GM_xmlhttpRequest
@@ -6829,46 +6829,6 @@
     }
     
     async function setupPrintPage() {
-        function highlightWordsInNode(node) {
-            if (node.nodeType === Node.TEXT_NODE) {
-                const text = node.nodeValue;
-                const parent = node.parentNode;
-                
-                if (parent && parent.classList && parent.classList.contains('lingQ')) return;
-                
-                const regex = new RegExp(`\\b(${cardsList.map(card => card.word).join('|')})\\b`, 'gi');
-                
-                const matches = [...text.matchAll(regex)];
-                
-                if (matches.length > 0) {
-                    let lastIndex = 0;
-                    const fragment = document.createDocumentFragment();
-                    
-                    matches.forEach(match => {
-                        const word = match[0];
-                        const index = match.index;
-                        
-                        if (index > lastIndex) fragment.appendChild(document.createTextNode(text.substring(lastIndex, index)));
-                        
-                        const span = createElement("span", {className: "lingQ", textContent: word});
-                        fragment.appendChild(span);
-                        
-                        lastIndex = index + word.length;
-                    });
-                    
-                    if (lastIndex < text.length) fragment.appendChild(document.createTextNode(text.substring(lastIndex)));
-                    
-                    parent.replaceChild(fragment, node);
-                }
-            } else if (node.nodeType === Node.ELEMENT_NODE) {
-                if (node.tagName.toLowerCase() === 'script' || node.tagName.toLowerCase() === 'style') return;
-                
-                for (let i = 0; i < node.childNodes.length; i++) {
-                    highlightWordsInNode(node.childNodes[i]);
-                }
-            }
-        }
-        
         const lessonURL = document.referrer;
         const lessonId = getLessonId(lessonURL);
         const lessonLanguage = getLessonLanguage(lessonURL);
@@ -6898,9 +6858,52 @@
                 }
             });
         
-        cardsList.sort((a, b) => {
-            return (a.word).localeCompare(b.word);
-        });
+        cardsList.sort((a, b) => b.word.length - a.word.length);
+        const escapedWords = cardsList.map((card) => card.word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+        const highlightRegex = new RegExp(`(?<=^|[^\\p{L}\\p{N}]|\\d)(${escapedWords.join('|')})(?=$|[^\\p{L}\\p{N}]|\\d)`, 'giu');
+        
+        function highlightWordsInNode(node) {
+            if (node.nodeType === Node.TEXT_NODE) {
+                const text = node.nodeValue;
+                const parent = node.parentNode;
+                
+                if (parent && parent.classList && parent.classList.contains('lingQ')) return;
+                
+                const matches = [...text.matchAll(highlightRegex)];
+                
+                if (matches.length > 0) {
+                    let lastIndex = 0;
+                    const fragment = document.createDocumentFragment();
+                    
+                    matches.forEach((match) => {
+                        const word = match[0];
+                        const index = match.index;
+                        
+                        if (index > lastIndex) {
+                            fragment.appendChild(document.createTextNode(text.substring(lastIndex, index)));
+                        }
+                        
+                        const span = createElement("span", { className: "lingQ", textContent: word });
+                        fragment.appendChild(span);
+                        
+                        lastIndex = index + word.length;
+                    });
+                    
+                    if (lastIndex < text.length) {
+                        fragment.appendChild(document.createTextNode(text.substring(lastIndex)));
+                    }
+                    
+                    parent.replaceChild(fragment, node);
+                }
+            } else if (node.nodeType === Node.ELEMENT_NODE) {
+                const tagName = node.tagName.toLowerCase();
+                if (tagName === 'script' || tagName === 'style') return;
+                
+                Array.from(node.childNodes).forEach((child) => {
+                    highlightWordsInNode(child);
+                });
+            }
+        }
         
         const css = `
             #logo {
