@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      12.9.1
+// @version      12.9.2
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @grant       GM_xmlhttpRequest
@@ -6130,7 +6130,7 @@
                    - Inflections: If the input is conjugated (e.g., "書いていました"), output the dictionary form ("書く").
                 
                 2. IPA Pronunciation
-                   - Provide IPA for the **Base Form** enclosed in brackets.
+                   - Provide IPA for the Base Form (lemma) enclosed in brackets.
                    - Simplify Constraints: Eliminate narrow phonetic diacritics (e.g., lowering [̞], voiceless [̥], compressed [ᵝ], or dental [̪] marks).
                    - Ensure the output represents the standard, dictionary-style pronunciation, not a precise phonetic realization.
                 
@@ -6151,7 +6151,6 @@
                    - Ensure the usage helps the user understand the general applicability of this specific sense.
                 
                 ## Output Structure (HTML)
-                - Any conversational text, prefaces, or explanations must be placed outside and before <div class="word-card">.
                 
                 <div class="word-card">
                     <b>[Base Form in ${lessonLanguage}]</b> <span>/[IPA]/</span> <i>([Part of Speech in ${userLanguage}])</i>
