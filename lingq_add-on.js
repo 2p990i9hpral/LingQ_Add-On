@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      12.9.4
+// @version      12.9.5
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @grant       GM_xmlhttpRequest
@@ -5505,16 +5505,17 @@
                 }
                 
                 function enhanceWordMessage(botMessageDiv, selectedData) {
-                    const wordCardWrapper = botMessageDiv.querySelector('.word-card');
+                    const wordCardWrappers = Array.from(botMessageDiv.querySelectorAll('.word-card'));
                     const buttonContainer = botMessageDiv.querySelector('.message-button-container');
                     const isWordCardFormat = isWordMessageStructure(botMessageDiv);
                     
-                    if (!wordCardWrapper && !isWordCardFormat) return;
+                    if (wordCardWrappers.length === 0 && !isWordCardFormat) return;
                     
                     if (buttonContainer) buttonContainer.remove();
                     
-                    if (wordCardWrapper) {
-                        wordCardWrapper.remove();
+                    if (wordCardWrappers.length > 0) {
+                        wordCardWrappers.forEach((wrapper) => wrapper.remove());
+                        
                         const prefaceContent = botMessageDiv.innerHTML.trim();
                         
                         if (prefaceContent) {
@@ -5524,9 +5525,19 @@
                                 innerHTML: prefaceContent
                             });
                             chatContainer.insertBefore(prefaceMessageDiv, botMessageDiv);
+                            
                             botMessageDiv.relatedPrefaceNode = prefaceMessageDiv;
                         }
-                        botMessageDiv.innerHTML = wordCardWrapper.innerHTML;
+                        
+                        botMessageDiv.innerHTML = '';
+                        wordCardWrappers.forEach((wrapper, index) => {
+                            if (index > 0) {
+                                botMessageDiv.appendChild(createElement('hr'));
+                            }
+                            while (wrapper.firstChild) {
+                                botMessageDiv.appendChild(wrapper.firstChild);
+                            }
+                        });
                     }
                     
                     if (!botMessageDiv.classList.contains('word-message')) botMessageDiv.classList.add('word-message');
