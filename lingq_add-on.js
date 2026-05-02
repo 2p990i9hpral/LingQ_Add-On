@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      12.10.0
+// @version      12.10.1
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @grant       GM_xmlhttpRequest
@@ -4470,6 +4470,9 @@
                 border-radius: 5px;
                 border: 1px solid rgba(125, 125, 125, 0.35);
                 outline: none;
+                resize: none;
+                overflow-y: auto;
+                field-sizing: content;
             }
     
             .section-widget--foot {
@@ -4830,13 +4833,28 @@
                 const eventKey = event.key.toLowerCase();
                 if (isTextInput) {
                     if (targetElement.id === "user-input") return;
-                    if ((eventKey === 'enter' || eventKey === 'escape') && withoutModifierKeys) {
-                        preventPropagation(event);
-                        event.target.blur()
-                    } else {
-                        event.stopPropagation();
-                        return;
+                    
+                    if (withoutModifierKeys) {
+                        if (eventKey === 'escape') {
+                            preventPropagation(event);
+                            targetElement.blur();
+                            return;
+                        }
+                        
+                        if (eventKey === 'enter') {
+                            if (targetElement.localName === 'textarea') {
+                                event.stopPropagation();
+                                return;
+                            } else {
+                                preventPropagation(event);
+                                targetElement.blur();
+                                return;
+                            }
+                        }
                     }
+                    
+                    event.stopPropagation();
+                    return;
                 }
                 
                 if (eventKey === ' ' && withoutModifierKeys && !isTextInput) {
@@ -6116,10 +6134,14 @@
                     const readerWidget = widgetArea.querySelector(".reader-widget");
                     if (readerWidget) readerWidget.insertAdjacentElement("afterend", memoContainer);
                     else widgetArea.appendChild(memoContainer);
+                    
+                    requestAnimationFrame(() => {
+                        memoTextarea.scrollTop = memoTextarea.scrollHeight;
+                    });
                 }
                 
                 async function updateChatWidget() {
-                    if (!settings.showMemoWidget) return;
+                    if (!settings.chatWidget) return;
                     
                     const chatContainer = createElement("div", {id: "chat-container"});
                     const userInput = createElement("textarea", {
