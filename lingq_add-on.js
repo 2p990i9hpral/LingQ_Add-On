@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      12.10.1
+// @version      12.10.2
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @grant       GM_xmlhttpRequest
@@ -6043,6 +6043,7 @@
                                 innerHTML: `<svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="transparent" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-rotate-ccw" aria-hidden="true"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path><path d="M3 3v5h5"></path></svg>`,
                             });
                             regenerateButton.addEventListener("click", async () => {
+                                if (botMessageDiv.relatedPrefaceNode) botMessageDiv.relatedPrefaceNode.remove();
                                 botMessageDiv.remove();
                                 chatHistory = chatHistory.slice(0, chatHistory.findLastIndex((item) => item.role === "assistant"));
                                 
@@ -6458,12 +6459,13 @@
                 ## Logic Branching via Intent Detection
                 
                 ### Condition A: Correction Request
-                Trigger: Only when the user explicitly requests a fix of the previously replied word card.
+                Trigger: Only when the user explicitly requests a fix of the previously replied word card using direct commands such as "Wrong word", "Fix the base form", "Use X instead of Y", "Correct the IPA".
                 Action: Output your conversational explanation first, then output the corrected word card wrapped strictly inside <div class="word-card">.
                 
                 ### Condition B: General or Referential Query
                 Trigger: The user asks a question or makes a general comment.
-                Action: Answer helpfully in HTML. If you introduce a new vocabulary using the Word Card format, you MUST wrap the card inside <div class="word-card"> and place your conversational explanation outside it.
+                Action: Answer in Raw HTML (<p>, <b> <ul>, <li>). Markdown syntax (code blocks, bold, and headers) is forbidden.
+                Restriction: Using <div class="word-card"> format is not permitted. This format is reserved for the Correction Protocol (Condition A).
                 
                 ## Examples
                 
