@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      12.10.2
+// @version      12.10.3
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @grant       GM_xmlhttpRequest
@@ -4842,7 +4842,7 @@
                         }
                         
                         if (eventKey === 'enter') {
-                            if (targetElement.localName === 'textarea') {
+                            if (targetElement.className === 'memo-textarea') {
                                 event.stopPropagation();
                                 return;
                             } else {
@@ -5389,7 +5389,7 @@
             
             async function updateTTS(click = true) {
                 async function replaceTTSButton() {
-                    const selectedTextElement = document.querySelector(".reference-word");
+                    const selectedTextElement = document.querySelector(".chat-message:last-child > b") || document.querySelector(".reference-word");
                     const selectedText = selectedTextElement ? selectedTextElement.textContent.trim() : "";
                     if (!selectedText) return;
                     
