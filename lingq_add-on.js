@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      12.10.3
+// @version      12.10.4
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @grant       GM_xmlhttpRequest
@@ -1657,8 +1657,9 @@
                 {value: "openai gpt-5.5", text: "OpenAI GPT-5.5 ($5/$30)"},
                 {value: "openai gpt-5.4", text: "OpenAI GPT-5.4 ($2.5/$15)"},
                 {value: "openai gpt-5.4-mini", text: "OpenAI GPT-5.4 mini ($0.75/$4.5)"},
-                {value: "google gemini-3-flash-preview", text: "Google Gemini 3.0 Flash ($0.5/$3)"},
-                {value: "google gemini-3.1-flash-lite-preview", text: "Google Gemini 3.1 Flash Light ($0.25/$1.5)"},
+                {value: "google gemini-3.5-flash", text: "Google Gemini 3.5 Flash ($0.5/$3)"},
+                {value: "google gemini-3-flash-preview", text: "Google Gemini 3.0 Flash ($1.5/$9)"},
+                {value: "google gemini-3.1-flash-lite", text: "Google Gemini 3.1 Flash Light ($0.25/$1.5)"},
                 {value: "google gemini-2.5-flash", text: "Google Gemini 2.5 Flash ($0.3/$2.5)"},
                 {value: "google gemini-2.5-flash-lite", text: "Google Gemini 2.5 Flash Light ($0.1/$0.4)"},
                 {value: "anthropic claude-sonnet-4-6", text: "Claude Sonnet 4.6 ($3.0/$15)"},
@@ -4561,7 +4562,7 @@
                 columns: ${isPageMode ? "100vw auto" : "unset"} !important;
                 overflow-x: ${isPageMode ? "visible" : "unset"} !important;
                 overflow-y: ${isPageMode ? "visible" : "scroll"} !important;
-                height: ${isPageMode ? "1800px" : "100%"} !important;
+                height: ${isPageMode ? "1780px" : "100%"} !important;
                 outline: none !important;
             }
             
