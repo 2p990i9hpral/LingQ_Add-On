@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      12.10.4
+// @version      12.10.5
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @grant       GM_xmlhttpRequest
@@ -3892,11 +3892,8 @@
             if(settings.skipEndPage) {
                 baseCSS += `
                 [id$="-content-lessonCompleted"] > div.pb-24 > div:nth-child(1) > div.gap-2,
-                [id$="-content-lessonCompleted"] > div.pb-24 > div:nth-child(3),
-                [id$="-content-lessonCompleted"] > div.pb-24 > div.mb-6:last-child > div:nth-child(1),
-                [id$="-content-lessonCompleted"] > div.pb-24 > div.mb-6:last-child > div:nth-child(2),
-                [id$="-content-lessonCompleted"] > div.pb-24 > div.mb-6:last-child > div:nth-child(3),
-                [id$="-content-lessonCompleted"] > div.pb-24 > div.mb-6:last-child > div:nth-child(5) {
+                [id$="-content-lessonCompleted"] > div.pb-24 > :is(div:nth-child(2), div:nth-child(4)),
+                [id$="-content-lessonCompleted"] > div.pb-24 > div.mb-6:last-child > div:not(:nth-child(4)) {
                     display: none !important;
                 }
                 `;
@@ -4351,7 +4348,7 @@
             }
     
             .main-header section:nth-child(1) {
-                display: none;
+                /* display: none; */
             }
     
             .main-header section {
@@ -5327,7 +5324,7 @@
                 element.setAttribute('tabindex', '-1');
                 element.addEventListener('keydown', (event) => {
                     if (['ArrowLeft', 'ArrowRight'].includes(event.key)) event.preventDefault();
-                }, {passive: false});
+                }, {passive: false, capture: true});
             }
             
             async function handleLoadedContent(node) {
