@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      12.10.5
+// @version      12.10.7
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @grant       GM_xmlhttpRequest
@@ -1554,7 +1554,7 @@
             addSlider(container1, "widgetWidthSlider", "Widget Width:", "widgetWidthValue", settings.widgetWidth, "px", 330, 500, 10);
             
             addSlider(container1, "fontSizeSlider", "Font Size:", "fontSizeValue", settings.fontSize[language], "rem", 0.8, 1.8, 0.05);
-            addSlider(container1, "lineHeightSlider", "Line Height:", "lineHeightValue", settings.lineHeight[language], "", 1.2, 3.0, 0.1);
+            addSlider(container1, "lineHeightSlider", "Line Height:", "lineHeightValue", settings.lineHeight[language], "", 1.2, 3.0, 0.05);
             
             const customFontContainer = createElement("div", {className: "popup-row"});
             customFontContainer.appendChild(createElement("label", {
@@ -4217,7 +4217,8 @@
                 .quick-summary {
                     display: flex;
                     color: var(--font-color);
-                    line-height: normal;
+                    font-size: var(--font-size);
+                    line-height: var(--line-height);
                     margin-bottom: 20px;
                     max-height: 200px;
                     overflow-y: scroll;
@@ -5334,8 +5335,9 @@
                     readerContainer?.addEventListener("wheel", (event) => {
                         const wrapper = readerContainer.closest(".reader-container-wrapper");
                         if (wrapper) {
-                            wrapper.scrollTop += event.deltaY;
+                            wrapper.scrollTop += event.deltaY * 0.3;
                             event.preventDefault();
+                            event.stopPropagation();
                         }
                     }, {passive: false});
                 }
@@ -7079,7 +7081,8 @@
             #player-control-overlay > div > div.player-controls-background-container > div.player-controls-background,
             #player-control-overlay > div > div:nth-child(5) > player-middle-controls,
             .ytp-paid-content-overlay, .ytmPaidContentOverlayHost,
-            .ytp-pause-overlay-container, .ytp-watermark {
+            .ytp-pause-overlay-container, .ytp-watermark,
+            #player-control-overlay > div > player-fullscreen-controls > div {
                 display: none !important;
             }
             #player-controls {
