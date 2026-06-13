@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      12.11.0
+// @version      13.0.0
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @grant       GM_xmlhttpRequest
@@ -1340,6 +1340,182 @@
         document.head.appendChild(link);
     }
     
+    function convertSrtToVttBlobUrl(srtText) {
+        const vttText = "WEBVTT\n\n" + srtText.replace(/(\d{2}:\d{2}:\d{2}),(\d{3})/g, "$1.$2");
+        const blob = new Blob([vttText], {type: "text/vtt"});
+        return URL.createObjectURL(blob);
+    }
+    
+    function handleLocalVideoContainerVisibility() {
+        const lessonReader = document.getElementById("lesson-reader");
+        if (!lessonReader) return;
+        
+        const currentStyle = settings.styleType[getLessonLanguage()];
+        let container = document.getElementById("local-video-container");
+        
+        if (currentStyle !== "localVideo") {
+            if (container) container.style.display = "none";
+            return;
+        }
+        
+        if (container) {
+            container.style.display = "flex";
+            return;
+        }
+        
+        container = createElement("div", {id: "local-video-container"});
+        
+        const setupBox = createElement("div", {className: "local-video-setup-box"});
+        const title = createElement("span", {style: "font-weight: bold; font-size: 1.1em; margin-bottom: 10px;", textContent: "Local Video Player Setup"});
+        
+        let selectedVideoFile = null;
+        let selectedSubtitleFile = null;
+        
+        const videoInput = createElement("input", {className: "local-video-file-input", type: "file", accept: "video/*"});
+        const videoLabel = createElement("label", {className: "local-video-file-label", textContent: "🎬 Select Video File (.mp4) *Required"});
+        videoLabel.appendChild(videoInput);
+        
+        const subtitleInput = createElement("input", {className: "local-video-file-input", type: "file", accept: ".srt,.vtt"});
+        const subtitleLabel = createElement("label", {className: "local-video-file-label", textContent: "📝 Select Subtitle File (.srt, .vtt) *Optional"});
+        subtitleLabel.appendChild(subtitleInput);
+        
+        const startButton = createElement("button", {
+            className: "popup-button",
+            textContent: "▶ Start Player",
+            disabled: true,
+            style: "margin-top: 15px; padding: 10px 24px; font-weight: bold; width: 100%;"
+        });
+        
+        setupBox.append(title, videoLabel, subtitleLabel, startButton);
+        container.appendChild(setupBox);
+        lessonReader.appendChild(container);
+        
+        const videoElement = createElement("video", {
+            id: "addonLocalVideo",
+            controls: true,
+            muted: true, // Muted by default to prioritize LingQ audio master quality
+            style: "width: 100%; max-height: 100%; border-radius: 12px; display: none;"
+        });
+        const trackElement = createElement("track", {
+            kind: "subtitles",
+            srclang: "en",
+            label: "Local Sub",
+            id: "addonLocalVideoTrack"
+        });
+        videoElement.appendChild(trackElement);
+        container.appendChild(videoElement);
+        
+        videoInput.addEventListener("change", (event) => {
+            const file = event.target.files[0];
+            if (file) {
+                selectedVideoFile = file;
+                videoLabel.textContent = `🎬 Video: ${file.name}`;
+                videoLabel.appendChild(videoInput);
+                startButton.disabled = false;
+            }
+        });
+        
+        subtitleInput.addEventListener("change", (event) => {
+            const file = event.target.files[0];
+            if (file) {
+                selectedSubtitleFile = file;
+                subtitleLabel.textContent = `📝 Subtitle: ${file.name}`;
+                subtitleLabel.appendChild(subtitleInput);
+            }
+        });
+        
+        startButton.addEventListener("click", () => {
+            if (!selectedVideoFile) return;
+            
+            videoElement.src = URL.createObjectURL(selectedVideoFile);
+            
+            if (selectedSubtitleFile) {
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    const text = e.target.result;
+                    const vttUrl = selectedSubtitleFile.name.endsWith(".srt")
+                        ? convertSrtToVttBlobUrl(text)
+                        : URL.createObjectURL(selectedSubtitleFile);
+                    
+                    trackElement.src = vttUrl;
+                    trackElement.track.mode = "showing";
+                };
+                reader.readAsText(selectedSubtitleFile);
+            }
+            
+            setupBox.style.display = "none";
+            videoElement.style.display = "block";
+            
+            // Initialize LingQ Core Player Controller Linkage
+            bindLingQPlayerControls(videoElement);
+        });
+    }
+    
+    async function bindLingQPlayerControls(videoElement) {
+        const sliderHandle = await waitForElement('.audio-player--progress .rc-slider-handle', 10000);
+        const playButton = await waitForElement(".section--player button.lingq-audio-player", 10000);
+        const speedLabel = await waitForElement(".audio-player--controllers span.leading-none.text-xl", 10000);
+        
+        if (!sliderHandle || !playButton) {
+            console.warn("Required LingQ control elements missing. Sync binder stopped.");
+            return;
+        }
+        
+        const playButtonSvg = playButton.querySelector("svg");
+        if (!playButtonSvg) return;
+        
+        const syncPlaybackRate = () => {
+            if (!speedLabel) return;
+            const currentSpeed = parseFloat(speedLabel.textContent) || 1.0;
+            
+            // Fix: Set defaultPlaybackRate to ensure the browser respects this speed as the baseline
+            videoElement.defaultPlaybackRate = currentSpeed;
+            if (videoElement.playbackRate !== currentSpeed) {
+                videoElement.playbackRate = currentSpeed;
+                console.log('Sync', `Playback speed updated to ${currentSpeed}x`);
+            }
+        };
+        
+        const playerObserver = new MutationObserver(() => {
+            // 1. Sync Play/Pause State
+            const isLingQPlaying = playButtonSvg.classList.contains("svg-icon--pause");
+            if (isLingQPlaying && videoElement.paused) {
+                videoElement.play().catch(() => {});
+            } else if (!isLingQPlaying && !videoElement.paused) {
+                videoElement.pause();
+            }
+            
+            // 2. Sync Precise Timeline
+            const preciseTargetTime = parseFloat(sliderHandle.getAttribute("aria-valuenow")) || 0;
+            if (Math.abs(videoElement.currentTime - preciseTargetTime) > 0.3) {
+                videoElement.currentTime = preciseTargetTime;
+            }
+        });
+        
+        const speedObserver = new MutationObserver(() => {
+            syncPlaybackRate();
+        });
+        
+        playerObserver.observe(sliderHandle, { attributes: true, attributeFilter: ["aria-valuenow", "style"] });
+        playerObserver.observe(playButtonSvg, { attributes: true, attributeFilter: ["class"] });
+        
+        if (speedLabel) {
+            speedObserver.observe(speedLabel, { childList: true, characterData: true, subtree: true });
+        }
+        
+        // Fix: Enforce synchronization when the video triggers its own pipeline events
+        // This prevents the browser from reverting playbackRate to 1.0 during media initialization
+        videoElement.addEventListener("play", syncPlaybackRate);
+        videoElement.addEventListener("loadedmetadata", syncPlaybackRate);
+        
+        // Run initial synchronization bootstrap
+        const isLingQPlayingInit = playButtonSvg.classList.contains("svg-icon--pause");
+        if (isLingQPlayingInit && videoElement.paused) {
+            videoElement.play().catch(() => {});
+        }
+        syncPlaybackRate();
+    }
+    
     /* Features */
     
     function fixBugs() {
@@ -1533,6 +1709,7 @@
                 {value: "video", text: "Video"},
                 {value: "video2", text: "Video2"},
                 {value: "video3", text: "Video3"},
+                {value: "localVideo", text: "Local Video"},
                 {value: "audio", text: "Audio"},
                 {value: "off", text: "Off"}
             ], settings.styleType[language]);
@@ -3882,6 +4059,9 @@
                 case "video3":
                     specificCSS = generateVerticalVideoCSS(true);
                     break;
+                case "localVideo":
+                    specificCSS = generateLocalVideoCSS();
+                    break;
                 case "audio":
                     specificCSS = generateAudioCSS();
                     break;
@@ -3890,6 +4070,8 @@
                     layoutCSS = '';
                     break;
             }
+            
+            handleLocalVideoContainerVisibility();
             
             baseCSS += layoutCSS;
             baseCSS += specificCSS;
@@ -4743,6 +4925,97 @@
             .main-footer {
                 grid-area: 2 / 2 / 3 / 3 !important;
                 align-self: end;
+            }
+            `;
+        }
+        
+        function generateLocalVideoCSS() {
+            return `
+            :root {
+                --width-big: calc(50vw - calc(var(--widget-width) / 2) - 10px);
+                --height-big: calc(100vh - 65px);
+        
+                --reader-layout-columns: 1fr var(--widget-width) 1fr;
+                --reader-layout-rows: calc(var(--article-height) - var(--footer-height)) var(--footer-height);
+                --article-height: var(--app-height);
+            }
+        
+            .main-header > div {
+                padding: 0 0 0 420px !important;
+            }
+        
+            #lesson-reader {
+                grid-template-columns: var(--reader-layout-columns);
+            }
+        
+            .main-content {
+                grid-area: 1 / 1 / 3 / 2 !important;
+            }
+            
+            .widget-area {
+                grid-area: 1 / 2 / 2 / 3 !important;
+            }
+        
+            .main-footer {
+                grid-area: 2 / 2 / 3 / 3 !important;
+                align-self: end;
+            }
+        
+            /* Fixed container alignment to keep elements vertically centered */
+            #local-video-container {
+                grid-area: 1 / 3 / 3 / 4 !important;
+                display: flex;
+                flex-direction: column;
+                justify-content: center; /* Center vertically */
+                align-items: center;    /* Center horizontally */
+                padding: 20px;
+                height: var(--height-big) !important;
+                box-sizing: border-box;
+            }
+        
+            .local-video-setup-box {
+                border: 2px dashed rgb(125 125 125 / 40%);
+                border-radius: 12px;
+                padding: 30px;
+                text-align: center;
+                background-color: rgb(125 125 125 / 5%);
+                display: flex;
+                flex-direction: column;
+                gap: 15px;
+                align-items: center;
+                justify-content: center;
+                width: 100%;
+                max-width: 400px;
+                box-sizing: border-box;
+            }
+        
+            .local-video-file-label {
+                display: inline-block;
+                padding: 10px 16px;
+                border: 1px solid rgb(125 125 125 / 50%);
+                border-radius: 6px;
+                cursor: pointer;
+                font-size: 0.9em;
+                width: 100%;
+                box-sizing: border-box;
+                text-overflow: ellipsis;
+                overflow: hidden;
+                white-space: nowrap;
+            }
+        
+            .local-video-file-label:hover {
+                background-color: rgb(125 125 125 / 20%);
+            }
+        
+            .local-video-file-input {
+                display: none !important;
+            }
+        
+            video::cue {
+                background-color: rgba(0, 0, 0, 0.75) !important;
+                color: #ffffff !important;
+                font-size: 1.25em !important;
+                line: -2 !important; /* Keep a consistent bottom-line boundary allocation */
             }
             `;
         }
@@ -6632,6 +6905,8 @@
         setupReaderContainer();
         setupLLMs();
         AutoplayInSentenceView();
+        
+        handleLocalVideoContainerVisibility();
     }
     
     async function setupCourse() {
