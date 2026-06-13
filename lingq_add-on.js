@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      12.10.7
+// @version      12.11.0
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @grant       GM_xmlhttpRequest
@@ -1532,6 +1532,7 @@
             addSelect(container1, "styleTypeSelector", "Layout Style:", [
                 {value: "video", text: "Video"},
                 {value: "video2", text: "Video2"},
+                {value: "video3", text: "Video3"},
                 {value: "audio", text: "Audio"},
                 {value: "off", text: "Off"}
             ], settings.styleType[language]);
@@ -3876,7 +3877,10 @@
                     specificCSS = generateVideoCSS();
                     break;
                 case "video2":
-                    specificCSS = generateVideo2CSS();
+                    specificCSS = generateVerticalVideoCSS(false);
+                    break;
+                case "video3":
+                    specificCSS = generateVerticalVideoCSS(true);
                     break;
                 case "audio":
                     specificCSS = generateAudioCSS();
@@ -4345,7 +4349,6 @@
     
             .main-header > div {
                 grid-template-columns: 1fr 150px !important;
-                padding: 0 0 0 420px !important;
             }
     
             .main-header section:nth-child(1) {
@@ -4674,6 +4677,10 @@
                 --width-big: calc(100vw - var(--widget-width) - 10px);
                 --height-big: ${settings.heightBig}px;
             }
+            
+            .main-header > div {
+                padding: 0 0 0 420px !important;
+            }
     
             .main-content {
                 grid-area: 1 / 1 / 2 / 2 !important;
@@ -4694,71 +4701,87 @@
             `;
         }
         
-        function generateVideo2CSS() {
+        function generateVerticalVideoCSS(isLeftVideo = false) {
             return `
             :root {
                 --width-big: calc(50vw - calc(var(--widget-width) / 2) - 10px);
                 --height-big: calc(100vh - 65px);
-    
+        
                 --reader-layout-columns: 1fr var(--widget-width) 1fr;
                 --reader-layout-rows: calc(var(--article-height) - var(--footer-height)) var(--footer-height);
                 --article-height: var(--app-height);
             }
-    
+            
+            .main-header > div {
+                padding: ${isLeftVideo ? "0 450px 0 0" : "0 0 0 420px"} !important;
+            }
+        
             #lesson-reader {
                 grid-template-columns: var(--reader-layout-columns);
             }
-    
-            .main-content {
-                grid-area: 1 / 1 / 3 / 2 !important;
+        
+            /* Video player positioning */
+            .video-player {
+                align-items: ${isLeftVideo ? "start" : "end"} !important;
+                justify-content: ${isLeftVideo ? "flex-start" : "flex-end"} !important;
             }
             
+            .video-player:not(.is-minimized) > .modal-content {
+                margin: ${isLeftVideo ? "0 10px 10px 0" : "0 0 10px 10px"} !important;
+            }
+        
+            /* Widget area in the middle (Column 2) */
             .widget-area {
                 grid-area: 1 / 2 / 2 / 3 !important;
             }
-    
+        
+            /* Text reader position (Column 1 or Column 3) */
+            .main-content {
+                grid-area: ${isLeftVideo ? "1 / 3 / 3 / 4" : "1 / 1 / 3 / 2"} !important;
+            }
+        
             .main-footer {
                 grid-area: 2 / 2 / 3 / 3 !important;
                 align-self: end;
-            }
-    
-            .video-player {
-                align-items: end !important;
             }
             `;
         }
         
         function generateAudioCSS() {
             return `
-        :root {
-            --width-big: calc(var(--widget-width) - 20px);
-            --height-big: cald(var(--footer-height) - 10px);
-
-            --reader-layout-rows: var(--article-height) var(--footer-height);
-            --article-height: calc(var(--app-height) - var(--footer-height));
-        }
-
-        .main-content {
-            grid-area: 1 / 1 / 2 / 2 !important;
-        }
-
-        .widget-area {
-            grid-area: 1 / 2 / 2 / 2 !important;
-        }
-
-        .main-footer {
-            grid-area: 2 / 1 / 3 / 2 !important;
-            align-self: end;
-        }
-
-        .video-player:not(.is-minimized) {
-            align-items: end !important;
-        }
-
-        .video-player:not(.is-minimized) > .modal-content {
-            margin: 0 10px 10px !important;
-        }
-        `;
+            :root {
+                --width-big: calc(var(--widget-width) - 20px);
+                --height-big: cald(var(--footer-height) - 10px);
+    
+                --reader-layout-rows: var(--article-height) var(--footer-height);
+                --article-height: calc(var(--app-height) - var(--footer-height));
+            }
+            
+            .main-header > div {
+                padding: 0 0 0 420px !important;
+            }
+    
+            .main-content {
+                grid-area: 1 / 1 / 2 / 2 !important;
+            }
+    
+            .widget-area {
+                grid-area: 1 / 2 / 2 / 2 !important;
+            }
+    
+            .main-footer {
+                grid-area: 2 / 1 / 3 / 2 !important;
+                align-self: end;
+            }
+    
+            .video-player:not(.is-minimized) {
+                align-items: end !important;
+            }
+    
+            .video-player:not(.is-minimized) > .modal-content {
+                margin: 0 10px 10px !important;
+            }
+            `;
         }
         
         function generateOffModeCSS() {
@@ -4769,6 +4792,10 @@
                 --sentence-height: ${settings.sentenceHeight}px;
                 --right-pos: 0.5%;
                 --bottom-pos: 5.5%;
+            }
+            
+            .main-header > div {
+                padding: 0 0 0 420px !important;
             }
             
             .quick-summary {
@@ -7108,40 +7135,46 @@
             `;
             applyCSS(youtubeCaptionCSS);
             
-            const video = await waitForElement('video.html5-main-video', 5000);
-            const player = await waitForElement('.html5-video-player', 5000);
+            const video = await waitForElement('video.html5-main-video', 10000);
+            const player = await waitForElement('.html5-video-player', 10000);
             
             if (!video || !player) return;
             
             const pRect = player.getBoundingClientRect();
             const vRect = video.getBoundingClientRect();
             
-            // If the video almost fills the player, reset custom properties
-            // if (Math.abs(pRect.height - vRect.height) < 10) {
-            //     player.style.removeProperty('--custom-caption-bottom');
-            //     player.style.removeProperty('--custom-caption-top');
-            //     return;
-            // }
-            
-            const gap = (pRect.height - vRect.height) / 2;
-            
-            if (settings.relocateCaption === "inside") {
-                // Anchor to the bottom of the video
-                const targetBottom = gap + 10;
-                const percentBottom = (targetBottom / pRect.height) * 100;
+            function updatePosition() {
+                const pRect = player.getBoundingClientRect();
+                const vRect = video.getBoundingClientRect();
                 
-                player.style.setProperty('--custom-caption-bottom', `${percentBottom}%`);
-                player.style.setProperty('--custom-caption-top', 'auto');
-            } else {
-                // Anchor to the top (just below the video) to bypass height calculation
-                const targetTop = pRect.height - gap + 5;
-                const percentTop = (targetTop / pRect.height) * 100;
+                if (pRect.height === 0 || vRect.height === 0) return;
                 
-                player.style.setProperty('--custom-caption-top', `${percentTop}%`);
-                player.style.setProperty('--custom-caption-bottom', 'auto');
+                const gap = (pRect.height - vRect.height) / 2;
+                
+                if (settings.relocateCaption === "inside") {
+                    const targetBottom = gap + 10;
+                    const percentBottom = (targetBottom / pRect.height) * 100;
+                    
+                    player.style.setProperty('--custom-caption-bottom', `${percentBottom}%`);
+                    player.style.setProperty('--custom-caption-top', 'auto');
+                } else {
+                    const targetTop = pRect.height - gap + 5;
+                    const percentTop = (targetTop / pRect.height) * 100;
+                    
+                    player.style.setProperty('--custom-caption-top', `${percentTop}%`);
+                    player.style.setProperty('--custom-caption-bottom', 'auto');
+                }
             }
+            
+            let resizeTimeout;
+            const resizeObserver = new ResizeObserver(() => {
+                clearTimeout(resizeTimeout);
+                resizeTimeout = setTimeout(() => {
+                    updatePosition();
+                }, 100);
+            });
+            resizeObserver.observe(player);
         }
-        
         if (settings.relocateCaption !== "default") adjustCaptionPosition();
     }
     
