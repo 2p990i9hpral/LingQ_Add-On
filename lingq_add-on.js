@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      13.0.0
+// @version      13.0.1
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @grant       GM_xmlhttpRequest
@@ -1366,18 +1366,20 @@
         container = createElement("div", {id: "local-video-container"});
         
         const setupBox = createElement("div", {className: "local-video-setup-box"});
-        const title = createElement("span", {style: "font-weight: bold; font-size: 1.1em; margin-bottom: 10px;", textContent: "Local Video Player Setup"});
+        const title = createElement("span", {style: "font-weight: bold; font-size: 1.1em; margin-bottom: 5px;", textContent: "Local Video Player Setup"});
+        const hintText = createElement("span", {style: "font-size: 0.85em; color: #aaa; margin-bottom: 10px;", textContent: "You can select both Video and Subtitle files at once."});
         
         let selectedVideoFile = null;
         let selectedSubtitleFile = null;
         
-        const videoInput = createElement("input", {className: "local-video-file-input", type: "file", accept: "video/*"});
-        const videoLabel = createElement("label", {className: "local-video-file-label", textContent: "🎬 Select Video File (.mp4) *Required"});
-        videoLabel.appendChild(videoInput);
-        
-        const subtitleInput = createElement("input", {className: "local-video-file-input", type: "file", accept: ".srt,.vtt"});
-        const subtitleLabel = createElement("label", {className: "local-video-file-label", textContent: "📝 Select Subtitle File (.srt, .vtt) *Optional"});
-        subtitleLabel.appendChild(subtitleInput);
+        const fileInput = createElement("input", {
+            className: "local-video-file-input",
+            type: "file",
+            multiple: true,
+            accept: "video/*,.srt,.vtt"
+        });
+        const fileLabel = createElement("label", {className: "local-video-file-label", textContent: "📁 Choose Files (Video + Subtitle)"});
+        fileLabel.appendChild(fileInput);
         
         const startButton = createElement("button", {
             className: "popup-button",
@@ -1386,41 +1388,49 @@
             style: "margin-top: 15px; padding: 10px 24px; font-weight: bold; width: 100%;"
         });
         
-        setupBox.append(title, videoLabel, subtitleLabel, startButton);
+        setupBox.append(title, hintText, fileLabel, startButton);
         container.appendChild(setupBox);
         lessonReader.appendChild(container);
         
+        // Reverted: Restored clean default video rendering heights
         const videoElement = createElement("video", {
             id: "addonLocalVideo",
-            controls: true,
-            muted: true, // Muted by default to prioritize LingQ audio master quality
-            style: "width: 100%; max-height: 100%; border-radius: 12px; display: none;"
+            muted: true,
+            style: "width: 100%; height: calc(100% - 5px); object-fit: contain; display: none;"
         });
+        
         const trackElement = createElement("track", {
             kind: "subtitles",
             srclang: "en",
             label: "Local Sub",
             id: "addonLocalVideoTrack"
         });
+        
         videoElement.appendChild(trackElement);
         container.appendChild(videoElement);
         
-        videoInput.addEventListener("change", (event) => {
-            const file = event.target.files[0];
-            if (file) {
-                selectedVideoFile = file;
-                videoLabel.textContent = `🎬 Video: ${file.name}`;
-                videoLabel.appendChild(videoInput);
-                startButton.disabled = false;
-            }
-        });
+        const progressWrapper = createElement("div", {className: "local-video-progress-wrapper", style: "display: none;"});
+        const miniProgressBar = createElement("div", {id: "local-video-mini-progress"});
+        progressWrapper.appendChild(miniProgressBar);
+        container.appendChild(progressWrapper);
         
-        subtitleInput.addEventListener("change", (event) => {
-            const file = event.target.files[0];
-            if (file) {
-                selectedSubtitleFile = file;
-                subtitleLabel.textContent = `📝 Subtitle: ${file.name}`;
-                subtitleLabel.appendChild(subtitleInput);
+        fileInput.addEventListener("change", (event) => {
+            const files = Array.from(event.target.files).slice(0, 2);
+            selectedVideoFile = files.find(file => file.type.startsWith("video/"));
+            selectedSubtitleFile = files.find(file => file.name.endsWith(".srt") || file.name.endsWith(".vtt"));
+            
+            if (selectedVideoFile) {
+                let statusText = `🎬 ${selectedVideoFile.name}`;
+                if (selectedSubtitleFile) statusText += ` + 📝 ${selectedSubtitleFile.name}`;
+                else statusText += ` (No Subtitle)`;
+                fileLabel.textContent = statusText;
+                fileLabel.appendChild(fileInput);
+                startButton.disabled = false;
+            } else {
+                fileLabel.textContent = "❌ Missing Video File! Try Again.";
+                fileLabel.appendChild(fileInput);
+                startButton.disabled = true;
+                selectedSubtitleFile = null;
             }
         });
         
@@ -1445,8 +1455,14 @@
             
             setupBox.style.display = "none";
             videoElement.style.display = "block";
+            progressWrapper.style.display = "block";
             
-            // Initialize LingQ Core Player Controller Linkage
+            const playButton = document.querySelector(".section--player button.lingq-audio-player");
+            const playButtonSvg = playButton?.querySelector("svg");
+            if (playButton && playButtonSvg && playButtonSvg.classList.contains("svg-icon--play")) {
+                playButton.click();
+            }
+            
             bindLingQPlayerControls(videoElement);
         });
     }
@@ -1455,6 +1471,7 @@
         const sliderHandle = await waitForElement('.audio-player--progress .rc-slider-handle', 10000);
         const playButton = await waitForElement(".section--player button.lingq-audio-player", 10000);
         const speedLabel = await waitForElement(".audio-player--controllers span.leading-none.text-xl", 10000);
+        const miniProgressBar = document.getElementById("local-video-mini-progress");
         
         if (!sliderHandle || !playButton) {
             console.warn("Required LingQ control elements missing. Sync binder stopped.");
@@ -1468,8 +1485,7 @@
             if (!speedLabel) return;
             const currentSpeed = parseFloat(speedLabel.textContent) || 1.0;
             
-            // Fix: Set defaultPlaybackRate to ensure the browser respects this speed as the baseline
-            videoElement.defaultPlaybackRate = currentSpeed;
+            // Reverted: Removed defaultPlaybackRate overwrite to fix initial double-speed glitch
             if (videoElement.playbackRate !== currentSpeed) {
                 videoElement.playbackRate = currentSpeed;
                 console.log('Sync', `Playback speed updated to ${currentSpeed}x`);
@@ -1490,6 +1506,13 @@
             if (Math.abs(videoElement.currentTime - preciseTargetTime) > 0.3) {
                 videoElement.currentTime = preciseTargetTime;
             }
+            
+            // 3. Update Mini Progress Bar
+            if (miniProgressBar) {
+                const maxVal = parseFloat(sliderHandle.getAttribute("aria-valuemax")) || 1;
+                const percentage = (preciseTargetTime / maxVal) * 100;
+                miniProgressBar.style.width = `${percentage}%`;
+            }
         });
         
         const speedObserver = new MutationObserver(() => {
@@ -1503,12 +1526,11 @@
             speedObserver.observe(speedLabel, { childList: true, characterData: true, subtree: true });
         }
         
-        // Fix: Enforce synchronization when the video triggers its own pipeline events
-        // This prevents the browser from reverting playbackRate to 1.0 during media initialization
+        // Ensure accurate tracking across playback status switches
         videoElement.addEventListener("play", syncPlaybackRate);
+        videoElement.addEventListener("playing", syncPlaybackRate);
         videoElement.addEventListener("loadedmetadata", syncPlaybackRate);
         
-        // Run initial synchronization bootstrap
         const isLingQPlayingInit = playButtonSvg.classList.contains("svg-icon--pause");
         if (isLingQPlayingInit && videoElement.paused) {
             videoElement.play().catch(() => {});
@@ -4961,16 +4983,19 @@
                 align-self: end;
             }
         
-            /* Fixed container alignment to keep elements vertically centered */
             #local-video-container {
                 grid-area: 1 / 3 / 3 / 4 !important;
                 display: flex;
                 flex-direction: column;
-                justify-content: center; /* Center vertically */
-                align-items: center;    /* Center horizontally */
-                padding: 20px;
-                height: var(--height-big) !important;
+                justify-content: flex-start;
+                align-items: stretch;
+                border-radius: 0.75rem;
+                height: calc(100% - var(--header-height) - 10px);
+                margin: var(--header-height) 0 10px 10px;
+                background-color: #000000;
+                overflow: hidden;
                 box-sizing: border-box;
+                position: relative !important;
             }
         
             .local-video-setup-box {
@@ -4984,38 +5009,71 @@
                 gap: 15px;
                 align-items: center;
                 justify-content: center;
-                width: 100%;
+                width: calc(100% - 40px);
                 max-width: 400px;
                 box-sizing: border-box;
+                margin: auto;
             }
         
             .local-video-file-label {
                 display: inline-block;
-                padding: 10px 16px;
+                padding: 12px 20px;
                 border: 1px solid rgb(125 125 125 / 50%);
                 border-radius: 6px;
                 cursor: pointer;
-                font-size: 0.9em;
+                font-size: 0.95em;
+                font-weight: 500;
                 width: 100%;
                 box-sizing: border-box;
                 text-overflow: ellipsis;
                 overflow: hidden;
                 white-space: nowrap;
+                background-color: rgb(125 125 125 / 10%);
             }
         
             .local-video-file-label:hover {
-                background-color: rgb(125 125 125 / 20%);
+                background-color: rgb(125 125 125 / 25%);
             }
         
             .local-video-file-input {
                 display: none !important;
             }
-        
+
+            .local-video-progress-wrapper {
+                position: absolute !important;
+                bottom: 0;
+                left: 0;
+                z-index: 10; /* Ensure it stays above the video */
+                margin-top: 0 !important;
+                width: 100%;
+                height: 5px;
+                background-color: rgba(255, 255, 255, 0.2);
+            }
+
+            #local-video-mini-progress {
+                height: 100%;
+                width: 0%;
+                background-color: rgb(76, 175, 80); /* Fixed: Light Green like toast/original youtube */
+                transition: width 0.1s linear;
+            }
+            
+            #addonLocalVideo {
+                width: auto !important;
+                height: auto !important;
+                max-width: 100% !important;
+                max-height: calc(100% - 5px) !important;
+                
+                align-self: center !important;
+                margin: auto !important;
+            }
+            
             video::cue {
                 background-color: rgba(0, 0, 0, 0.75) !important;
                 color: #ffffff !important;
-                font-size: 1.25em !important;
-                line: -2 !important; /* Keep a consistent bottom-line boundary allocation */
+                
+                font-size: 1rem !important;
+                
+                line: -1 !important;
             }
             `;
         }
