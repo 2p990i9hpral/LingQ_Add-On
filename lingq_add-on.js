@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      13.0.1
+// @version      13.1.1
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @grant       GM_xmlhttpRequest
@@ -1346,6 +1346,30 @@
         return URL.createObjectURL(blob);
     }
     
+    function convertSentencesToVttBlobUrl(sentences) {
+        function formatTime(seconds) {
+            const date = new Date(0);
+            date.setSeconds(seconds);
+            const match = date.toISOString().match(/T(\d{2}:\d{2}:\d{2})\.(\d{3})/);
+            return `${match[1]}.${match[2]}`;
+        }
+        
+        const vttLines = ["WEBVTT\n"];
+        
+        sentences.forEach((sentence) => {
+            if (!sentence.timestamp || sentence.timestamp.length < 2) return;
+            
+            const startTime = formatTime(sentence.timestamp[0]);
+            const endTime = formatTime(sentence.timestamp[1]);
+            const text = sentence.text || "";
+            
+            vttLines.push(`${startTime} --> ${endTime}\n${text}\n`);
+        });
+        
+        const blob = new Blob([vttLines.join("\n")], {type: "text/vtt"});
+        return URL.createObjectURL(blob);
+    }
+    
     function handleLocalVideoContainerVisibility() {
         const lessonReader = document.getElementById("lesson-reader");
         if (!lessonReader) return;
@@ -1366,8 +1390,10 @@
         container = createElement("div", {id: "local-video-container"});
         
         const setupBox = createElement("div", {className: "local-video-setup-box"});
-        const title = createElement("span", {style: "font-weight: bold; font-size: 1.1em; margin-bottom: 5px;", textContent: "Local Video Player Setup"});
-        const hintText = createElement("span", {style: "font-size: 0.85em; color: #aaa; margin-bottom: 10px;", textContent: "You can select both Video and Subtitle files at once."});
+        const title = createElement("span", {
+            style: "font-weight: bold; font-size: 1.1em;",
+            textContent: "Local Video Player Setup"
+        });
         
         let selectedVideoFile = null;
         let selectedSubtitleFile = null;
@@ -1378,25 +1404,30 @@
             multiple: true,
             accept: "video/*,.srt,.vtt"
         });
-        const fileLabel = createElement("label", {className: "local-video-file-label", textContent: "📁 Choose Files (Video + Subtitle)"});
+        const fileLabel = createElement("label", {
+            className: "local-video-button",
+            textContent: "Choose Files (Video + Subtitle)"
+        });
         fileLabel.appendChild(fileInput);
         
         const startButton = createElement("button", {
-            className: "popup-button",
-            textContent: "▶ Start Player",
+            className: "local-video-button",
+            textContent: "Start Player",
             disabled: true,
-            style: "margin-top: 15px; padding: 10px 24px; font-weight: bold; width: 100%;"
         });
         
-        setupBox.append(title, hintText, fileLabel, startButton);
+        setupBox.append(title, fileLabel, startButton);
         container.appendChild(setupBox);
         lessonReader.appendChild(container);
         
-        // Reverted: Restored clean default video rendering heights
         const videoElement = createElement("video", {
             id: "addonLocalVideo",
             muted: true,
-            style: "width: 100%; height: calc(100% - 5px); object-fit: contain; display: none;"
+            style: "width: 100%; height: calc(100% - 5px); object-fit: contain; display: none; cursor: pointer;"
+        });
+        
+        videoElement.addEventListener("click", () => {
+            clickElement(".section--player button.lingq-audio-player");
         });
         
         const trackElement = createElement("track", {
@@ -1409,7 +1440,10 @@
         videoElement.appendChild(trackElement);
         container.appendChild(videoElement);
         
-        const progressWrapper = createElement("div", {className: "local-video-progress-wrapper", style: "display: none;"});
+        const progressWrapper = createElement("div", {
+            className: "local-video-progress-wrapper",
+            style: "display: none;"
+        });
         const miniProgressBar = createElement("div", {id: "local-video-mini-progress"});
         progressWrapper.appendChild(miniProgressBar);
         container.appendChild(progressWrapper);
@@ -1420,14 +1454,14 @@
             selectedSubtitleFile = files.find(file => file.name.endsWith(".srt") || file.name.endsWith(".vtt"));
             
             if (selectedVideoFile) {
-                let statusText = `🎬 ${selectedVideoFile.name}`;
-                if (selectedSubtitleFile) statusText += ` + 📝 ${selectedSubtitleFile.name}`;
-                else statusText += ` (No Subtitle)`;
+                let statusText = `${selectedVideoFile.name}`;
+                if (selectedSubtitleFile) statusText += ` + ${selectedSubtitleFile.name}`;
+                else statusText += ` (Default Subtitle)`;
                 fileLabel.textContent = statusText;
                 fileLabel.appendChild(fileInput);
                 startButton.disabled = false;
             } else {
-                fileLabel.textContent = "❌ Missing Video File! Try Again.";
+                fileLabel.textContent = "Missing Video File! Try Again.";
                 fileLabel.appendChild(fileInput);
                 startButton.disabled = true;
                 selectedSubtitleFile = null;
@@ -1451,6 +1485,20 @@
                     trackElement.track.mode = "showing";
                 };
                 reader.readAsText(selectedSubtitleFile);
+            } else {
+                const lessonLanguage = getLessonLanguage();
+                const lessonId = getLessonId();
+                
+                getLessonSentences(lessonLanguage, lessonId)
+                    .then((sentences) => {
+                        if (sentences && sentences.length > 0) {
+                            trackElement.src = convertSentencesToVttBlobUrl(sentences);
+                            trackElement.track.mode = "showing";
+                        }
+                    })
+                    .catch((error) => {
+                        console.error("Failed to fetch default subtitles:", error);
+                    });
             }
             
             setupBox.style.display = "none";
@@ -4985,53 +5033,43 @@
         
             #local-video-container {
                 grid-area: 1 / 3 / 3 / 4 !important;
-                display: flex;
-                flex-direction: column;
-                justify-content: flex-start;
-                align-items: stretch;
                 border-radius: 0.75rem;
                 height: calc(100% - var(--header-height) - 10px);
                 margin: var(--header-height) 0 10px 10px;
                 background-color: #000000;
-                overflow: hidden;
-                box-sizing: border-box;
                 position: relative !important;
             }
         
             .local-video-setup-box {
-                border: 2px dashed rgb(125 125 125 / 40%);
-                border-radius: 12px;
-                padding: 30px;
-                text-align: center;
-                background-color: rgb(125 125 125 / 5%);
                 display: flex;
                 flex-direction: column;
-                gap: 15px;
                 align-items: center;
-                justify-content: center;
+                gap: 20px;
+                text-align: center;
                 width: calc(100% - 40px);
-                max-width: 400px;
-                box-sizing: border-box;
+                max-width: 70%;
+                border: 2px dashed rgb(125 125 125 / 40%);
+                border-radius: 12px;
+                background-color: rgb(125 125 125 / 10%);
+                padding: 30px;
                 margin: auto;
             }
         
-            .local-video-file-label {
+            .local-video-button {
                 display: inline-block;
                 padding: 12px 20px;
                 border: 1px solid rgb(125 125 125 / 50%);
                 border-radius: 6px;
                 cursor: pointer;
                 font-size: 0.95em;
-                font-weight: 500;
                 width: 100%;
-                box-sizing: border-box;
                 text-overflow: ellipsis;
                 overflow: hidden;
                 white-space: nowrap;
                 background-color: rgb(125 125 125 / 10%);
             }
         
-            .local-video-file-label:hover {
+            .local-video-button:hover {
                 background-color: rgb(125 125 125 / 25%);
             }
         
@@ -5043,7 +5081,7 @@
                 position: absolute !important;
                 bottom: 0;
                 left: 0;
-                z-index: 10; /* Ensure it stays above the video */
+                z-index: 10;
                 margin-top: 0 !important;
                 width: 100%;
                 height: 5px;
@@ -5062,7 +5100,6 @@
                 height: auto !important;
                 max-width: 100% !important;
                 max-height: calc(100% - 5px) !important;
-                
                 align-self: center !important;
                 margin: auto !important;
             }
@@ -5070,9 +5107,7 @@
             video::cue {
                 background-color: rgba(0, 0, 0, 0.75) !important;
                 color: #ffffff !important;
-                
                 font-size: 1rem !important;
-                
                 line: -1 !important;
             }
             `;
