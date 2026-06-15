@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      13.1.1
+// @version      13.1.2
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @grant       GM_xmlhttpRequest
@@ -62,7 +62,7 @@
         usePageMode: false,
         skipEndPage: false,
         relocateCaption: 'default',
-        captionFontsize: 2.75,
+        captionFontsize: 1.25,
         showMemoWidget: false,
         
         keyboardShortcut: false,
@@ -1862,7 +1862,7 @@
                 {value: "inside", text: "Inside"},
                 {value: "below", text: "Below"}
             ], settings.relocateCaption);
-            addSlider(container1, "captionFontsizeSlider", "Video Caption Font Size", "captionFontsizeValue", settings.captionFontsize, "em", 1.5, 3.5, 0.25);
+            addSlider(container1, "captionFontsizeSlider", "Video Caption Font Size", "captionFontsizeValue", settings.captionFontsize, "vw", 1, 2, 0.05);
             addCheckbox(container1, "showMemoWidgetCheckbox", "Show Memo Widget", settings.showMemoWidget);
             
             columns.appendChild(container1);
@@ -2628,7 +2628,7 @@
                 });
             });
             
-            setupSlider("captionFontsizeSlider", "captionFontsizeValue", "captionFontsize", "em", "--caption-font-size", (val) => `${val}em`);
+            setupSlider("captionFontsizeSlider", "captionFontsizeValue", "captionFontsize", "vw", "--caption-font-size", (val) => `${val}vw`);
             
             const showMemoWidgetCheckbox = document.getElementById("showMemoWidgetCheckbox");
             showMemoWidgetCheckbox.addEventListener('change', (event) => {
@@ -5008,6 +5008,8 @@
                 --reader-layout-columns: 1fr var(--widget-width) 1fr;
                 --reader-layout-rows: calc(var(--article-height) - var(--footer-height)) var(--footer-height);
                 --article-height: var(--app-height);
+                
+                --caption-font-size: ${settings.captionFontsize}vw;
             }
         
             .main-header > div {
@@ -5033,6 +5035,7 @@
         
             #local-video-container {
                 grid-area: 1 / 3 / 3 / 4 !important;
+                display: flex;
                 border-radius: 0.75rem;
                 height: calc(100% - var(--header-height) - 10px);
                 margin: var(--header-height) 0 10px 10px;
@@ -5104,11 +5107,15 @@
                 margin: auto !important;
             }
             
-            video::cue {
+            video::-webkit-media-text-track-container {
+                font-size: var(--caption-font-size) !important;
+            }
+            
+            ::cue, video::cue {
                 background-color: rgba(0, 0, 0, 0.75) !important;
                 color: #ffffff !important;
-                font-size: 1rem !important;
-                line: -1 !important;
+                font-family: sans-serif !important;
+                line-height: 1.2 !important;
             }
             `;
         }
@@ -7488,6 +7495,10 @@
         
         async function adjustCaptionPosition() {
             const youtubeCaptionCSS = `
+                :root {
+                    --caption-font-size: ${settings.captionFontsize}vw;
+                }
+                
                 .caption-window.ytp-caption-window-bottom {
                     display: unset !important;
                     width: 90% !important;
@@ -7498,7 +7509,7 @@
                     margin-bottom: 0 !important;
                 }
                 .ytp-caption-segment {
-                    font-size: ${settings.captionFontsize}em !important;
+                    font-size: var(--caption-font-size) !important;
                 }
             `;
             applyCSS(youtubeCaptionCSS);
