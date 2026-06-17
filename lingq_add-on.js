@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      13.1.2
+// @version      13.2.0
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @grant       GM_xmlhttpRequest
@@ -62,7 +62,7 @@
         usePageMode: false,
         skipEndPage: false,
         relocateCaption: 'default',
-        captionFontsize: 1.25,
+        captionFontsize: 1.1,
         showMemoWidget: false,
         
         keyboardShortcut: false,
@@ -1776,19 +1776,20 @@
             const container1 = createElement("div", {style: "padding: 5px; width: 350px;"});
             
             addSelect(container1, "styleTypeSelector", "Layout Style:", [
-                {value: "video", text: "Video"},
-                {value: "video2", text: "Video2"},
-                {value: "video3", text: "Video3"},
-                {value: "localVideo", text: "Local Video"},
-                {value: "audio", text: "Audio"},
-                {value: "off", text: "Off"}
+                {value: "audio", text: "Audio Only"},
+                {value: "videoRight", text: "Video (Right)"},
+                {value: "videoLeft", text: "Video (Left)"},
+                {value: "videoTop", text: "Video (Top)"},
+                {value: "videoBottom", text: "Video (Bottom)"},
+                {value: "videoLocal", text: "Local Video"},
+                {value: "off", text: "Layout Off"}
             ], settings.styleType[language]);
             
             const videoSettings = createElement("div", {
                 id: "videoSettings",
-                style: `${settings.styleType[language] === "video" ? "" : "display: none"}`
+                style: `${["videoTop", "videoBottom"].includes(settings.styleType[language]) ? "" : "display: none"}`
             });
-            addSlider(videoSettings, "heightBigSlider", "Video Height:", "heightBigValue", settings.heightBig, "px", 300, 800, 10);
+            addSlider(videoSettings, "heightBigSlider", "Video Height:", "heightBigValue", settings.heightBig, "px", 300, 1200, 10);
             container1.appendChild(videoSettings);
             
             const sentenceVideoSettings = createElement("div", {
@@ -1862,7 +1863,7 @@
                 {value: "inside", text: "Inside"},
                 {value: "below", text: "Below"}
             ], settings.relocateCaption);
-            addSlider(container1, "captionFontsizeSlider", "Video Caption Font Size", "captionFontsizeValue", settings.captionFontsize, "vw", 1, 2, 0.05);
+            addSlider(container1, "captionFontsizeSlider", "Video Caption Font Size", "captionFontsizeValue", settings.captionFontsize, "px", 10, 30, 1);
             addCheckbox(container1, "showMemoWidgetCheckbox", "Show Memo Widget", settings.showMemoWidget);
             
             columns.appendChild(container1);
@@ -2628,7 +2629,7 @@
                 });
             });
             
-            setupSlider("captionFontsizeSlider", "captionFontsizeValue", "captionFontsize", "vw", "--caption-font-size", (val) => `${val}vw`);
+            setupSlider("captionFontsizeSlider", "captionFontsizeValue", "captionFontsize", "px", "--caption-font-size", (val) => `${val}px`);
             
             const showMemoWidgetCheckbox = document.getElementById("showMemoWidgetCheckbox");
             showMemoWidgetCheckbox.addEventListener('change', (event) => {
@@ -4120,16 +4121,19 @@
             }
             
             switch (settings.styleType[language]) {
-                case "video":
-                    specificCSS = generateVideoCSS();
+                case "videoRight":
+                    specificCSS = generateHorizontalVideoCSS(false);
                     break;
-                case "video2":
+                case "videoLeft":
+                    specificCSS = generateHorizontalVideoCSS(true);
+                    break;
+                case "videoBottom":
                     specificCSS = generateVerticalVideoCSS(false);
                     break;
-                case "video3":
+                case "videoTop":
                     specificCSS = generateVerticalVideoCSS(true);
                     break;
-                case "localVideo":
+                case "videoLocal":
                     specificCSS = generateLocalVideoCSS();
                     break;
                 case "audio":
@@ -4137,7 +4141,6 @@
                     break;
                 case "off":
                     specificCSS = generateOffModeCSS();
-                    layoutCSS = '';
                     break;
             }
             
@@ -4166,6 +4169,10 @@
             const styleTypeSelector = document.getElementById("styleTypeSelector");
             styleTypeSelector.addEventListener("change", (event) => {
                 const selectedStyleType = event.target.value;
+                
+                document.getElementById("videoSettings").style.display = ["videoTop", "videoBottom"].includes(selectedStyleType) ? "block" : "none";
+                document.getElementById("sentenceVideoSettings").style.display = selectedStyleType === "off" ? "block" : "none";
+                
                 applyStyles(selectedStyleType, document.querySelector('input[name="colorMode"]:checked')?.value);
             });
             
@@ -4644,6 +4651,7 @@
             }
     
             .sentence-text {
+                max-width: 1200px !important;
                 height: calc(var(--article-height) - var(--header-height)) !important;
                 padding: 0 0 20px !important;
             }
@@ -4923,11 +4931,16 @@
             `;
         }
         
-        function generateVideoCSS() {
+        function generateVerticalVideoCSS(isTop = false) {
             return `
             :root {
                 --width-big: calc(100vw - var(--widget-width) - 10px);
                 --height-big: ${settings.heightBig}px;
+                
+                ${isTop ? `
+                --reader-layout-rows: calc(var(--height-big) + var(--header-height)) calc(var(--article-height) - var(--header-height) - var(--footer-height)) var(--footer-height);
+                --article-height: calc(var(--app-height) - var(--height-big));
+                ` : ''}
             }
             
             .main-header > div {
@@ -4935,25 +4948,33 @@
             }
     
             .main-content {
-                grid-area: 1 / 1 / 2 / 2 !important;
+                grid-area: ${isTop ? "2 / 1 / 3 / 2" : "1 / 1 / 2 / 2"} !important;
             }
     
             .widget-area {
-                grid-area: 1 / 2 / 3 / 2 !important;
+                grid-area: ${isTop ? "1 / 2 / 3 / 3" : "1 / 2 / 3 / 2"} !important;
             }
     
             .main-footer {
-                grid-area: 3 / 2 / 4 / 3 !important;
+                grid-area: ${isTop ? "3 / 1 / 4 / 2" : "3 / 2 / 4 / 3"} !important;
                 align-self: end;
             }
     
             .video-player:not(.is-minimized) {
                 align-items: flex-start !important;
+                ${isTop ? "justify-content: flex-start !important;" : ""}
             }
+    
+            ${isTop ? `
+            .video-player:not(.is-minimized) > .modal-content {
+                margin: var(--header-height) 0 10px 10px !important;
+                max-width: var(--width-big) !important;
+            }
+            ` : ''}
             `;
         }
         
-        function generateVerticalVideoCSS(isLeftVideo = false) {
+        function generateHorizontalVideoCSS(isLeftVideo = false) {
             return `
             :root {
                 --width-big: calc(50vw - calc(var(--widget-width) / 2) - 10px);
@@ -4972,7 +4993,6 @@
                 grid-template-columns: var(--reader-layout-columns);
             }
         
-            /* Video player positioning */
             .video-player {
                 align-items: ${isLeftVideo ? "start" : "end"} !important;
                 justify-content: ${isLeftVideo ? "flex-start" : "flex-end"} !important;
@@ -5009,7 +5029,7 @@
                 --reader-layout-rows: calc(var(--article-height) - var(--footer-height)) var(--footer-height);
                 --article-height: var(--app-height);
                 
-                --caption-font-size: ${settings.captionFontsize}vw;
+                --caption-font-size: ${settings.captionFontsize}px;
             }
         
             .main-header > div {
@@ -7496,7 +7516,7 @@
         async function adjustCaptionPosition() {
             const youtubeCaptionCSS = `
                 :root {
-                    --caption-font-size: ${settings.captionFontsize}vw;
+                    --caption-font-size: ${settings.captionFontsize}px;
                 }
                 
                 .caption-window.ytp-caption-window-bottom {
