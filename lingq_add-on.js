@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      13.2.1
+// @version      13.2.2
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @grant       GM_xmlhttpRequest
@@ -1781,7 +1781,7 @@
                 {value: "videoLeft", text: "Video (Left)"},
                 {value: "videoTop", text: "Video (Top)"},
                 {value: "videoBottom", text: "Video (Bottom)"},
-                {value: "videoLocal", text: "Local Video"},
+                {value: "localVideo", text: "Local Video"},
                 {value: "off", text: "Layout Off"}
             ], settings.styleType[language]);
             
@@ -4133,7 +4133,7 @@
                 case "videoTop":
                     specificCSS = generateVerticalVideoCSS(true);
                     break;
-                case "videoLocal":
+                case "localVideo":
                     specificCSS = generateLocalVideoCSS();
                     break;
                 case "audio":
