@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      13.2.0
+// @version      13.2.1
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @grant       GM_xmlhttpRequest
@@ -4949,6 +4949,15 @@
     
             .main-content {
                 grid-area: ${isTop ? "2 / 1 / 3 / 2" : "1 / 1 / 2 / 2"} !important;
+            }
+            
+            .reader-component {
+                height: 100%;
+                min-height: 0px;
+            }
+
+            .sentence-text {
+                height: auto !important;
             }
     
             .widget-area {
