@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      13.2.2
+// @version      13.3.0
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @grant       GM_xmlhttpRequest
@@ -29,6 +29,7 @@
     
     const defaults = {
         styleType: {},
+        videoPosition: {},
         heightBig: 400,
         sentenceHeight: 400,
         sentenceAutoplay: false,
@@ -99,6 +100,7 @@
     
     const languageScopedDefaults = {
         styleType: "video",
+        videoPosition: "Right",
         customFont: "",
         prependSummary: false,
         fontSize: 1.1,
@@ -1635,6 +1637,15 @@
             popup.appendChild(dragHandle);
             popup.appendChild(content);
             
+            const closeTopButton = createElement("button", {
+                className: "popup-close-top-btn",
+                textContent: "×",
+            });
+            closeTopButton.addEventListener("click", () => {
+                popup.style.display = "none";
+            });
+            popup.appendChild(closeTopButton);
+            
             return popup;
         }
         
@@ -1775,19 +1786,31 @@
             
             const container1 = createElement("div", {style: "padding: 5px; width: 350px;"});
             
+            const baseType = settings.styleType[language] || "video";
+            const position = settings.videoPosition[language] || "Right";
+            
             addSelect(container1, "styleTypeSelector", "Layout Style:", [
                 {value: "audio", text: "Audio Only"},
-                {value: "videoRight", text: "Video (Right)"},
-                {value: "videoLeft", text: "Video (Left)"},
-                {value: "videoTop", text: "Video (Top)"},
-                {value: "videoBottom", text: "Video (Bottom)"},
+                {value: "video", text: "YouTube Video"},
                 {value: "localVideo", text: "Local Video"},
                 {value: "off", text: "Layout Off"}
-            ], settings.styleType[language]);
+            ], baseType);
+            
+            const positionSettingsContainer = createElement("div", {
+                id: "positionSettingsContainer",
+                style: `${["video", "localVideo"].includes(baseType) ? "" : "display: none;"}`
+            });
+            addSelect(positionSettingsContainer, "videoPositionSelector", "Video Position:", [
+                {value: "Right", text: "Right"},
+                {value: "Left", text: "Left"},
+                {value: "Top", text: "Top"},
+                {value: "Bottom", text: "Bottom"}
+            ], position);
+            container1.appendChild(positionSettingsContainer);
             
             const videoSettings = createElement("div", {
                 id: "videoSettings",
-                style: `${["videoTop", "videoBottom"].includes(settings.styleType[language]) ? "" : "display: none"}`
+                style: `${["video", "localVideo"].includes(baseType) && ["Top", "Bottom"].includes(position) ? "" : "display: none"}`
             });
             addSlider(videoSettings, "heightBigSlider", "Video Height:", "heightBigValue", settings.heightBig, "px", 300, 1200, 10);
             container1.appendChild(videoSettings);
@@ -2188,6 +2211,15 @@
             popup.appendChild(dragHandle);
             popup.appendChild(content);
             
+            const closeTopButton = createElement("button", {
+                className: "popup-close-top-btn",
+                textContent: "×",
+            });
+            closeTopButton.addEventListener("click", () => {
+                popup.style.display = "none";
+            });
+            popup.appendChild(closeTopButton);
+            
             return popup;
         }
         
@@ -2273,6 +2305,15 @@
             popup.appendChild(dragHandle);
             popup.appendChild(content);
             
+            const closeTopButton = createElement("button", {
+                className: "popup-close-top-btn",
+                textContent: "×",
+            });
+            closeTopButton.addEventListener("click", () => {
+                popup.style.display = "none";
+            });
+            popup.appendChild(closeTopButton);
+            
             return popup;
         }
         
@@ -2346,6 +2387,16 @@
                     )
                 )
             );
+            
+            const closeTopButton = createElement("button", {
+                className: "popup-close-top-btn",
+                textContent: "×",
+            });
+            closeTopButton.addEventListener("click", () => {
+                popup.style.display = "none";
+            });
+            popup.appendChild(closeTopButton);
+            
             return popup;
         }
         
@@ -2568,14 +2619,24 @@
             });
             
             const styleTypeSelector = document.getElementById("styleTypeSelector");
-            styleTypeSelector.addEventListener("change", (event) => {
-                const selectedStyleType = event.target.value;
+            const videoPositionSelector = document.getElementById("videoPositionSelector");
+            const positionSettingsContainer = document.getElementById("positionSettingsContainer");
+            
+            function handleStyleSelectorChange() {
+                const baseType = styleTypeSelector.value;
+                const position = videoPositionSelector.value;
+                const isVideoMode = ["video", "localVideo"].includes(baseType);
                 
-                settings.styleType = {...settings.styleType, [language]: selectedStyleType};
+                settings.styleType = { ...settings.styleType, [language]: baseType };
+                settings.videoPosition = { ...settings.videoPosition, [language]: position };
                 
-                document.getElementById("videoSettings").style.display = selectedStyleType === "video" ? "block" : "none";
-                document.getElementById("sentenceVideoSettings").style.display = selectedStyleType === "off" ? "block" : "none";
-            });
+                positionSettingsContainer.style.display = isVideoMode ? "block" : "none";
+                document.getElementById("videoSettings").style.display = isVideoMode && ["Top", "Bottom"].includes(position) ? "block" : "none";
+                document.getElementById("sentenceVideoSettings").style.display = baseType === "off" ? "block" : "none";
+            }
+            
+            styleTypeSelector.addEventListener("change", handleStyleSelectorChange);
+            videoPositionSelector.addEventListener("change", handleStyleSelectorChange);
             
             setupSlider("heightBigSlider", "heightBigValue", "heightBig", "px", "--height-big", (val) => `${val}px`);
             setupSlider("sentenceHeightSlider", "sentenceHeightValue", "sentenceHeight", "px", "--sentence-height", (val) => `${val}px`);
@@ -3696,76 +3757,73 @@
                 });
             });
             
-            document.getElementById("flashcardCsvDownload").addEventListener("click", async () => {
-                function formatContext(context, originalWord, padding = 100) {
-                    if (!context || !originalWord) return "";
-                    
-                    const escapedWord = originalWord.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-                    const match = context.match(new RegExp(escapedWord, 'i'));
-                    
-                    if (!match) return context;
-                    
-                    const foundWord = match[0];
-                    const wordStart = match.index;
-                    const wordEnd = wordStart + foundWord.length;
-                    const totalLen = context.length;
-                    
-                    let start = wordStart - padding;
-                    let end = wordEnd + padding;
-                    
-                    if (start < 0) {
-                        end += Math.abs(start);
-                        start = 0;
+            document.getElementById("flashcardCsvDownload").addEventListener("click", async (event) => {
+                const exportButton = event.currentTarget;
+                exportButton.disabled = true;
+                
+                try {
+                    function formatContext(context, originalWord, padding = 100) {
+                        if (!context || !originalWord) return "";
+                        const escapedWord = originalWord.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                        const match = context.match(new RegExp(escapedWord, 'i'));
+                        if (!match) return context;
+                        const foundWord = match[0];
+                        const wordStart = match.index;
+                        const wordEnd = wordStart + foundWord.length;
+                        const totalLen = context.length;
+                        let start = wordStart - padding;
+                        let end = wordEnd + padding;
+                        if (start < 0) {
+                            end += Math.abs(start);
+                            start = 0;
+                        }
+                        if (end > totalLen) {
+                            start -= (end - totalLen);
+                            if (start < 0) start = 0;
+                            end = totalLen;
+                        }
+                        const slicedText = context.substring(start, end);
+                        const relativeStart = wordStart - start;
+                        const relativeEnd = relativeStart + foundWord.length;
+                        const before = slicedText.substring(0, relativeStart);
+                        const target = slicedText.substring(relativeStart, relativeEnd);
+                        const after = slicedText.substring(relativeEnd);
+                        const prefix = start > 0 ? "..." : "";
+                        const suffix = end < totalLen ? "..." : "";
+                        return `${prefix}${before}<b>${target}</b>${after}${suffix}`;
                     }
                     
-                    if (end > totalLen) {
-                        start -= (end - totalLen);
-                        if (start < 0) start = 0;
-                        end = totalLen;
-                    }
+                    const allData = await fetchFlashcardsInBatches(language, "*", "idx");
+                    if (!allData.length) return;
                     
-                    const slicedText = context.substring(start, end);
+                    const processedData = allData.map(row => ({
+                        ...row,
+                        formatted_context: formatContext(row.context, row.original_word)
+                    }));
                     
-                    const relativeStart = wordStart - start;
-                    const relativeEnd = relativeStart + foundWord.length;
+                    const headers = Object.keys(processedData[0] || {});
+                    const rows = processedData.map(row =>
+                        Object.values(row)
+                            .map(value => typeof value === "string" ? `"${value.replace(/"/g, '""')}"` : value)
+                            .join(",")
+                    );
                     
-                    const before = slicedText.substring(0, relativeStart);
-                    const target = slicedText.substring(relativeStart, relativeEnd);
-                    const after = slicedText.substring(relativeEnd);
+                    const csv = [headers.join(","), ...rows].join("\n");
+                    const blob = new Blob([csv], {type: "text/csv;charset=utf-8;"});
                     
-                    const prefix = start > 0 ? "..." : "";
-                    const suffix = end < totalLen ? "..." : "";
+                    const link = createElement("a", {
+                        href: URL.createObjectURL(blob),
+                        download: `flashcards_${language}.csv`
+                    });
                     
-                    return `${prefix}${before}<b>${target}</b>${after}${suffix}`;
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                } catch (error) {
+                    console.error("Flashcard CSV export task failed:", error);
+                } finally {
+                    exportButton.disabled = false;
                 }
-                
-                const allData = await fetchFlashcardsInBatches(language, "*", "idx");
-                
-                if (!allData.length) return;
-                
-                const processedData = allData.map(row => ({
-                    ...row,
-                    formatted_context: formatContext(row.context, row.original_word)
-                }));
-                
-                const headers = Object.keys(processedData[0] || {});
-                const rows = processedData.map(row =>
-                    Object.values(row)
-                        .map(v => typeof v === "string" ? `"${v.replace(/"/g, '""')}"` : v) // Process escape
-                        .join(",")
-                );
-                
-                const csv = [headers.join(","), ...rows].join("\n");
-                const blob = new Blob([csv], {type: "text/csv;charset=utf-8;"});
-                
-                const link = createElement("a", {
-                    href: URL.createObjectURL(blob),
-                    download: `flashcards_${language}.csv`
-                });
-                
-                document.body.appendChild(link);
-                link.click();
-                document.body.removeChild(link);
             });
         }
         
@@ -3814,6 +3872,16 @@
                     display: none;
                     max-height: 90vh;
                     overflow-y: auto;
+                }
+                
+                .popup-close-top-btn {
+                    position: absolute;
+                    top: 3px;
+                    right: 14px;
+                    font-size: 2rem;
+                    cursor: pointer;
+                    line-height: 1;
+                    z-index: 1;
                 }
 
                 .popup-drag-handle {
@@ -4120,21 +4188,13 @@
                     break;
             }
             
+            
             switch (settings.styleType[language]) {
-                case "videoRight":
-                    specificCSS = generateHorizontalVideoCSS(false);
-                    break;
-                case "videoLeft":
-                    specificCSS = generateHorizontalVideoCSS(true);
-                    break;
-                case "videoBottom":
-                    specificCSS = generateVerticalVideoCSS(false);
-                    break;
-                case "videoTop":
-                    specificCSS = generateVerticalVideoCSS(true);
+                case "video":
+                    specificCSS = generateVideoCSS(settings.videoPosition[language]);
                     break;
                 case "localVideo":
-                    specificCSS = generateLocalVideoCSS();
+                    specificCSS = generateLocalVideoCSS(settings.videoPosition[language]);
                     break;
                 case "audio":
                     specificCSS = generateAudioCSS();
@@ -4167,14 +4227,26 @@
         
         function setupStyleEventListeners() {
             const styleTypeSelector = document.getElementById("styleTypeSelector");
-            styleTypeSelector.addEventListener("change", (event) => {
-                const selectedStyleType = event.target.value;
+            const videoPositionSelector = document.getElementById("videoPositionSelector");
+            const positionSettingsContainer = document.getElementById("positionSettingsContainer");
+            
+            function handleReaderStyleTrigger() {
+                const baseType = styleTypeSelector.value;
+                const position = videoPositionSelector.value;
+                const isVideoMode = ["video", "localVideo"].includes(baseType);
                 
-                document.getElementById("videoSettings").style.display = ["videoTop", "videoBottom"].includes(selectedStyleType) ? "block" : "none";
-                document.getElementById("sentenceVideoSettings").style.display = selectedStyleType === "off" ? "block" : "none";
+                settings.styleType = { ...settings.styleType, [language]: baseType };
+                settings.videoPosition = { ...settings.videoPosition, [language]: position };
                 
-                applyStyles(selectedStyleType, document.querySelector('input[name="colorMode"]:checked')?.value);
-            });
+                positionSettingsContainer.style.display = isVideoMode ? "block" : "none";
+                document.getElementById("videoSettings").style.display = isVideoMode && ["Top", "Bottom"].includes(position) ? "block" : "none";
+                document.getElementById("sentenceVideoSettings").style.display = baseType === "off" ? "block" : "none";
+                
+                applyStyles();
+            }
+            
+            styleTypeSelector.addEventListener("change", handleReaderStyleTrigger);
+            videoPositionSelector.addEventListener("change", handleReaderStyleTrigger);
             
             const usePageModeCheckbox = document.getElementById("usePageModeCheckbox");
             if (usePageModeCheckbox) {
@@ -4931,147 +5003,171 @@
             `;
         }
         
-        function generateVerticalVideoCSS(isTop = false) {
-            return `
-            :root {
-                --width-big: calc(100vw - var(--widget-width) - 10px);
-                --height-big: ${settings.heightBig}px;
-                
-                ${isTop ? `
-                --reader-layout-rows: calc(var(--height-big) + var(--header-height)) calc(var(--article-height) - var(--header-height) - var(--footer-height)) var(--footer-height);
-                --article-height: calc(var(--app-height) - var(--height-big));
-                ` : ''}
+        function generateVideoCSS(position = "Right") {
+            let layoutCSS = "";
+            
+            if (position === "Right") {
+                layoutCSS = `
+                    :root {
+                        --width-big: calc(50vw - calc(var(--widget-width) / 2) - 10px);
+                        --height-big: calc(100vh - 65px);
+                        --reader-layout-columns: 1fr var(--widget-width) 1fr;
+                        --reader-layout-rows: calc(var(--article-height) - var(--footer-height)) var(--footer-height);
+                        --article-height: var(--app-height);
+                    }
+                    .main-header > div { padding: 0 0 0 420px !important; }
+                    #lesson-reader { grid-template-columns: var(--reader-layout-columns); }
+                    .video-player { align-items: end !important; justify-content: flex-end !important; }
+                    .video-player:not(.is-minimized) > .modal-content { margin: 0 0 10px 10px !important; }
+                    .widget-area { grid-area: 1 / 2 / 2 / 3 !important; }
+                    .main-content { grid-area: 1 / 1 / 3 / 2 !important; }
+                    .main-footer { grid-area: 2 / 2 / 3 / 3 !important; }
+                `;
+            } else if (position === "Left") {
+                layoutCSS = `
+                    :root {
+                        --width-big: calc(50vw - calc(var(--widget-width) / 2) - 10px);
+                        --height-big: calc(100vh - 65px);
+                        --reader-layout-columns: 1fr var(--widget-width) 1fr;
+                        --reader-layout-rows: calc(var(--article-height) - var(--footer-height)) var(--footer-height);
+                        --article-height: var(--app-height);
+                    }
+                    .main-header > div { padding: 0 450px 0 0 !important; }
+                    #lesson-reader { grid-template-columns: var(--reader-layout-columns); }
+                    .video-player { align-items: start !important; justify-content: flex-start !important; }
+                    .video-player:not(.is-minimized) > .modal-content { margin: 0 10px 10px 0 !important; }
+                    .widget-area { grid-area: 1 / 2 / 2 / 3 !important; }
+                    .main-content { grid-area: 1 / 3 / 3 / 4 !important; }
+                    .main-footer { grid-area: 2 / 2 / 3 / 3 !important; }
+                `;
+            } else if (position === "Bottom") {
+                layoutCSS = `
+                :root {
+                    --width-big: calc(100vw - var(--widget-width) - 10px);
+                    --height-big: ${settings.heightBig}px;
+                }
+                .main-header > div { padding: 0 0 0 420px !important; }
+                .main-content { grid-area: 1 / 1 / 2 / 2 !important; }
+                .widget-area { grid-area: 1 / 2 / 3 / 2 !important; }
+                .main-footer { grid-area: 3 / 2 / 4 / 3 !important; align-self: end; }
+                .video-player:not(.is-minimized) { align-items: flex-start !important; }
+                `;
+            } else if (position === "Top") {
+                layoutCSS = `
+                :root {
+                    --width-big: calc(100vw - var(--widget-width) - 10px);
+                    --height-big: ${settings.heightBig}px;
+                    --reader-layout-rows: calc(var(--height-big) + var(--header-height)) calc(var(--article-height) - var(--header-height) - var(--footer-height)) var(--footer-height);
+                    --article-height: calc(var(--app-height) - var(--height-big));
+                }
+                .main-header > div { padding: 0 0 0 420px !important; }
+                .main-content { grid-area: 2 / 1 / 3 / 2 !important; }
+                .widget-area { grid-area: 1 / 2 / 3 / 3 !important; }
+                .main-footer { grid-area: 3 / 1 / 4 / 2 !important; align-self: end; }
+                .video-player:not(.is-minimized) { align-items: flex-start !important; justify-content: flex-start !important; }
+                .video-player:not(.is-minimized) > .modal-content {
+                    margin: var(--header-height) 0 10px 10px !important;
+                    max-width: var(--width-big) !important;
+                }
+                `;
             }
             
-            .main-header > div {
-                padding: 0 0 0 420px !important;
-            }
-    
-            .main-content {
-                grid-area: ${isTop ? "2 / 1 / 3 / 2" : "1 / 1 / 2 / 2"} !important;
-            }
-            
-            .reader-component {
-                height: 100%;
-                min-height: 0px;
-            }
-
-            .sentence-text {
-                height: auto !important;
-            }
-    
-            .widget-area {
-                grid-area: ${isTop ? "1 / 2 / 3 / 3" : "1 / 2 / 3 / 2"} !important;
-            }
-    
-            .main-footer {
-                grid-area: ${isTop ? "3 / 1 / 4 / 2" : "3 / 2 / 4 / 3"} !important;
-                align-self: end;
-            }
-    
-            .video-player:not(.is-minimized) {
-                align-items: flex-start !important;
-                ${isTop ? "justify-content: flex-start !important;" : ""}
-            }
-    
-            ${isTop ? `
-            .video-player:not(.is-minimized) > .modal-content {
-                margin: var(--header-height) 0 10px 10px !important;
-                max-width: var(--width-big) !important;
-            }
-            ` : ''}
-            `;
+            return layoutCSS;
         }
         
-        function generateHorizontalVideoCSS(isLeftVideo = false) {
-            return `
-            :root {
-                --width-big: calc(50vw - calc(var(--widget-width) / 2) - 10px);
-                --height-big: calc(100vh - 65px);
-        
-                --reader-layout-columns: 1fr var(--widget-width) 1fr;
-                --reader-layout-rows: calc(var(--article-height) - var(--footer-height)) var(--footer-height);
-                --article-height: var(--app-height);
+        function generateLocalVideoCSS(position = "Right") {
+            let layoutCSS = "";
+            
+            if (position === "Right") {
+                layoutCSS = `
+                :root {
+                    --width-big: calc(50vw - calc(var(--widget-width) / 2) - 10px);
+                    --height-big: calc(100vh - 65px);
+                    --reader-layout-columns: 1fr var(--widget-width) 1fr;
+                    --reader-layout-rows: calc(var(--article-height) - var(--footer-height)) var(--footer-height);
+                    --article-height: var(--app-height);
+                }
+                .main-header > div { padding: 0 0 0 420px !important; }
+                .main-content { grid-area: 1 / 1 / 3 / 2 !important; }
+                .widget-area { grid-area: 1 / 2 / 2 / 3 !important; }
+                .main-footer { grid-area: 2 / 2 / 3 / 3 !important; }
+                #local-video-container {
+                    grid-area: 1 / 3 / 3 / 4 !important;
+                    margin: var(--header-height) 0 10px 10px;
+                }
+                `;
+            } else if (position === "Left") {
+                layoutCSS = `
+                :root {
+                    --width-big: calc(50vw - calc(var(--widget-width) / 2) - 10px);
+                    --height-big: calc(100vh - 65px);
+                    --reader-layout-columns: 1fr var(--widget-width) 1fr;
+                    --reader-layout-rows: calc(var(--article-height) - var(--footer-height)) var(--footer-height);
+                    --article-height: var(--app-height);
+                }
+                .main-header > div { padding: 0 450px 0 0 !important; }
+                .main-content { grid-area: 1 / 3 / 3 / 4 !important; }
+                .widget-area { grid-area: 1 / 2 / 2 / 3 !important; }
+                .main-footer { grid-area: 2 / 2 / 3 / 3 !important; }
+                #local-video-container {
+                    grid-area: 1 / 1 / 3 / 2 !important;
+                    margin: var(--header-height) 10px 10px 0;
+                }
+                `;
+            } else if (position === "Bottom") {
+                layoutCSS = `
+                :root {
+                    --width-big: calc(100vw - var(--widget-width) - 10px);
+                    --height-big: ${settings.heightBig}px;
+                    --reader-layout-columns: 1fr var(--widget-width);
+                    --reader-layout-rows: var(--article-height) calc(var(--height-big) - var(--footer-height)) var(--footer-height);
+                    --article-height: calc(var(--app-height) - var(--height-big));
+                }
+                .main-header > div { padding: 0 0 0 420px !important; }
+                .main-content { grid-area: 1 / 1 / 2 / 2 !important; }
+                .widget-area { grid-area: 1 / 2 / 4 / 3 !important; }
+                .main-footer { grid-area: 3 / 1 / 4 / 2 !important; }
+                #local-video-container {
+                    grid-area: 2 / 1 / 3 / 2 !important;
+                    margin: 0 0 10px 10px;
+                }
+                `;
+            } else if (position === "Top") {
+                layoutCSS = `
+                :root {
+                    --width-big: calc(100vw - var(--widget-width) - 10px);
+                    --height-big: ${settings.heightBig}px;
+                    --reader-layout-columns: 1fr var(--widget-width);
+                    --reader-layout-rows: calc(var(--height-big) + var(--header-height)) calc(var(--article-height) - var(--header-height) - var(--footer-height)) var(--footer-height);
+                    --article-height: calc(var(--app-height) - var(--height-big));
+                }
+                .main-header > div { padding: 0 0 0 420px !important; }
+                .main-content { grid-area: 2 / 1 / 3 / 2 !important; }
+                .widget-area { grid-area: 1 / 2 / 4 / 3 !important; }
+                .main-footer { grid-area: 3 / 1 / 4 / 2 !important; }
+                #local-video-container {
+                    grid-area: 1 / 1 / 2 / 2 !important;
+                    margin: var(--header-height) 0 10px 10px;
+                }
+                `;
             }
             
-            .main-header > div {
-                padding: ${isLeftVideo ? "0 450px 0 0" : "0 0 0 420px"} !important;
-            }
-        
-            #lesson-reader {
-                grid-template-columns: var(--reader-layout-columns);
-            }
-        
-            .video-player {
-                align-items: ${isLeftVideo ? "start" : "end"} !important;
-                justify-content: ${isLeftVideo ? "flex-start" : "flex-end"} !important;
-            }
-            
-            .video-player:not(.is-minimized) > .modal-content {
-                margin: ${isLeftVideo ? "0 10px 10px 0" : "0 0 10px 10px"} !important;
-            }
-        
-            /* Widget area in the middle (Column 2) */
-            .widget-area {
-                grid-area: 1 / 2 / 2 / 3 !important;
-            }
-        
-            /* Text reader position (Column 1 or Column 3) */
-            .main-content {
-                grid-area: ${isLeftVideo ? "1 / 3 / 3 / 4" : "1 / 1 / 3 / 2"} !important;
-            }
-        
-            .main-footer {
-                grid-area: 2 / 2 / 3 / 3 !important;
-                align-self: end;
-            }
-            `;
-        }
-        
-        function generateLocalVideoCSS() {
             return `
+            ${layoutCSS}
+            
             :root {
-                --width-big: calc(50vw - calc(var(--widget-width) / 2) - 10px);
-                --height-big: calc(100vh - 65px);
-        
-                --reader-layout-columns: 1fr var(--widget-width) 1fr;
-                --reader-layout-rows: calc(var(--article-height) - var(--footer-height)) var(--footer-height);
-                --article-height: var(--app-height);
-                
                 --caption-font-size: ${settings.captionFontsize}px;
             }
-        
-            .main-header > div {
-                padding: 0 0 0 420px !important;
-            }
-        
             #lesson-reader {
                 grid-template-columns: var(--reader-layout-columns);
             }
-        
-            .main-content {
-                grid-area: 1 / 1 / 3 / 2 !important;
-            }
-            
-            .widget-area {
-                grid-area: 1 / 2 / 2 / 3 !important;
-            }
-        
-            .main-footer {
-                grid-area: 2 / 2 / 3 / 3 !important;
-                align-self: end;
-            }
-        
             #local-video-container {
-                grid-area: 1 / 3 / 3 / 4 !important;
                 display: flex;
                 border-radius: 0.75rem;
-                height: calc(100% - var(--header-height) - 10px);
-                margin: var(--header-height) 0 10px 10px;
                 background-color: #000000;
                 position: relative !important;
+                height: ${position === "Bottom" ? "100%" : "calc(100% - var(--header-height) - 10px)"};
             }
-        
             .local-video-setup-box {
                 display: flex;
                 flex-direction: column;
@@ -5086,7 +5182,6 @@
                 padding: 30px;
                 margin: auto;
             }
-        
             .local-video-button {
                 display: inline-block;
                 padding: 12px 20px;
@@ -5100,15 +5195,12 @@
                 white-space: nowrap;
                 background-color: rgb(125 125 125 / 10%);
             }
-        
             .local-video-button:hover {
                 background-color: rgb(125 125 125 / 25%);
             }
-        
             .local-video-file-input {
                 display: none !important;
             }
-
             .local-video-progress-wrapper {
                 position: absolute !important;
                 bottom: 0;
@@ -5119,14 +5211,12 @@
                 height: 5px;
                 background-color: rgba(255, 255, 255, 0.2);
             }
-
             #local-video-mini-progress {
                 height: 100%;
                 width: 0%;
-                background-color: rgb(76, 175, 80); /* Fixed: Light Green like toast/original youtube */
+                background-color: rgb(76, 175, 80);
                 transition: width 0.1s linear;
             }
-            
             #addonLocalVideo {
                 width: auto !important;
                 height: auto !important;
@@ -5135,11 +5225,9 @@
                 align-self: center !important;
                 margin: auto !important;
             }
-            
             video::-webkit-media-text-track-container {
                 font-size: var(--caption-font-size) !important;
             }
-            
             ::cue, video::cue {
                 background-color: rgba(0, 0, 0, 0.75) !important;
                 color: #ffffff !important;
@@ -5747,13 +5835,22 @@
                 }, true);
             }
             
-            function preventHorizontalScroll(selector) {
-                const element = document.querySelector(selector);
-                if (!element) return;
+            function preventHorizontalScroll() {
+                if (window.hasPreventHorizontalScrollLinked) return;
+                window.hasPreventHorizontalScrollLinked = true;
                 
-                element.setAttribute('tabindex', '-1');
-                element.addEventListener('keydown', (event) => {
-                    if (['ArrowLeft', 'ArrowRight'].includes(event.key)) event.preventDefault();
+                window.addEventListener('keydown', (event) => {
+                    if (['ArrowLeft', 'ArrowRight'].includes(event.key)) {
+                        const target = event.target;
+                        const isTextInput = target.localName === "text" ||
+                            target.localName === "textarea" ||
+                            target.localName === "input" ||
+                            target.isContentEditable;
+                        
+                        if (!isTextInput && !event.shiftKey) {
+                            event.preventDefault();
+                        }
+                    }
                 }, {passive: false, capture: true});
             }
             
@@ -5771,8 +5868,7 @@
                     }, {passive: false});
                 }
                 
-                preventHorizontalScroll('.reader-container-wrapper');
-                preventHorizontalScroll('.reader-container');
+                preventHorizontalScroll();
                 
                 const scrollTarget = isPageMode ? ".reader-container-wrapper" : ".reader-container";
                 changeScrollAmount(scrollTarget, 0.3);
@@ -7531,7 +7627,6 @@
                 .caption-window.ytp-caption-window-bottom {
                     display: unset !important;
                     width: 90% !important;
-                    left: 5% !important;
                     margin-left: 0 !important;
                     bottom: var(--custom-caption-bottom, 10%) !important;
                     top: var(--custom-caption-top, auto) !important;
