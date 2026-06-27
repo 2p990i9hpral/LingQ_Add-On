@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      13.3.0
+// @version      13.3.2
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @grant       GM_xmlhttpRequest
@@ -1929,8 +1929,8 @@
                 {value: "openai gpt-5.5", text: "OpenAI GPT-5.5 ($5/$30)"},
                 {value: "openai gpt-5.4", text: "OpenAI GPT-5.4 ($2.5/$15)"},
                 {value: "openai gpt-5.4-mini", text: "OpenAI GPT-5.4 mini ($0.75/$4.5)"},
-                {value: "google gemini-3.5-flash", text: "Google Gemini 3.5 Flash ($0.5/$3)"},
-                {value: "google gemini-3-flash-preview", text: "Google Gemini 3.0 Flash ($1.5/$9)"},
+                {value: "google gemini-3.5-flash", text: "Google Gemini 3.5 Flash ($1.5/$9)"},
+                {value: "google gemini-3-flash-preview", text: "Google Gemini 3.0 Flash ($0.5/$3)"},
                 {value: "google gemini-3.1-flash-lite", text: "Google Gemini 3.1 Flash Light ($0.25/$1.5)"},
                 {value: "google gemini-2.5-flash", text: "Google Gemini 2.5 Flash ($0.3/$2.5)"},
                 {value: "google gemini-2.5-flash-lite", text: "Google Gemini 2.5 Flash Light ($0.1/$0.4)"},
@@ -4201,6 +4201,7 @@
                     break;
                 case "off":
                     specificCSS = generateOffModeCSS();
+                    layoutCSS = '';
                     break;
             }
             
@@ -4260,18 +4261,7 @@
             });
         }
         
-        function createReaderUI() {
-            const completeLessonButton = createElement("button", {
-                id: "lingqLessonComplete",
-                textContent: "✔",
-                title: "Complete Lesson Button",
-                className: "nav-button",
-            });
-            
-            addElementToNavBar(completeLessonButton);
-        }
-        
-        
+      
         function generateBaseCSS(colorSettings) {
             return `
                 :root {
@@ -4723,7 +4713,7 @@
             }
     
             .sentence-text {
-                max-width: 1200px !important;
+                max-width: 80% !important;
                 height: calc(var(--article-height) - var(--header-height)) !important;
                 padding: 0 0 20px !important;
             }
@@ -4865,10 +4855,10 @@
             /*make prev/next page buttons compact*/
     
             .reader-component {
-                grid-template-columns: ${isPageMode ? "2rem" : "0"} 1fr ${isPageMode ? "2rem" : "0"} !important;
+                grid-template-columns: ${isPageMode ? "2rem" : "0"} 1fr 2rem !important;
             }
     
-            .reader-component > :is(.nav--left, .nav--right) {
+            .reader-component > .nav--left {
                 visibility: ${isPageMode ? "visible" : "hidden"} !important;
             }
     
@@ -5015,13 +5005,28 @@
                         --reader-layout-rows: calc(var(--article-height) - var(--footer-height)) var(--footer-height);
                         --article-height: var(--app-height);
                     }
-                    .main-header > div { padding: 0 0 0 420px !important; }
-                    #lesson-reader { grid-template-columns: var(--reader-layout-columns); }
-                    .video-player { align-items: end !important; justify-content: flex-end !important; }
-                    .video-player:not(.is-minimized) > .modal-content { margin: 0 0 10px 10px !important; }
-                    .widget-area { grid-area: 1 / 2 / 2 / 3 !important; }
-                    .main-content { grid-area: 1 / 1 / 3 / 2 !important; }
-                    .main-footer { grid-area: 2 / 2 / 3 / 3 !important; }
+                    .main-header > div {
+                        padding: 0 0 0 420px !important;
+                    }
+                    #lesson-reader {
+                        grid-template-columns: var(--reader-layout-columns);
+                    }
+                    .video-player {
+                        align-items: end !important;
+                        justify-content: flex-end !important;
+                    }
+                    .video-player:not(.is-minimized) > .modal-content {
+                        margin: 0 0 10px 10px !important;
+                    }
+                    .widget-area {
+                        grid-area: 1 / 2 / 2 / 3 !important;
+                    }
+                    .main-content {
+                        grid-area: 1 / 1 / 3 / 2 !important;
+                    }
+                    .main-footer {
+                        grid-area: 2 / 2 / 3 / 3 !important;
+                    }
                 `;
             } else if (position === "Left") {
                 layoutCSS = `
@@ -5032,13 +5037,28 @@
                         --reader-layout-rows: calc(var(--article-height) - var(--footer-height)) var(--footer-height);
                         --article-height: var(--app-height);
                     }
-                    .main-header > div { padding: 0 450px 0 0 !important; }
-                    #lesson-reader { grid-template-columns: var(--reader-layout-columns); }
-                    .video-player { align-items: start !important; justify-content: flex-start !important; }
-                    .video-player:not(.is-minimized) > .modal-content { margin: 0 10px 10px 0 !important; }
-                    .widget-area { grid-area: 1 / 2 / 2 / 3 !important; }
-                    .main-content { grid-area: 1 / 3 / 3 / 4 !important; }
-                    .main-footer { grid-area: 2 / 2 / 3 / 3 !important; }
+                    .main-header > div {
+                        padding: 0 450px 0 0 !important;
+                    }
+                    #lesson-reader {
+                        grid-template-columns: var(--reader-layout-columns);
+                    }
+                    .video-player {
+                        align-items: start !important;
+                        justify-content: flex-start !important;
+                    }
+                    .video-player:not(.is-minimized) > .modal-content {
+                        margin: 0 10px 10px 0 !important;
+                    }
+                    .widget-area {
+                        grid-area: 1 / 2 / 2 / 3 !important;
+                    }
+                    .main-content {
+                        grid-area: 1 / 3 / 3 / 4 !important;
+                    }
+                    .main-footer {
+                        grid-area: 2 / 2 / 3 / 3 !important;
+                    }
                 `;
             } else if (position === "Bottom") {
                 layoutCSS = `
@@ -5046,11 +5066,22 @@
                     --width-big: calc(100vw - var(--widget-width) - 10px);
                     --height-big: ${settings.heightBig}px;
                 }
-                .main-header > div { padding: 0 0 0 420px !important; }
-                .main-content { grid-area: 1 / 1 / 2 / 2 !important; }
-                .widget-area { grid-area: 1 / 2 / 3 / 2 !important; }
-                .main-footer { grid-area: 3 / 2 / 4 / 3 !important; align-self: end; }
-                .video-player:not(.is-minimized) { align-items: flex-start !important; }
+                .main-header > div {
+                    padding: 0 0 0 420px !important;
+                }
+                .main-content {
+                    grid-area: 1 / 1 / 2 / 2 !important;
+                }
+                .widget-area {
+                    grid-area: 1 / 2 / 3 / 2 !important;
+                }
+                .main-footer {
+                    grid-area: 3 / 2 / 4 / 3 !important;
+                    align-self: end;
+                }
+                .video-player:not(.is-minimized) {
+                    align-items: flex-start !important;
+                }
                 `;
             } else if (position === "Top") {
                 layoutCSS = `
@@ -5060,11 +5091,30 @@
                     --reader-layout-rows: calc(var(--height-big) + var(--header-height)) calc(var(--article-height) - var(--header-height) - var(--footer-height)) var(--footer-height);
                     --article-height: calc(var(--app-height) - var(--height-big));
                 }
-                .main-header > div { padding: 0 0 0 420px !important; }
-                .main-content { grid-area: 2 / 1 / 3 / 2 !important; }
-                .widget-area { grid-area: 1 / 2 / 3 / 3 !important; }
-                .main-footer { grid-area: 3 / 1 / 4 / 2 !important; align-self: end; }
-                .video-player:not(.is-minimized) { align-items: flex-start !important; justify-content: flex-start !important; }
+                .main-header > div {
+                    padding: 0 0 0 420px !important;
+                }
+                .main-content {
+                    grid-area: 2 / 1 / 3 / 2 !important;
+                }
+                .reader-component {
+                    height: 100%;
+                    min-height: 0;
+                }
+                .sentence-text {
+                    height: auto !important;
+                }
+                .widget-area {
+                    grid-area: 1 / 2 / 3 / 3 !important;
+                }
+                .main-footer {
+                    grid-area: 3 / 1 / 4 / 2 !important;
+                    align-self: end;
+                }
+                .video-player:not(.is-minimized) {
+                    align-items: flex-start !important;
+                    justify-content: flex-start !important;
+                }
                 .video-player:not(.is-minimized) > .modal-content {
                     margin: var(--header-height) 0 10px 10px !important;
                     max-width: var(--width-big) !important;
@@ -5087,10 +5137,18 @@
                     --reader-layout-rows: calc(var(--article-height) - var(--footer-height)) var(--footer-height);
                     --article-height: var(--app-height);
                 }
-                .main-header > div { padding: 0 0 0 420px !important; }
-                .main-content { grid-area: 1 / 1 / 3 / 2 !important; }
-                .widget-area { grid-area: 1 / 2 / 2 / 3 !important; }
-                .main-footer { grid-area: 2 / 2 / 3 / 3 !important; }
+                .main-header > div {
+                    padding: 0 0 0 420px !important;
+                }
+                .main-content {
+                    grid-area: 1 / 1 / 3 / 2 !important;
+                }
+                .widget-area {
+                    grid-area: 1 / 2 / 2 / 3 !important;
+                }
+                .main-footer {
+                    grid-area: 2 / 2 / 3 / 3 !important;
+                }
                 #local-video-container {
                     grid-area: 1 / 3 / 3 / 4 !important;
                     margin: var(--header-height) 0 10px 10px;
@@ -5105,10 +5163,18 @@
                     --reader-layout-rows: calc(var(--article-height) - var(--footer-height)) var(--footer-height);
                     --article-height: var(--app-height);
                 }
-                .main-header > div { padding: 0 450px 0 0 !important; }
-                .main-content { grid-area: 1 / 3 / 3 / 4 !important; }
-                .widget-area { grid-area: 1 / 2 / 2 / 3 !important; }
-                .main-footer { grid-area: 2 / 2 / 3 / 3 !important; }
+                .main-header > div {
+                    padding: 0 450px 0 0 !important;
+                }
+                .main-content {
+                    grid-area: 1 / 3 / 3 / 4 !important;
+                }
+                .widget-area {
+                    grid-area: 1 / 2 / 2 / 3 !important;
+                }
+                .main-footer {
+                    grid-area: 2 / 2 / 3 / 3 !important;
+                }
                 #local-video-container {
                     grid-area: 1 / 1 / 3 / 2 !important;
                     margin: var(--header-height) 10px 10px 0;
@@ -5123,10 +5189,18 @@
                     --reader-layout-rows: var(--article-height) calc(var(--height-big) - var(--footer-height)) var(--footer-height);
                     --article-height: calc(var(--app-height) - var(--height-big));
                 }
-                .main-header > div { padding: 0 0 0 420px !important; }
-                .main-content { grid-area: 1 / 1 / 2 / 2 !important; }
-                .widget-area { grid-area: 1 / 2 / 4 / 3 !important; }
-                .main-footer { grid-area: 3 / 1 / 4 / 2 !important; }
+                .main-header > div {
+                    padding: 0 0 0 420px !important;
+                }
+                .main-content {
+                    grid-area: 1 / 1 / 2 / 2 !important;
+                }
+                .widget-area {
+                    grid-area: 1 / 2 / 4 / 3 !important;
+                }
+                .main-footer {
+                    grid-area: 3 / 1 / 4 / 2 !important;
+                }
                 #local-video-container {
                     grid-area: 2 / 1 / 3 / 2 !important;
                     margin: 0 0 10px 10px;
@@ -5141,10 +5215,25 @@
                     --reader-layout-rows: calc(var(--height-big) + var(--header-height)) calc(var(--article-height) - var(--header-height) - var(--footer-height)) var(--footer-height);
                     --article-height: calc(var(--app-height) - var(--height-big));
                 }
-                .main-header > div { padding: 0 0 0 420px !important; }
-                .main-content { grid-area: 2 / 1 / 3 / 2 !important; }
-                .widget-area { grid-area: 1 / 2 / 4 / 3 !important; }
-                .main-footer { grid-area: 3 / 1 / 4 / 2 !important; }
+                .main-header > div {
+                    padding: 0 0 0 420px !important;
+                }
+                .main-content {
+                    grid-area: 2 / 1 / 3 / 2 !important;
+                }
+                .reader-component {
+                    height: 100%;
+                    min-height: 0;
+                }
+                .sentence-text {
+                    height: auto !important;
+                }
+                .widget-area {
+                    grid-area: 1 / 2 / 4 / 3 !important;
+                }
+                .main-footer {
+                    grid-area: 3 / 1 / 4 / 2 !important;
+                }
                 #local-video-container {
                     grid-area: 1 / 1 / 2 / 2 !important;
                     margin: var(--header-height) 0 10px 10px;
@@ -5241,7 +5330,7 @@
             return `
             :root {
                 --width-big: calc(var(--widget-width) - 20px);
-                --height-big: cald(var(--footer-height) - 10px);
+                --height-big: calc(var(--widget-width) * 0.6);
     
                 --reader-layout-rows: var(--article-height) var(--footer-height);
                 --article-height: calc(var(--app-height) - var(--footer-height));
@@ -6984,8 +7073,9 @@
                 ## Logic Branching via Intent Detection
                 
                 ### Condition A: Correction Request
-                Trigger: Only when the user explicitly requests a fix of the previously replied word card using direct commands such as "Wrong word", "Fix the base form", "Use X instead of Y", "Correct the IPA".
-                Action: Output your conversational explanation first, then output the corrected word card wrapped strictly inside <div class="word-card">.
+                Trigger: Only when the user explicitly requests a fix of the previously generated word card using direct commands such as "Wrong word", "Fix the base form", "Use X instead of Y", "Correct the IPA".
+                Action: Output conversational explanation first (optional), then output the corrected word card wrapped strictly inside <div class="word-card">.
+                Restriction: Change only the parts of the existing word-card that are explicitly requested. Keep the contextual explanation inside the <p> tags of the word-card as unchanged as possible.
                 
                 ### Condition B: General or Referential Query
                 Trigger: The user asks a question or makes a general comment.
@@ -7121,9 +7211,7 @@
         const language = getLessonLanguage();
         ensureLanguageSettings(language);
         
-        createReaderUI();
         setupStyleEventListeners();
-        setupLessonCompletion();
         applyStyles();
         setupKeyboardShortcuts();
         setupYoutubePlayerCustomization();
