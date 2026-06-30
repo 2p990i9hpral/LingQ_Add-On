@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      13.3.2
+// @version      13.4.1
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @grant       GM_xmlhttpRequest
@@ -1217,6 +1217,10 @@
                 api_url = "https://api.deepseek.com/chat/completions";
                 headers['Authorization'] = `Bearer ${apiKey}`;
                 break;
+            case "cerebras":
+                api_url = "https://api.cerebras.ai/v1/chat/completions";
+                headers['Authorization'] = `Bearer ${apiKey}`;
+                break;
         }
         
         return {api_url, headers};
@@ -1253,6 +1257,9 @@
         }
         if (provider === "deepseek") {
             body.thinking = {type: "disabled"}
+        }
+        if (provider === "cerebras") {
+            body.reasoning_effort = "low"
         }
         
         return body;
@@ -1937,7 +1944,8 @@
                 {value: "anthropic claude-sonnet-4-6", text: "Claude Sonnet 4.6 ($3.0/$15)"},
                 {value: "anthropic claude-haiku-4-5", text: "Claude Haiku 4.5 ($1/$5)"},
                 {value: "deepseek deepseek-v4-pro", text: "Deepseek v4 Pro ($1.74/$3.48)"},
-                {value: "deepseek deepseek-v4-flash", text: "Deepseek v4 Flash ($0.14/$0.28)"}
+                {value: "deepseek deepseek-v4-flash", text: "Deepseek v4 Flash ($0.14/$0.28)"},
+                {value: "cerebras gemma-4-31b", text: "Cerebras Gemma 4 31B ($0.99/$1.49)"}
             ], settings.llmProviderModel);
             
             const apiKeyContainer = createElement("div", {className: "popup-row"});
@@ -6209,6 +6217,12 @@
                     
                     const wordElem = botMessageDiv.querySelector("b");
                     const pronunciationElem = botMessageDiv.querySelector("span");
+                    
+                    if (pronunciationElem) {
+                        const cleanText = pronunciationElem.textContent.replace(/[\[\]\/]/g, "").trim();
+                        pronunciationElem.textContent = `[${cleanText}]`;
+                    }
+                    
                     const meaningElem = botMessageDiv.querySelector("p");
                     const explanationElem = botMessageDiv.querySelectorAll("p")[1];
                     const exampleListElem = botMessageDiv.querySelector("ul");
@@ -6467,6 +6481,11 @@
                             });
                             
                             saveFlashcardButton.addEventListener("click", async () => {
+                                if (!safeSelectedData.context || safeSelectedData.context.trim() === "") {
+                                    showToast("Context is not exist", false);
+                                    return;
+                                }
+                                
                                 saveFlashcardButton.disabled = true;
                                 try {
                                     const currentMeaning = meaningElem?.textContent?.trim() || "";
