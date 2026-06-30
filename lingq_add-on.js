@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      13.4.1
+// @version      13.4.2
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @grant       GM_xmlhttpRequest
@@ -1945,7 +1945,7 @@
                 {value: "anthropic claude-haiku-4-5", text: "Claude Haiku 4.5 ($1/$5)"},
                 {value: "deepseek deepseek-v4-pro", text: "Deepseek v4 Pro ($1.74/$3.48)"},
                 {value: "deepseek deepseek-v4-flash", text: "Deepseek v4 Flash ($0.14/$0.28)"},
-                {value: "cerebras gemma-4-31b", text: "Cerebras Gemma 4 31B ($0.99/$1.49)"}
+                {value: "cerebras gemma-4-31b", text: "Cerebras Gemma 4 31B ($0/$0)"}
             ], settings.llmProviderModel);
             
             const apiKeyContainer = createElement("div", {className: "popup-row"});
