@@ -4277,9 +4277,15 @@
             const container = document.getElementById("local-video-container");
             if (container) {
                 const video = container.querySelector("#addonLocalVideo");
-                if (video) {
+                if (video && video.src) {
+                    URL.revokeObjectURL(video.src);
                     video.src = "";
                     video.load();
+                }
+                const track = container.querySelector("#addonLocalVideoTrack");
+                if (track && track.src) {
+                    URL.revokeObjectURL(track.src);
+                    track.src = "";
                 }
                 container.remove();
             }
@@ -6077,6 +6083,9 @@
             }
             
             async function handleLoadedContent(node) {
+                resetLocalVideo();
+                handleLocalVideoContainerVisibility();
+                
                 const isPageMode = settings.usePageMode;
                 if (isPageMode) {
                     const readerContainer = node.querySelector(".reader-container");
