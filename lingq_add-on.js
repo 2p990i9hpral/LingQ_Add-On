@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      13.4.3
+// @version      13.5.0
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @grant       GM_xmlhttpRequest
@@ -81,8 +81,10 @@
         
         chatWidget: false,
         chatWidgetHeight: 350,
-        llmProviderModel: "openai gpt-4.1-nano",
-        llmApiKey: "",
+        llmProvider: "openai",
+        llmModel: "gpt-5.4-mini",
+        llmApiKeys: {},
+        llmModels: {},
         askSelected: false,
         prependSummary: {},
         useCentralDb: false,
@@ -106,6 +108,32 @@
         fontSize: 1.1,
         lineHeight: 1.7,
         ttsVoice: "random"
+    };
+    
+    const llmModelsByProvider = {
+        "openai": [
+            {value: "gpt-5.5", text: "OpenAI GPT-5.5 ($5/$30)"},
+            {value: "gpt-5.4", text: "OpenAI GPT-5.4 ($2.5/$15)"},
+            {value: "gpt-5.4-mini", text: "OpenAI GPT-5.4 mini ($0.75/$4.5)"}
+        ],
+        "google": [
+            {value: "gemini-3.5-flash", text: "Google Gemini 3.5 Flash ($1.5/$9)"},
+            {value: "gemini-3-flash-preview", text: "Google Gemini 3.0 Flash ($0.5/$3)"},
+            {value: "gemini-3.1-flash-lite", text: "Google Gemini 3.1 Flash Light ($0.25/$1.5)"},
+            {value: "gemini-2.5-flash", text: "Google Gemini 2.5 Flash ($0.3/$2.5)"},
+            {value: "gemini-2.5-flash-lite", text: "Google Gemini 2.5 Flash Light ($0.1/$0.4)"}
+        ],
+        "anthropic": [
+            {value: "claude-sonnet-4-6", text: "Claude Sonnet 4.6 ($3.0/$15)"},
+            {value: "claude-haiku-4-5", text: "Claude Haiku 4.5 ($1/$5)"}
+        ],
+        "deepseek": [
+            {value: "deepseek-v4-pro", text: "Deepseek v4 Pro ($1.74/$3.48)"},
+            {value: "deepseek-v4-flash", text: "Deepseek v4 Flash ($0.14/$0.28)"}
+        ],
+        "cerebras": [
+            {value: "gemma-4-31b", text: "Cerebras Gemma 4 31B ($0.99/$1.49)"}
+        ]
     };
     
     function ensureLanguageScopedSetting(settingKey, language) {
@@ -1189,8 +1217,8 @@
         }
     }
     
-    function getLLMPricing(llmProviderModel) {
-        const llmInfo = document.querySelector(`#llmProviderModelSelector > option[value="${llmProviderModel}"]`).text;
+    function getLLMPricing(llmModel) {
+        const llmInfo = document.querySelector(`#llmModelSelector > option[value="${llmModel}"]`).text;
         const [inputPrice, outputPrice] = llmInfo.match(/\$(\d+(?:\.\d+)?)\/\$(\d+(?:\.\d+)?)\)/).slice(1, 3).map(num => parseFloat(num) / 1000000);
         return [inputPrice, outputPrice];
     }
@@ -1281,7 +1309,7 @@
             const content = provider === "anthropic" ? data.content[0]?.text : data.choices[0]?.message?.content;
             const usage = data.usage || {};
             
-            const [inputPrice, outputPrice] = getLLMPricing(settings.llmProviderModel);
+            const [inputPrice, outputPrice] = getLLMPricing(settings.llmModel);
             const cachedTokens = usage.prompt_tokens_details?.cached_tokens || usage.prompt_cache_hit_tokens || usage.cache_read_input_tokens || 0;
             const inputTokens = (usage.prompt_tokens || usage.input_tokens || 0) - cachedTokens;
             const outputTokens = usage.completion_tokens || usage.output_tokens || 0;
@@ -1932,21 +1960,16 @@
             
             addSlider(chatWidgetSection, "chatWidgetHeightSlider", "Chat Widget Height", "chatWidgetHeightValue", settings.chatWidgetHeight, "", 150, 500, 10);
             
-            addSelect(chatWidgetSection, "llmProviderModelSelector", "Chat Provider: (Price per 1M tokens)", [
-                {value: "openai gpt-5.5", text: "OpenAI GPT-5.5 ($5/$30)"},
-                {value: "openai gpt-5.4", text: "OpenAI GPT-5.4 ($2.5/$15)"},
-                {value: "openai gpt-5.4-mini", text: "OpenAI GPT-5.4 mini ($0.75/$4.5)"},
-                {value: "google gemini-3.5-flash", text: "Google Gemini 3.5 Flash ($1.5/$9)"},
-                {value: "google gemini-3-flash-preview", text: "Google Gemini 3.0 Flash ($0.5/$3)"},
-                {value: "google gemini-3.1-flash-lite", text: "Google Gemini 3.1 Flash Light ($0.25/$1.5)"},
-                {value: "google gemini-2.5-flash", text: "Google Gemini 2.5 Flash ($0.3/$2.5)"},
-                {value: "google gemini-2.5-flash-lite", text: "Google Gemini 2.5 Flash Light ($0.1/$0.4)"},
-                {value: "anthropic claude-sonnet-4-6", text: "Claude Sonnet 4.6 ($3.0/$15)"},
-                {value: "anthropic claude-haiku-4-5", text: "Claude Haiku 4.5 ($1/$5)"},
-                {value: "deepseek deepseek-v4-pro", text: "Deepseek v4 Pro ($1.74/$3.48)"},
-                {value: "deepseek deepseek-v4-flash", text: "Deepseek v4 Flash ($0.14/$0.28)"},
-                {value: "cerebras gemma-4-31b", text: "Cerebras Gemma 4 31B ($0.99/$1.49)"}
-            ], settings.llmProviderModel);
+            addSelect(chatWidgetSection, "llmProviderSelector", "Chat Provider:", [
+                {value: "openai", text: "OpenAI"},
+                {value: "google", text: "Google"},
+                {value: "anthropic", text: "Anthropic"},
+                {value: "deepseek", text: "DeepSeek"},
+                {value: "cerebras", text: "Cerebras"}
+            ], settings.llmProvider);
+            
+            const activeProviderModels = llmModelsByProvider[settings.llmProvider] || [];
+            addSelect(chatWidgetSection, "llmModelSelector", "Model: (Price per 1M tokens)", activeProviderModels, settings.llmModel);
             
             const apiKeyContainer = createElement("div", {className: "popup-row"});
             apiKeyContainer.appendChild(createElement("label", {
@@ -1954,14 +1977,16 @@
                 textContent: "Chat API Key:"
             }));
             
+            const savedKeys = settings.llmApiKeys || {};
+            
             const apiKeyFlexContainer = createElement("div", {style: "display: flex; align-items: center;"});
             const apiKeyInput = createElement("input", {
                 type: "password",
                 id: "llmApiKeyInput",
-                value: settings.llmApiKey,
+                value: savedKeys[settings.llmProvider] || "",
                 className: "popup-input"
             });
-            apiKeyFlexContainer.appendChild(apiKeyInput)
+            apiKeyFlexContainer.appendChild(apiKeyInput);
             apiKeyContainer.appendChild(apiKeyFlexContainer);
             chatWidgetSection.appendChild(apiKeyContainer);
             
@@ -2756,14 +2781,51 @@
             
             setupSlider("chatWidgetHeightSlider", "chatWidgetHeightValue", "chatWidgetHeight", "px", "--chat-widget-height", (val) => `${val}px`);
             
-            const llmProviderModelSelector = document.getElementById("llmProviderModelSelector");
-            llmProviderModelSelector.addEventListener("change", (event) => {
-                settings.llmProviderModel = event.target.value
+            const llmProviderSelector = document.getElementById("llmProviderSelector");
+            const llmModelSelector = document.getElementById("llmModelSelector");
+            const llmApiKeyInput = document.getElementById("llmApiKeyInput");
+            
+            llmProviderSelector.addEventListener("change", (event) => {
+                const provider = event.target.value;
+                settings.llmProvider = provider;
+                
+                llmModelSelector.innerHTML = "";
+                const models = llmModelsByProvider[provider] || [];
+                models.forEach((model) => {
+                    llmModelSelector.appendChild(createElement("option", {
+                        value: model.value,
+                        textContent: model.text
+                    }));
+                });
+                
+                const savedModels = settings.llmModels || {};
+                const targetModel = savedModels[provider] || (models[0]?.value || "");
+                
+                settings.llmModel = targetModel;
+                llmModelSelector.value = targetModel;
+                
+                const savedKeys = settings.llmApiKeys || {};
+                llmApiKeyInput.value = savedKeys[provider] || "";
             });
             
-            const llmApiKeyInput = document.getElementById("llmApiKeyInput");
+            llmModelSelector.addEventListener("change", (event) => {
+                const model = event.target.value;
+                settings.llmModel = model;
+                const provider = settings.llmProvider;
+                
+                settings.llmModels = {
+                    ...(settings.llmModels || {}),
+                    [provider]: model
+                };
+            });
+            
             llmApiKeyInput.addEventListener("change", (event) => {
-                settings.llmApiKey = event.target.value
+                const provider = settings.llmProvider;
+                
+                settings.llmApiKeys = {
+                    ...(settings.llmApiKeys || {}),
+                    [provider]: event.target.value
+                };
             });
             
             const askSelectedCheckbox = document.getElementById("askSelectedCheckbox");
@@ -2972,8 +3034,13 @@
                 
                 document.getElementById("chatWidgetCheckbox").value = defaults.chatWidget;
                 document.getElementById("chatWidgetHeightSlider").value = defaults.chatWidgetHeight;
-                document.getElementById("llmProviderModelSelector").value = defaults.llmProviderModel;
-                document.getElementById("llmApiKeyInput").value = defaults.llmApiKey;
+                settings.llmModels = {};
+                settings.llmApiKeys = {};
+                document.getElementById("llmProviderSelector").value = defaults.llmProvider;
+                llmProviderSelector.dispatchEvent(new Event("change"));
+                document.getElementById("llmModelSelector").value = defaults.llmModel;
+                settings.llmModel = defaults.llmModel;
+                
                 document.getElementById("askSelectedCheckbox").value = defaults.askSelected;
                 document.getElementById("prependSummaryCheckbox").checked = languageScopedDefaults.prependSummary;
                 
@@ -5654,8 +5721,10 @@
         }
         
         async function setupReaderContainer() {
-            let [llmProvider, llmModel] = settings.llmProviderModel.split(" ");
-            let llmApiKey = settings.llmApiKey;
+            let llmProvider = settings.llmProvider;
+            let llmModel = settings.llmModel;
+            let savedKeys = settings.llmApiKeys || {};
+            let llmApiKey = savedKeys[llmProvider] || "";
             
             function setupSentenceFocus(readerContainer) {
                 function isPlayerPlaying() {
@@ -5859,8 +5928,10 @@
                 
                 const lessonContent = extractTextFromDOM(readerContainer).trim();
                 
-                [llmProvider, llmModel] = settings.llmProviderModel.split(" ");
-                llmApiKey = settings.llmApiKey;
+                llmProvider = settings.llmProvider;
+                llmModel = settings.llmModel;
+                const savedKeys = settings.llmApiKeys || {};
+                llmApiKey = savedKeys[llmProvider] || "";
                 
                 if (settings.prependSummary[language]) {
                     await getQuickSummary(llmProvider, llmApiKey, llmModel, lessonContent);
@@ -6050,8 +6121,10 @@
         }
         
         async function setupLLMs() {
-            let [llmProvider, llmModel] = settings.llmProviderModel.split(" ");
-            let llmApiKey = settings.llmApiKey;
+            let llmProvider = settings.llmProvider;
+            let llmModel = settings.llmModel;
+            let savedKeys = settings.llmApiKeys || {};
+            let llmApiKey = savedKeys[llmProvider] || "";
             
             async function updateTTS(click = true) {
                 async function replaceTTSButton() {
@@ -6641,8 +6714,11 @@
                         existingRegenerateButton.remove();
                     }
                     
-                    [llmProvider, llmModel] = settings.llmProviderModel.split(" ");
-                    llmApiKey = settings.llmApiKey;
+                    llmProvider = settings.llmProvider;
+                    llmModel = settings.llmModel;
+                    const savedKeys = settings.llmApiKeys || {};
+                    llmApiKey = savedKeys[llmProvider] || "";
+                    
                     await streamOpenAIResponse(
                         llmProvider,
                         llmApiKey,
