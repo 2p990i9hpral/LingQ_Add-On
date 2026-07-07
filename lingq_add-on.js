@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      13.5.0
+// @version      13.6.0
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @grant       GM_xmlhttpRequest
@@ -4273,8 +4273,16 @@
     }
     
     function setupReader() {
-        function setupLessonCompletion() {
-            document.getElementById("lingqLessonComplete").addEventListener("click", moveNextPage);
+        function resetLocalVideo() {
+            const container = document.getElementById("local-video-container");
+            if (container) {
+                const video = container.querySelector("#addonLocalVideo");
+                if (video) {
+                    video.src = "";
+                    video.load();
+                }
+                container.remove();
+            }
         }
         
         function getColorSettings(colorMode) {
@@ -5968,6 +5976,7 @@
                         if (!element) return;
                         clickElement("div.player-wrapper > div.player-close a");
                     });
+                    resetLocalVideo();
                 }
                 
                 async function skipEndPages() {
@@ -6027,6 +6036,7 @@
                         nextBtn.click();
                         
                         clickElement("div.player-wrapper > div.player-close a");
+                        resetLocalVideo();
                         document.dispatchEvent(new KeyboardEvent("keydown", {key: "Escape"}));
                         
                         if (settings.skipEndPage) {
