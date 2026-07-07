@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      13.4.2
+// @version      13.4.3
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @grant       GM_xmlhttpRequest
@@ -1945,7 +1945,7 @@
                 {value: "anthropic claude-haiku-4-5", text: "Claude Haiku 4.5 ($1/$5)"},
                 {value: "deepseek deepseek-v4-pro", text: "Deepseek v4 Pro ($1.74/$3.48)"},
                 {value: "deepseek deepseek-v4-flash", text: "Deepseek v4 Flash ($0.14/$0.28)"},
-                {value: "cerebras gemma-4-31b", text: "Cerebras Gemma 4 31B ($0/$0)"}
+                {value: "cerebras gemma-4-31b", text: "Cerebras Gemma 4 31B ($0.99/$1.49)"}
             ], settings.llmProviderModel);
             
             const apiKeyContainer = createElement("div", {className: "popup-row"});
@@ -3771,34 +3771,79 @@
                 
                 try {
                     function formatContext(context, originalWord, padding = 100) {
-                        if (!context || !originalWord) return "";
-                        const escapedWord = originalWord.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-                        const match = context.match(new RegExp(escapedWord, 'i'));
-                        if (!match) return context;
-                        const foundWord = match[0];
-                        const wordStart = match.index;
-                        const wordEnd = wordStart + foundWord.length;
-                        const totalLen = context.length;
-                        let start = wordStart - padding;
-                        let end = wordEnd + padding;
-                        if (start < 0) {
-                            end += Math.abs(start);
-                            start = 0;
+                        if (!context) return "";
+                        
+                        const openTag = "<selected>";
+                        const closeTag = "</selected>";
+                        
+                        const startTagIdx = context.indexOf(openTag);
+                        const endTagIdx = context.indexOf(closeTag);
+                        
+                        if (startTagIdx !== -1 && endTagIdx !== -1) {
+                            const targetEndIdx = endTagIdx + closeTag.length;
+                            const totalLen = context.length;
+                            
+                            let start = startTagIdx - padding;
+                            let end = targetEndIdx + padding;
+                            
+                            if (start < 0) {
+                                end += Math.abs(start);
+                                start = 0;
+                            }
+                            if (end > totalLen) {
+                                start -= (end - totalLen);
+                                if (start < 0) start = 0;
+                                end = totalLen;
+                            }
+                            
+                            let slicedText = context.substring(start, end);
+                            slicedText = slicedText.replace(openTag, "<b>").replace(closeTag, "</b>");
+                            
+                            const prefix = start > 0 ? "..." : "";
+                            const suffix = end < totalLen ? "..." : "";
+                            
+                            return `${prefix}${slicedText}${suffix}`;
                         }
-                        if (end > totalLen) {
-                            start -= (end - totalLen);
-                            if (start < 0) start = 0;
-                            end = totalLen;
+                        
+                        if (originalWord) {
+                            const escapedWord = originalWord.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                            const match = context.match(new RegExp(escapedWord, 'i'));
+                            
+                            if (match) {
+                                const foundWord = match[0];
+                                const wordStart = match.index;
+                                const wordEnd = wordStart + foundWord.length;
+                                const totalLen = context.length;
+                                
+                                let start = wordStart - padding;
+                                let end = wordEnd + padding;
+                                
+                                if (start < 0) {
+                                    end += Math.abs(start);
+                                    start = 0;
+                                }
+                                if (end > totalLen) {
+                                    start -= (end - totalLen);
+                                    if (start < 0) start = 0;
+                                    end = totalLen;
+                                }
+                                
+                                const slicedText = context.substring(start, end);
+                                const relativeStart = wordStart - start;
+                                const relativeEnd = relativeStart + foundWord.length;
+                                
+                                const before = slicedText.substring(0, relativeStart);
+                                const target = slicedText.substring(relativeStart, relativeEnd);
+                                const after = slicedText.substring(relativeEnd);
+                                
+                                const prefix = start > 0 ? "..." : "";
+                                const suffix = end < totalLen ? "..." : "";
+                                
+                                return `${prefix}${before}<b>${target}</b>${after}${suffix}`;
+                            }
                         }
-                        const slicedText = context.substring(start, end);
-                        const relativeStart = wordStart - start;
-                        const relativeEnd = relativeStart + foundWord.length;
-                        const before = slicedText.substring(0, relativeStart);
-                        const target = slicedText.substring(relativeStart, relativeEnd);
-                        const after = slicedText.substring(relativeEnd);
-                        const prefix = start > 0 ? "..." : "";
-                        const suffix = end < totalLen ? "..." : "";
-                        return `${prefix}${before}<b>${target}</b>${after}${suffix}`;
+                        
+                        return context;
                     }
                     
                     const allData = await fetchFlashcardsInBatches(language, "*", "idx");
@@ -4721,7 +4766,7 @@
             }
     
             .sentence-text {
-                max-width: 80% !important;
+                max-width: max(80%, 1200px) !important;
                 height: calc(var(--article-height) - var(--header-height)) !important;
                 padding: 0 0 20px !important;
             }
@@ -5721,8 +5766,7 @@
                     
                         # Output Format
                         - Language: English; use original-language terms inline when necessary for fidelity
-                        - Format: plain text only, not HTML or Markdown format.
-                        - Length: 2,000 words max`;
+                        - Format: plain text only, not HTML or Markdown format.`;
                     
                     const summary_history = [
                         {role: "system", content: removeIndent(summaryPrompt)},
@@ -6082,12 +6126,12 @@
                     
                     const positionRatio = sentenceItems.length > 0 ? Math.max(0, selectedIndex) / sentenceItems.length : 0.5;
                     
-                    const currentText = extractTextFromDOM(currentSentenceEl).trim();
+                    const rawCurrentText = extractTextFromDOM(currentSentenceEl).trim();
                     const allSentences = [...document.querySelectorAll(".sentence")];
                     const currentIndex = allSentences.indexOf(currentSentenceEl);
                     
-                    const leftLen = Math.floor(currentText.length * positionRatio);
-                    const rightLen = currentText.length - leftLen;
+                    const leftLen = Math.floor(rawCurrentText.length * positionRatio);
+                    const rightLen = rawCurrentText.length - leftLen;
                     
                     let remainingLeft = Math.max(0, targetSideLength - leftLen);
                     let remainingRight = Math.max(0, targetSideLength - rightLen);
@@ -6122,11 +6166,16 @@
                         nextIdx++;
                     }
                     
+                    const currentText = sentenceItems.map((item, idx) => {
+                        const text = extractTextFromDOM(item);
+                        return idx === selectedIndex ? `<selected>${text}</selected>` : text;
+                    }).join("").trim();
+                    
                     const contextText = [...prefixTexts, currentText, ...suffixTexts].filter(Boolean).join(" ");
                     
                     const prefixLog = prefixTexts.length > 0 ? '+'.repeat(prefixTexts.length) : '';
                     const suffixLog = suffixTexts.length > 0 ? '+'.repeat(suffixTexts.length) : '';
-                    console.log(`Context: ${currentText.length} -> ${contextText.length} (${prefixLog}Selected${suffixLog})`);
+                    console.log(`Context: ${rawCurrentText.length} -> ${contextText.length} (${prefixLog}Selected${suffixLog})`);
                     
                     return {input: selectedText, context: contextText};
                 }
@@ -6996,6 +7045,66 @@
                     <ul>
                       <li>カバンに本が入る。</li>
                       <li>가방에 책이 들어있다.</li>
+                    </ul>
+                </div>
+                
+                ### Example 6: Complex Inflection/Conjugation (Original: Japanese, User: Korean)
+                User Input: 'Input: "見せられませんでした", Context: "昨日の発表会では、準備不足で納得のいく成果を観客に見せられませんでした。"'
+                Assistant Output:
+                <div class="word-card">
+                    <b>見せる</b> <span>[miseɾɯ]</span> <i>(동사)</i>
+                    <p>보여주다</p>
+                    <hr>
+                    <p>문맥에서는 '見せられませんでした(보여주지 못했습니다)'라는 가능형의 부정 과거 형태로 쓰였습니다. 준비가 부족하여 관객에게 만족스러운 결과를 보여줄 수 없었다는 아쉬움과 불가능의 뉘앙스를 전달하고 있습니다.</p>
+                    <hr>
+                    <ul>
+                      <li>子供に悪い見本を見せるべきではない。</li>
+                      <li>아이에게 나쁜 본보기를 보여주어서는 안 된다。</li>
+                    </ul>
+                </div>
+                
+                ### Example 7: Lexicalized Negation / Fixed Expression (Original: Japanese, User: Korean)
+                User Input: 'Input: "仕方がありません", Context: "雨が降り始めてしまったので、今日の遠足が中止になるのは仕方がありません。"'
+                Assistant Output:
+                <div class="word-card">
+                    <b>仕方がない</b> <span>[ɕikata ɡa nai]</span> <i>(관용구)</i>
+                    <p>어쩔 수 없다</p>
+                    <hr>
+                    <p>정해진 상황이나 이미 일어난 일에 대해 다른 방도가 없음을 체념하듯 표현하는 관용구입니다. 여기서는 정중한 형태인 'ありません'으로 변형되어, 비가 와서 소풍이 취소되는 것은 불가피하고 당연한 일이라는 의미를 나타냅니다.</p>
+                    <hr>
+                    <ul>
+                      <li>いくら後悔しても、過ぎたことは仕方がない。</li>
+                      <li>아무리 후회해도 지난 일은 어쩔 수 없다。</li>
+                    </ul>
+                </div>
+                
+                ### Example 8: Orthographic Adaptation (Original: Japanese, User: Korean)
+                User Input: 'Input: "カワイイ", Context: "彼女が着ている服は、いつもすごくカワイイですね。"'
+                Assistant Output:
+                <div class="word-card">
+                    <b>かわいい</b> <span>[kawaii]</span> <i>(형용사)</i>
+                    <p>귀엽다</p>
+                    <hr>
+                    <p>외모나 행동이 사랑스럽고 호감이 가는 상태를 뜻합니다. 원문에서는 'カワイイ'처럼 카타카나로 표기하여, 단순히 귀엽다는 의미를 넘어 패션이나 시각적인 측면에서 감각적이고 트렌디한 느낌을 한층 강조하고 있습니다.</p>
+                    <hr>
+                    <ul>
+                      <li>公園でかわいい子猫を見つけました。</li>
+                      <li>공원에서 귀여운 새끼 고양이를 발견했습니다。</li>
+                    </ul>
+                </div>
+                
+                ### Example 9: Kanji Phonetic Disambiguation (Original: Japanese, User: Korean)
+                User Input: 'Input: "市場", Context: "新鮮な野菜を買うために、朝早く地元の市場に行きました。"'
+                Assistant Output:
+                <div class="word-card">
+                    <b>市場</b> <span>[it͡ɕiba]</span> <i>(명사)</i>
+                    <p>시장</p>
+                    <hr>
+                    <p>'市場'은 주식이나 경제 등 추상적인 시장(しじょう)을 뜻하기도 하지만, 이 문맥에서는 사람들이 모여 물건을 직접 사고파는 물리적인 장소인 '재래시장(いちば)'을 가리킵니다. 신선한 채소를 사기 위해 방문한 구체적인 공간의 의미로 사용되었습니다.</p>
+                    <hr>
+                    <ul>
+                      <li>毎朝、この市場は活気に満ちている。</li>
+                      <li>매일 아침 이 시장은 활기로 넘친다。</li>
                     </ul>
                 </div>
                 `;
