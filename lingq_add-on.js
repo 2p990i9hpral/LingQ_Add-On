@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      13.7.0
+// @version      13.7.1
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @grant       GM_xmlhttpRequest
@@ -508,21 +508,46 @@
             .replace(/[^\S\n]?(,)/g, '$1');
     }
     
+    const toastQueue = [];
+    let isToastProcessing = false;
+    
     function showToast(inputMessage, success = true) {
+        toastQueue.push({ inputMessage, success });
+        if (!isToastProcessing) {
+            processToastQueue();
+        }
+    }
+    
+    function processToastQueue() {
+        if (toastQueue.length === 0) {
+            isToastProcessing = false;
+            return;
+        }
+        
+        isToastProcessing = true;
+        const { inputMessage, success } = toastQueue.shift();
+        
         const toast = createElement("div", {
             className: 'userToast',
             textContent: inputMessage,
             style: `box-shadow: 0 0 10px 0 ${success ? 'rgb(76, 175, 80)' : 'rgb(175, 76, 80)'}`
         });
-        document.querySelector('.reader-widget').appendChild(toast);
+        
+        const widget = document.querySelector('.reader-widget');
+        if (widget) {
+            widget.appendChild(toast);
+        }
         
         setTimeout(() => {
-            toast.style.opacity = '1'
+            toast.style.opacity = '1';
         }, 10);
         
         setTimeout(() => {
             toast.style.opacity = '0';
-            setTimeout(() => toast.remove(), 1000);
+            setTimeout(() => {
+                toast.remove();
+                processToastQueue();
+            }, 1000);
         }, 1500);
     }
     
@@ -6452,6 +6477,10 @@
                                     const storedIdx = botMessageDiv.dataset.wordIdx;
                                     if (!storedIdx) return;
                                     
+                                    navigator.clipboard.writeText(newValue)
+                                        .then(() => showToast("Meaning Copied!", true))
+                                        .catch(() => showToast("Failed to copy meaning.", false));
+                                    
                                     const {data: existing} = await getDbClient()
                                         .from(getTableName())
                                         .select("idx")
@@ -6461,7 +6490,7 @@
                                     
                                     if (existing && existing.length > 0) {
                                         meaningElem.textContent = currentText;
-                                        showToast("Same Flashcard Exists", false);
+                                        showToast("Same Flashcard Already Exists", false);
                                         return;
                                     }
                                     
@@ -6476,10 +6505,6 @@
                                     } else {
                                         showToast("Meaning updated!", true);
                                     }
-                                    
-                                    navigator.clipboard.writeText(newValue)
-                                        .then(() => showToast("Meaning Copied!", true))
-                                        .catch(() => showToast("Failed to copy meaning.", false));
                                 };
                                 
                                 input.addEventListener("keydown", async (event) => {
