@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      13.7.1
+// @version      13.7.2
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @grant       GM_xmlhttpRequest
@@ -7362,7 +7362,9 @@
                 ### Condition A: Correction Request
                 Trigger: Only when the user explicitly requests a fix of the previously generated word card using direct commands such as "Wrong word", "Fix the base form", "Use X instead of Y", "Correct the IPA".
                 Action: Output conversational explanation first (optional), then output the corrected word card wrapped strictly inside <div class="word-card">.
-                Restriction: Change only the parts of the existing word-card that are explicitly requested. Keep the contextual explanation inside the <p> tags of the word-card as unchanged as possible.
+                Restriction:
+                    - Carefully inspect the "Previous Response" and locate the exact slot requested for modification.
+                    - Except for the explicitly requested changes, all other content (definitions, contextual explanations, and examples) must be copied verbatim from the "Previous Response".
                 
                 ### Condition B: General or Referential Query
                 Trigger: The user asks a question or makes a general comment.
@@ -7372,14 +7374,26 @@
                 ## Examples
                 
                 ### Example 1: Strict Correction (no preface needed)
-                Scenario: Previous output for "happily" showed base form "happy". User complains.
-                User Input: "The basa form should be the adverb, not adjective."
+                Scenario: Target Language is English, Presentation Language (User Language) is Japanese. The word "happily" in the context of "He played happily" was incorrectly analyzed with the base form "happy" and the part of speech marked as an adjective (形容詞).
+                Previous Response:
+                <div class="word-card">
+                    <b>happy</b> <span>[ˈhæpɪli]</span> <i>(形容詞)</i>
+                    <p>楽しそうに、幸福に</p>
+                    <hr>
+                    <p>喜びを伴って行われる動作を説明するために使用されます。ユーザーの文脈は動作の様態を強調しています。</p>
+                    <hr>
+                    <ul>
+                        <li>He played happily.</li>
+                        <li>彼は楽しそうに遊んだ。</li>
+                    </ul>
+                </div>
+                User Input: "The base form should be the adverb, not adjective."
                 Assistant Output:
                 <div class="word-card">
-                    <b>happily</b> <span>[ˈhæpɪli]</span> <i>(adverb)</i>
-                    <p>In a happy way</p>
+                    <b>happily</b> <span>[ˈhæpɪli]</span> <i>(副詞)</i>
+                    <p>楽しそうに</p>
                     <hr>
-                    <p>Used to describe an action performed with joy. The user context emphasizes the manner of action.</p>
+                    <p>喜びを伴って行われる動作を説明するために使用されます。ユーザーの文脈は動作の 様態を強調しています。</p>
                     <hr>
                     <ul>
                         <li>He played happily.</li>
@@ -7388,19 +7402,31 @@
                 </div>
                 
                 ### Example 2: Strict Correction with Preface
-                Scenario: Previous output for "入っていました" showed IPA [haiɾɯ]. User points out the pronunciation.
-                User Input: "It seems that the pronunciation is incorrect.."
-                Assistant Output:
-                <p>「入る」의 표준 IPA는 [iɾɯ]입니다. [haiɾɯ]는 「入る(はいる)」의 발음으로, 이 문맥에서는 [iɾɯ]가 올바릅니다.</p>
+                Scenario: Target Language is Japanese, Presentation Language (User Language) is Korean. The word "角" in the context of turning a corner ("次の角を右に曲がってください") was incorrectly analyzed with the pronunciation of "horn" ([tsɯno]).
+                Previous Response:
                 <div class="word-card">
-                    <b>入る</b> <span>[iɾɯ]</span> <i>(동사)</i>
-                    <p>들어가다</p>
+                    <b>角</b> <span>[tsɯno]</span> <i>(명사)</i>
+                    <p>길모퉁이</p>
                     <hr>
-                    <p>문맥에서는 편지가 상자 안에 이미 존재하는 '상태'를 나타냅니다.</p>
+                    <p>길이 꺾이는 곳을 의미합니다. 문맥에서는 다음 안내 지점인 오른쪽으로 가야 할 모퉁이를 지칭합니다.</p>
                     <hr>
                     <ul>
-                        <li>カバンに本が入る。</li>
-                        <li>가방에 책이 들어있다.</li>
+                        <li>次の角を右に曲がってください。</li>
+                        <li>다음 길모퉁이에서 우회전해 주세요.</li>
+                    </ul>
+                </div>
+                User Input: "발음 고쳐줘 'かど'야."
+                Assistant Output:
+                <p>「角」는 이 문맥에서 길모퉁이를 뜻하는 'かど'로 읽히므로 [kado]가 올바른 발음입니다. [tsɯno]는 동물의 뿔을 뜻할 때의 발음입니다.</p>
+                <div class="word-card">
+                    <b>角</b> <span>[kado]</span> <i>(명사)</i>
+                    <p>길모퉁이</p>
+                    <hr>
+                    <p>길이 꺾이는 곳을 의미합니다. 문맥에서는 다음 안내 지점인 오른쪽으로 가야 할 모퉁이를 지칭합니다.</p>
+                    <hr>
+                    <ul>
+                        <li>次の角を右に曲がってください。</li>
+                        <li>다음 길모퉁이에서 우회전해 주세요.</li>
                     </ul>
                 </div>
                 
