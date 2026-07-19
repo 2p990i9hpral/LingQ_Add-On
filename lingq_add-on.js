@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      14.0.1
+// @version      14.0.2
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @grant       GM_xmlhttpRequest
@@ -811,6 +811,7 @@
         return new Promise((resolve, reject) => {
             let fullContent = '';
             let isResolved = false;
+            let isError = false;
             
             const finish = () => {
                 if (isResolved) return;
@@ -818,7 +819,7 @@
                 resolve(fullContent);
             };
             
-            const req = GM_xmlhttpRequest({
+            GM_xmlhttpRequest({
                 method: options.method || 'POST',
                 url: url,
                 headers: options.headers || {},
@@ -828,7 +829,9 @@
                 onloadstart: (res) => {
                     if (!res.response) return;
                     
+                    // Handle HTTP errors properly by preventing onload from resolving
                     if (res.status >= 400) {
+                        isError = true;
                         const reader = res.response.getReader();
                         const decoder = new TextDecoder('utf-8');
                         let errText = '';
@@ -836,13 +839,19 @@
                         (async () => {
                             try {
                                 while (true) {
-                                    const {done, value} = await reader.read();
-                                    if (value) errText += decoder.decode(value, {stream: true});
+                                    const { done, value } = await reader.read();
+                                    if (value) errText += decoder.decode(value, { stream: true });
                                     if (done) break;
                                 }
-                                if (!isResolved) reject(new Error(`HTTP ${res.status}: ${errText}`));
+                                if (!isResolved) {
+                                    isResolved = true;
+                                    reject(new Error(`HTTP ${res.status}: ${errText}`));
+                                }
                             } catch (e) {
-                                if (!isResolved) reject(new Error(`HTTP ${res.status}: Stream read error`));
+                                if (!isResolved) {
+                                    isResolved = true;
+                                    reject(new Error(`HTTP ${res.status}: Stream read error`));
+                                }
                             }
                         })();
                         return;
@@ -855,16 +864,16 @@
                     (async () => {
                         try {
                             while (true) {
-                                const {done, value} = await reader.read();
+                                const { done, value } = await reader.read();
                                 
                                 if (value) {
-                                    const chunk = decoder.decode(value, {stream: true});
+                                    const chunk = decoder.decode(value, { stream: true });
                                     buffer += chunk;
                                     
                                     const lines = buffer.split('\n');
                                     buffer = lines.pop();
                                     
-                                    lines.forEach(line => {
+                                    lines.forEach((line) => {
                                         const trimmed = line.trim();
                                         if (!trimmed.startsWith('data: ')) return;
                                         
@@ -886,7 +895,7 @@
                                 }
                                 
                                 if (done) {
-                                    finish();
+                                    if (!isError) finish();
                                     break;
                                 }
                             }
@@ -895,9 +904,21 @@
                         }
                     })();
                 },
-                onload: () => finish(),
-                onerror: () => { if (!isResolved) reject(new Error("Network Error")); },
-                ontimeout: () => { if (!isResolved) reject(new Error("Request Timed Out")); }
+                onload: () => {
+                    if (!isError) finish();
+                },
+                onerror: () => {
+                    if (!isResolved) {
+                        isResolved = true;
+                        reject(new Error("Network Error"));
+                    }
+                },
+                ontimeout: () => {
+                    if (!isResolved) {
+                        isResolved = true;
+                        reject(new Error("Request Timed Out"));
+                    }
+                }
             });
         });
     }
