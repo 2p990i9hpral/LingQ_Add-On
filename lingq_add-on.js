@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      13.7.2
+// @version      13.7.3
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @grant       GM_xmlhttpRequest
@@ -60,7 +60,7 @@
         autoFinishing: false,
         focusPlayingSentence: false,
         showTranslation: false,
-        usePageMode: false,
+        usePageMode: {},
         skipEndPage: false,
         relocateCaption: 'default',
         captionFontsize: 1.1,
@@ -107,6 +107,7 @@
         prependSummary: false,
         fontSize: 1.1,
         lineHeight: 1.7,
+        usePageMode: true,
         ttsVoice: "random"
     };
     
@@ -467,6 +468,8 @@
             const leaves = [];
             
             function traverse(node) {
+                if (node.nodeType === Node.ELEMENT_NODE && node.tagName === 'RT') return;
+                
                 if (node.nodeType === Node.TEXT_NODE) {
                     if (node.textContent.trim() !== "") leaves.push(node);
                     return;
@@ -489,6 +492,7 @@
         const textParts = [];
         let sentenceElements = domElement.querySelectorAll('.sentence');
         sentenceElements = sentenceElements.length ? sentenceElements : [domElement];
+        
         if (domElement.childNodes.length === 0) return null;
         
         sentenceElements.forEach(sentenceElement => {
@@ -1979,7 +1983,7 @@
             addCheckbox(container1, "autoFinishingCheckbox", "Finish Lesson Automatically", settings.autoFinishing);
             addCheckbox(container1, "focusPlayingSentenceCheckbox", "Focus on Playing Sentence", settings.focusPlayingSentence);
             addCheckbox(container1, "showTranslationCheckbox", "Show Translation Automatically", settings.showTranslation);
-            addCheckbox(container1, "usePageModeCheckbox", "Use Paging Mode", settings.usePageMode);
+            addCheckbox(container1, "usePageModeCheckbox", "Use Paging Mode", settings.usePageMode[language]);
             addCheckbox(container1, "skipEndPageCheckbox", "Skip End Page", settings.skipEndPage);
             addRadioGroup(container1, "relocateCaption", "Video Caption:", [
                 {value: "default", text: "Default"},
@@ -2774,7 +2778,7 @@
             
             const usePageModeCheckbox = document.getElementById("usePageModeCheckbox");
             usePageModeCheckbox.addEventListener('change', (event) => {
-                settings.usePageMode = event.target.checked;
+                settings.usePageMode = {...settings.usePageMode, [language]: event.target.checked};
             });
             
             const skipEndPageCheckbox = document.getElementById("skipEndPageCheckbox");
@@ -3077,7 +3081,7 @@
                 document.getElementById("autoFinishingCheckbox").checked = defaults.autoFinishing;
                 document.getElementById("focusPlayingSentenceCheckbox").checked = defaults.focusPlayingSentence;
                 document.getElementById("showTranslationCheckbox").checked = defaults.showTranslation;
-                document.getElementById("usePageModeCheckbox").checked = defaults.usePageMode;
+                document.getElementById("usePageModeCheckbox").checked = languageScopedDefaults.usePageMode;
                 document.getElementById("skipEndPageCheckbox").checked = defaults.skipEndPage;
                 document.querySelectorAll('input[name="relocateCaption"]').forEach((radio) => {
                     radio.checked = radio.value === defaults.relocateCaption;
@@ -4787,7 +4791,7 @@
         }
         
         function generateLayoutCSS() {
-            const isPageMode = settings.usePageMode;
+            const isPageMode = settings.usePageMode[language];
             
             return `
             :root {
@@ -5812,7 +5816,7 @@
                 }
                 
                 function focusPlayingSentence(playingSentence) {
-                    const isPageMode = settings.usePageMode;
+                    const isPageMode = settings.usePageMode[language];
                     const wrapper = document.querySelector(".reader-container-wrapper");
                     const container = document.querySelector(".reader-container");
                     
@@ -6022,6 +6026,34 @@
                 
             }
             
+            function handleLessonCompletion() {
+                waitForElement('[id$="-content-lessonCompleted"]', 5000).then((completionElement) => {
+                    if (!completionElement) return;
+                    
+                    setTimeout(async () => {
+                        if (completionElement.getAttribute("data-state") === "active") {
+                            clickElement("div.player-wrapper > div.player-close a");
+                            resetLocalVideo();
+                            document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
+                            
+                            const nextButton = document.querySelector("#lesson-reader > div.h-full > div > header > div.col-3 > button");
+                            if (!nextButton) return;
+                            
+                            if (settings.skipEndPage) {
+                                for (let i = 0; i < 2; i++) {
+                                    const currentPanel = document.querySelector('[id$="-content-lessonCompleted"]');
+                                    if (currentPanel?.getAttribute("data-state") === "active") {
+                                        break;
+                                    }
+                                    nextButton.click();
+                                    await sleep(500);
+                                }
+                            }
+                        }
+                    }, 300);
+                });
+            }
+            
             function setupNavClickListeners() {
                 const navSelectors = [
                     ".reader-component .nav--left a",
@@ -6041,89 +6073,41 @@
                     document.querySelector(".quick-summary")?.remove();
                 }
                 
-                function closeVideoPlayer() {
-                    waitForElement('[id$="-content-lessonCompleted"]', 5000).then((element) => {
-                        if (!element) return;
-                        clickElement("div.player-wrapper > div.player-close a");
-                    });
-                    resetLocalVideo();
-                }
-                
-                async function skipEndPages() {
-                    waitForElement('[id$="-content-lessonCompleted"]', 5000).then(async (element) => {
-                        if (!element) return;
-                        
-                        clickElement("div.player-wrapper > div.player-close a");
-                        document.dispatchEvent(new KeyboardEvent("keydown", {key: "Escape"}));
-                        
-                        const nextBtn = document.querySelector("#lesson-reader > div.h-full > div > header > div.col-3 > button");
-                        if (!nextBtn) return;
-                        
-                        if (settings.skipEndPage) {
-                            for (let i = 0; i < 2; i++) {
-                                const current = document.querySelector('[id$="-content-lessonCompleted"]');
-                                if (current?.getAttribute("data-state") === "active") break;
-                                
-                                nextBtn.click();
-                                await sleep(500);
-                            }
-                        }
-                    });
-                }
-                
                 navSelectors.forEach((selector) => {
                     waitForElement(selector, 5000).then((button) => {
                         if (!button) return;
                         button.addEventListener("click", resetScroll);
                         button.addEventListener("click", removeSummary, true);
-                        button.addEventListener("click", closeVideoPlayer, true);
-                        button.addEventListener("click", skipEndPages, true);
+                        button.addEventListener("click", handleLessonCompletion, true);
                     });
                 });
             }
             
             function setupKeyboardListeners() {
-                window.addEventListener("keydown", async (event) => {
+                window.addEventListener("keydown", (event) => {
                     if (!event.shiftKey) return;
                     if (!(event.key === "ArrowRight" || event.key === "ArrowLeft")) return;
                     
-                    setTimeout(() => { // reset scrolls
+                    setTimeout(() => {
                         const wrapper = document.querySelector(".reader-container-wrapper");
                         const container = document.querySelector(".reader-container");
                         if (wrapper) wrapper.scrollTop = 0;
                         if (container) wrapper.scrollLeft = 0;
                     }, 150);
-                    // document.querySelector(".quick-summary")?.remove();
                     
-                    const isLessonFinished = await waitForElement('[id$="-content-lessonCompleted"]', 5000);
-                    if (!isLessonFinished) return;
                     const nextBtn = document.querySelector("#lesson-reader > div.h-full > div > header > div.col-3 > button");
                     const prevBtn = document.querySelector("#lesson-reader > div.h-full > div > header > div:nth-child(1) > button");
                     
-                    if (event.key === "ArrowRight") {
+                    if (event.key === "ArrowRight" && nextBtn) {
                         event.stopImmediatePropagation();
                         event.preventDefault();
                         nextBtn.click();
-                        
-                        clickElement("div.player-wrapper > div.player-close a");
-                        resetLocalVideo();
-                        document.dispatchEvent(new KeyboardEvent("keydown", {key: "Escape"}));
-                        
-                        if (settings.skipEndPage) {
-                            for (let i = 0; i < 2; i++) {
-                                const current = document.querySelector('[id$="-content-lessonCompleted"]');
-                                if (current?.getAttribute("data-state") === "active") break;
-                                
-                                nextBtn.click();
-                                await sleep(500);
-                            }
-                        }
-                    } else if (event.key === "ArrowLeft") {
+                        handleLessonCompletion();
+                    } else if (event.key === "ArrowLeft" && prevBtn) {
                         event.stopImmediatePropagation();
                         event.preventDefault();
                         prevBtn.click();
                     }
-                    
                 }, true);
             }
             
@@ -6150,7 +6134,7 @@
                 resetLocalVideo();
                 handleLocalVideoContainerVisibility();
                 
-                const isPageMode = settings.usePageMode;
+                const isPageMode = settings.usePageMode[language];
                 if (isPageMode) {
                     const readerContainer = node.querySelector(".reader-container");
                     readerContainer?.addEventListener("wheel", (event) => {
