@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      14.0.0
+// @version      14.0.1
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @grant       GM_xmlhttpRequest
@@ -463,25 +463,28 @@
         }
     }
     
-    function extractTextFromDOM(domElement) {
+    function extractTextFromDOM(domElement, selectedEl = null) {
         function getAllLeafNodes(root) {
             const leaves = [];
             
             function traverse(node) {
-                if (node.nodeType === Node.ELEMENT_NODE && node.tagName === 'RT') return;
-                
-                if (node.nodeType === Node.TEXT_NODE) {
-                    if (node.textContent.trim() !== "") leaves.push(node);
+                if (node.nodeType === Node.ELEMENT_NODE && node.tagName === 'RT') {
                     return;
                 }
+                
+                if (node.nodeType === Node.TEXT_NODE) {
+                    if (node.textContent.trim() !== "") {
+                        leaves.push(node);
+                    }
+                    return;
+                }
+                
                 if (node.nodeType === Node.ELEMENT_NODE || node.nodeType === Node.DOCUMENT_FRAGMENT_NODE) {
                     if (node.childNodes.length === 0) {
                         leaves.push(node);
                         return;
                     }
-                    for (const child of node.childNodes) {
-                        traverse(child);
-                    }
+                    Array.from(node.childNodes).forEach(traverse);
                 }
             }
             
@@ -495,21 +498,30 @@
         
         if (domElement.childNodes.length === 0) return null;
         
-        sentenceElements.forEach(sentenceElement => {
-            for (const childNode of getAllLeafNodes(sentenceElement)) {
-                const text = childNode.textContent.trim();
-                if (text) textParts.push(text);
-                
-                const parentNodeType = childNode.parentNode.nodeType;
-                if (parentNodeType === Node.ELEMENT_NODE && childNode.parentNode.matches('.has-end-punctuation-question')) textParts.push('?');
-                if (parentNodeType === Node.ELEMENT_NODE && childNode.parentNode.matches('.has-end-punctuation-period')) textParts.push('.');
-            }
+        sentenceElements.forEach((sentenceElement) => {
+            getAllLeafNodes(sentenceElement).forEach((childNode) => {
+                let text = childNode.textContent.trim();
+                if (text) {
+                    if (selectedEl && (childNode === selectedEl || selectedEl.contains(childNode))) {
+                        text = `<selected>${text}</selected>`;
+                    }
+                    textParts.push(text);
+                    
+                    const parentNode = childNode.parentNode;
+                    if (parentNode.nodeType === Node.ELEMENT_NODE && parentNode.matches('.has-end-punctuation-question')) {
+                        textParts.push('?');
+                    }
+                    if (parentNode.nodeType === Node.ELEMENT_NODE && parentNode.matches('.has-end-punctuation-period')) {
+                        textParts.push('.');
+                    }
+                }
+            });
             textParts.push('\n');
         });
         
         return textParts.slice(0, -1).join(' ')
-            .replace(/[^\S\n]?(\?|\.|\-|\n)[^\S\n]?/g, '$1')
-            .replace(/[^\S\n]?(,)/g, '$1');
+            .replace(/[^\S\n]?(\?|\.|\-|\n|。|、)[^\S\n]?/g, '$1')
+            .replace(/[^\S\n]?(,|、)/g, '$1');
     }
     
     const toastQueue = [];
@@ -6408,12 +6420,8 @@
                         nextIdx++;
                     }
                     
-                    const currentText = sentenceItems.map((item, idx) => {
-                        const text = extractTextFromDOM(item);
-                        return idx === selectedIndex ? `<selected>${text}</selected>` : text;
-                    }).join("").trim();
-                    
-                    const contextText = [...prefixTexts, currentText, ...suffixTexts].filter(Boolean).join(" ");
+                    const currentText = extractTextFromDOM(currentSentenceEl, selectedEl).trim();
+                    const contextText = [...prefixTexts, currentText, ...suffixTexts].filter((text) => text).join(" ");
                     
                     const prefixLog = prefixTexts.length > 0 ? '+'.repeat(prefixTexts.length) : '';
                     const suffixLog = suffixTexts.length > 0 ? '+'.repeat(suffixTexts.length) : '';
