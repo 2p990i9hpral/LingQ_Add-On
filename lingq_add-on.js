@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      13.7.3
+// @version      14.0.0
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @grant       GM_xmlhttpRequest
@@ -814,7 +814,25 @@
                 responseType: 'stream',
                 
                 onloadstart: (res) => {
-                    if (!res.response) {
+                    if (!res.response) return;
+                    
+                    if (res.status >= 400) {
+                        const reader = res.response.getReader();
+                        const decoder = new TextDecoder('utf-8');
+                        let errText = '';
+                        
+                        (async () => {
+                            try {
+                                while (true) {
+                                    const {done, value} = await reader.read();
+                                    if (value) errText += decoder.decode(value, {stream: true});
+                                    if (done) break;
+                                }
+                                if (!isResolved) reject(new Error(`HTTP ${res.status}: ${errText}`));
+                            } catch (e) {
+                                if (!isResolved) reject(new Error(`HTTP ${res.status}: Stream read error`));
+                            }
+                        })();
                         return;
                     }
                     
@@ -851,8 +869,7 @@
                                             if (json.type === "content_block_delta" && json.delta?.text) {
                                                 fullContent += json.delta.text;
                                             }
-                                        } catch (e) {
-                                        }
+                                        } catch (e) {}
                                     });
                                 }
                                 
@@ -866,18 +883,9 @@
                         }
                     })();
                 },
-                
-                onload: () => {
-                    finish();
-                },
-                
-                onerror: (err) => {
-                    if (!isResolved) reject(new Error("Network Error"));
-                },
-                
-                ontimeout: () => {
-                    if (!isResolved) reject(new Error("Request Timed Out"));
-                }
+                onload: () => finish(),
+                onerror: () => { if (!isResolved) reject(new Error("Network Error")); },
+                ontimeout: () => { if (!isResolved) reject(new Error("Request Timed Out")); }
             });
         });
     }
@@ -1283,55 +1291,96 @@
         return {api_url, headers};
     }
     
-    function buildRequestBody(provider, model, history, stream = false) {
-        let body = {model, temperature: 1.0, messages: history};
+    function buildRequestBody(provider, model, history, stream = false, cacheName = null) {
+        const processedHistory = (provider === "google" && cacheName)
+            ? history.filter(m => {
+                if (m.role === "user" && m.content.startsWith("<summary>")) return false;
+                if (m.role === "system-main" || m.role === "system-word") return false;
+                return true;
+            })
+            : history;
         
+        let mappedHistory = processedHistory.map(m => {
+            let role = m.role.split("-")[0];
+            
+            if (provider === "google" && cacheName && role === "system") {
+                role = "user";
+            }
+            
+            return { role, content: m.content };
+        });
+        
+        if (provider === "anthropic") {
+            const mergedHistory = [];
+            mappedHistory.forEach(msg => {
+                const lastMsg = mergedHistory[mergedHistory.length - 1];
+                if (lastMsg && lastMsg.role === msg.role) {
+                    lastMsg.content += `\n\n${msg.content}`;
+                } else {
+                    mergedHistory.push({ role: msg.role, content: msg.content });
+                }
+            });
+            mappedHistory = mergedHistory;
+        }
+        
+        const body = { model, temperature: 1.0, messages: mappedHistory };
         if (stream) body.stream = true;
         
         if (provider === "openai" && model.includes("gpt-5")) {
             body.reasoning_effort = "none";
         }
+        
         if (provider === "google") {
             body.reasoning_effort = "none";
+            if (cacheName) {
+                body.extra_body = { google: { cached_content: cacheName } };
+            }
+            body.stream_options = {include_usage: true};
         }
+        
         if (provider === "anthropic") {
             body.max_tokens = 8192;
             
-            const systemMessages = history.filter(m => m.role === "system");
-            body.system = systemMessages.map(m => m.content).join("\n\n---\n\n");
-            
-            const nonSystem = history.filter(m => m.role !== "system");
-            const merged = [];
-            for (const msg of nonSystem) {
-                const last = merged[merged.length - 1];
-                if (last && last.role === msg.role) {
-                    last.content += `\n\n${msg.content}`;
-                } else {
-                    merged.push({role: msg.role, content: msg.content});
-                }
+            const systemMessages = mappedHistory.filter(m => m.role === "system");
+            if (systemMessages.length > 0) {
+                body.system = systemMessages.map(m => m.content).join("\n\n---\n\n");
             }
-            body.messages = merged;
+            
+            body.messages = mappedHistory.filter(m => m.role !== "system");
         }
+        
         if (provider === "deepseek") {
-            body.thinking = {type: "disabled"}
+            body.thinking = { type: "disabled" };
         }
+        
         if (provider === "cerebras") {
-            body.reasoning_effort = "low"
+            body.reasoning_effort = "low";
         }
         
         return body;
     }
     
-    async function getOpenAIResponse(provider, apiKey, model, history) {
+    async function getOpenAIResponse(provider, apiKey, model, history, cacheName = null, onCacheExpired = null, retryCount = 0) {
         const {api_url, headers} = buildRequestConfig(provider, apiKey);
-        const body = buildRequestBody(provider, model, history);
+        const body = buildRequestBody(provider, model, history, false, cacheName);
         
         try {
             const response = await gmFetch(api_url, {method: 'POST', headers, body: JSON.stringify(body)});
             
             if (!response.ok) {
                 const errorData = await response.json();
-                return errorData.error?.message || JSON.stringify(errorData);
+                const errMsg = errorData.error?.message || JSON.stringify(errorData);
+                
+                if (cacheName && provider === "google" && response.status === 403 && retryCount === 0 && onCacheExpired) {
+                    console.warn("Gemini cache may have expired. Recreating and retrying...");
+                    const newCacheName = await onCacheExpired();
+                    if (newCacheName) {
+                        return getOpenAIResponse(provider, apiKey, model, history, newCacheName, onCacheExpired, 1);
+                    }
+                    console.warn("Cache recreation failed. Falling back to non-cached request.");
+                    return getOpenAIResponse(provider, apiKey, model, history, null, null, 1);
+                }
+                return errMsg;
             }
             
             const data = await response.json();
@@ -1353,10 +1402,10 @@
         }
     }
     
-    async function streamOpenAIResponse(provider, apiKey, model, history, onChunkReceived, onStreamEnd, onError) {
+    async function streamOpenAIResponse(provider, apiKey, model, history, onChunkReceived, onStreamEnd, onError, cacheName = null, onCacheExpired = null, retryCount = 0) {
         const {api_url, headers} = buildRequestConfig(provider, apiKey);
         if (provider === "anthropic") headers['Accept'] = 'text/event-stream';
-        const body = buildRequestBody(provider, model, history, true);
+        const body = buildRequestBody(provider, model, history, true, cacheName);
         
         try {
             const finalContent = await gmStream(api_url, {
@@ -1374,6 +1423,15 @@
             
             onStreamEnd(finalContent);
         } catch (error) {
+            if (cacheName && provider === "google" && (error.message.includes("403") || error.message.includes("404")) && retryCount === 0 && onCacheExpired) {
+                console.warn("Gemini cache may have expired. Recreating and retrying...");
+                const newCacheName = await onCacheExpired();
+                if (newCacheName) {
+                    return streamOpenAIResponse(provider, apiKey, model, history, onChunkReceived, onStreamEnd, onError, newCacheName, onCacheExpired, 1);
+                }
+                console.warn("Cache recreation failed. Falling back to non-cached request.");
+                return streamOpenAIResponse(provider, apiKey, model, history, onChunkReceived, onStreamEnd, onError, null, null, 1);
+            }
             onError(error);
         }
     }
@@ -4341,7 +4399,7 @@
         setupFlashcardPopupEventListeners();
     }
     
-    function setupReader() {
+    async function setupReader() {
         function resetLocalVideo() {
             const container = document.getElementById("local-video-container");
             if (container) {
@@ -6020,8 +6078,9 @@
                 }
                 
                 getLessonSummary(llmProvider, llmApiKey, llmModel, lessonContent)
-                    .then(summary => {
+                    .then(async summary => {
                         lessonSummary = convertMarkdownToHTML(summary);
+                        await refreshGeminiCache();
                     });
                 
             }
@@ -6131,6 +6190,7 @@
             }
             
             async function handleLoadedContent(node) {
+                currentGeminiCacheName = null;
                 resetLocalVideo();
                 handleLocalVideoContainerVisibility();
                 
@@ -6185,6 +6245,48 @@
             const sentenceText = await waitForElement('.sentence-text', 10000);
             sentenceText.querySelectorAll(".loadedContent").forEach(handleLoadedContent);
             observer.observe(sentenceText, {childList: true});
+        }
+        
+        async function createGeminiCache(apiKey, model, summaryHTML, sysPlain, sysWord) {
+            const formattedModel = model.startsWith('models/') ? model : `models/${model}`;
+            const apiUrl = 'https://generativelanguage.googleapis.com/v1beta/cachedContents';
+            const contents = [
+                { role: "user", parts: [{ text: `<summary>${summaryHTML}</summary>` }] },
+                { role: "user", parts: [{ text: sysPlain }] },
+                { role: "user", parts: [{ text: sysWord }] }
+            ];
+            
+            try {
+                const response = await gmFetch(apiUrl, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'x-goog-api-key': apiKey
+                    },
+                    body: JSON.stringify({ model: formattedModel, contents })
+                });
+                
+                if (!response.ok) {
+                    console.error("Cache Creation Failed:", await response.text());
+                    return null;
+                }
+                const data = await response.json();
+                console.log("✅ Cache created successfully:", data);
+                return data.name;
+            } catch (error) {
+                console.error("Cache Creation Exception:", error);
+                return null;
+            }
+        }
+        
+        async function refreshGeminiCache() {
+            if (settings.llmProvider !== "google") return null;
+            const apiKey = (settings.llmApiKeys || {})["google"];
+            
+            if (!apiKey || !lessonSummary) return null;
+            
+            currentGeminiCacheName = await createGeminiCache(apiKey, settings.llmModel, lessonSummary, systemPrompt, wordPhrasePrompt);
+            return currentGeminiCacheName;
         }
         
         async function setupLLMs() {
@@ -6786,11 +6888,14 @@
                     const savedKeys = settings.llmApiKeys || {};
                     llmApiKey = savedKeys[llmProvider] || "";
                     
+                    const isWordRequest = chatHistory.some(m => m.role === "system-word");
+                    const cacheToUse = (isWordRequest && llmProvider === "google") ? currentGeminiCacheName : null;
+                    
                     await streamOpenAIResponse(
                         llmProvider,
                         llmApiKey,
                         llmModel,
-                        chatHistory.map(item => ({role: item.role.split("-")[0], content: item.content})),
+                        chatHistory,
                         (chunk) => {
                             const content = typeof chunk === "string" ? chunk : chunk.choices?.[0]?.delta?.content;
                             if (content) {
@@ -6823,14 +6928,9 @@
                             });
                             copyButton.addEventListener('click', async () => {
                                 const textToCopy = botMessageDiv.textContent.trim();
-                                
                                 navigator.clipboard.writeText(textToCopy)
-                                    .then(() => {
-                                        showToast("Message Copied!", true);
-                                    })
-                                    .catch(() => {
-                                        showToast("Failed to copy message.", false);
-                                    });
+                                    .then(() => showToast("Message Copied!", true))
+                                    .catch(() => showToast("Failed to copy message.", false));
                             });
                             messageButtonContainer.appendChild(copyButton);
                             
@@ -6840,7 +6940,6 @@
                             });
                             ttsButton.addEventListener('click', async function initialTTSHandler() {
                                 let textToTTS = "";
-                                
                                 if (botMessageDiv.matches(".word-message")) {
                                     textToTTS = Array.from(botMessageDiv.querySelectorAll("b, ul > li:nth-child(1)")).map(node => node.textContent).join(". ");
                                 } else {
@@ -6895,7 +6994,9 @@
                         },
                         (error) => {
                             botMessageDiv.innerHTML = `⚠️ Error: ${error.message}`;
-                        }
+                        },
+                        cacheToUse,
+                        refreshGeminiCache
                     );
                 }
                 
@@ -7048,378 +7149,6 @@
                 
                 const isSentence = !document.querySelector(".section-widget--main");
                 
-                const systemPrompt = `
-                # System Capabilities & Format Protocol
-                
-                ## Core Responsibility
-                - Tone: Objective and concise.
-                - Latency Control: Skip prefaces (e.g., "Here is the answer"). Output the result immediately.
-                
-                ## STRICT Output Formatting (HTML Only)
-                - Content Type: Raw HTML string.
-                - Forbidden: Markdown syntax (No \`\`\`html blocks, no bold, no # headers), conversational filler.
-                - Spacing: Use <p> tags for structural spacing. Use <br> only for line breaks inside a specific block if absolutely necessary.
-                
-                ## Language Configuration
-                - Presentation Language: '${userLanguage}' (Used for explanations, definitions, translations).
-                - Target Language: '${lessonLanguage}' (Used for original examples, base forms).
-                - Nuance: Explanations must bridge the cultural/linguistic gap between '${lessonLanguage}' and '${userLanguage}'.
-                `;
-                
-                const wordPhrasePrompt = `
-                # Single Word/Phrase Extraction
-                
-                ## Task: Linguistic Analysis
-                Analyze the input: 'Input: "Term" Context: "Sentence"'.
-                
-                1. Lemma Extraction (Base Form)
-                   - Nouns: Singular form.
-                   - Verbs: Infinitive form.
-                   - Adverbs: Maintain the adverbial form. DO NOT revert '-ly' adverbs to adjectives (e.g., Input: "perfectly" -> Base: "perfectly", NOT "perfect").
-                   - Idioms: Standard dictionary form (e.g., "kicked the bucket" -> "kick the bucket").
-                   - Inflections: If the input is conjugated (e.g., "書いていました"), output the dictionary form ("書く").
-                
-                2. IPA Pronunciation
-                   - Provide IPA for the Base Form (lemma) enclosed in brackets.
-                   - Simplify Constraints: Eliminate narrow phonetic diacritics (e.g., lowering [̞], voiceless [̥], compressed [ᵝ], or dental [̪] marks).
-                   - Ensure the output represents the standard, dictionary-style pronunciation, not a precise phonetic realization.
-                
-                3. Contextual Definition
-                   - Identify a single standard dictionary definition of the Base Form in ${userLanguage} that best covers the sense used in the Context.
-                   - Select the definition at the correct semantic granularity: broad enough to reflect the word's general dictionary entry, yet specific enough to distinguish it from other listed senses.
-                   - Prioritize formal equivalence: if the target language has a direct lexical counterpart (e.g., a cognate or loanword), prefer it over a paraphrase or a semantically narrowed synonym.
-                   - Do not use parentheses for alternative meanings or additional explanation. Do not provide a comma-separated list of synonyms.
-                   - Output must be a definitive, short phrase or single word.
-                
-                4. Contextual Explanation
-                   - This is where you bridge the "Standard Definition" and the "Specific Context".
-                   - Explain how the dictionary meaning applies here, explaining specific nuances, tense, or implications.
-                
-                5. Example Generation
-                   - Create a new, high-quality penetrating example sentence in ${lessonLanguage} using the Base Form.
-                   - And translate accurately into ${userLanguage}.
-                   - Ensure the usage helps the user understand the general applicability of this specific sense.
-                
-                ## Output Structure (HTML)
-                
-                <div class="word-card">
-                    <b>[Base Form in ${lessonLanguage}]</b> <span>/[IPA]/</span> <i>([Part of Speech in ${userLanguage}])</i>
-                    <p>[Standard Dictionary Definition in ${userLanguage}]</p>
-                    <hr>
-                    <p>[Contextual Explanation in ${userLanguage}]</p>
-                    <hr>
-                    <ul>
-                      <li>[New Example Sentence in ${lessonLanguage}]</li>
-                      <li>[Translation in ${userLanguage}]</li>
-                    </ul>
-                </div>
-                
-                ## Examples
-                
-                ### Example 1: Noun (Original: English, User: Korean)
-                User Input: 'Input: "translators", Context: "However, the ESV translators chose to translate that same word as 'servant'."'
-                Assistant Output:
-                <div class="word-card">
-                    <b>translator</b> <span>[trænsˈleɪtər]</span> <i>(명사)</i>
-                    <p>번역가</p>
-                    <hr>
-                    <p>한 언어로 된 텍스트나 말을 다른 언어로 바꾸는 사람을 뜻하는 일반적인 단어입니다. 문맥에서는 성경 번역을 담당한 특정 그룹을 지칭하고 있습니다.</p>
-                    <hr>
-                    <ul>
-                      <li>Many translators work freely.</li>
-                      <li>많은 번역가들이 자유롭게 일합니다.</li>
-                    </ul>
-                </div>
-                
-                ### Example 2: Verb (Original: Spanish, User: English)
-                User Input: 'Input: "lograr", Context: "Debemos lograr nuestros objetivos."'
-                Assistant Output:
-                <div class="word-card">
-                    <b>lograr</b> <span>[loˈɣɾaɾ]</span> <i>(verb)</i>
-                    <p>To achieve</p>
-                    <hr>
-                    <p>Refers to the act of reaching a goal or result, typically through effort. The context highlights obtaining specific objectives.</p>
-                    <hr>
-                    <ul>
-                      <li>Espero lograr todas mis metas.</li>
-                      <li>I hope to achieve all my goals.</li>
-                    </ul>
-                </div>
-                
-                ### Example 3: Context-Specific Sense (Original: German, User: French)
-                User Input: 'Input: "anstellen", Context: "Was hast du mit der Schere angestellt?"'
-                Assistant Output:
-                <div class="word-card">
-                    <b>anstellen</b> <span>[ˈanˌʃtɛlən]</span> <i>(verb)</i>
-                    <p>Faire</p>
-                    <hr>
-                    <p>Bien que "anstellen" puisse signifier "employer", dans ce contexte, il signifie "commettre" ou "faire" une bêtise. C'est le sens standard utilisé pour des actions négatives ou maladroites.</p>
-                    <hr>
-                    <ul>
-                      <li>Er hat wieder etwas Dummes angestellt.</li>
-                      <li>Il a encore fait quelque chose de stupide.</li>
-                    </ul>
-                </div>
-                
-                ### Example 4: Adverb Retention (Original: English, User: Japanese)
-                User Input: 'Input: "recklessly", Context: "He drove recklessly through the rain."'
-                Assistant Output:
-                <div class="word-card">
-                    <b>recklessly</b> <span>[ˈrɛklɪsli]</span> <i>(副詞)</i>
-                    <p>無謀に</p>
-                    <hr>
-                    <p>危険や結果を十分に考えずに行動することを指す定義です。文脈では運転という行為が安全を無視して行われたことを説明しています。</p>
-                    <hr>
-                    <ul>
-                      <li>She spent money recklessly.</li>
-                      <li>彼女は無謀にお金を使った。</li>
-                    </ul>
-                </div>
-                
-                ### Example 5: Conjugated Verb (Original: Japanese, User: Korean)
-                User Input: 'Input: "入っていました", Context: "箱の中に手紙が入っていました。"'
-                Assistant Output:
-                <div class="word-card">
-                    <b>入る</b> <span>[haiɾɯ]</span> <i>(동사)</i>
-                    <p>들어가다</p>
-                    <hr>
-                    <p>문맥에서는 편지가 상자 안에 이미 존재하는 '상태'를 나타냅니다. 이는 어휘 자체의 의미가 아니라 '〜ている' 문법 구조가 동작의 결과로 지속되는 상태를 표현하기 때문입니다.</p>
-                    <hr>
-                    <ul>
-                      <li>カバンに本が入る。</li>
-                      <li>가방에 책이 들어있다.</li>
-                    </ul>
-                </div>
-                
-                ### Example 6: Complex Inflection/Conjugation (Original: Japanese, User: Korean)
-                User Input: 'Input: "見せられませんでした", Context: "昨日の発表会では、準備不足で納得のいく成果を観客に見せられませんでした。"'
-                Assistant Output:
-                <div class="word-card">
-                    <b>見せる</b> <span>[miseɾɯ]</span> <i>(동사)</i>
-                    <p>보여주다</p>
-                    <hr>
-                    <p>문맥에서는 '見せられませんでした(보여주지 못했습니다)'라는 가능형의 부정 과거 형태로 쓰였습니다. 준비가 부족하여 관객에게 만족스러운 결과를 보여줄 수 없었다는 아쉬움과 불가능의 뉘앙스를 전달하고 있습니다.</p>
-                    <hr>
-                    <ul>
-                      <li>子供に悪い見本を見せるべきではない。</li>
-                      <li>아이에게 나쁜 본보기를 보여주어서는 안 된다。</li>
-                    </ul>
-                </div>
-                
-                ### Example 7: Lexicalized Negation / Fixed Expression (Original: Japanese, User: Korean)
-                User Input: 'Input: "仕方がありません", Context: "雨が降り始めてしまったので、今日の遠足が中止になるのは仕方がありません。"'
-                Assistant Output:
-                <div class="word-card">
-                    <b>仕方がない</b> <span>[ɕikata ɡa nai]</span> <i>(관용구)</i>
-                    <p>어쩔 수 없다</p>
-                    <hr>
-                    <p>정해진 상황이나 이미 일어난 일에 대해 다른 방도가 없음을 체념하듯 표현하는 관용구입니다. 여기서는 정중한 형태인 'ありません'으로 변형되어, 비가 와서 소풍이 취소되는 것은 불가피하고 당연한 일이라는 의미를 나타냅니다.</p>
-                    <hr>
-                    <ul>
-                      <li>いくら後悔しても、過ぎたことは仕方がない。</li>
-                      <li>아무리 후회해도 지난 일은 어쩔 수 없다。</li>
-                    </ul>
-                </div>
-                
-                ### Example 8: Orthographic Adaptation (Original: Japanese, User: Korean)
-                User Input: 'Input: "カワイイ", Context: "彼女が着ている服は、いつもすごくカワイイですね。"'
-                Assistant Output:
-                <div class="word-card">
-                    <b>かわいい</b> <span>[kawaii]</span> <i>(형용사)</i>
-                    <p>귀엽다</p>
-                    <hr>
-                    <p>외모나 행동이 사랑스럽고 호감이 가는 상태를 뜻합니다. 원문에서는 'カワイイ'처럼 카타카나로 표기하여, 단순히 귀엽다는 의미를 넘어 패션이나 시각적인 측면에서 감각적이고 트렌디한 느낌을 한층 강조하고 있습니다.</p>
-                    <hr>
-                    <ul>
-                      <li>公園でかわいい子猫を見つけました。</li>
-                      <li>공원에서 귀여운 새끼 고양이를 발견했습니다。</li>
-                    </ul>
-                </div>
-                
-                ### Example 9: Kanji Phonetic Disambiguation (Original: Japanese, User: Korean)
-                User Input: 'Input: "市場", Context: "新鮮な野菜を買うために、朝早く地元の市場に行きました。"'
-                Assistant Output:
-                <div class="word-card">
-                    <b>市場</b> <span>[it͡ɕiba]</span> <i>(명사)</i>
-                    <p>시장</p>
-                    <hr>
-                    <p>'市場'은 주식이나 경제 등 추상적인 시장(しじょう)을 뜻하기도 하지만, 이 문맥에서는 사람들이 모여 물건을 직접 사고파는 물리적인 장소인 '재래시장(いちば)'을 가리킵니다. 신선한 채소를 사기 위해 방문한 구체적인 공간의 의미로 사용되었습니다.</p>
-                    <hr>
-                    <ul>
-                      <li>毎朝、この市場は活気に満ちている。</li>
-                      <li>매일 아침 이 시장은 활기로 넘친다。</li>
-                    </ul>
-                </div>
-                `;
-                
-                const sentencePrompt = `
-                # Sentence Analysis
-                
-                ## Task: Full Text Parsing
-                Input: 'Input: "Sentences"'.
-                
-                1. Translation Strategy
-                   - Translate ALL input sentences into a single flowing block in ${userLanguage}.
-                   - Wrap the entire translation in <p><b>...</b></p>.
-                
-                2. Holistic Explanation
-                   - Analyze the "Big Picture": Meaning, tone, speaker intent, and nuance.
-                   - Explain beyond the literal translation.
-                
-                3. Key Element Extraction
-                   - Select 2-4 distinct elements (Difficult words, Collocations, Idioms).
-                   - Criteria: Choose elements where the whole is greater than the sum of parts, or where detailed nuance is needed.
-                   - Format: [Original Term]: [Concise Definition in ${userLanguage}].
-                
-                ## Output Structure (HTML)
-                
-                <p><b>[Full Translation in ${userLanguage}]</b></p>
-                <hr>
-                <p>[Holistic Explanation in ${userLanguage}]</p>
-                <hr>
-                <ul>
-                  <li><b>[Element 1 in ${lessonLanguage}]:</b> [Definition in ${userLanguage}]</li>
-                  <li><b>[Element 2 in ${lessonLanguage}]:</b> [Definition in ${userLanguage}]</li>
-                </ul>
-                
-                ## Examples
-                
-                ### Example 1: Standard Sentence (Original: French, User: Japanese)
-                User Input: 'Input: "Il a réussi à convaincre ses collègues malgré les difficultés."'
-                Assistant Output:
-                <p><b>彼は困難にもかかわらず同僚たちを説得することに成功した。</b></p>
-                <hr>
-                <p>この文は、彼が直面した障害や困難な状況があったにもかかわらず、最終的に同僚たちを自分の意見に同意させることに成功したという達成感を伝えています。</p>
-                <hr>
-                <ul>
-                  <li><b>réussi à convaincre:</b> 説得に成功した、納得させた。</li>
-                  <li><b>malgré:</b> ～にもかかわらず（対立や譲歩を表す前置詞）。</li>
-                </ul>
-                
-                ### Example 2: Contrast/Nuance (Original: Italian, User: German)
-                User Input: 'Input: "Nonostante la pioggia, siamo andati al concerto."'
-                Assistant Output:
-                <p><b>Trotz des Regens sind wir zum Konzert gegangen.</b></p>
-                <hr>
-                <p>Dieser Satz hebt die Entschlossenheit hervor. Das Wort "Nonostante" signalisiert ein Hindernis (den Regen), das jedoch die Hauptaktion (zum Konzert gehen) nicht verhindern konnte.</p>
-                <hr>
-                <ul>
-                  <li><b>Nonostante:</b> Trotz; obwohl.</li>
-                  <li><b>siamo andati:</b> wir sind gegangen (Vergangenheitsform von "andare").</li>
-                </ul>
-                
-                ### Example 3: Idiomatic Expression (Original: English, User: Korean)
-                User Input: 'Input: "Don't worry, it's not rocket science, you'll figure it out quickly."'
-                Assistant Output:
-                <p><b>걱정 마세요, 그렇게 복잡한 게 아니니까 금방 알게 될 거예요.</b></p>
-                <hr>
-                <p>상대방을 안심시키고 격려하는 문장입니다. "Rocket science"는 매우 어렵고 복잡한 학문을 상징하는데, 부정문으로 쓰여 해당 과제가 평이하다는 것을 강조합니다.</p>
-                <hr>
-                <ul>
-                  <li><b>it's not rocket science:</b> (관용구) 몹시 어려운 일이 아니다, 아주 복잡하지 않다.</li>
-                  <li><b>figure it out:</b> (문제 등을) 해결하다, 이해하다, 답을 알아내다.</li>
-                </ul>
-                
-                ### Example 4: Multiple Sentences (Original: Spanish, User: French)
-                User Input: 'Input: "El sol brillaba con fuerza. Los pájaros cantaban en los árboles." 'r
-                Assistant Output:
-                <p><b>Le soleil brillait fort. Les oiseaux chantaient dans les arbres.</b></p>
-                <hr>
-                <p>Ces deux phrases posent un décor paisible et vivant. L'utilisation de l'imparfait (brillaba, cantaban) suggère une action continue dans le passé, décrivant l'atmosphère d'un moment précis.</p>
-                <hr>
-                <ul>
-                  <li><b>con fuerza:</b> avec force; intensément.</li>
-                  <li><b>cantaban:</b> ils chantaient (verbe chanter à l'imparfait).</li>
-                </ul>
-                `;
-                
-                const plainTextPrompt = `
-                # Conversational Mode & Correction Protocol
-                
-                ## Context Awareness
-                You are in a follow-up state. The user has either:
-                1. Explicitly requested a correction to the previous analysis.
-                2. Asked a general or referential question.
-                
-                ## Logic Branching via Intent Detection
-                
-                ### Condition A: Correction Request
-                Trigger: Only when the user explicitly requests a fix of the previously generated word card using direct commands such as "Wrong word", "Fix the base form", "Use X instead of Y", "Correct the IPA".
-                Action: Output conversational explanation first (optional), then output the corrected word card wrapped strictly inside <div class="word-card">.
-                Restriction:
-                    - Carefully inspect the "Previous Response" and locate the exact slot requested for modification.
-                    - Except for the explicitly requested changes, all other content (definitions, contextual explanations, and examples) must be copied verbatim from the "Previous Response".
-                
-                ### Condition B: General or Referential Query
-                Trigger: The user asks a question or makes a general comment.
-                Action: Answer in Raw HTML (<p>, <b> <ul>, <li>). Markdown syntax (code blocks, bold, and headers) is forbidden.
-                Restriction: Using <div class="word-card"> format is not permitted. This format is reserved for the Correction Protocol (Condition A).
-                
-                ## Examples
-                
-                ### Example 1: Strict Correction (no preface needed)
-                Scenario: Target Language is English, Presentation Language (User Language) is Japanese. The word "happily" in the context of "He played happily" was incorrectly analyzed with the base form "happy" and the part of speech marked as an adjective (形容詞).
-                Previous Response:
-                <div class="word-card">
-                    <b>happy</b> <span>[ˈhæpɪli]</span> <i>(形容詞)</i>
-                    <p>楽しそうに、幸福に</p>
-                    <hr>
-                    <p>喜びを伴って行われる動作を説明するために使用されます。ユーザーの文脈は動作の様態を強調しています。</p>
-                    <hr>
-                    <ul>
-                        <li>He played happily.</li>
-                        <li>彼は楽しそうに遊んだ。</li>
-                    </ul>
-                </div>
-                User Input: "The base form should be the adverb, not adjective."
-                Assistant Output:
-                <div class="word-card">
-                    <b>happily</b> <span>[ˈhæpɪli]</span> <i>(副詞)</i>
-                    <p>楽しそうに</p>
-                    <hr>
-                    <p>喜びを伴って行われる動作を説明するために使用されます。ユーザーの文脈は動作の 様態を強調しています。</p>
-                    <hr>
-                    <ul>
-                        <li>He played happily.</li>
-                        <li>彼は楽しそうに遊んだ。</li>
-                    </ul>
-                </div>
-                
-                ### Example 2: Strict Correction with Preface
-                Scenario: Target Language is Japanese, Presentation Language (User Language) is Korean. The word "角" in the context of turning a corner ("次の角を右に曲がってください") was incorrectly analyzed with the pronunciation of "horn" ([tsɯno]).
-                Previous Response:
-                <div class="word-card">
-                    <b>角</b> <span>[tsɯno]</span> <i>(명사)</i>
-                    <p>길모퉁이</p>
-                    <hr>
-                    <p>길이 꺾이는 곳을 의미합니다. 문맥에서는 다음 안내 지점인 오른쪽으로 가야 할 모퉁이를 지칭합니다.</p>
-                    <hr>
-                    <ul>
-                        <li>次の角を右に曲がってください。</li>
-                        <li>다음 길모퉁이에서 우회전해 주세요.</li>
-                    </ul>
-                </div>
-                User Input: "발음 고쳐줘 'かど'야."
-                Assistant Output:
-                <p>「角」는 이 문맥에서 길모퉁이를 뜻하는 'かど'로 읽히므로 [kado]가 올바른 발음입니다. [tsɯno]는 동물의 뿔을 뜻할 때의 발음입니다.</p>
-                <div class="word-card">
-                    <b>角</b> <span>[kado]</span> <i>(명사)</i>
-                    <p>길모퉁이</p>
-                    <hr>
-                    <p>길이 꺾이는 곳을 의미합니다. 문맥에서는 다음 안내 지점인 오른쪽으로 가야 할 모퉁이를 지칭합니다.</p>
-                    <hr>
-                    <ul>
-                        <li>次の角を右に曲がってください。</li>
-                        <li>다음 길모퉁이에서 우회전해 주세요.</li>
-                    </ul>
-                </div>
-                
-                ### Example 3: General Conversation
-                User Input: "Why is English so hard?"
-                Assistant Output:
-                <p>English can be difficult due to its inconsistent spelling rules and vast vocabulary borrowed from multiple languages.</p>
-                `;
-                
                 let chatHistory = [];
                 
                 updateReferenceWord();
@@ -7463,10 +7192,6 @@
                 observer.observe(widgetArea, {childList: true});
             }
             
-            const userDictionaryLang = await getDictionaryLanguage();
-            const DictionaryLocalePairs = await getDictionaryLocalePairs()
-            const lessonLanguage = DictionaryLocalePairs[language];
-            const userLanguage = DictionaryLocalePairs[userDictionaryLang];
             const lessonReader = document.getElementById('lesson-reader');
             
             updateWidget();
@@ -7504,9 +7229,384 @@
         let styleElement = null;
         let lessonSummary = "";
         let quickSummary = "";
+        let currentGeminiCacheName = null;
         
         const language = getLessonLanguage();
         ensureLanguageSettings(language);
+        
+        const userDictionaryLang = await getDictionaryLanguage();
+        const DictionaryLocalePairs = await getDictionaryLocalePairs()
+        const lessonLanguage = DictionaryLocalePairs[language];
+        const userLanguage = DictionaryLocalePairs[userDictionaryLang];
+        
+        const systemPrompt = `
+        # System Capabilities & Format Protocol
+        
+        ## Core Responsibility
+        - Tone: Objective and concise.
+        - Latency Control: Skip prefaces (e.g., "Here is the answer"). Output the result immediately.
+        
+        ## STRICT Output Formatting (HTML Only)
+        - Content Type: Raw HTML string.
+        - Forbidden: Markdown syntax (No \`\`\`html blocks, no bold, no # headers), conversational filler.
+        - Spacing: Use <p> tags for structural spacing. Use <br> only for line breaks inside a specific block if absolutely necessary.
+        
+        ## Language Configuration
+        - Presentation Language: '${userLanguage}' (Used for explanations, definitions, translations).
+        - Target Language: '${lessonLanguage}' (Used for original examples, base forms).
+        - Nuance: Explanations must bridge the cultural/linguistic gap between '${lessonLanguage}' and '${userLanguage}'.
+        `;
+        const wordPhrasePrompt = `
+        # Single Word/Phrase Extraction
+        
+        ## Task: Linguistic Analysis
+        Analyze the input: 'Input: "Term" Context: "Sentence"'.
+        
+        1. Lemma Extraction (Base Form)
+           - Nouns: Singular form.
+           - Verbs: Infinitive form.
+           - Adverbs: Maintain the adverbial form. DO NOT revert '-ly' adverbs to adjectives (e.g., Input: "perfectly" -> Base: "perfectly", NOT "perfect").
+           - Idioms: Standard dictionary form (e.g., "kicked the bucket" -> "kick the bucket").
+           - Inflections: If the input is conjugated (e.g., "書いていました"), output the dictionary form ("書く").
+        
+        2. IPA Pronunciation
+           - Provide IPA for the Base Form (lemma) enclosed in brackets.
+           - Simplify Constraints: Eliminate narrow phonetic diacritics (e.g., lowering [̞], voiceless [̥], compressed [ᵝ], or dental [̪] marks).
+           - Ensure the output represents the standard, dictionary-style pronunciation, not a precise phonetic realization.
+        
+        3. Contextual Definition
+           - Identify a single standard dictionary definition of the Base Form in ${userLanguage} that best covers the sense used in the Context.
+           - Select the definition at the correct semantic granularity: broad enough to reflect the word's general dictionary entry, yet specific enough to distinguish it from other listed senses.
+           - Prioritize formal equivalence: if the target language has a direct lexical counterpart (e.g., a cognate or loanword), prefer it over a paraphrase or a semantically narrowed synonym.
+           - Do not use parentheses for alternative meanings or additional explanation. Do not provide a comma-separated list of synonyms.
+           - Output must be a definitive, short phrase or single word.
+        
+        4. Contextual Explanation
+           - This is where you bridge the "Standard Definition" and the "Specific Context".
+           - Explain how the dictionary meaning applies here, explaining specific nuances, tense, or implications.
+        
+        5. Example Generation
+           - Create a new, high-quality penetrating example sentence in ${lessonLanguage} using the Base Form.
+           - And translate accurately into ${userLanguage}.
+           - Ensure the usage helps the user understand the general applicability of this specific sense.
+        
+        ## Output Structure (HTML)
+        
+        <div class="word-card">
+            <b>[Base Form in ${lessonLanguage}]</b> <span>/[IPA]/</span> <i>([Part of Speech in ${userLanguage}])</i>
+            <p>[Standard Dictionary Definition in ${userLanguage}]</p>
+            <hr>
+            <p>[Contextual Explanation in ${userLanguage}]</p>
+            <hr>
+            <ul>
+              <li>[New Example Sentence in ${lessonLanguage}]</li>
+              <li>[Translation in ${userLanguage}]</li>
+            </ul>
+        </div>
+        
+        ## Examples
+        
+        ### Example 1: Noun (Original: English, User: Korean)
+        User Input: 'Input: "translators", Context: "However, the ESV translators chose to translate that same word as 'servant'."'
+        Assistant Output:
+        <div class="word-card">
+            <b>translator</b> <span>[trænsˈleɪtər]</span> <i>(명사)</i>
+            <p>번역가</p>
+            <hr>
+            <p>한 언어로 된 텍스트나 말을 다른 언어로 바꾸는 사람을 뜻하는 일반적인 단어입니다. 문맥에서는 성경 번역을 담당한 특정 그룹을 지칭하고 있습니다.</p>
+            <hr>
+            <ul>
+              <li>Many translators work freely.</li>
+              <li>많은 번역가들이 자유롭게 일합니다.</li>
+            </ul>
+        </div>
+        
+        ### Example 2: Verb (Original: Spanish, User: English)
+        User Input: 'Input: "lograr", Context: "Debemos lograr nuestros objetivos."'
+        Assistant Output:
+        <div class="word-card">
+            <b>lograr</b> <span>[loˈɣɾaɾ]</span> <i>(verb)</i>
+            <p>To achieve</p>
+            <hr>
+            <p>Refers to the act of reaching a goal or result, typically through effort. The context highlights obtaining specific objectives.</p>
+            <hr>
+            <ul>
+              <li>Espero lograr todas mis metas.</li>
+              <li>I hope to achieve all my goals.</li>
+            </ul>
+        </div>
+        
+        ### Example 3: Context-Specific Sense (Original: German, User: French)
+        User Input: 'Input: "anstellen", Context: "Was hast du mit der Schere angestellt?"'
+        Assistant Output:
+        <div class="word-card">
+            <b>anstellen</b> <span>[ˈanˌʃtɛlən]</span> <i>(verb)</i>
+            <p>Faire</p>
+            <hr>
+            <p>Bien que "anstellen" puisse signifier "employer", dans ce contexte, il signifie "commettre" ou "faire" une bêtise. C'est le sens standard utilisé pour des actions négatives ou maladroites.</p>
+            <hr>
+            <ul>
+              <li>Er hat wieder etwas Dummes angestellt.</li>
+              <li>Il a encore fait quelque chose de stupide.</li>
+            </ul>
+        </div>
+        
+        ### Example 4: Adverb Retention (Original: English, User: Japanese)
+        User Input: 'Input: "recklessly", Context: "He drove recklessly through the rain."'
+        Assistant Output:
+        <div class="word-card">
+            <b>recklessly</b> <span>[ˈrɛklɪsli]</span> <i>(副詞)</i>
+            <p>無謀に</p>
+            <hr>
+            <p>危険や結果を十分に考えずに行動することを指す定義です。文脈では運転という行為が安全を無視して行われたことを説明しています。</p>
+            <hr>
+            <ul>
+              <li>She spent money recklessly.</li>
+              <li>彼女は無謀にお金を使った。</li>
+            </ul>
+        </div>
+        
+        ### Example 5: Conjugated Verb (Original: Japanese, User: Korean)
+        User Input: 'Input: "入っていました", Context: "箱の中に手紙が入っていました。"'
+        Assistant Output:
+        <div class="word-card">
+            <b>入る</b> <span>[haiɾɯ]</span> <i>(동사)</i>
+            <p>들어가다</p>
+            <hr>
+            <p>문맥에서는 편지가 상자 안에 이미 존재하는 '상태'를 나타냅니다. 이는 어휘 자체의 의미가 아니라 '〜ている' 문법 구조가 동작의 결과로 지속되는 상태를 표현하기 때문입니다.</p>
+            <hr>
+            <ul>
+              <li>カバンに本が入る。</li>
+              <li>가방에 책이 들어있다.</li>
+            </ul>
+        </div>
+        
+        ### Example 6: Complex Inflection/Conjugation (Original: Japanese, User: Korean)
+        User Input: 'Input: "見せられませんでした", Context: "昨日の発表会では、準備不足で納得のいく成果を観客に見せられませんでした。"'
+        Assistant Output:
+        <div class="word-card">
+            <b>見せる</b> <span>[miseɾɯ]</span> <i>(동사)</i>
+            <p>보여주다</p>
+            <hr>
+            <p>문맥에서는 '見せられませんでした(보여주지 못했습니다)'라는 가능형의 부정 과거 형태로 쓰였습니다. 준비가 부족하여 관객에게 만족스러운 결과를 보여줄 수 없었다는 아쉬움과 불가능의 뉘앙스를 전달하고 있습니다.</p>
+            <hr>
+            <ul>
+              <li>子供に悪い見本を見せるべきではない。</li>
+              <li>아이에게 나쁜 본보기를 보여주어서는 안 된다。</li>
+            </ul>
+        </div>
+        
+        ### Example 7: Lexicalized Negation / Fixed Expression (Original: Japanese, User: Korean)
+        User Input: 'Input: "仕方がありません", Context: "雨が降り始めてしまったので、今日の遠足が中止になるのは仕方がありません。"'
+        Assistant Output:
+        <div class="word-card">
+            <b>仕方がない</b> <span>[ɕikata ɡa nai]</span> <i>(관용구)</i>
+            <p>어쩔 수 없다</p>
+            <hr>
+            <p>정해진 상황이나 이미 일어난 일에 대해 다른 방도가 없음을 체념하듯 표현하는 관용구입니다. 여기서는 정중한 형태인 'ありません'으로 변형되어, 비가 와서 소풍이 취소되는 것은 불가피하고 당연한 일이라는 의미를 나타냅니다.</p>
+            <hr>
+            <ul>
+              <li>いくら後悔しても、過ぎたことは仕方がない。</li>
+              <li>아무리 후회해도 지난 일은 어쩔 수 없다。</li>
+            </ul>
+        </div>
+        
+        ### Example 8: Orthographic Adaptation (Original: Japanese, User: Korean)
+        User Input: 'Input: "カワイイ", Context: "彼女が着ている服は、いつもすごくカワイイですね。"'
+        Assistant Output:
+        <div class="word-card">
+            <b>かわいい</b> <span>[kawaii]</span> <i>(형용사)</i>
+            <p>귀엽다</p>
+            <hr>
+            <p>외모나 행동이 사랑스럽고 호감이 가는 상태를 뜻합니다. 원문에서는 'カワイイ'처럼 카타카나로 표기하여, 단순히 귀엽다는 의미를 넘어 패션이나 시각적인 측면에서 감각적이고 트렌디한 느낌을 한층 강조하고 있습니다.</p>
+            <hr>
+            <ul>
+              <li>公園でかわいい子猫を見つけました。</li>
+              <li>공원에서 귀여운 새끼 고양이를 발견했습니다。</li>
+            </ul>
+        </div>
+        
+        ### Example 9: Kanji Phonetic Disambiguation (Original: Japanese, User: Korean)
+        User Input: 'Input: "市場", Context: "新鮮な野菜を買うために、朝早く地元の市場に行きました。"'
+        Assistant Output:
+        <div class="word-card">
+            <b>市場</b> <span>[it͡ɕiba]</span> <i>(명사)</i>
+            <p>시장</p>
+            <hr>
+            <p>'市場'은 주식이나 경제 등 추상적인 시장(しじょう)을 뜻하기도 하지만, 이 문맥에서는 사람들이 모여 물건을 직접 사고파는 물리적인 장소인 '재래시장(いちば)'을 가리킵니다. 신선한 채소를 사기 위해 방문한 구체적인 공간의 의미로 사용되었습니다.</p>
+            <hr>
+            <ul>
+              <li>毎朝、この市場は活気に満ちている。</li>
+              <li>매일 아침 이 시장은 활기로 넘친다。</li>
+            </ul>
+        </div>
+        `;
+        const sentencePrompt = `
+        # Sentence Analysis
+        
+        ## Task: Full Text Parsing
+        Input: 'Input: "Sentences"'.
+        
+        1. Translation Strategy
+           - Translate ALL input sentences into a single flowing block in ${userLanguage}.
+           - Wrap the entire translation in <p><b>...</b></p>.
+        
+        2. Holistic Explanation
+           - Analyze the "Big Picture": Meaning, tone, speaker intent, and nuance.
+           - Explain beyond the literal translation.
+        
+        3. Key Element Extraction
+           - Select 2-4 distinct elements (Difficult words, Collocations, Idioms).
+           - Criteria: Choose elements where the whole is greater than the sum of parts, or where detailed nuance is needed.
+           - Format: [Original Term]: [Concise Definition in ${userLanguage}].
+        
+        ## Output Structure (HTML)
+        
+        <p><b>[Full Translation in ${userLanguage}]</b></p>
+        <hr>
+        <p>[Holistic Explanation in ${userLanguage}]</p>
+        <hr>
+        <ul>
+          <li><b>[Element 1 in ${lessonLanguage}]:</b> [Definition in ${userLanguage}]</li>
+          <li><b>[Element 2 in ${lessonLanguage}]:</b> [Definition in ${userLanguage}]</li>
+        </ul>
+        
+        ## Examples
+        
+        ### Example 1: Standard Sentence (Original: French, User: Japanese)
+        User Input: 'Input: "Il a réussi à convaincre ses collègues malgré les difficultés."'
+        Assistant Output:
+        <p><b>彼は困難にもかかわらず同僚たちを説得することに成功した。</b></p>
+        <hr>
+        <p>この文は、彼が直面した障害や困難な状況があったにもかかわらず、最終的に同僚たちを自分の意見に同意させることに成功したという達成感を伝えています。</p>
+        <hr>
+        <ul>
+          <li><b>réussi à convaincre:</b> 説得に成功した、納得させた。</li>
+          <li><b>malgré:</b> ～にもかかわらず（対立や譲歩を表す前置詞）。</li>
+        </ul>
+        
+        ### Example 2: Contrast/Nuance (Original: Italian, User: German)
+        User Input: 'Input: "Nonostante la pioggia, siamo andati al concerto."'
+        Assistant Output:
+        <p><b>Trotz des Regens sind wir zum Konzert gegangen.</b></p>
+        <hr>
+        <p>Dieser Satz hebt die Entschlossenheit hervor. Das Wort "Nonostante" signalisiert ein Hindernis (den Regen), das jedoch die Hauptaktion (zum Konzert gehen) nicht verhindern konnte.</p>
+        <hr>
+        <ul>
+          <li><b>Nonostante:</b> Trotz; obwohl.</li>
+          <li><b>siamo andati:</b> wir sind gegangen (Vergangenheitsform von "andare").</li>
+        </ul>
+        
+        ### Example 3: Idiomatic Expression (Original: English, User: Korean)
+        User Input: 'Input: "Don't worry, it's not rocket science, you'll figure it out quickly."'
+        Assistant Output:
+        <p><b>걱정 마세요, 그렇게 복잡한 게 아니니까 금방 알게 될 거예요.</b></p>
+        <hr>
+        <p>상대방을 안심시키고 격려하는 문장입니다. "Rocket science"는 매우 어렵고 복잡한 학문을 상징하는데, 부정문으로 쓰여 해당 과제가 평이하다는 것을 강조합니다.</p>
+        <hr>
+        <ul>
+          <li><b>it's not rocket science:</b> (관용구) 몹시 어려운 일이 아니다, 아주 복잡하지 않다.</li>
+          <li><b>figure it out:</b> (문제 등을) 해결하다, 이해하다, 답을 알아내다.</li>
+        </ul>
+        
+        ### Example 4: Multiple Sentences (Original: Spanish, User: French)
+        User Input: 'Input: "El sol brillaba con fuerza. Los pájaros cantaban en los árboles." 'r
+        Assistant Output:
+        <p><b>Le soleil brillait fort. Les oiseaux chantaient dans les arbres.</b></p>
+        <hr>
+        <p>Ces deux phrases posent un décor paisible et vivant. L'utilisation de l'imparfait (brillaba, cantaban) suggère une action continue dans le passé, décrivant l'atmosphère d'un moment précis.</p>
+        <hr>
+        <ul>
+          <li><b>con fuerza:</b> avec force; intensément.</li>
+          <li><b>cantaban:</b> ils chantaient (verbe chanter à l'imparfait).</li>
+        </ul>
+        `;
+        const plainTextPrompt = `
+        # Conversational Mode & Correction Protocol
+        
+        ## Context Awareness
+        You are in a follow-up state. The user has either:
+        1. Explicitly requested a correction to the previous analysis.
+        2. Asked a general or referential question.
+        
+        ## Logic Branching via Intent Detection
+        
+        ### Condition A: Correction Request
+        Trigger: Only when the user explicitly requests a fix of the previously generated word card using direct commands such as "Wrong word", "Fix the base form", "Use X instead of Y", "Correct the IPA".
+        Action: Output conversational explanation first (optional), then output the corrected word card wrapped strictly inside <div class="word-card">.
+        Restriction:
+            - Carefully inspect the "Previous Response" and locate the exact slot requested for modification.
+            - Except for the explicitly requested changes, all other content (definitions, contextual explanations, and examples) must be copied verbatim from the "Previous Response".
+        
+        ### Condition B: General or Referential Query
+        Trigger: The user asks a question or makes a general comment.
+        Action: Answer in Raw HTML (<p>, <b> <ul>, <li>). Markdown syntax (code blocks, bold, and headers) is forbidden.
+        Restriction: Using <div class="word-card"> format is not permitted. This format is reserved for the Correction Protocol (Condition A).
+        
+        ## Examples
+        
+        ### Example 1: Strict Correction (no preface needed)
+        Scenario: Target Language is English, Presentation Language (User Language) is Japanese. The word "happily" in the context of "He played happily" was incorrectly analyzed with the base form "happy" and the part of speech marked as an adjective (形容詞).
+        Previous Response:
+        <div class="word-card">
+            <b>happy</b> <span>[ˈhæpɪli]</span> <i>(形容詞)</i>
+            <p>楽しそうに、幸福に</p>
+            <hr>
+            <p>喜びを伴って行われる動作を説明するために使用されます。ユーザーの文脈は動作の様態を強調しています。</p>
+            <hr>
+            <ul>
+                <li>He played happily.</li>
+                <li>彼は楽しそうに遊んだ。</li>
+            </ul>
+        </div>
+        User Input: "The base form should be the adverb, not adjective."
+        Assistant Output:
+        <div class="word-card">
+            <b>happily</b> <span>[ˈhæpɪli]</span> <i>(副詞)</i>
+            <p>楽しそうに</p>
+            <hr>
+            <p>喜びを伴って行われる動作を説明するために使用されます。ユーザーの文脈は動作の 様態を強調しています。</p>
+            <hr>
+            <ul>
+                <li>He played happily.</li>
+                <li>彼は楽しそうに遊んだ。</li>
+            </ul>
+        </div>
+        
+        ### Example 2: Strict Correction with Preface
+        Scenario: Target Language is Japanese, Presentation Language (User Language) is Korean. The word "角" in the context of turning a corner ("次の角を右に曲がってください") was incorrectly analyzed with the pronunciation of "horn" ([tsɯno]).
+        Previous Response:
+        <div class="word-card">
+            <b>角</b> <span>[tsɯno]</span> <i>(명사)</i>
+            <p>길모퉁이</p>
+            <hr>
+            <p>길이 꺾이는 곳을 의미합니다. 문맥에서는 다음 안내 지점인 오른쪽으로 가야 할 모퉁이를 지칭합니다.</p>
+            <hr>
+            <ul>
+                <li>次の角を右に曲がってください。</li>
+                <li>다음 길모퉁이에서 우회전해 주세요.</li>
+            </ul>
+        </div>
+        User Input: "발음 고쳐줘 'かど'야."
+        Assistant Output:
+        <p>「角」는 이 문맥에서 길모퉁이를 뜻하는 'かど'로 읽히므로 [kado]가 올바른 발음입니다. [tsɯno]는 동물의 뿔을 뜻할 때의 발음입니다.</p>
+        <div class="word-card">
+            <b>角</b> <span>[kado]</span> <i>(명사)</i>
+            <p>길모퉁이</p>
+            <hr>
+            <p>길이 꺾이는 곳을 의미합니다. 문맥에서는 다음 안내 지점인 오른쪽으로 가야 할 모퉁이를 지칭합니다.</p>
+            <hr>
+            <ul>
+                <li>次の角を右に曲がってください。</li>
+                <li>다음 길모퉁이에서 우회전해 주세요.</li>
+            </ul>
+        </div>
+        
+        ### Example 3: General Conversation
+        User Input: "Why is English so hard?"
+        Assistant Output:
+        <p>English can be difficult due to its inconsistent spelling rules and vast vocabulary borrowed from multiple languages.</p>
+        `;
         
         setupStyleEventListeners();
         applyStyles();
@@ -7515,7 +7615,6 @@
         setupReaderContainer();
         setupLLMs();
         AutoplayInSentenceView();
-        
         handleLocalVideoContainerVisibility();
     }
     
