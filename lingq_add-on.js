@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      13.6.0
+// @version      13.7.0
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @grant       GM_xmlhttpRequest
@@ -1625,7 +1625,7 @@
     
     /* Features */
     
-    function fixBugs() {
+    function globalSetup() {
         function resizeToast() {
             const css = `
             .toasts {
@@ -1635,7 +1635,47 @@
             applyCSS(css);
         }
         
+        function removePromoBanners() {
+            const bannerSelectors = [
+                '[data-promo-banner="true"]',
+                '[data-mkt-banner="true"]',
+                'div[class*="hide-promoOffer"]'
+            ];
+            
+            const closeButtonSelectors = [
+                '[data-promo-banner] button[aria-label*="Close" i]',
+                '[data-mkt-banner] button[aria-label*="Close" i]',
+                'div[class*="hide-promoOffer"] button'
+            ].join(',');
+            
+            const css = bannerSelectors.map(selector => `${selector} { display: none !important; }`).join('\n');
+            applyCSS(css);
+            
+            let isThrottled = false;
+            const observer = new MutationObserver(() => {
+                if (isThrottled) return;
+                
+                isThrottled = true;
+                requestAnimationFrame(() => {
+                    const closeButton = document.querySelector(closeButtonSelectors);
+                    
+                    if (closeButton && !closeButton.dataset.addonClicked) {
+                        closeButton.dataset.addonClicked = 'true';
+                        closeButton.click();
+                        console.log('A banner is closed.');
+                    }
+                    isThrottled = false;
+                });
+            });
+            
+            observer.observe(document.documentElement, {
+                childList: true,
+                subtree: true
+            });
+        }
+        
         resizeToast();
+        removePromoBanners();
     }
     
     function setupPopups() {
@@ -4679,11 +4719,10 @@
                     font-size: var(--font-size);
                     line-height: var(--line-height);
                     margin-bottom: 20px;
-                    max-height: 200px;
+                    max-height: calc(var(--article-height) * 0.3);
                     overflow-y: scroll;
                     resize: vertical;
                     flex-direction: column;
-                    gap: 15px;
                     padding: 10px 0;
                 }
                 
@@ -5909,7 +5948,7 @@
                     const summaryElement = createElement("div", {
                         className: "quick-summary",
                         style: `position: relative; ${(settings.prependSummary[language]) ? '' : 'display: none;'}`
-                    }, createElement("b", {}, "Summary"));
+                    });
                     
                     const contentWrapper = createElement("div", {
                         className: "summary-content",
@@ -7938,7 +7977,6 @@
                 .caption-window.ytp-caption-window-bottom {
                     display: unset !important;
                     width: 90% !important;
-                    margin-left: 0 !important;
                     bottom: var(--custom-caption-bottom, 10%) !important;
                     top: var(--custom-caption-top, auto) !important;
                     margin-bottom: 0 !important;
@@ -8014,7 +8052,7 @@
         
         const url = document.URL.split("?")[0];
         if (url.includes("lingq")) {
-            fixBugs();
+            globalSetup();
             if (url.includes("/reader")) {
                 setupPopups();
                 setupReader();
