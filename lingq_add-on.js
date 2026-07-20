@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      14.0.3
+// @version      14.1.0
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @grant       GM_xmlhttpRequest
@@ -1049,7 +1049,7 @@
         const apiUrl = "https://api.openai.com/v1/audio/speech";
         
         if (!API_KEY) throw new Error("Invalid or missing OpenAI API key. Please set the API_KEY");
-        console.log('TTS', `${modelId}, ${voice}`);
+        console.log('[TTS]', `${modelId}, ${voice}`);
         
         try {
             const response = await fetch(apiUrl, {
@@ -1169,7 +1169,7 @@
                     const inputTokens = data.usageMetadata.promptTokenCount;
                     const outputTokens = data.usageMetadata.candidatesTokenCount;
                     const approxCost = inputTokens * 0.5 / 1000000 + outputTokens * 10 / 1000000;
-                    console.log('TTS', `${modelId}, ${voice}, tokens: (${inputTokens}/${outputTokens}) cost: $${approxCost.toFixed(6)}`);
+                    console.log('[TTS]', `${modelId}, ${voice}, tokens: (${inputTokens}/${outputTokens}) cost: $${approxCost.toFixed(6)}`);
                     
                     const binaryString = atob(audioDataBase64);
                     const len = binaryString.length;
@@ -1212,7 +1212,7 @@
         const apiUrl = `https://texttospeech.googleapis.com/v1/text:synthesize?key=${API_KEY}`;
         
         if (!API_KEY) throw new Error("Invalid or missing Google API key. Please set the API_KEY");
-        console.log('TTS', `${voice}`);
+        console.log('[TTS]', `${voice}`);
         
         try {
             const response = await fetch(apiUrl, {
@@ -1411,7 +1411,7 @@
                     console.warn("Cache recreation failed. Falling back to non-cached request.");
                     return getOpenAIResponse(provider, apiKey, model, history, null, null, 1);
                 }
-                return `⚠️ Error: ${errMsg}`;
+                return `Error: ${errMsg}`;
             }
             
             const data = await response.json();
@@ -1422,8 +1422,12 @@
             const cachedTokens = usage.prompt_tokens_details?.cached_tokens || usage.prompt_cache_hit_tokens || usage.cache_read_input_tokens || 0;
             const inputTokens = (usage.prompt_tokens || usage.input_tokens || 0) - cachedTokens;
             const outputTokens = usage.completion_tokens || usage.output_tokens || 0;
-            const approxCost = cachedTokens * (inputPrice / 4) + inputTokens * inputPrice + outputTokens * outputPrice;
-            console.log('Chat', `${model}, tokens: (${cachedTokens}/${inputTokens}/${outputTokens}), cost: $${approxCost.toFixed(6)}`);
+            
+            const approxCost = cachedTokens * (inputPrice / 10) + inputTokens * inputPrice + outputTokens * outputPrice;
+            const uncachedCost = (cachedTokens + inputTokens) * inputPrice + outputTokens * outputPrice;
+            const savedPercent = uncachedCost > 0 ? (((uncachedCost - approxCost) / uncachedCost) * 100).toFixed(1) : '0.0';
+            
+            console.log('[LLM usage]', '[Chat Batch]', `${model}, tokens: (${cachedTokens}/${inputTokens}/${outputTokens}), cost: $${approxCost.toFixed(6)} (${savedPercent}% saved)`);
             
             return content || "Sorry, could not get a response.";
             
@@ -1438,12 +1442,18 @@
         if (provider === "anthropic") headers['Accept'] = 'text/event-stream';
         const body = buildRequestBody(provider, model, history, true, cacheName);
         
+        let lastUsage = null;
+        
         try {
             const finalContent = await gmStream(api_url, {
                 method: 'POST',
                 headers,
                 body: JSON.stringify(body)
             }, (json) => {
+                if (provider === "google" && json.usage) {
+                    lastUsage = json.usage;
+                }
+                
                 if (provider === "anthropic") {
                     if (json.type === "content_block_delta" && json.delta?.text) onChunkReceived(json.delta.text);
                 } else {
@@ -1451,6 +1461,19 @@
                     if (content) onChunkReceived(content);
                 }
             });
+            
+            if (provider === "google" && lastUsage) {
+                const [inputPrice, outputPrice] = getLLMPricing(model);
+                const cachedTokens = lastUsage.prompt_tokens_details?.cached_tokens || 0;
+                const inputTokens = (lastUsage.prompt_tokens || 0) - cachedTokens;
+                const outputTokens = lastUsage.completion_tokens || 0;
+                
+                const approxCost = cachedTokens * (inputPrice / 10) + inputTokens * inputPrice + outputTokens * outputPrice;
+                const uncachedCost = (cachedTokens + inputTokens) * inputPrice + outputTokens * outputPrice;
+                const savedPercent = uncachedCost > 0 ? (((uncachedCost - approxCost) / uncachedCost) * 100).toFixed(1) : '0.0';
+                
+                console.log('[LLM usage]', '[Chat Stream]', `${model}, tokens: (${cachedTokens}/${inputTokens}/${outputTokens}), cost: $${approxCost.toFixed(6)} (${savedPercent}% saved)`);
+            }
             
             onStreamEnd(finalContent);
         } catch (error) {
@@ -1693,7 +1716,7 @@
             // Reverted: Removed defaultPlaybackRate overwrite to fix initial double-speed glitch
             if (videoElement.playbackRate !== currentSpeed) {
                 videoElement.playbackRate = currentSpeed;
-                console.log('Sync', `Playback speed updated to ${currentSpeed}x`);
+                console.log('[Sync]', `Playback speed updated to ${currentSpeed}x`);
             }
         };
         
@@ -4857,7 +4880,7 @@
                 }
                 
                 .close-summary-btn {
-                    padding: 5px 10px;
+                    padding: 0px 10px;
                     border: 1px solid rgb(125, 125, 125, 50%);
                     border-radius: 5px;
                     margin: 0 10px 0 auto;
@@ -5830,7 +5853,7 @@
                     const flooredProgressPercentage = Math.floor(progressPercentage / progressUpdatePeriod) * progressUpdatePeriod;
                     
                     if (flooredProgressPercentage > lastCompletedPercentage) {
-                        console.log('Slider', `progress percentage: ${flooredProgressPercentage}`);
+                        console.log('[Slider]', `progress percentage: ${flooredProgressPercentage}`);
                         const wordIndex = Math.floor(lessonInfo["totalWordsCount"] * (flooredProgressPercentage / 100));
                         setLessonProgress(lessonId, wordIndex);
                         return flooredProgressPercentage;
@@ -5862,7 +5885,7 @@
                         
                         const isLessonFinished = ((progressPercentage >= 99) && isVideoStopped) || (progressPercentage >= 99.95);
                         if (isLessonFinished && settings.autoFinishing) {
-                            console.log('Slider', 'lesson finished.')
+                            console.log('[Slider]', 'lesson finished.')
                             setTimeout(moveNextPage, 1000);
                             sliderObserver.disconnect();
                         }
@@ -5932,21 +5955,21 @@
                     const allSentences = container.querySelectorAll(".sentence");
                     const lastSentence = allSentences[allSentences.length - 1];
                     if (sentence !== lastSentence) return;
-                    console.log('[PageAdvance] Last sentence detected.');
+                    console.log('[PageAdvance]', 'Last sentence detected.');
                     
                     const playing = isPlayerPlaying();
                     if (!playing) {
-                        console.log('[PageAdvance] Player is paused — skip.');
+                        console.log('[PageAdvance]', 'Player is paused — skip.');
                         return;
                     }
                     
                     const otherPlaying = container.querySelector(".sentence.is-playing");
                     if (otherPlaying) {
-                        console.log('[PageAdvance] Another sentence is playing — user went back, skip.');
+                        console.log('[PageAdvance]', 'Another sentence is playing — user went back, skip.');
                         return;
                     }
                     
-                    console.log('[PageAdvance] ✅ All conditions passed — advance to next page.');
+                    console.log('[PageAdvance]' ,'All conditions passed — advance to next page.');
                     moveNextPage();
                 }
                 
@@ -6015,7 +6038,7 @@
                         {role: "user", content: content}
                     ]
                     const summary = await getOpenAIResponse(provider, apikey, model, summary_history);
-                    console.log(`Lesson summary: \n${summary}`);
+                    console.log('[Lesson summary]\n', summary);
                     
                     return summary;
                 }
@@ -6054,7 +6077,7 @@
                         },
                         (finalContent) => {
                             quickSummary = finalContent;
-                            console.log(`Quick summary: \n${finalContent}`);
+                            console.log('[Quick summary]\n', finalContent);
                         },
                         (error) => {
                             console.error("Failed to fetch summary:", error);
@@ -6304,7 +6327,16 @@
                     return null;
                 }
                 const data = await response.json();
-                console.log("✅ Cache created successfully:", data);
+                
+                const totalTokens = data.usageMetadata?.totalTokenCount || data.totalTokenCount || 0;
+                const [inputPrice] = getLLMPricing(model);
+                const inputCost = totalTokens * inputPrice;
+                const storageCostPerHour = totalTokens * (1 / 1000000);
+                const totalInitialCost = inputCost + storageCostPerHour;
+                
+                console.log("Cache created successfully:", data);
+                console.log('[LLM usage]', '[Cache Creation]', `${model}, tokens: ${totalTokens}, initial cost: $${totalInitialCost.toFixed(6)} (input: $${inputCost.toFixed(6)} + storage/hr: $${storageCostPerHour.toFixed(6)})`);
+                
                 return data.name;
             } catch (error) {
                 console.error("Cache Creation Exception:", error);
