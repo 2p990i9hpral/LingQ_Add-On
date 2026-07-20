@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      14.0.2
+// @version      14.0.3
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @grant       GM_xmlhttpRequest
@@ -811,7 +811,8 @@
         return new Promise((resolve, reject) => {
             let fullContent = '';
             let isResolved = false;
-            let isError = false;
+            let streamStarted = false;
+            let isErrorStatus = false;
             
             const finish = () => {
                 if (isResolved) return;
@@ -819,41 +820,30 @@
                 resolve(fullContent);
             };
             
-            GM_xmlhttpRequest({
+            const req = GM_xmlhttpRequest({
                 method: options.method || 'POST',
                 url: url,
                 headers: options.headers || {},
                 data: options.body,
                 responseType: 'stream',
                 
-                onloadstart: (res) => {
-                    if (!res.response) return;
+                onreadystatechange: (res) => {
+                    if (res.readyState < 2 || streamStarted || isResolved) return;
+                    if (res.status === 0) return;
                     
-                    // Handle HTTP errors properly by preventing onload from resolving
+                    streamStarted = true;
+                    
                     if (res.status >= 400) {
-                        isError = true;
-                        const reader = res.response.getReader();
-                        const decoder = new TextDecoder('utf-8');
-                        let errText = '';
-                        
-                        (async () => {
-                            try {
-                                while (true) {
-                                    const { done, value } = await reader.read();
-                                    if (value) errText += decoder.decode(value, { stream: true });
-                                    if (done) break;
-                                }
-                                if (!isResolved) {
-                                    isResolved = true;
-                                    reject(new Error(`HTTP ${res.status}: ${errText}`));
-                                }
-                            } catch (e) {
-                                if (!isResolved) {
-                                    isResolved = true;
-                                    reject(new Error(`HTTP ${res.status}: Stream read error`));
-                                }
-                            }
-                        })();
+                        isErrorStatus = true;
+                        isResolved = true;
+                        reject(new Error(`HTTP ${res.status}: Request failed`));
+                        if (req && typeof req.abort === 'function') req.abort();
+                        return;
+                    }
+                    
+                    if (!res.response) {
+                        isResolved = true;
+                        reject(new Error(`HTTP ${res.status}: Response stream unavailable`));
                         return;
                     }
                     
@@ -864,21 +854,28 @@
                     (async () => {
                         try {
                             while (true) {
-                                const { done, value } = await reader.read();
+                                const {done, value} = await reader.read();
                                 
                                 if (value) {
-                                    const chunk = decoder.decode(value, { stream: true });
+                                    const chunk = decoder.decode(value, {stream: true});
                                     buffer += chunk;
                                     
                                     const lines = buffer.split('\n');
                                     buffer = lines.pop();
                                     
-                                    lines.forEach((line) => {
+                                    let stopParsing = false;
+                                    
+                                    lines.forEach(line => {
+                                        if (stopParsing) return;
+                                        
                                         const trimmed = line.trim();
                                         if (!trimmed.startsWith('data: ')) return;
                                         
                                         const data = trimmed.slice(6).trim();
-                                        if (data === '[DONE]') return;
+                                        if (data === '[DONE]') {
+                                            stopParsing = true;
+                                            return;
+                                        }
                                         
                                         try {
                                             const json = JSON.parse(data);
@@ -890,35 +887,34 @@
                                             if (json.type === "content_block_delta" && json.delta?.text) {
                                                 fullContent += json.delta.text;
                                             }
+                                            if (json.type === "message_stop") {
+                                                stopParsing = true;
+                                            }
                                         } catch (e) {}
                                     });
+                                    
+                                    if (stopParsing) {
+                                        finish();
+                                        break;
+                                    }
                                 }
                                 
                                 if (done) {
-                                    if (!isError) finish();
+                                    finish();
                                     break;
                                 }
                             }
                         } catch (e) {
-                            console.warn("Stream reading paused/error", e);
+                            if (!isResolved) {
+                                isResolved = true;
+                                reject(new Error("Stream reading error"));
+                            }
                         }
                     })();
                 },
-                onload: () => {
-                    if (!isError) finish();
-                },
-                onerror: () => {
-                    if (!isResolved) {
-                        isResolved = true;
-                        reject(new Error("Network Error"));
-                    }
-                },
-                ontimeout: () => {
-                    if (!isResolved) {
-                        isResolved = true;
-                        reject(new Error("Request Timed Out"));
-                    }
-                }
+                onload: () => { if (!isErrorStatus && !isResolved) finish(); },
+                onerror: () => { if (!isResolved) { isResolved = true; reject(new Error("Network Error")); } },
+                ontimeout: () => { if (!isResolved) { isResolved = true; reject(new Error("Request Timed Out")); } }
             });
         });
     }
@@ -1403,17 +1399,19 @@
             if (!response.ok) {
                 const errorData = await response.json();
                 const errMsg = errorData.error?.message || JSON.stringify(errorData);
+                console.error(`Fetch API Error (${response.status}):`, errMsg);
                 
                 if (cacheName && provider === "google" && response.status === 403 && retryCount === 0 && onCacheExpired) {
-                    console.warn("Gemini cache may have expired. Recreating and retrying...");
+                    console.warn("Gemini cache expired or not found. Recreating and retrying...");
                     const newCacheName = await onCacheExpired();
                     if (newCacheName) {
+                        console.log(`Cache recreated successfully. Retrying with new cache: ${newCacheName}`);
                         return getOpenAIResponse(provider, apiKey, model, history, newCacheName, onCacheExpired, 1);
                     }
                     console.warn("Cache recreation failed. Falling back to non-cached request.");
                     return getOpenAIResponse(provider, apiKey, model, history, null, null, 1);
                 }
-                return errMsg;
+                return `⚠️ Error: ${errMsg}`;
             }
             
             const data = await response.json();
@@ -1456,10 +1454,12 @@
             
             onStreamEnd(finalContent);
         } catch (error) {
+            console.error("Stream API Error:", error.message);
             if (cacheName && provider === "google" && (error.message.includes("403") || error.message.includes("404")) && retryCount === 0 && onCacheExpired) {
-                console.warn("Gemini cache may have expired. Recreating and retrying...");
+                console.warn("Gemini cache expired or not found. Recreating and retrying...");
                 const newCacheName = await onCacheExpired();
                 if (newCacheName) {
+                    console.log(`Cache recreated successfully. Retrying with new cache: ${newCacheName}`);
                     return streamOpenAIResponse(provider, apiKey, model, history, onChunkReceived, onStreamEnd, onError, newCacheName, onCacheExpired, 1);
                 }
                 console.warn("Cache recreation failed. Falling back to non-cached request.");
