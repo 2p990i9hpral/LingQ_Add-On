@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      14.1.1
+// @version      14.2.0
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @grant       GM_xmlhttpRequest
@@ -1180,7 +1180,8 @@
                     const inputTokens = data.usageMetadata.promptTokenCount;
                     const outputTokens = data.usageMetadata.candidatesTokenCount;
                     const approxCost = inputTokens * 0.5 / 1000000 + outputTokens * 10 / 1000000;
-                    console.log('[TTS]', `${modelId}, ${voice}, tokens: (${inputTokens}/${outputTokens}) cost: $${approxCost.toFixed(6)}`);
+                    
+                    trackLLMUsage("TTS", modelId, 0, inputTokens, outputTokens, approxCost);
                     
                     const binaryString = atob(audioDataBase64);
                     const len = binaryString.length;
@@ -1298,6 +1299,45 @@
         const llmInfo = document.querySelector(`#llmModelSelector > option[value="${llmModel}"]`).text;
         const [inputPrice, outputPrice] = llmInfo.match(/\$(\d+(?:\.\d+)?)\/\$(\d+(?:\.\d+)?)\)/).slice(1, 3).map(num => parseFloat(num) / 1000000);
         return [inputPrice, outputPrice];
+    }
+    
+    function trackLLMUsage(contextType, model, cachedTokens, inputTokens, outputTokens, overrideCost = null) {
+        let approxCost = 0;
+        let uncachedCost = 0;
+        let savedPercentStr = "";
+        
+        if (overrideCost !== null) {
+            approxCost = overrideCost;
+            uncachedCost = overrideCost;
+        } else {
+            const [inputPrice, outputPrice] = getLLMPricing(model);
+            approxCost = cachedTokens * (inputPrice / 10) + inputTokens * inputPrice + outputTokens * outputPrice;
+            uncachedCost = (cachedTokens + inputTokens) * inputPrice + outputTokens * outputPrice;
+            
+            savedPercentStr = uncachedCost > 0
+                ? (((uncachedCost - approxCost) / uncachedCost) * 100).toFixed(1)
+                : '0.0';
+        }
+        
+        const logMessage = overrideCost !== null
+            ? `cost: $${approxCost.toFixed(6)}`
+            : `cost: $${approxCost.toFixed(6)} (${savedPercentStr}% saved)`;
+        
+        console.log('[LLM usage]', `[${contextType}]`, `${model}, tokens: (${cachedTokens}/${inputTokens}/${outputTokens}), ${logMessage}`);
+        
+        document.dispatchEvent(new CustomEvent("addon:llmUsage", {
+            detail: {
+                type: contextType,
+                model: model,
+                tokens: {
+                    cached: cachedTokens,
+                    input: inputTokens,
+                    output: outputTokens
+                },
+                cost: approxCost,
+                uncachedCost: uncachedCost
+            }
+        }));
     }
     
     function buildRequestConfig(provider, apiKey) {
@@ -1429,19 +1469,13 @@
             const content = provider === "anthropic" ? data.content[0]?.text : data.choices[0]?.message?.content;
             const usage = data.usage || {};
             
-            const [inputPrice, outputPrice] = getLLMPricing(settings.llmModel);
             const cachedTokens = usage.prompt_tokens_details?.cached_tokens || usage.prompt_cache_hit_tokens || usage.cache_read_input_tokens || 0;
             const inputTokens = (usage.prompt_tokens || usage.input_tokens || 0) - cachedTokens;
             const outputTokens = usage.completion_tokens || usage.output_tokens || 0;
             
-            const approxCost = cachedTokens * (inputPrice / 10) + inputTokens * inputPrice + outputTokens * outputPrice;
-            const uncachedCost = (cachedTokens + inputTokens) * inputPrice + outputTokens * outputPrice;
-            const savedPercent = uncachedCost > 0 ? (((uncachedCost - approxCost) / uncachedCost) * 100).toFixed(1) : '0.0';
-            
-            console.log('[LLM usage]', '[Chat Batch]', `${model}, tokens: (${cachedTokens}/${inputTokens}/${outputTokens}), cost: $${approxCost.toFixed(6)} (${savedPercent}% saved)`);
+            trackLLMUsage("Chat Batch", model, cachedTokens, inputTokens, outputTokens);
             
             return content || "Sorry, could not get a response.";
-            
         } catch (error) {
             console.error('API call failed:', error);
             return `Sorry, something went wrong communicating with ${provider}.`;
@@ -1474,16 +1508,11 @@
             });
             
             if (provider === "google" && lastUsage) {
-                const [inputPrice, outputPrice] = getLLMPricing(model);
                 const cachedTokens = lastUsage.prompt_tokens_details?.cached_tokens || 0;
                 const inputTokens = (lastUsage.prompt_tokens || 0) - cachedTokens;
                 const outputTokens = lastUsage.completion_tokens || 0;
                 
-                const approxCost = cachedTokens * (inputPrice / 10) + inputTokens * inputPrice + outputTokens * outputPrice;
-                const uncachedCost = (cachedTokens + inputTokens) * inputPrice + outputTokens * outputPrice;
-                const savedPercent = uncachedCost > 0 ? (((uncachedCost - approxCost) / uncachedCost) * 100).toFixed(1) : '0.0';
-                
-                console.log('[LLM usage]', '[Chat Stream]', `${model}, tokens: (${cachedTokens}/${inputTokens}/${outputTokens}), cost: $${approxCost.toFixed(6)} (${savedPercent}% saved)`);
+                trackLLMUsage("Chat Stream", model, cachedTokens, inputTokens, outputTokens);
             }
             
             onStreamEnd(finalContent);
@@ -2562,7 +2591,7 @@
                 createElement("table", {id: "flashcardTable"},
                     createElement("thead", {},
                         createElement("tr", {},
-                            ...["", "Idx", "Word", "Pronunciation", "Meaning", "Explanation"]
+                            ...["", "Idx", "Word", "Meaning", "Explanation"]
                                 .map(headerText => createElement("th", {}, headerText)
                                 )
                         )
@@ -3591,11 +3620,18 @@
                 
                 let queryBase = getDbClient()
                     .from(getTableName())
-                    .select("idx, word, pronunciation, meaning, explanation", {count: "exact"})
+                    .select("idx, word, meaning, explanation", {count: "exact"})
                     .eq("language", language);
                 
                 if (searchKeyword) {
-                    queryBase = queryBase.or(`idx::text.ilike.%${searchKeyword}%,word.ilike.%${searchKeyword}%,pronunciation.ilike.%${searchKeyword}%,meaning.ilike.%${searchKeyword}%`);
+                    const isNumber = /^\d+$/.test(searchKeyword);
+                    const textColumns = ["word", "pronunciation", "meaning"];
+                    const searchConditions = [
+                        ...textColumns.map((col) => `${col}.ilike.%${searchKeyword}%`),
+                        isNumber ? `idx.eq.${searchKeyword}` : null
+                    ].filter(Boolean).join(",");
+                    
+                    queryBase = queryBase.or(searchConditions);
                 }
                 
                 const {data, error, count} = await queryBase
@@ -3626,7 +3662,6 @@
                         deleteTd,
                         createElement("td", {textContent: row.idx ?? "", title: row.idx ?? ""}),
                         createElement("td", {textContent: row.word || "", title: row.word || ""}),
-                        createElement("td", {textContent: row.pronunciation || "", title: row.pronunciation || ""}),
                         meaningTd,
                         createElement("td", {textContent: row.explanation || "", title: row.explanation || ""})
                     );
@@ -3995,7 +4030,6 @@
                     const fieldMap = {
                         Idx: "idx",
                         Word: "word",
-                        Pronunciation: "pronunciation",
                         Meaning: "meaning",
                         Explanation: "explanation"
                     };
@@ -4353,7 +4387,7 @@
                 
                 #flashcardTable th:nth-child(2),
                 #flashcardTable td:nth-child(2) {
-                    width: 20%;
+                    width: 50px;
                 }
                 
                 #flashcardTable th:nth-child(3),
@@ -4363,6 +4397,11 @@
                 
                 #flashcardTable th:nth-child(4),
                 #flashcardTable td:nth-child(4) {
+                    width: 20%;
+                }
+                
+                #flashcardTable th:nth-child(5),
+                #flashcardTable td:nth-child(5) {
                     width: 60%;
                 }
                 
@@ -6166,6 +6205,39 @@
                 waitForElement('[id$="-content-lessonCompleted"]', 5000).then((completionElement) => {
                     if (!completionElement) return;
                     
+                    const usageStats = lessonUsageHistory.reduce((acc, usage) => {
+                        const category = usage.type.includes("TTS") ? "TTS"
+                            : usage.type.includes("Cache") ? "Cache"
+                                : "LLM Chat/Summary";
+                        
+                        if (!acc[category]) {
+                            acc[category] = { calls: 0, cost: 0, uncachedCost: 0 };
+                        }
+                        
+                        acc[category].calls += 1;
+                        acc[category].cost += usage.cost;
+                        acc[category].uncachedCost += (usage.uncachedCost ?? usage.cost);
+                        acc.totalCost += usage.cost;
+                        acc.totalUncachedCost += (usage.uncachedCost ?? usage.cost);
+                        
+                        return acc;
+                    }, { totalCost: 0, totalUncachedCost: 0 });
+                    
+                    const totalSavedPercent = usageStats.totalUncachedCost > 0
+                        ? (((usageStats.totalUncachedCost - usageStats.totalCost) / usageStats.totalUncachedCost) * 100).toFixed(1)
+                        : '0.0';
+                    
+                    console.log('[Lesson Stats]', `Total Cost: $${usageStats.totalCost.toFixed(6)} (${totalSavedPercent}% saved)`);
+                    
+                    Object.entries(usageStats)
+                        .filter(([key]) => !key.startsWith("total"))
+                        .forEach(([category, data]) => {
+                            const savedPercent = data.uncachedCost > 0
+                                ? (((data.uncachedCost - data.cost) / data.uncachedCost) * 100).toFixed(1)
+                                : '0.0';
+                            console.log(`  - ${category}: ${data.calls} calls, $${data.cost.toFixed(6)} (${savedPercent}% saved)`);
+                        });
+                    
                     setTimeout(async () => {
                         if (completionElement.getAttribute("data-state") === "active") {
                             clickElement("div.player-wrapper > div.player-close a");
@@ -6268,6 +6340,9 @@
             
             async function handleLoadedContent(node) {
                 currentGeminiCacheName = null;
+                lessonUsageHistory = [];
+                console.log('[Lesson Stats]', 'Lesson started. Usage history reset.');
+                
                 resetLocalVideo();
                 handleLocalVideoContainerVisibility();
                 
@@ -6356,9 +6431,8 @@
                 const totalInitialCost = inputCost + storageCostPerHour;
                 
                 showToast("Cache Created", true);
-                console.log("Cache created successfully:", data);
-                console.log('[LLM usage]', '[Cache Creation]', `${model}, tokens: ${totalTokens}, initial cost: $${totalInitialCost.toFixed(6)} (input: $${inputCost.toFixed(6)} + storage/hr: $${storageCostPerHour.toFixed(6)})`);
                 
+                trackLLMUsage("Cache Creation", model, 0, totalTokens, 0, totalInitialCost);
                 
                 return data.name;
             } catch (error) {
@@ -6644,12 +6718,12 @@
                                     
                                     if (newValue === currentText) return;
                                     
-                                    const storedIdx = botMessageDiv.dataset.wordIdx;
-                                    if (!storedIdx) return;
-                                    
                                     navigator.clipboard.writeText(newValue)
                                         .then(() => showToast("Meaning Copied!", true))
                                         .catch(() => showToast("Failed to copy meaning.", false));
+                                    
+                                    const storedIdx = botMessageDiv.dataset.wordIdx;
+                                    if (!storedIdx) return;
                                     
                                     const {data: existing} = await getDbClient()
                                         .from(getTableName())
@@ -7314,6 +7388,11 @@
         let lessonSummary = "";
         let quickSummary = "";
         let currentGeminiCacheName = null;
+        let lessonUsageHistory = [];
+        
+        document.addEventListener("addon:llmUsage", (event) => {
+            lessonUsageHistory.push(event.detail);
+        });
         
         const language = getLessonLanguage();
         ensureLanguageSettings(language);
@@ -7354,17 +7433,24 @@
            - Inflections: If the input is conjugated (e.g., "書いていました"), output the dictionary form ("書く").
         
         2. IPA Pronunciation
-           - Provide IPA for the Base Form (lemma) enclosed in brackets.
-           - Simplify Constraints: Eliminate narrow phonetic diacritics (e.g., lowering [̞], voiceless [̥], compressed [ᵝ], or dental [̪] marks).
-           - Ensure the output represents the standard, dictionary-style pronunciation, not a precise phonetic realization.
+           - Provide IPA for the Base Form (lemma) enclosed in brackets [].
+           - Use a single, consistent transcription system throughout the whole word. Do not mix broad IPA symbols with romanized/orthographic letters (e.g., Pinyin, Revised Romanization) within the same transcription.
+           - Prefer broad, phonemic transcription over narrow, allophonic transcription. Eliminate narrow phonetic diacritics (e.g., lowering [̞], voiceless [̥], compressed [ᵝ], or dental [̪] marks), and avoid substituting a distinct narrow-transcription symbol for a gradient, sub-phonemic co-articulatory detail (e.g., minor degrees of palatalization, uvularization, or aspiration) that is not codified in the standard pronunciation convention of the language.
+           - Mark suprasegmental features (vowel/consonant length, stress, tone, gemination, etc.) consistently wherever the target language treats them as phonemically distinctive.
+           - When in doubt, follow the phonemic transcription convention used by Wiktionary or a major academic reference for that language, rather than an ad hoc or narrow phonetic realization.
+           - Ensure the output represents the standard, dictionary-style pronunciation, not a precise phonetic realization of one specific utterance.
         
         3. Contextual Definition
-           - Identify a single standard dictionary definition of the Base Form in ${userLanguage} that best covers the sense used in the Context.
+           - This field represents the core meaning of the lemma — the general concept as understood in ${lessonLanguage}, not a meaning narrowed to fit only this specific sentence.
+           - Identify a single standard dictionary definition of the Base Form in ${userLanguage} that best covers the sense used in the context.
            - Select the definition at the correct semantic granularity: broad enough to reflect the word's general dictionary entry, yet specific enough to distinguish it from other listed senses.
            - Prioritize formal equivalence: if the target language has a direct lexical counterpart (e.g., a cognate or loanword), prefer it over a paraphrase or a semantically narrowed synonym.
-           - Do not use parentheses for alternative meanings or additional explanation. Do not provide a comma-separated list of synonyms.
+           - Single lexical item constraint: The definition must be a single word or a single fixed phrase. A comma-separated string is prohibited by default — this applies whether the additional items are synonyms, nuance complements, or context variants.
+           - Permitted exception: A comma may be used only when ${userLanguage} genuinely has no single lexical item corresponding to the concept, so that a compound expression is structurally unavoidable (typically for abstract or culture-bound concepts). In that case, the comma functions as an internal separator within one fixed expression, not as a list of alternatives.
+           - Resolution rule: If more than one candidate translation is possible, select the one that best represents the general dictionary sense per the granularity rule above, and place any remaining nuance, tense implication, or context-specific coloring into the Contextual Explanation field instead.
+           - Do not use parentheses for alternative meanings or additional explanation.
            - Output must be a definitive, short phrase or single word.
-        
+
         4. Contextual Explanation
            - This is where you bridge the "Standard Definition" and the "Specific Context".
            - Explain how the dictionary meaning applies here, explaining specific nuances, tense, or implications.
@@ -7449,38 +7535,23 @@
               <li>彼女は無謀にお金を使った。</li>
             </ul>
         </div>
-        
-        ### Example 5: Conjugated Verb (Original: Japanese, User: Korean)
-        User Input: 'Input: "入っていました", Context: "箱の中に手紙が入っていました。"'
+
+        ### Example 5: Complex Inflection/Conjugation (Original: Japanese, User: Korean)
+        User Input: 'Input: "立ち尽くしていました", Context: "予期せぬニュースを聞いて、彼女はしばらくその場に立ち尽くしていました。"'
         Assistant Output:
         <div class="word-card">
-            <b>入る</b> <span>[haiɾɯ]</span> <i>(동사)</i>
-            <p>들어가다</p>
+            <b>立ち尽くす</b> <span>[tat͡ɕit͡sɯkɯsɯ]</span> <i>(동사)</i>
+            <p>그 자리에 멈춰 서다</p>
             <hr>
-            <p>문맥에서는 편지가 상자 안에 이미 존재하는 '상태'를 나타냅니다. 이는 어휘 자체의 의미가 아니라 '〜ている' 문법 구조가 동작의 결과로 지속되는 상태를 표현하기 때문입니다.</p>
+            <p>충격이나 놀라움 등으로 움직이지 못하고 계속 서 있는 상태를 뜻합니다. 문맥에서는 '〜ていました'(계속형+과거)로 쓰여, 예상치 못한 소식을 듣고 한동안 그 자리에서 몸이 굳어 있던 상태가 지속되었음을 나타냅니다.</p>
             <hr>
             <ul>
-              <li>カバンに本が入る。</li>
-              <li>가방에 책이 들어있다.</li>
+              <li>あまりの美しさに、彼はその場に立ち尽くした。</li>
+              <li>너무나 아름다운 광경에 그는 그 자리에 멈춰 섰다.</li>
             </ul>
         </div>
         
-        ### Example 6: Complex Inflection/Conjugation (Original: Japanese, User: Korean)
-        User Input: 'Input: "見せられませんでした", Context: "昨日の発表会では、準備不足で納得のいく成果を観客に見せられませんでした。"'
-        Assistant Output:
-        <div class="word-card">
-            <b>見せる</b> <span>[miseɾɯ]</span> <i>(동사)</i>
-            <p>보여주다</p>
-            <hr>
-            <p>문맥에서는 '見せられませんでした(보여주지 못했습니다)'라는 가능형의 부정 과거 형태로 쓰였습니다. 준비가 부족하여 관객에게 만족스러운 결과를 보여줄 수 없었다는 아쉬움과 불가능의 뉘앙스를 전달하고 있습니다.</p>
-            <hr>
-            <ul>
-              <li>子供に悪い見本を見せるべきではない。</li>
-              <li>아이에게 나쁜 본보기를 보여주어서는 안 된다。</li>
-            </ul>
-        </div>
-        
-        ### Example 7: Lexicalized Negation / Fixed Expression (Original: Japanese, User: Korean)
+        ### Example 6: Lexicalized Negation / Fixed Expression (Original: Japanese, User: Korean)
         User Input: 'Input: "仕方がありません", Context: "雨が降り始めてしまったので、今日の遠足が中止になるのは仕方がありません。"'
         Assistant Output:
         <div class="word-card">
@@ -7491,26 +7562,26 @@
             <hr>
             <ul>
               <li>いくら後悔しても、過ぎたことは仕方がない。</li>
-              <li>아무리 후회해도 지난 일은 어쩔 수 없다。</li>
+              <li>아무리 후회해도 지난 일은 어쩔 수 없다.</li>
             </ul>
         </div>
         
-        ### Example 8: Orthographic Adaptation (Original: Japanese, User: Korean)
+        ### Example 7: Orthographic Adaptation (Original: Japanese, User: Korean)
         User Input: 'Input: "カワイイ", Context: "彼女が着ている服は、いつもすごくカワイイですね。"'
         Assistant Output:
         <div class="word-card">
-            <b>かわいい</b> <span>[kawaii]</span> <i>(형용사)</i>
+            <b>かわいい</b> <span>[kawaiː]</span> <i>(형용사)</i>
             <p>귀엽다</p>
             <hr>
             <p>외모나 행동이 사랑스럽고 호감이 가는 상태를 뜻합니다. 원문에서는 'カワイイ'처럼 카타카나로 표기하여, 단순히 귀엽다는 의미를 넘어 패션이나 시각적인 측면에서 감각적이고 트렌디한 느낌을 한층 강조하고 있습니다.</p>
             <hr>
             <ul>
               <li>公園でかわいい子猫を見つけました。</li>
-              <li>공원에서 귀여운 새끼 고양이를 발견했습니다。</li>
+              <li>공원에서 귀여운 새끼 고양이를 발견했습니다.</li>
             </ul>
         </div>
         
-        ### Example 9: Kanji Phonetic Disambiguation (Original: Japanese, User: Korean)
+        ### Example 8: Kanji Phonetic Disambiguation (Original: Japanese, User: Korean)
         User Input: 'Input: "市場", Context: "新鮮な野菜を買うために、朝早く地元の市場に行きました。"'
         Assistant Output:
         <div class="word-card">
@@ -7521,7 +7592,7 @@
             <hr>
             <ul>
               <li>毎朝、この市場は活気に満ちている。</li>
-              <li>매일 아침 이 시장은 활기로 넘친다。</li>
+              <li>매일 아침 이 시장은 활기로 넘친다.</li>
             </ul>
         </div>
         `;
