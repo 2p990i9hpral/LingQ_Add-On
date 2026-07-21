@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      14.1.0
+// @version      14.1.1
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @grant       GM_xmlhttpRequest
@@ -498,22 +498,33 @@
         
         if (domElement.childNodes.length === 0) return null;
         
+        const isNodeSelected = (node) => Boolean(node && selectedEl && (node === selectedEl || selectedEl.contains(node)));
+        
         sentenceElements.forEach((sentenceElement) => {
-            getAllLeafNodes(sentenceElement).forEach((childNode) => {
+            const leaves = getAllLeafNodes(sentenceElement);
+            
+            leaves.forEach((childNode, index) => {
                 let text = childNode.textContent.trim();
-                if (text) {
-                    if (selectedEl && (childNode === selectedEl || selectedEl.contains(childNode))) {
-                        text = `<selected>${text}</selected>`;
-                    }
-                    textParts.push(text);
+                if (!text) return;
+                
+                const isSelected = isNodeSelected(childNode);
+                
+                if (isSelected) {
+                    const isPrevSelected = isNodeSelected(leaves[index - 1]);
+                    const isNextSelected = isNodeSelected(leaves[index + 1]);
                     
-                    const parentNode = childNode.parentNode;
-                    if (parentNode.nodeType === Node.ELEMENT_NODE && parentNode.matches('.has-end-punctuation-question')) {
-                        textParts.push('?');
-                    }
-                    if (parentNode.nodeType === Node.ELEMENT_NODE && parentNode.matches('.has-end-punctuation-period')) {
-                        textParts.push('.');
-                    }
+                    if (!isPrevSelected) text = `<selected>${text}`;
+                    if (!isNextSelected) text = `${text}</selected>`;
+                }
+                
+                textParts.push(text);
+                
+                const parentNode = childNode.parentNode;
+                if (parentNode.nodeType === Node.ELEMENT_NODE && parentNode.matches('.has-end-punctuation-question')) {
+                    textParts.push('?');
+                }
+                if (parentNode.nodeType === Node.ELEMENT_NODE && parentNode.matches('.has-end-punctuation-period')) {
+                    textParts.push('.');
                 }
             });
             textParts.push('\n');
@@ -2551,7 +2562,7 @@
                 createElement("table", {id: "flashcardTable"},
                     createElement("thead", {},
                         createElement("tr", {},
-                            ...["", "Word", "Meaning", "Explanation"]
+                            ...["", "Idx", "Word", "Pronunciation", "Meaning", "Explanation"]
                                 .map(headerText => createElement("th", {}, headerText)
                                 )
                         )
@@ -3580,10 +3591,12 @@
                 
                 let queryBase = getDbClient()
                     .from(getTableName())
-                    .select("idx, word, meaning, explanation", {count: "exact"})
+                    .select("idx, word, pronunciation, meaning, explanation", {count: "exact"})
                     .eq("language", language);
                 
-                if (searchKeyword) queryBase = queryBase.or(`word.ilike.%${searchKeyword}%,meaning.ilike.%${searchKeyword}%`);
+                if (searchKeyword) {
+                    queryBase = queryBase.or(`idx::text.ilike.%${searchKeyword}%,word.ilike.%${searchKeyword}%,pronunciation.ilike.%${searchKeyword}%,meaning.ilike.%${searchKeyword}%`);
+                }
                 
                 const {data, error, count} = await queryBase
                     .order(currentSortField, {ascending: currentSortOrder === "asc"})
@@ -3611,7 +3624,9 @@
                     
                     const tableRow = createElement("tr", {},
                         deleteTd,
+                        createElement("td", {textContent: row.idx ?? "", title: row.idx ?? ""}),
                         createElement("td", {textContent: row.word || "", title: row.word || ""}),
+                        createElement("td", {textContent: row.pronunciation || "", title: row.pronunciation || ""}),
                         meaningTd,
                         createElement("td", {textContent: row.explanation || "", title: row.explanation || ""})
                     );
@@ -3975,9 +3990,15 @@
             searchInput.addEventListener("input", debouncedSearch);
             
             const tableHeaders = document.querySelectorAll("#flashcardTable thead th");
-            tableHeaders.forEach(th => {
+            tableHeaders.forEach((th) => {
                 th.addEventListener("click", () => {
-                    const fieldMap = {"": "idx", Word: "word", Meaning: "meaning", Explanation: "explanation"};
+                    const fieldMap = {
+                        Idx: "idx",
+                        Word: "word",
+                        Pronunciation: "pronunciation",
+                        Meaning: "meaning",
+                        Explanation: "explanation"
+                    };
                     const headerText = th.textContent.replace(/[▲▼]/g, "").trim();
                     const field = fieldMap[headerText];
                     if (!field) return;
@@ -3996,7 +4017,7 @@
                         }
                     }
                     
-                    tableHeaders.forEach(header => {
+                    tableHeaders.forEach((header) => {
                         header.textContent = header.textContent.replace(/[▲▼]/g, "").trim();
                     });
                     
@@ -4008,7 +4029,7 @@
                     if (currentSortField === field) {
                         th.textContent = headerText + arrow;
                     } else {
-                        tableHeaders[0].textContent = tableHeaders[0].textContent.replace(/[▲▼]/g, "").trim() + arrow;
+                        tableHeaders[1].textContent = tableHeaders[1].textContent.replace(/[▲▼]/g, "").trim() + arrow;
                     }
                     
                     loadFlashcardPage(1);
@@ -6334,8 +6355,10 @@
                 const storageCostPerHour = totalTokens * (1 / 1000000);
                 const totalInitialCost = inputCost + storageCostPerHour;
                 
+                showToast("Cache Created", true);
                 console.log("Cache created successfully:", data);
                 console.log('[LLM usage]', '[Cache Creation]', `${model}, tokens: ${totalTokens}, initial cost: $${totalInitialCost.toFixed(6)} (input: $${inputCost.toFixed(6)} + storage/hr: $${storageCostPerHour.toFixed(6)})`);
+                
                 
                 return data.name;
             } catch (error) {
