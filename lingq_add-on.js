@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      14.2.0
+// @version      14.2.1
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @grant       GM_xmlhttpRequest
@@ -4922,7 +4922,7 @@
                     font-size: var(--font-size);
                     line-height: var(--line-height);
                     margin-bottom: 20px;
-                    max-height: calc(var(--article-height) * 0.3);
+                    max-height: calc(var(--article-height) * 0.5);
                     overflow-y: scroll;
                     resize: vertical;
                     flex-direction: column;
@@ -7426,39 +7426,47 @@
         Analyze the input: 'Input: "Term" Context: "Sentence"'.
         
         1. Lemma Extraction (Base Form)
-           - Nouns: Singular form.
-           - Verbs: Infinitive form.
-           - Adverbs: Maintain the adverbial form. DO NOT revert '-ly' adverbs to adjectives (e.g., Input: "perfectly" -> Base: "perfectly", NOT "perfect").
-           - Idioms: Standard dictionary form (e.g., "kicked the bucket" -> "kick the bucket").
-           - Inflections: If the input is conjugated (e.g., "書いていました"), output the dictionary form ("書く").
+            - Nouns: Singular form.
+            - Verbs: Infinitive form.
+            - Adverbs: Maintain the adverbial form. DO NOT revert '-ly' adverbs to adjectives (e.g., Input: "perfectly" -> Base: "perfectly", NOT "perfect").
+            - Idioms: Standard dictionary form (e.g., "kicked the bucket" -> "kick the bucket").
+            - Inflections: If the input is conjugated (e.g., "書いていました"), output the dictionary form ("書く").
+            - Negative Examples
+                - Avoid: "smoothly, seamlessly" / Prefer: "smoothly"
+                - Avoid: "nearby, in the neighborhood" / Prefer: "nearby"
         
         2. IPA Pronunciation
-           - Provide IPA for the Base Form (lemma) enclosed in brackets [].
-           - Use a single, consistent transcription system throughout the whole word. Do not mix broad IPA symbols with romanized/orthographic letters (e.g., Pinyin, Revised Romanization) within the same transcription.
-           - Prefer broad, phonemic transcription over narrow, allophonic transcription. Eliminate narrow phonetic diacritics (e.g., lowering [̞], voiceless [̥], compressed [ᵝ], or dental [̪] marks), and avoid substituting a distinct narrow-transcription symbol for a gradient, sub-phonemic co-articulatory detail (e.g., minor degrees of palatalization, uvularization, or aspiration) that is not codified in the standard pronunciation convention of the language.
-           - Mark suprasegmental features (vowel/consonant length, stress, tone, gemination, etc.) consistently wherever the target language treats them as phonemically distinctive.
-           - When in doubt, follow the phonemic transcription convention used by Wiktionary or a major academic reference for that language, rather than an ad hoc or narrow phonetic realization.
-           - Ensure the output represents the standard, dictionary-style pronunciation, not a precise phonetic realization of one specific utterance.
+            - Provide IPA for the Base Form (lemma) enclosed in brackets [].
+            - Use a single, consistent transcription system throughout the whole word. Do not mix broad IPA symbols with romanized/orthographic letters (e.g., Pinyin, Revised Romanization) within the same transcription.
+            - Prefer broad, phonemic transcription over narrow, allophonic transcription. Eliminate narrow phonetic diacritics (e.g., lowering [̞], voiceless [̥], compressed [ᵝ], or dental [̪] marks), and avoid substituting a distinct narrow-transcription symbol for a gradient, sub-phonemic co-articulatory detail (e.g., minor degrees of palatalization, uvularization, or aspiration) that is not codified in the standard pronunciation convention of the language.
+            - Mark suprasegmental features (vowel/consonant length, stress, tone, gemination, etc.) consistently wherever the target language treats them as phonemically distinctive.
+            - When in doubt, follow the phonemic transcription convention used by Wiktionary or a major academic reference for that language, rather than an ad hoc or narrow phonetic realization.
+            - Ensure the output represents the standard, dictionary-style pronunciation, not a precise phonetic realization of one specific utterance.
+            - Negative Examples
+                - Incorrect: 滅ぼす → [ホロボス] / Correct: [horobosɯ]
+                - Incorrect: 읽고 → [일꼬] (hangul used as a pronunciation guide) / Correct: [ilkʰo]
+                - Incorrect: 我们 → [wǒmen] (pinyin with tone marks) / Correct: [wo˨˩˦mən]
+                - Incorrect: كتاب → [kitab] (Latin transliteration) / Correct: [kitaːb]
         
         3. Contextual Definition
-           - This field represents the core meaning of the lemma — the general concept as understood in ${lessonLanguage}, not a meaning narrowed to fit only this specific sentence.
-           - Identify a single standard dictionary definition of the Base Form in ${userLanguage} that best covers the sense used in the context.
-           - Select the definition at the correct semantic granularity: broad enough to reflect the word's general dictionary entry, yet specific enough to distinguish it from other listed senses.
-           - Prioritize formal equivalence: if the target language has a direct lexical counterpart (e.g., a cognate or loanword), prefer it over a paraphrase or a semantically narrowed synonym.
-           - Single lexical item constraint: The definition must be a single word or a single fixed phrase. A comma-separated string is prohibited by default — this applies whether the additional items are synonyms, nuance complements, or context variants.
-           - Permitted exception: A comma may be used only when ${userLanguage} genuinely has no single lexical item corresponding to the concept, so that a compound expression is structurally unavoidable (typically for abstract or culture-bound concepts). In that case, the comma functions as an internal separator within one fixed expression, not as a list of alternatives.
-           - Resolution rule: If more than one candidate translation is possible, select the one that best represents the general dictionary sense per the granularity rule above, and place any remaining nuance, tense implication, or context-specific coloring into the Contextual Explanation field instead.
-           - Do not use parentheses for alternative meanings or additional explanation.
-           - Output must be a definitive, short phrase or single word.
+            - This field represents the core meaning of the lemma — the general concept as understood in ${lessonLanguage}, not a meaning narrowed to fit only this specific sentence.
+            - Identify a single standard dictionary definition of the Base Form in ${userLanguage} that best covers the sense used in the context.
+            - Select the definition at the correct semantic granularity: broad enough to reflect the word's general dictionary entry, yet specific enough to distinguish it from other listed senses.
+            - Prioritize formal equivalence: if the target language has a direct lexical counterpart (e.g., a cognate or loanword), prefer it over a paraphrase or a semantically narrowed synonym.
+            - Single lexical item constraint: The definition must be a single word or a single fixed phrase. A comma-separated string is prohibited by default — this applies whether the additional items are synonyms, nuance complements, or context variants.
+            - Permitted exception: A comma may be used only when ${userLanguage} genuinely has no single lexical item corresponding to the concept, so that a compound expression is structurally unavoidable (typically for abstract or culture-bound concepts). In that case, the comma functions as an internal separator within one fixed expression, not as a list of alternatives.
+            - Resolution rule: If more than one candidate translation is possible, select the one that best represents the general dictionary sense per the granularity rule above, and place any remaining nuance, tense implication, or context-specific coloring into the Contextual Explanation field instead.
+            - Do not use parentheses for alternative meanings or additional explanation.
+            - Output must be a definitive, short phrase or single word.
 
         4. Contextual Explanation
-           - This is where you bridge the "Standard Definition" and the "Specific Context".
-           - Explain how the dictionary meaning applies here, explaining specific nuances, tense, or implications.
+            - This is where you bridge the "Standard Definition" and the "Specific Context".
+            - Explain how the dictionary meaning applies here, explaining specific nuances, tense, or implications.
         
         5. Example Generation
-           - Create a new, high-quality penetrating example sentence in ${lessonLanguage} using the Base Form.
-           - And translate accurately into ${userLanguage}.
-           - Ensure the usage helps the user understand the general applicability of this specific sense.
+            - Create a new, high-quality penetrating example sentence in ${lessonLanguage} using the Base Form.
+            - And translate accurately into ${userLanguage}.
+            - Ensure the usage helps the user understand the general applicability of this specific sense.
         
         ## Output Structure (HTML)
         
