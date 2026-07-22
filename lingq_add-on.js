@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      14.2.1
+// @version      14.2.2
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @grant       GM_xmlhttpRequest
@@ -118,11 +118,13 @@
             {value: "gpt-5.4-mini", text: "OpenAI GPT-5.4 mini ($0.75/$4.5)"}
         ],
         "google": [
+            {value: "gemini-3.6-flash", text: "Google Gemini 3.6 Flash ($1.5/$7.5)"},
             {value: "gemini-3.5-flash", text: "Google Gemini 3.5 Flash ($1.5/$9)"},
             {value: "gemini-3-flash-preview", text: "Google Gemini 3.0 Flash ($0.5/$3)"},
-            {value: "gemini-3.1-flash-lite", text: "Google Gemini 3.1 Flash Light ($0.25/$1.5)"},
+            {value: "gemini-3.5-flash-lite", text: "Google Gemini 3.5 Flash-Light ($0.3/$2.5)"},
+            {value: "gemini-3.1-flash-lite", text: "Google Gemini 3.1 Flash-Light ($0.25/$1.5)"},
             {value: "gemini-2.5-flash", text: "Google Gemini 2.5 Flash ($0.3/$2.5)"},
-            {value: "gemini-2.5-flash-lite", text: "Google Gemini 2.5 Flash Light ($0.1/$0.4)"}
+            {value: "gemini-2.5-flash-lite", text: "Google Gemini 2.5 Flash-Light ($0.1/$0.4)"}
         ],
         "anthropic": [
             {value: "claude-sonnet-4-6", text: "Claude Sonnet 4.6 ($3.0/$15)"},
@@ -1411,7 +1413,7 @@
         }
         
         if (provider === "google") {
-            body.reasoning_effort = "none";
+            body.reasoning_effort = "minimal";
             if (cacheName) {
                 body.extra_body = { google: { cached_content: cacheName } };
             }
