@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      14.2.2
+// @version      14.2.3
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @grant       GM_xmlhttpRequest
@@ -113,29 +113,29 @@
     
     const llmModelsByProvider = {
         "openai": [
-            {value: "gpt-5.5", text: "OpenAI GPT-5.5 ($5/$30)"},
-            {value: "gpt-5.4", text: "OpenAI GPT-5.4 ($2.5/$15)"},
-            {value: "gpt-5.4-mini", text: "OpenAI GPT-5.4 mini ($0.75/$4.5)"}
+            {value: "gpt-5.5", text: "GPT-5.5 ($5/$30)"},
+            {value: "gpt-5.4", text: "GPT-5.4 ($2.5/$15)"},
+            {value: "gpt-5.4-mini", text: "GPT-5.4 mini ($0.75/$4.5)"}
         ],
         "google": [
-            {value: "gemini-3.6-flash", text: "Google Gemini 3.6 Flash ($1.5/$7.5)"},
-            {value: "gemini-3.5-flash", text: "Google Gemini 3.5 Flash ($1.5/$9)"},
-            {value: "gemini-3-flash-preview", text: "Google Gemini 3.0 Flash ($0.5/$3)"},
-            {value: "gemini-3.5-flash-lite", text: "Google Gemini 3.5 Flash-Light ($0.3/$2.5)"},
-            {value: "gemini-3.1-flash-lite", text: "Google Gemini 3.1 Flash-Light ($0.25/$1.5)"},
-            {value: "gemini-2.5-flash", text: "Google Gemini 2.5 Flash ($0.3/$2.5)"},
-            {value: "gemini-2.5-flash-lite", text: "Google Gemini 2.5 Flash-Light ($0.1/$0.4)"}
+            {value: "gemini-3.6-flash", text: "Gemini 3.6 Flash ($1.5/$7.5)"},
+            {value: "gemini-3.5-flash", text: "Gemini 3.5 Flash ($1.5/$9)"},
+            {value: "gemini-3-flash-preview", text: "Gemini 3.0 Flash ($0.5/$3)"},
+            {value: "gemini-3.5-flash-lite", text: "Gemini 3.5 Flash-Light ($0.3/$2.5)"},
+            {value: "gemini-3.1-flash-lite", text: "Gemini 3.1 Flash-Light ($0.25/$1.5)"},
+            {value: "gemini-2.5-flash", text: "Gemini 2.5 Flash ($0.3/$2.5)"},
+            {value: "gemini-2.5-flash-lite", text: "Gemini 2.5 Flash-Light ($0.1/$0.4)"}
         ],
         "anthropic": [
-            {value: "claude-sonnet-4-6", text: "Claude Sonnet 4.6 ($3.0/$15)"},
-            {value: "claude-haiku-4-5", text: "Claude Haiku 4.5 ($1/$5)"}
+            {value: "claude-sonnet-4-6", text: "Sonnet 4.6 ($3.0/$15)"},
+            {value: "claude-haiku-4-5", text: "Haiku 4.5 ($1/$5)"}
         ],
         "deepseek": [
-            {value: "deepseek-v4-pro", text: "Deepseek v4 Pro ($1.74/$3.48)"},
-            {value: "deepseek-v4-flash", text: "Deepseek v4 Flash ($0.14/$0.28)"}
+            {value: "deepseek-v4-pro", text: "v4 Pro ($1.74/$3.48)"},
+            {value: "deepseek-v4-flash", text: "v4 Flash ($0.14/$0.28)"}
         ],
         "cerebras": [
-            {value: "gemma-4-31b", text: "Cerebras Gemma 4 31B ($0.99/$1.49)"}
+            {value: "gemma-4-31b", text: "Gemma 4 31B ($0.99/$1.49)"}
         ]
     };
     
@@ -1405,7 +1405,7 @@
             mappedHistory = mergedHistory;
         }
         
-        const body = { model, temperature: 1.0, messages: mappedHistory };
+        const body = { model, messages: mappedHistory };
         if (stream) body.stream = true;
         
         if (provider === "openai" && model.includes("gpt-5")) {
@@ -8094,7 +8094,7 @@
             field.appendChild(control);
             navItem.appendChild(field);
             
-            let mainNav = await waitForElement(`#\\:r7\\:-form-item > .grid`, 10000);
+            let mainNav = await waitForElement(`#\\:rp\\:-form-item > .grid`, 10000);
             mainNav.style.height = "auto";
             
             mainNav.appendChild(createElement("hr", {className: "divider my-3"}));
