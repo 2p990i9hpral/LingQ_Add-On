@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      14.2.3
+// @version      14.3.0
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @grant       GM_xmlhttpRequest
@@ -87,6 +87,7 @@
         llmModels: {},
         askSelected: false,
         prependSummary: {},
+        summaryDifficulty: {},
         useCentralDb: false,
         dbUrl: "",
         dbKey: "",
@@ -105,6 +106,7 @@
         videoPosition: "Right",
         customFont: "",
         prependSummary: false,
+        summaryDifficulty: "unset",
         fontSize: 1.1,
         lineHeight: 1.7,
         usePageMode: true,
@@ -140,9 +142,13 @@
     };
     
     function ensureLanguageScopedSetting(settingKey, language) {
-        const scopedSettings = typeof settings[settingKey] === "object" && settings[settingKey] !== null
+        let scopedSettings = typeof settings[settingKey] === "object" && settings[settingKey] !== null
             ? settings[settingKey]
             : {};
+        
+        if (typeof settings[settingKey] !== "object" && settings[settingKey] !== undefined && settings[settingKey] !== null) {
+            scopedSettings = { [language]: settings[settingKey] };
+        }
         
         if (Object.hasOwn(scopedSettings, language)) return;
         
@@ -2218,6 +2224,21 @@
             addCheckbox(chatWidgetSection, "askSelectedCheckbox", "Enable asking with selected text", settings.askSelected);
             addCheckbox(chatWidgetSection, "prependSummaryCheckbox", "Prepend a quick Summary", settings.prependSummary[language]);
             
+            const difficultyOptions = [
+                {value: "unset", text: "Unset"},
+                {value: "A1", text: "A1"},
+                {value: "A2", text: "A2"},
+                {value: "B1", text: "B1"},
+                {value: "B2", text: "B2"},
+                {value: "C1", text: "C1"},
+                {value: "C2", text: "C2"}
+            ];
+            const currentDifficulty = (typeof settings.summaryDifficulty === "object" && settings.summaryDifficulty !== null)
+                ? (settings.summaryDifficulty[language] || "unset")
+                : (settings.summaryDifficulty || "unset");
+            const difficultyContainer = addSelect(chatWidgetSection, "summaryDifficultySelector", "Summary Difficulty (CEFR):", difficultyOptions, currentDifficulty);
+            difficultyContainer.style.display = settings.prependSummary[language] ? "block" : "none";
+            
             addRadioGroup(chatWidgetSection, "dbMode", "DB Type:", [
                 {value: "personal", text: "Custom"},
                 {value: "central", text: "Built-in"}
@@ -3061,7 +3082,18 @@
             const prependSummaryCheckbox = document.getElementById("prependSummaryCheckbox");
             prependSummaryCheckbox.addEventListener('change', (event) => {
                 settings.prependSummary = {...settings.prependSummary, [language]: event.target.checked};
+                document.getElementById("summaryDifficultySection").style.display = event.target.checked ? "flex" : "none";
             });
+            
+            const summaryDifficultySelector = document.getElementById("summaryDifficultySelector");
+            if (summaryDifficultySelector) {
+                summaryDifficultySelector.addEventListener('change', (event) => {
+                    const currentMap = (typeof settings.summaryDifficulty === "object" && settings.summaryDifficulty !== null)
+                        ? settings.summaryDifficulty
+                        : {};
+                    settings.summaryDifficulty = {...currentMap, [language]: event.target.value};
+                });
+            }
             
             document.querySelectorAll('input[name="dbMode"]').forEach((radio) => {
                 radio.addEventListener("change", (event) => {
@@ -3268,6 +3300,8 @@
                 
                 document.getElementById("askSelectedCheckbox").value = defaults.askSelected;
                 document.getElementById("prependSummaryCheckbox").checked = languageScopedDefaults.prependSummary;
+                document.getElementById("summaryDifficultySelector").value = languageScopedDefaults.summaryDifficulty || "unset";
+                document.getElementById("summaryDifficultySection").style.display = languageScopedDefaults.prependSummary ? "flex" : "none";
                 
                 document.querySelectorAll('input[name="dbMode"]').forEach((radio) => {
                     radio.checked = radio.value === (settings.useCentralDb ? "central" : "personal");
@@ -6108,6 +6142,14 @@
                 async function getQuickSummary(provider, apikey, model, content) {
                     const DictionaryLocalePairs = await getDictionaryLocalePairs()
                     const lessonLanguage = DictionaryLocalePairs[language];
+                    const rawDifficulty = typeof settings.summaryDifficulty === "object" && settings.summaryDifficulty !== null
+                        ? settings.summaryDifficulty[language]
+                        : settings.summaryDifficulty;
+                    const difficulty = rawDifficulty || "unset";
+                    const difficultyPrompt = difficulty && difficulty !== "unset" 
+                        ? `- Ensure the summary uses vocabulary and grammar suitable for a CEFR ${difficulty} learner.`
+                        : "";
+
                     const summaryPrompt = `
                         # Role
                         Summarize the lesson content, helping learners grasp the topic before reading.
@@ -6121,6 +6163,7 @@
                         # Content Rules
                         - Objective and factual; base ONLY on the given content
                         - Summary body ONLY — no preface, title restatement, or closing remarks
+                        ${difficultyPrompt}
                     
                         # Example
                         <p>first paragraph</p> <p>second paragraph</p>`;
@@ -6161,9 +6204,34 @@
                     });
                     summaryElement.append(contentWrapper);
                     
-                    const closeButton = createElement("button", {className: "close-summary-btn"}, ["close"]);
+                    const btnContainer = createElement("div", {
+                        style: "display: flex; gap: 10px; align-items: center; justify-content: flex-end; margin: 0 10px 0 auto;"}
+                    );
+                    
+                    const ttsButton = createElement("button", {
+                        className: "tts-summary-btn",
+                        title: "Read Quick Summary",
+                        innerHTML: `<svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="transparent" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-play" aria-hidden="true"><polygon points="6 3 20 12 6 21 6 3"></polygon></svg>`,
+                        style: "padding: 10px 10px; border: 1px solid rgb(125, 125, 125, 50%); border-radius: 5px; cursor: pointer; display: flex; opacity: 1;"
+                    });
+                    
+                    let audioData = null;
+                    ttsButton.addEventListener("click", async () => {
+                        if (!audioData) {
+                            ttsButton.style.opacity = "0.5";
+                            const textToTTS = contentWrapper.textContent.replaceAll("\n", " ");
+                            audioData = await getTTSResponse(settings.ttsProvider, settings.ttsApiKey, (settings.ttsVoice[language]), textToTTS);
+                            ttsButton.style.opacity = "1";
+                            if (!audioData) return;
+                        }
+                        playAudio(audioData, 1.0);
+                    });
+                    
+                    const closeButton = createElement("button", {className: "close-summary-btn", style: "margin: 0;"}, ["close"]);
                     closeButton.addEventListener("click", () => summaryElement.remove());
-                    summaryElement.append(closeButton);
+                    
+                    btnContainer.append(ttsButton, closeButton);
+                    summaryElement.append(btnContainer);
                     
                     changeScrollAmount(".quick-summary", 0.2);
                     summaryElement.addEventListener('wheel', (event) => event.stopPropagation());
