@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      14.3.0
+// @version      14.4.0
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @grant       GM_xmlhttpRequest
@@ -6159,14 +6159,19 @@
                         - Structure: 2–3 <p> paragraphs
                         - Render target: The result will be used as the innerHTML of a DOM element. So, output raw HTML as plain text; not use Markdown syntax or code blocks
                         - Length: 150 words max
+                        - Reading Aids: For languages with logographic or complex scripts (e.g., Japanese, Chinese), annotate Kanji/words with phonetic readings using HTML <ruby> tags (e.g., <ruby>漢字<rt>かんじ</rt></ruby>).
                     
                         # Content Rules
                         - Objective and factual; base ONLY on the given content
                         - Summary body ONLY — no preface, title restatement, or closing remarks
                         ${difficultyPrompt}
                     
+                        # Format
+                        <p>first paragraph</p> <p>second paragraph</p>
+                        
                         # Example
-                        <p>first paragraph</p> <p>second paragraph</p>`;
+                        <p><ruby>私<rt>わたし</rt></ruby>は<ruby>日本語<rt>にほんご</rt></ruby>を<ruby>勉強<rt>べんきょう</rt></ruby>しています。</p>
+                        `;
                     
                     const summary_history = [
                         {role: "system", content: removeIndent(summaryPrompt)},
@@ -6219,7 +6224,10 @@
                     ttsButton.addEventListener("click", async () => {
                         if (!audioData) {
                             ttsButton.style.opacity = "0.5";
-                            const textToTTS = contentWrapper.textContent.replaceAll("\n", " ");
+                            const textToTTS = contentWrapper.innerHTML
+                                .replace(/<rt>[\s\S]*?<\/rt>/gi, "")
+                                .replace(/<[^>]+>/g, "")
+                                .replaceAll("\n", " ");
                             audioData = await getTTSResponse(settings.ttsProvider, settings.ttsApiKey, (settings.ttsVoice[language]), textToTTS);
                             ttsButton.style.opacity = "1";
                             if (!audioData) return;
@@ -6264,9 +6272,8 @@
                 }
                 
                 getLessonSummary(llmProvider, llmApiKey, llmModel, lessonContent)
-                    .then(async summary => {
+                    .then(summary => {
                         lessonSummary = convertMarkdownToHTML(summary);
-                        await refreshGeminiCache();
                     });
                 
             }
@@ -7117,6 +7124,9 @@
                     llmApiKey = savedKeys[llmProvider] || "";
                     
                     const isWordRequest = chatHistory.some(m => m.role === "system-word");
+                    if (isWordRequest && llmProvider === "google" && !currentGeminiCacheName) {
+                        await refreshGeminiCache();
+                    }
                     const cacheToUse = (isWordRequest && llmProvider === "google") ? currentGeminiCacheName : null;
                     
                     await streamOpenAIResponse(
