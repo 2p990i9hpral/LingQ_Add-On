@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      14.5.0
+// @version      14.5.1
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @grant       GM_xmlhttpRequest
@@ -6378,17 +6378,19 @@
                 async function getLessonSummary(provider, apikey, model, content) {
                     const summaryPrompt = `
                         # Role
-                        Generate a comprehensive English summary of the lesson content, serving as persistent context for downstream tasks — including Q&A about the lesson and AI dictionary lookups that require full contextual awareness.
+                        Generate a comprehensive English note of the given content, serving as persistent context for downstream tasks — including Q&A about the lesson and AI dictionary lookups that require full contextual awareness.
                     
                         # Content Rules
                         - Objective and factual; base ONLY on the given content
                         - Preserve ALL key details, named entities, terminology, and plot/argument structure
                         - Retain original-language terms when translation would lose precision (e.g., proper nouns, culturally specific concepts)
-                        - Summary body ONLY — no preface or closing remarks
+                        - No preface or closing remarks
                     
                         # Output Format
                         - Language: English; use original-language terms inline when necessary for fidelity
-                        - Format: plain text only, not HTML or Markdown format.`;
+                        - Format: plain text only, not HTML or Markdown format.
+                        - Length: Proportional to input length (about 15%–25%). For maximum context depth, aim for detailed coverage, but do not exceed 1,500 words in total.
+                        `;
                     
                     const summary_history = [
                         {role: "system", content: removeIndent(summaryPrompt)},
@@ -6420,7 +6422,10 @@
                         - Structure: 2–3 <p> paragraphs
                         - Render target: The result will be used as the innerHTML of a DOM element. So, output raw HTML as plain text; not use Markdown syntax or code blocks
                         - Length: 150 words max
-                        - Reading Aids: For languages with logographic or complex scripts (e.g., Japanese, Chinese), annotate Kanji/words with phonetic readings using HTML <ruby> tags (e.g., <ruby>漢字<rt>かんじ</rt></ruby>).
+                        - Reading Aids:
+                            If ${lessonLanguage} uses logographic or complex scripts (e.g., Japanese, Chinese), annotate Kanji/words with phonetic readings using HTML <ruby> tags (e.g., <ruby>漢字<rt>かんじ</rt></ruby>).
+                            If not (e.g., English), never use <ruby> tags.
+                            Example: "<p><ruby>私<rt>わたし</rt></ruby>は<ruby>日本語<rt>にほんご</rt></ruby>を<ruby>勉強<rt>べんきょう</rt></ruby>しています。...</p>"
                     
                         # Content Rules
                         - Objective and factual; base ONLY on the given content
@@ -6429,9 +6434,6 @@
                     
                         # Format
                         <p>first paragraph</p> <p>second paragraph</p>
-                        
-                        # Example
-                        <p><ruby>私<rt>わたし</rt></ruby>は<ruby>日本語<rt>にほんご</rt></ruby>を<ruby>勉強<rt>べんきょう</rt></ruby>しています。</p>
                         `;
                     
                     const summary_history = [
@@ -8460,7 +8462,7 @@
             field.appendChild(control);
             navItem.appendChild(field);
             
-            let mainNav = await waitForElement(`#\\:rp\\:-form-item > .grid`, 10000);
+            let mainNav = await waitForElement(`.bg-editor [data-slot="card"] [data-slot="form-item"] [data-slot="form-control"]  div.grid`, 10000);
             mainNav.style.height = "auto";
             
             mainNav.appendChild(createElement("hr", {className: "divider my-3"}));
