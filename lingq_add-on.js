@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      14.4.0
+// @version      14.5.0
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @grant       GM_xmlhttpRequest
@@ -113,6 +113,8 @@
         ttsVoice: "random"
     };
     
+    const useVertexPriorityMode = false;
+    
     const llmModelsByProvider = {
         "openai": [
             {value: "gpt-5.5", text: "GPT-5.5 ($5/$30)"},
@@ -120,6 +122,15 @@
             {value: "gpt-5.4-mini", text: "GPT-5.4 mini ($0.75/$4.5)"}
         ],
         "google": [
+            {value: "gemini-3.6-flash", text: "Gemini 3.6 Flash ($1.5/$7.5)"},
+            {value: "gemini-3.5-flash", text: "Gemini 3.5 Flash ($1.5/$9)"},
+            {value: "gemini-3-flash-preview", text: "Gemini 3.0 Flash ($0.5/$3)"},
+            {value: "gemini-3.5-flash-lite", text: "Gemini 3.5 Flash-Light ($0.3/$2.5)"},
+            {value: "gemini-3.1-flash-lite", text: "Gemini 3.1 Flash-Light ($0.25/$1.5)"},
+            {value: "gemini-2.5-flash", text: "Gemini 2.5 Flash ($0.3/$2.5)"},
+            {value: "gemini-2.5-flash-lite", text: "Gemini 2.5 Flash-Light ($0.1/$0.4)"}
+        ],
+        "vertex": [
             {value: "gemini-3.6-flash", text: "Gemini 3.6 Flash ($1.5/$7.5)"},
             {value: "gemini-3.5-flash", text: "Gemini 3.5 Flash ($1.5/$9)"},
             {value: "gemini-3-flash-preview", text: "Gemini 3.0 Flash ($0.5/$3)"},
@@ -1309,18 +1320,20 @@
         return [inputPrice, outputPrice];
     }
     
-    function trackLLMUsage(contextType, model, cachedTokens, inputTokens, outputTokens, overrideCost = null) {
+    function trackLLMUsage(contextType, model, cachedTokens, inputTokens, outputTokens, overrideCost = null, isPriority = false) {
         let approxCost = 0;
         let uncachedCost = 0;
         let savedPercentStr = "";
+        
+        const multiplier = isPriority ? 1.8 : 1.0;
         
         if (overrideCost !== null) {
             approxCost = overrideCost;
             uncachedCost = overrideCost;
         } else {
             const [inputPrice, outputPrice] = getLLMPricing(model);
-            approxCost = cachedTokens * (inputPrice / 10) + inputTokens * inputPrice + outputTokens * outputPrice;
-            uncachedCost = (cachedTokens + inputTokens) * inputPrice + outputTokens * outputPrice;
+            approxCost = (cachedTokens * (inputPrice / 10) + inputTokens * inputPrice + outputTokens * outputPrice) * multiplier;
+            uncachedCost = ((cachedTokens + inputTokens) * inputPrice + outputTokens * outputPrice) * multiplier;
             
             savedPercentStr = uncachedCost > 0
                 ? (((uncachedCost - approxCost) / uncachedCost) * 100).toFixed(1)
@@ -1331,7 +1344,8 @@
             ? `cost: $${approxCost.toFixed(6)}`
             : `cost: $${approxCost.toFixed(6)} (${savedPercentStr}% saved)`;
         
-        console.log('[LLM usage]', `[${contextType}]`, `${model}, tokens: (${cachedTokens}/${inputTokens}/${outputTokens}), ${logMessage}`);
+        const priorityStr = isPriority ? " (Priority)" : "";
+        console.log('[LLM usage]', `[${contextType}]`, `${model}${priorityStr}, tokens: (${cachedTokens}/${inputTokens}/${outputTokens}), ${logMessage}`);
         
         document.dispatchEvent(new CustomEvent("addon:llmUsage", {
             detail: {
@@ -1347,10 +1361,93 @@
             }
         }));
     }
+    async function importPrivateKey(pem) {
+        const pemContents = pem
+            .replace(/-----BEGIN PRIVATE KEY-----/g, "")
+            .replace(/-----END PRIVATE KEY-----/g, "")
+            .replace(/\s+/g, "");
+        
+        const binaryDerString = window.atob(pemContents);
+        const binaryDer = new Uint8Array(binaryDerString.length);
+        for (let i = 0; i < binaryDerString.length; i++) {
+            binaryDer[i] = binaryDerString.charCodeAt(i);
+        }
+        
+        return await window.crypto.subtle.importKey(
+            "pkcs8",
+            binaryDer.buffer,
+            { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" },
+            false,
+            ["sign"]
+        );
+    }
     
-    function buildRequestConfig(provider, apiKey) {
+    async function getAccessTokenFromServiceAccount(clientEmail, privateKey) {
+        const now = Math.floor(Date.now() / 1000);
+        const header = { alg: "RS256", typ: "JWT" };
+        const payload = {
+            iss: clientEmail,
+            scope: "https://www.googleapis.com/auth/cloud-platform",
+            aud: "https://oauth2.googleapis.com/token",
+            exp: now + 3600,
+            iat: now
+        };
+        
+        const base64UrlEncode = (data) => {
+            const str = typeof data === "string" ? data : JSON.stringify(data);
+            return btoa(str).replace(/=/g, "").replace(/\+/g, "-").replace(/\//g, "_");
+        };
+        
+        const unsignedJwt = `${base64UrlEncode(header)}.${base64UrlEncode(payload)}`;
+        const cryptoKey = await importPrivateKey(privateKey);
+        const signatureBuffer = await window.crypto.subtle.sign(
+            "RSASSA-PKCS1-v1_5",
+            cryptoKey,
+            new TextEncoder().encode(unsignedJwt)
+        );
+        
+        const signatureBase64Url = btoa(String.fromCharCode(...new Uint8Array(signatureBuffer)))
+            .replace(/=/g, "").replace(/\+/g, "-").replace(/\//g, "_");
+        
+        const signedJwt = `${unsignedJwt}.${signatureBase64Url}`;
+        
+        const response = await gmFetch("https://oauth2.googleapis.com/token", {
+            method: "POST",
+            headers: { "Content-Type": "application/x-www-form-urlencoded" },
+            body: new URLSearchParams({
+                grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer",
+                assertion: signedJwt
+            }).toString()
+        });
+        
+        const data = await response.json();
+        if (!response.ok) {
+            throw new Error(`Token fetch failed: ${JSON.stringify(data)}`);
+        }
+        return data.access_token;
+    }
+
+    async function getValidVertexToken() {
+        const now = Math.floor(Date.now() / 1000);
+        if (settings.vertexAccessToken && settings.vertexTokenExpiry && now < settings.vertexTokenExpiry - 300) {
+            return settings.vertexAccessToken;
+        }
+        
+        const credentials = settings.vertexCredential || {};
+        if (!credentials.clientEmail || !credentials.privateKey || !credentials.projectId) {
+            throw new Error("Vertex credentials are not set.");
+        }
+        
+        const token = await getAccessTokenFromServiceAccount(credentials.clientEmail, credentials.privateKey);
+        settings.vertexAccessToken = token;
+        settings.vertexTokenExpiry = now + 3600;
+        return token;
+    }
+
+    async function buildRequestConfig(provider, apiKey, forcePriority = false) {
         let api_url;
         let headers = {'Content-Type': 'application/json'};
+        let isPriority = false;
         
         switch (provider) {
             case "openai":
@@ -1374,13 +1471,26 @@
                 api_url = "https://api.cerebras.ai/v1/chat/completions";
                 headers['Authorization'] = `Bearer ${apiKey}`;
                 break;
+            case "vertex": {
+                const token = await getValidVertexToken();
+                const projectId = (settings.vertexCredential || {}).projectId;
+                const region = "global";
+                api_url = `https://aiplatform.googleapis.com/v1beta1/projects/${projectId}/locations/${region}/endpoints/openapi/chat/completions`;
+                headers['Authorization'] = `Bearer ${token}`;
+                if (useVertexPriorityMode || forcePriority) {
+                    headers['X-Vertex-AI-LLM-Request-Type'] = 'shared';
+                    headers['X-Vertex-AI-LLM-Shared-Request-Type'] = 'priority';
+                    isPriority = true;
+                }
+                break;
+            }
         }
         
-        return {api_url, headers};
+        return {api_url, headers, isPriority};
     }
     
     function buildRequestBody(provider, model, history, stream = false, cacheName = null) {
-        const processedHistory = (provider === "google" && cacheName)
+        const processedHistory = ((provider === "google" || provider === "vertex") && cacheName)
             ? history.filter(m => {
                 if (m.role === "user" && m.content.startsWith("<summary>")) return false;
                 if (m.role === "system-main" || m.role === "system-word") return false;
@@ -1391,7 +1501,7 @@
         let mappedHistory = processedHistory.map(m => {
             let role = m.role.split("-")[0];
             
-            if (provider === "google" && cacheName && role === "system") {
+            if ((provider === "google" || provider === "vertex") && cacheName && role === "system") {
                 role = "user";
             }
             
@@ -1411,14 +1521,19 @@
             mappedHistory = mergedHistory;
         }
         
-        const body = { model, messages: mappedHistory };
+        let reqModel = model;
+        if (provider === "vertex") {
+            reqModel = model.startsWith("google/") ? model : `google/${model}`;
+        }
+        
+        const body = { model: reqModel, messages: mappedHistory };
         if (stream) body.stream = true;
         
         if (provider === "openai" && model.includes("gpt-5")) {
             body.reasoning_effort = "none";
         }
         
-        if (provider === "google") {
+        if (provider === "google" || provider === "vertex") {
             body.reasoning_effort = "minimal";
             if (cacheName) {
                 body.extra_body = { google: { cached_content: cacheName } };
@@ -1449,7 +1564,8 @@
     }
     
     async function getOpenAIResponse(provider, apiKey, model, history, cacheName = null, onCacheExpired = null, retryCount = 0) {
-        const {api_url, headers} = buildRequestConfig(provider, apiKey);
+        const forcePriority = (provider === "vertex" && retryCount > 0);
+        const {api_url, headers, isPriority} = await buildRequestConfig(provider, apiKey, forcePriority);
         const body = buildRequestBody(provider, model, history, false, cacheName);
         
         try {
@@ -1460,7 +1576,7 @@
                 const errMsg = errorData.error?.message || JSON.stringify(errorData);
                 console.error(`Fetch API Error (${response.status}):`, errMsg);
                 
-                if (cacheName && provider === "google" && response.status === 403 && retryCount === 0 && onCacheExpired) {
+                if (cacheName && (provider === "google" || provider === "vertex") && (response.status === 403 || response.status === 404 || (provider === "vertex" && response.status === 400)) && retryCount === 0 && onCacheExpired) {
                     console.warn("Gemini cache expired or not found. Recreating and retrying...");
                     const newCacheName = await onCacheExpired();
                     if (newCacheName) {
@@ -1470,6 +1586,19 @@
                     console.warn("Cache recreation failed. Falling back to non-cached request.");
                     return getOpenAIResponse(provider, apiKey, model, history, null, null, 1);
                 }
+                
+                if (provider === "vertex" && response.status === 401 && retryCount === 0) {
+                    console.warn("Vertex token expired. Regenerating and retrying...");
+                    settings.vertexTokenExpiry = 0;
+                    return getOpenAIResponse(provider, apiKey, model, history, cacheName, onCacheExpired, 1);
+                }
+                
+                if (response.status === 429 && retryCount === 0) {
+                    console.warn("429 Resource Exhausted. Retrying once after 2 seconds...");
+                    await new Promise(r => setTimeout(r, 1000));
+                    return getOpenAIResponse(provider, apiKey, model, history, cacheName, onCacheExpired, 1);
+                }
+                
                 return `Error: ${errMsg}`;
             }
             
@@ -1481,7 +1610,7 @@
             const inputTokens = (usage.prompt_tokens || usage.input_tokens || 0) - cachedTokens;
             const outputTokens = usage.completion_tokens || usage.output_tokens || 0;
             
-            trackLLMUsage("Chat Batch", model, cachedTokens, inputTokens, outputTokens);
+            trackLLMUsage("Chat Batch", model, cachedTokens, inputTokens, outputTokens, null, isPriority);
             
             return content || "Sorry, could not get a response.";
         } catch (error) {
@@ -1491,7 +1620,8 @@
     }
     
     async function streamOpenAIResponse(provider, apiKey, model, history, onChunkReceived, onStreamEnd, onError, cacheName = null, onCacheExpired = null, retryCount = 0) {
-        const {api_url, headers} = buildRequestConfig(provider, apiKey);
+        const forcePriority = (provider === "vertex" && retryCount > 0);
+        const {api_url, headers, isPriority} = await buildRequestConfig(provider, apiKey, forcePriority);
         if (provider === "anthropic") headers['Accept'] = 'text/event-stream';
         const body = buildRequestBody(provider, model, history, true, cacheName);
         
@@ -1503,7 +1633,7 @@
                 headers,
                 body: JSON.stringify(body)
             }, (json) => {
-                if (provider === "google" && json.usage) {
+                if ((provider === "google" || provider === "vertex") && json.usage) {
                     lastUsage = json.usage;
                 }
                 
@@ -1515,18 +1645,18 @@
                 }
             });
             
-            if (provider === "google" && lastUsage) {
+            if ((provider === "google" || provider === "vertex") && lastUsage) {
                 const cachedTokens = lastUsage.prompt_tokens_details?.cached_tokens || 0;
                 const inputTokens = (lastUsage.prompt_tokens || 0) - cachedTokens;
                 const outputTokens = lastUsage.completion_tokens || 0;
                 
-                trackLLMUsage("Chat Stream", model, cachedTokens, inputTokens, outputTokens);
+                trackLLMUsage("Chat Stream", model, cachedTokens, inputTokens, outputTokens, null, isPriority);
             }
             
             onStreamEnd(finalContent);
         } catch (error) {
             console.error("Stream API Error:", error.message);
-            if (cacheName && provider === "google" && (error.message.includes("403") || error.message.includes("404")) && retryCount === 0 && onCacheExpired) {
+            if (cacheName && (provider === "google" || provider === "vertex") && (error.message.includes("403") || error.message.includes("404") || (provider === "vertex" && error.message.includes("400"))) && retryCount === 0 && onCacheExpired) {
                 console.warn("Gemini cache expired or not found. Recreating and retrying...");
                 const newCacheName = await onCacheExpired();
                 if (newCacheName) {
@@ -1536,6 +1666,19 @@
                 console.warn("Cache recreation failed. Falling back to non-cached request.");
                 return streamOpenAIResponse(provider, apiKey, model, history, onChunkReceived, onStreamEnd, onError, null, null, 1);
             }
+            
+            if (provider === "vertex" && error.message.includes("401") && retryCount === 0) {
+                console.warn("Vertex token expired. Regenerating and retrying...");
+                settings.vertexTokenExpiry = 0;
+                return streamOpenAIResponse(provider, apiKey, model, history, onChunkReceived, onStreamEnd, onError, cacheName, onCacheExpired, 1);
+            }
+            
+            if (error.message.includes("429") && retryCount === 0) {
+                console.warn("429 Resource Exhausted. Retrying once after 2 seconds...");
+                await new Promise(r => setTimeout(r, 1000));
+                return streamOpenAIResponse(provider, apiKey, model, history, onChunkReceived, onStreamEnd, onError, cacheName, onCacheExpired, 1);
+            }
+            
             onError(error);
         }
     }
@@ -2194,6 +2337,7 @@
             addSelect(chatWidgetSection, "llmProviderSelector", "Chat Provider:", [
                 {value: "openai", text: "OpenAI"},
                 {value: "google", text: "Google"},
+                {value: "vertex", text: "Vertex (GCP)"},
                 {value: "anthropic", text: "Anthropic"},
                 {value: "deepseek", text: "DeepSeek"},
                 {value: "cerebras", text: "Cerebras"}
@@ -2202,7 +2346,10 @@
             const activeProviderModels = llmModelsByProvider[settings.llmProvider] || [];
             addSelect(chatWidgetSection, "llmModelSelector", "Model: (Price per 1M tokens)", activeProviderModels, settings.llmModel);
             
-            const apiKeyContainer = createElement("div", {className: "popup-row"});
+            const apiKeyContainer = createElement("div", {
+                className: "popup-row",
+                style: "display: flex; justify-content: space-between; align-items: center;"
+            });
             apiKeyContainer.appendChild(createElement("label", {
                 htmlFor: "llmApiKeyInput",
                 textContent: "Chat API Key:"
@@ -2210,7 +2357,7 @@
             
             const savedKeys = settings.llmApiKeys || {};
             
-            const apiKeyFlexContainer = createElement("div", {style: "display: flex; align-items: center;"});
+            const apiKeyFlexContainer = createElement("div", {style: "display: flex; align-items: center; width: 65%;"});
             const apiKeyInput = createElement("input", {
                 type: "password",
                 id: "llmApiKeyInput",
@@ -2220,6 +2367,54 @@
             apiKeyFlexContainer.appendChild(apiKeyInput);
             apiKeyContainer.appendChild(apiKeyFlexContainer);
             chatWidgetSection.appendChild(apiKeyContainer);
+            
+            const vertexCreds = settings.vertexCredential || {};
+            const vertexCredentialsContainer = createElement("div", {id: "vertexCredentialsContainer"});
+            vertexCredentialsContainer.style.display = settings.llmProvider === "vertex" ? "block" : "none";
+            apiKeyContainer.style.display = settings.llmProvider === "vertex" ? "none" : "flex";
+
+            const addVertexField = (id, label, value, isPassword) => {
+                const row = createElement("div", {
+                    className: "popup-row",
+                    style: "display: flex; justify-content: space-between; align-items: center;"
+                });
+                row.appendChild(createElement("label", {htmlFor: id, textContent: label}));
+                
+                const flexContainer = createElement("div", {style: "display: flex; align-items: center; width: 65%;"});
+                const input = createElement("input", {
+                    type: isPassword ? "password" : "text",
+                    id: id,
+                    value: value || "",
+                    className: "popup-input"
+                });
+                flexContainer.appendChild(input);
+                row.appendChild(flexContainer);
+                
+                vertexCredentialsContainer.appendChild(row);
+                return input;
+            };
+
+            addVertexField("vertexProjectIdInput", "Project ID:", vertexCreds.projectId, false);
+            addVertexField("vertexClientEmailInput", "Client Email:", vertexCreds.clientEmail, false);
+            addVertexField("vertexPrivateKeyInput", "Private Key:", vertexCreds.privateKey, true);
+            
+            const jsonUploadRow = createElement("div", {className: "popup-row", style: "display: flex; justify-content: flex-end;"});
+            const jsonUploadLabel = createElement("label", {
+                className: "popup-button",
+                textContent: "Load from JSON",
+                style: "cursor: pointer; text-align: center;"
+            });
+            const jsonUploadInput = createElement("input", {
+                type: "file",
+                id: "jsonUploadInput",
+                accept: ".json",
+                style: "display: none"
+            });
+            jsonUploadLabel.appendChild(jsonUploadInput);
+            jsonUploadRow.appendChild(jsonUploadLabel);
+            vertexCredentialsContainer.appendChild(jsonUploadRow);
+            
+            chatWidgetSection.appendChild(vertexCredentialsContainer);
             
             addCheckbox(chatWidgetSection, "askSelectedCheckbox", "Enable asking with selected text", settings.askSelected);
             addCheckbox(chatWidgetSection, "prependSummaryCheckbox", "Prepend a quick Summary", settings.prependSummary[language]);
@@ -2369,13 +2564,16 @@
             
             addCheckbox(ttsSection, "ttsAutoplayCheckbox", "Autoplay TTS voice", settings.ttsAutoplay);
             
-            const ttsApiKeyContainer = createElement("div", {className: "popup-row"});
+            const ttsApiKeyContainer = createElement("div", {
+                className: "popup-row",
+                style: "display: flex; justify-content: space-between; align-items: center;"
+            });
             ttsApiKeyContainer.appendChild(createElement("label", {
                 htmlFor: "ttsApiKeyInput",
                 textContent: "TTS API Key:"
             }));
             
-            const ttsApiKeyFlexContainer = createElement("div", {style: "display: flex; align-items: center;"});
+            const ttsApiKeyFlexContainer = createElement("div", {style: "display: flex; align-items: center; width: 65%;"});
             const ttsApiKeyInput = createElement("input", {
                 type: "password",
                 id: "ttsApiKeyInput",
@@ -3052,6 +3250,16 @@
                 
                 const savedKeys = settings.llmApiKeys || {};
                 llmApiKeyInput.value = savedKeys[provider] || "";
+                
+                const isVertex = provider === "vertex";
+                const vertexCredentialsContainer = document.getElementById("vertexCredentialsContainer");
+                if (vertexCredentialsContainer) {
+                    vertexCredentialsContainer.style.display = isVertex ? "block" : "none";
+                }
+                const apiKeyContainer = llmApiKeyInput.closest(".popup-row");
+                if (apiKeyContainer) {
+                    apiKeyContainer.style.display = isVertex ? "none" : "flex";
+                }
             });
             
             llmModelSelector.addEventListener("change", (event) => {
@@ -3523,6 +3731,54 @@
             document.getElementById("closeDownloadWordsBtn").addEventListener("click", () => {
                 downloadWordsPopup.style.display = "none";
             });
+            
+            const jsonUploadInput = document.getElementById("jsonUploadInput");
+            const vertexProjectIdInput = document.getElementById("vertexProjectIdInput");
+            const vertexClientEmailInput = document.getElementById("vertexClientEmailInput");
+            const vertexPrivateKeyInput = document.getElementById("vertexPrivateKeyInput");
+            
+            if (jsonUploadInput) {
+                jsonUploadInput.addEventListener('change', (event) => {
+                    const file = event.target.files[0];
+                    if (!file) return;
+                    const reader = new FileReader();
+                    reader.onload = (e) => {
+                        try {
+                            const json = JSON.parse(e.target.result);
+                            if (json.project_id && json.client_email && json.private_key) {
+                                vertexProjectIdInput.value = json.project_id;
+                                vertexClientEmailInput.value = json.client_email;
+                                vertexPrivateKeyInput.value = json.private_key;
+                                
+                                settings.vertexCredential = {
+                                    projectId: json.project_id,
+                                    clientEmail: json.client_email,
+                                    privateKey: json.private_key
+                                };
+                                alert("Vertex credentials loaded successfully.");
+                            } else {
+                                alert("Invalid Service Account JSON file.");
+                            }
+                        } catch (error) {
+                            alert("Error parsing JSON file.");
+                        }
+                        event.target.value = "";
+                    };
+                    reader.readAsText(file);
+                });
+            }
+            
+            if (vertexProjectIdInput && vertexClientEmailInput && vertexPrivateKeyInput) {
+                [vertexProjectIdInput, vertexClientEmailInput, vertexPrivateKeyInput].forEach(input => {
+                    input.addEventListener('change', () => {
+                        settings.vertexCredential = {
+                            projectId: vertexProjectIdInput.value.trim(),
+                            clientEmail: vertexClientEmailInput.value.trim(),
+                            privateKey: vertexPrivateKeyInput.value.trim()
+                        };
+                    });
+                });
+            }
         }
         
         function setupTTSPlaygroundEventListeners() {
@@ -4963,6 +5219,11 @@
                     resize: vertical;
                     flex-direction: column;
                     padding: 10px 0;
+                }
+                
+                .quick-summary rt {
+                    user-select: none;
+                    -webkit-user-select: none;
                 }
                 
                 .summary-content {
@@ -6476,9 +6737,29 @@
             observer.observe(sentenceText, {childList: true});
         }
         
-        async function createGeminiCache(apiKey, model, summaryHTML, sysPlain, sysWord) {
-            const formattedModel = model.startsWith('models/') ? model : `models/${model}`;
-            const apiUrl = 'https://generativelanguage.googleapis.com/v1beta/cachedContents';
+        async function createGeminiCache(provider, apiKey, model, summaryHTML, sysPlain, sysWord) {
+            let apiUrl = 'https://generativelanguage.googleapis.com/v1beta/cachedContents';
+            let headers = { 'Content-Type': 'application/json' };
+            let formattedModel = model.startsWith('models/') ? model : `models/${model}`;
+            let isPriority = false;
+            
+            if (provider === "vertex") {
+                const projectId = (settings.vertexCredential || {}).projectId;
+                const region = "global";
+                const cleanModel = model.replace(/^models\//, '').replace(/^google\//, '');
+                formattedModel = `projects/${projectId}/locations/${region}/publishers/google/models/${cleanModel}`;
+                
+                apiUrl = `https://aiplatform.googleapis.com/v1beta1/projects/${projectId}/locations/${region}/cachedContents`;
+                headers['Authorization'] = `Bearer ${apiKey}`;
+                if (useVertexPriorityMode) {
+                    headers['X-Vertex-AI-LLM-Request-Type'] = 'shared';
+                    headers['X-Vertex-AI-LLM-Shared-Request-Type'] = 'priority';
+                    isPriority = true;
+                }
+            } else {
+                headers['x-goog-api-key'] = apiKey;
+            }
+            
             const contents = [
                 { role: "user", parts: [{ text: `<summary>${summaryHTML}</summary>` }] },
                 { role: "user", parts: [{ text: sysPlain }] },
@@ -6488,10 +6769,7 @@
             try {
                 const response = await gmFetch(apiUrl, {
                     method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'x-goog-api-key': apiKey
-                    },
+                    headers,
                     body: JSON.stringify({ model: formattedModel, contents })
                 });
                 
@@ -6505,11 +6783,11 @@
                 const [inputPrice] = getLLMPricing(model);
                 const inputCost = totalTokens * inputPrice;
                 const storageCostPerHour = totalTokens * (1 / 1000000);
-                const totalInitialCost = inputCost + storageCostPerHour;
+                const totalInitialCost = (inputCost + storageCostPerHour) * (isPriority ? 1.8 : 1.0);
                 
                 showToast("Cache Created", true);
                 
-                trackLLMUsage("Cache Creation", model, 0, totalTokens, 0, totalInitialCost);
+                trackLLMUsage("Cache Creation", model, 0, totalTokens, 0, totalInitialCost, isPriority);
                 
                 return data.name;
             } catch (error) {
@@ -6519,12 +6797,22 @@
         }
         
         async function refreshGeminiCache() {
-            if (settings.llmProvider !== "google") return null;
-            const apiKey = (settings.llmApiKeys || {})["google"];
+            if (settings.llmProvider !== "google" && settings.llmProvider !== "vertex") return null;
+            let apiKey;
+            if (settings.llmProvider === "vertex") {
+                try {
+                    apiKey = await getValidVertexToken();
+                } catch (e) {
+                    console.error("Vertex token fetch failed:", e);
+                    return null;
+                }
+            } else {
+                apiKey = (settings.llmApiKeys || {})["google"];
+            }
             
             if (!apiKey || !lessonSummary) return null;
             
-            currentGeminiCacheName = await createGeminiCache(apiKey, settings.llmModel, lessonSummary, systemPrompt, wordPhrasePrompt);
+            currentGeminiCacheName = await createGeminiCache(settings.llmProvider, apiKey, settings.llmModel, lessonSummary, systemPrompt, wordPhrasePrompt);
             return currentGeminiCacheName;
         }
         
@@ -7124,10 +7412,10 @@
                     llmApiKey = savedKeys[llmProvider] || "";
                     
                     const isWordRequest = chatHistory.some(m => m.role === "system-word");
-                    if (isWordRequest && llmProvider === "google" && !currentGeminiCacheName) {
+                    if (isWordRequest && (llmProvider === "google" || llmProvider === "vertex") && !currentGeminiCacheName) {
                         await refreshGeminiCache();
                     }
-                    const cacheToUse = (isWordRequest && llmProvider === "google") ? currentGeminiCacheName : null;
+                    const cacheToUse = (isWordRequest && (llmProvider === "google" || llmProvider === "vertex")) ? currentGeminiCacheName : null;
                     
                     await streamOpenAIResponse(
                         llmProvider,
