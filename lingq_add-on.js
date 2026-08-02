@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      14.5.1
+// @version      14.5.2
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @grant       GM_xmlhttpRequest
@@ -5224,6 +5224,7 @@
                 .quick-summary rt {
                     user-select: none;
                     -webkit-user-select: none;
+                    font-size: 0.6em;
                 }
                 
                 .summary-content {
@@ -7831,7 +7832,7 @@
 
         4. Contextual Explanation
             - This is where you bridge the "Standard Definition" and the "Specific Context".
-            - Explain how the dictionary meaning applies here, explaining specific nuances, tense, or implications.
+            - Structure your explanation into two parts: First, state the inherent nuance or register of the word (e.g., formal, slang, archaic, colloquial). Second, explain how its specific grammatical inflection (e.g., subjunctive mood, causative-passive, perfective aspect) or metaphorical usage colors the provided context.
         
         5. Example Generation
             - Create a new, high-quality penetrating example sentence in ${lessonLanguage} using the Base Form.
@@ -7971,6 +7972,51 @@
             <ul>
               <li>毎朝、この市場は活気に満ちている。</li>
               <li>매일 아침 이 시장은 활기로 넘친다.</li>
+            </ul>
+        </div>
+
+        ### Example 9: Pure Idiom & Metaphorical Extraction (Original: French, User: English)
+        User Input: 'Input: "posé un lapin", Context: "J'ai attendu une heure au café, mais il m'a posé un lapin."'
+        Assistant Output:
+        <div class="word-card">
+            <b>poser un lapin</b> <span>[po.ze œ̃ la.pɛ̃]</span> <i>(idiom)</i>
+            <p>to stand somebody up</p>
+            <hr>
+            <p>Literally meaning "to place a rabbit," this French idiom signifies failing to show up for a scheduled appointment without informing the other person. The base form is extracted collectively as an idiom rather than translating the literal words.</p>
+            <hr>
+            <ul>
+              <li>Elle m'a posé un lapin à notre premier rendez-vous.</li>
+              <li>She stood me up on our first date.</li>
+            </ul>
+        </div>
+        
+        ### Example 10: Culture-Bound Concept & Comma Exception (Original: Portuguese, User: English)
+        User Input: 'Input: "saudade", Context: "Morar no exterior é bom, mas sinto muita saudade da minha terra natal."'
+        Assistant Output:
+        <div class="word-card">
+            <b>saudade</b> <span>[sawˈdadʒi]</span> <i>(noun)</i>
+            <p>nostalgic longing, profound melancholy</p>
+            <hr>
+            <p>A deep emotional state of melancholic longing for a person, place, or time that is absent. Because English lacks a single exact lexical equivalent for this culturally specific concept, a descriptive compound phrase separated by a comma is exceptionally permitted here according to the rule.</p>
+            <hr>
+            <ul>
+              <li>A saudade bateu forte hoje.</li>
+              <li>The nostalgic longing hit hard today.</li>
+            </ul>
+        </div>
+        
+        ### Example 11: Separated Phrasal Verb (Original: English, User: Chinese)
+        User Input: 'Input: "figure", Context: "I finally managed to figure the complicated puzzle out after hours of trying."'
+        Assistant Output:
+        <div class="word-card">
+            <b>figure out</b> <span>[ˈfɪɡjər aʊt]</span> <i>(短语动词)</i>
+            <p>弄明白</p>
+            <hr>
+            <p>这是一个英语短语动词，意思是理解或解决某事。在这个语境中，虽然动词“figure”和介词“out”被宾语（“the complicated puzzle”）在物理上隔开了，但助手依然准确地提取了完整的动词原形“figure out”。</p>
+            <hr>
+            <ul>
+              <li>We need to figure out a better solution.</li>
+              <li>我们需要弄明白一个更好的解决办法。</li>
             </ul>
         </div>
         `;
