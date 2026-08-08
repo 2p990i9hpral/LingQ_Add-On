@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      14.5.2
+// @version      14.5.3
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @grant       GM_xmlhttpRequest
@@ -5168,6 +5168,17 @@
                     outline: none;
                     padding: 3px;
                 }
+                
+                .pronunciation-edit-input {
+                    width: 120px;
+                    border: none;
+                    outline: none;
+                    padding: 0 3px;
+                    background: transparent;
+                    color: inherit;
+                    font-size: inherit;
+                    font-family: inherit;
+                }
 
                 #chat-container li {
                     list-style: inside !important;
@@ -7038,6 +7049,71 @@
                     if (pronunciationElem) {
                         const cleanText = pronunciationElem.textContent.replace(/[\[\]\/]/g, "").trim();
                         pronunciationElem.textContent = `[${cleanText}]`;
+
+                        pronunciationElem.addEventListener("click", async (e) => {
+                            if (e.ctrlKey || e.metaKey) {
+                                if (pronunciationElem.querySelector("input")) return;
+                                
+                                const currentText = pronunciationElem.textContent.trim();
+                                
+                                const input = createElement("input", {
+                                    type: "text",
+                                    value: currentText,
+                                    className: "pronunciation-edit-input",
+                                });
+                                
+                                pronunciationElem.textContent = "";
+                                pronunciationElem.appendChild(input);
+                                input.focus();
+                                
+                                const finishEdit = async () => {
+                                    const rawValue = input.value.trim();
+                                    const cleanText = rawValue.replace(/[\[\]\/]/g, "").trim();
+                                    const newValue = cleanText ? `[${cleanText}]` : "";
+                                    pronunciationElem.textContent = newValue;
+                                    
+                                    if (newValue === currentText) return;
+                                    
+                                    navigator.clipboard.writeText(newValue)
+                                        .then(() => showToast("Pronunciation Copied!", true))
+                                        .catch(() => showToast("Failed to copy pronunciation.", false));
+                                    
+                                    const storedIdx = botMessageDiv.dataset.wordIdx;
+                                    if (!storedIdx) return;
+                                    
+                                    const {error: updateError} = await getDbClient()
+                                        .from(getTableName())
+                                        .update({pronunciation: newValue})
+                                        .eq("idx", storedIdx);
+                                    
+                                    if (updateError) {
+                                        console.error("Pronunciation update error:", updateError);
+                                        showToast("Failed to update pronunciation.", false);
+                                    } else {
+                                        showToast("Pronunciation updated!", true);
+                                    }
+                                };
+                                
+                                input.addEventListener("keydown", async (event) => {
+                                    if (event.key === "Enter") {
+                                        event.preventDefault();
+                                        input.blur();
+                                    } else if (event.key === "Escape") {
+                                        pronunciationElem.textContent = currentText;
+                                    }
+                                });
+                                
+                                input.addEventListener("blur", async () => {
+                                    await finishEdit();
+                                });
+                                
+                                return;
+                            }
+                            
+                            navigator.clipboard.writeText(pronunciationElem?.textContent?.trim() || "")
+                                .then(() => showToast("Pronunciation Copied!", true))
+                                .catch(() => showToast("Failed to copy pronunciation.", false));
+                        });
                     }
                     
                     const meaningElem = botMessageDiv.querySelector("p");
@@ -7306,6 +7382,7 @@
                                 saveFlashcardButton.disabled = true;
                                 try {
                                     const currentMeaning = meaningElem?.textContent?.trim() || "";
+                                    const currentPronunciation = pronunciationElem?.textContent?.trim() || "";
                                     
                                     const {data: existing} = await getDbClient()
                                         .from(getTableName())
@@ -7322,7 +7399,7 @@
                                     
                                     const {data: inserted, error: insertError} = await getDbClient()
                                         .from(getTableName())
-                                        .insert([{...newItem, meaning: currentMeaning}])
+                                        .insert([{...newItem, meaning: currentMeaning, pronunciation: currentPronunciation}])
                                         .select("idx");
                                     
                                     if (insertError) {
@@ -7810,7 +7887,7 @@
             - Provide IPA for the Base Form (lemma) enclosed in brackets [].
             - Use a single, consistent transcription system throughout the whole word. Do not mix broad IPA symbols with romanized/orthographic letters (e.g., Pinyin, Revised Romanization) within the same transcription.
             - Prefer broad, phonemic transcription over narrow, allophonic transcription. Eliminate narrow phonetic diacritics (e.g., lowering [̞], voiceless [̥], compressed [ᵝ], or dental [̪] marks), and avoid substituting a distinct narrow-transcription symbol for a gradient, sub-phonemic co-articulatory detail (e.g., minor degrees of palatalization, uvularization, or aspiration) that is not codified in the standard pronunciation convention of the language.
-            - Mark suprasegmental features (vowel/consonant length, stress, tone, gemination, etc.) consistently wherever the target language treats them as phonemically distinctive.
+            - Mark suprasegmental features (vowel/consonant length, stress, tone, pitch accent, gemination, etc.) consistently wherever the target language treats them as phonemically distinctive.
             - When in doubt, follow the phonemic transcription convention used by Wiktionary or a major academic reference for that language, rather than an ad hoc or narrow phonetic realization.
             - Ensure the output represents the standard, dictionary-style pronunciation, not a precise phonetic realization of one specific utterance.
             - Negative Examples
@@ -7836,7 +7913,7 @@
         
         5. Example Generation
             - Create a new, high-quality penetrating example sentence in ${lessonLanguage} using the Base Form.
-            - And translate accurately into ${userLanguage}.
+            - And translate the example sentence accurately into ${userLanguage}.
             - Ensure the usage helps the user understand the general applicability of this specific sense.
         
         ## Output Structure (HTML)
@@ -7849,7 +7926,7 @@
             <hr>
             <ul>
               <li>[New Example Sentence in ${lessonLanguage}]</li>
-              <li>[Translation in ${userLanguage}]</li>
+              <li>[Translation of the example sentence in ${userLanguage}]</li>
             </ul>
         </div>
         
@@ -7919,7 +7996,7 @@
         User Input: 'Input: "立ち尽くしていました", Context: "予期せぬニュースを聞いて、彼女はしばらくその場に立ち尽くしていました。"'
         Assistant Output:
         <div class="word-card">
-            <b>立ち尽くす</b> <span>[tat͡ɕit͡sɯkɯsɯ]</span> <i>(동사)</i>
+            <b>立ち尽くす</b> <span>[tat͡ɕit͡sɯꜜkɯsɯ]</span> <i>(동사)</i>
             <p>그 자리에 멈춰 서다</p>
             <hr>
             <p>충격이나 놀라움 등으로 움직이지 못하고 계속 서 있는 상태를 뜻합니다. 문맥에서는 '〜ていました'(계속형+과거)로 쓰여, 예상치 못한 소식을 듣고 한동안 그 자리에서 몸이 굳어 있던 상태가 지속되었음을 나타냅니다.</p>
@@ -7934,7 +8011,7 @@
         User Input: 'Input: "仕方がありません", Context: "雨が降り始めてしまったので、今日の遠足が中止になるのは仕方がありません。"'
         Assistant Output:
         <div class="word-card">
-            <b>仕方がない</b> <span>[ɕikata ɡa nai]</span> <i>(관용구)</i>
+            <b>仕方がない</b> <span>[ɕikataɡanaꜜi]</span> <i>(관용구)</i>
             <p>어쩔 수 없다</p>
             <hr>
             <p>정해진 상황이나 이미 일어난 일에 대해 다른 방도가 없음을 체념하듯 표현하는 관용구입니다. 여기서는 정중한 형태인 'ありません'으로 변형되어, 비가 와서 소풍이 취소되는 것은 불가피하고 당연한 일이라는 의미를 나타냅니다.</p>
@@ -7949,7 +8026,7 @@
         User Input: 'Input: "カワイイ", Context: "彼女が着ている服は、いつもすごくカワイイですね。"'
         Assistant Output:
         <div class="word-card">
-            <b>かわいい</b> <span>[kawaiː]</span> <i>(형용사)</i>
+            <b>かわいい</b> <span>[kawaiꜜː]</span> <i>(형용사)</i>
             <p>귀엽다</p>
             <hr>
             <p>외모나 행동이 사랑스럽고 호감이 가는 상태를 뜻합니다. 원문에서는 'カワイイ'처럼 카타카나로 표기하여, 단순히 귀엽다는 의미를 넘어 패션이나 시각적인 측면에서 감각적이고 트렌디한 느낌을 한층 강조하고 있습니다.</p>
@@ -7964,7 +8041,7 @@
         User Input: 'Input: "市場", Context: "新鮮な野菜を買うために、朝早く地元の市場に行きました。"'
         Assistant Output:
         <div class="word-card">
-            <b>市場</b> <span>[it͡ɕiba]</span> <i>(명사)</i>
+            <b>市場</b> <span>[iꜜt͡ɕiba]</span> <i>(명사)</i>
             <p>시장</p>
             <hr>
             <p>'市場'은 주식이나 경제 등 추상적인 시장(しじょう)을 뜻하기도 하지만, 이 문맥에서는 사람들이 모여 물건을 직접 사고파는 물리적인 장소인 '재래시장(いちば)'을 가리킵니다. 신선한 채소를 사기 위해 방문한 구체적인 공간의 의미로 사용되었습니다.</p>
