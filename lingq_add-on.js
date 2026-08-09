@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      14.5.3
+// @version      14.6.0
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @grant       GM_xmlhttpRequest
@@ -98,6 +98,8 @@
         ttsProvider: "openai",
         ttsVoice: {},
         ttsWord: false,
+        
+        lingqVolume: 1.0,
         ttsSentence: false,
     };
     
@@ -195,7 +197,7 @@
             return true;
         }
     });
-    
+
     let supabaseClient;
     
     const CENTRAL_SUPABASE_URL = "https://hzmjdmliorfotjbbkrni.supabase.co";
@@ -1712,7 +1714,8 @@
     }
     
     function convertSrtToVttBlobUrl(srtText) {
-        const vttText = "WEBVTT\n\n" + srtText.replace(/(\d{2}:\d{2}:\d{2}),(\d{3})/g, "$1.$2");
+        let vttText = "WEBVTT\n\n" + srtText.replace(/(\d{2}:\d{2}:\d{2}),(\d{3})/g, "$1.$2");
+        vttText = vttText.replace(/(--> \d{2}:\d{2}:\d{2}\.\d{3})/g, "$1 size:80% align:middle");
         const blob = new Blob([vttText], {type: "text/vtt"});
         return URL.createObjectURL(blob);
     }
@@ -1734,7 +1737,7 @@
             const endTime = formatTime(sentence.timestamp[1]);
             const text = sentence.text || "";
             
-            vttLines.push(`${startTime} --> ${endTime}\n${text}\n`);
+            vttLines.push(`${startTime} --> ${endTime} size:80% align:middle\n${text}\n`);
         });
         
         const blob = new Blob([vttLines.join("\n")], {type: "text/vtt"});
@@ -1793,8 +1796,8 @@
         
         const videoElement = createElement("video", {
             id: "addonLocalVideo",
-            muted: true,
-            style: "width: 100%; height: calc(100% - 5px); object-fit: contain; display: none; cursor: pointer;"
+            muted: false,
+            style: "width: 100%; height: 100%; flex-grow: 1; object-fit: contain; display: none; cursor: pointer;"
         });
         
         videoElement.addEventListener("click", () => {
@@ -1922,7 +1925,7 @@
             
             // 2. Sync Precise Timeline
             const preciseTargetTime = parseFloat(sliderHandle.getAttribute("aria-valuenow")) || 0;
-            if (Math.abs(videoElement.currentTime - preciseTargetTime) > 0.3) {
+            if (Math.abs(videoElement.currentTime - preciseTargetTime) > 0.5) {
                 videoElement.currentTime = preciseTargetTime;
             }
             
@@ -1959,6 +1962,56 @@
     
     /* Features */
     
+    // Volume Control & Local Video Audio Mute Hook
+    const mediaInstances = new Set();
+    const PageMediaElement = window.HTMLMediaElement;
+    if (PageMediaElement) {
+        const volumeDescriptor = Object.getOwnPropertyDescriptor(PageMediaElement.prototype, 'volume');
+        const originalVolumeSetter = volumeDescriptor.set;
+        const originalVolumeGetter = volumeDescriptor.get;
+
+        Object.defineProperty(PageMediaElement.prototype, 'volume', {
+            get: function() {
+                return originalVolumeGetter.call(this);
+            },
+            set: function(val) {
+                const src = this.src || '';
+
+                if (src.startsWith('data:') || src.includes('/tts/')) {
+                    return originalVolumeSetter.call(this, val);
+                }
+
+                const lessonLang = typeof getLessonLanguage === 'function' ? getLessonLanguage() : null;
+                if (lessonLang && settings.styleType[lessonLang] === "localVideo" && this.id !== "addonLocalVideo") {
+                    return originalVolumeSetter.call(this, 0);
+                }
+
+                const targetVolume = settings.lingqVolume;
+                const adjustedVolume = Math.min(Math.max(val * targetVolume, 0), 1);
+                return originalVolumeSetter.call(this, adjustedVolume);
+            }
+        });
+
+        const originalPlay = PageMediaElement.prototype.play;
+        PageMediaElement.prototype.play = function() {
+            const src = this.src || '';
+            if (!src.startsWith('data:') && !src.includes('/tts/')) {
+                if (!mediaInstances.has(this)) {
+                    mediaInstances.add(this);
+                }
+                this.volume = 1.0;
+            }
+            return originalPlay.apply(this, arguments);
+        };
+    }
+
+    function setLingqVolume(vol) {
+        settings.lingqVolume = Math.min(Math.max(vol, 0), 1);
+        mediaInstances.forEach(media => {
+            if (media) media.volume = 1.0;
+        });
+    }
+
     function globalSetup() {
         function resizeToast() {
             const css = `
@@ -4808,6 +4861,106 @@
     }
     
     async function setupReader() {
+        waitForElement(".section--player", 10000).then(playerContainer => {
+            if (playerContainer) {
+                const audioPlayerObserver = new MutationObserver((mutations) => {
+                    for (const mutation of mutations) {
+                        for (const node of mutation.addedNodes) {
+                            if (node.nodeType === Node.ELEMENT_NODE) {
+                                if (node.matches('.audio-player--controllers') || node.querySelector('.audio-player--controllers')) {
+                                    setupVolumeController();
+                                }
+                            }
+                        }
+                    }
+                });
+                audioPlayerObserver.observe(playerContainer, { childList: true, subtree: true });
+                setupVolumeController();
+            }
+        });
+        
+        function setupVolumeController() {
+            const controllers = document.querySelector('.audio-player--controllers');
+            if (!controllers || document.getElementById('addon-volume-controller')) return;
+            
+            // Skip if this is the YouTube video controller (distinguished by its specific speed button class)
+            if (controllers.querySelector('.controller-item--speed')) return;
+    
+            const volumeWrapper = createElement("div", {
+                id: "addon-volume-controller",
+                style: "display: inline;"
+            });
+            
+            const volumeBtn = createElement("a", {
+                className: "controller-item button is-white",
+                style: "cursor: pointer; position: relative; display: inline-flex; align-items: center; justify-content: center; gap: 2px;"
+            });
+            
+            const iconWrapper = createElement("span", {
+                className: "icon-wrapper icon t-btn-text-player hover:t-btn-text-hover-player",
+                style: "display: flex; align-items: center; justify-content: center;"
+            });
+            
+            const svgMute = `<svg style="flex-shrink: 0;" width="25" height="25" class="svg-icon is-dark stroke-current fill-current" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><path fill="none" stroke="#050d18" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" class="is-stroke" d="M12 21l-5-5H3V10h4l5-5v16z"></path><line fill="none" stroke="#050d18" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" class="is-stroke" x1="23" y1="9" x2="17" y2="15"></line><line fill="none" stroke="#050d18" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" class="is-stroke" x1="17" y1="9" x2="23" y2="15"></line></svg>`;
+            const svgLow = `<svg style="flex-shrink: 0;" width="25" height="25" class="svg-icon is-dark stroke-current fill-current" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><path fill="none" stroke="#050d18" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" class="is-stroke" d="M14 21l-5-5H5V10h4l5-5v16z"></path><path fill="none" stroke="#050d18" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" class="is-stroke" d="M19 11c1.5 1.5 1.5 3.5 0 5"></path></svg>`;
+            const svgHigh = `<svg style="flex-shrink: 0;" width="25" height="25" class="svg-icon is-dark stroke-current fill-current" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><path fill="none" stroke="#050d18" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" class="is-stroke" d="M12 21l-5-5H3V10h4l5-5v16z"></path><path fill="none" stroke="#050d18" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" class="is-stroke" d="M17 11c1.5 1.5 1.5 3.5 0 5"></path><path fill="none" stroke="#050d18" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" class="is-stroke" d="M21 7c3 3 3 7 0 12"></path></svg>`;
+    
+            function updateIcon() {
+                const vol = settings.lingqVolume;
+                const volPct = Math.round(vol * 100);
+                let svgStr = "";
+                
+                if (vol === 0) svgStr = svgMute;
+                else if (vol <= 0.5) svgStr = svgLow;
+                else svgStr = svgHigh;
+                
+                const textHtml = `<span style="font-size: 0.75rem; font-weight: bold; margin-left: 2px; min-width: 22px; text-align: left;">${volPct}</span>`;
+                
+                iconWrapper.innerHTML = svgStr + textHtml;
+                volumeBtn.setAttribute("title", `Volume: ${volPct}%`);
+            }
+            
+            updateIcon();
+            
+            volumeBtn.addEventListener('click', () => {
+                const levels = [0, 0.25, 0.5, 0.75, 1.0];
+                let nextIdx = (levels.indexOf(settings.lingqVolume) + 1) % levels.length;
+                if (nextIdx === 0 && settings.lingqVolume !== 1.0) {
+                    const closest = levels.reduce((prev, curr) => Math.abs(curr - settings.lingqVolume) < Math.abs(prev - settings.lingqVolume) ? curr : prev);
+                    nextIdx = (levels.indexOf(closest) + 1) % levels.length;
+                }
+                setLingqVolume(levels[nextIdx]);
+                updateIcon();
+            });
+            
+            volumeBtn.addEventListener('wheel', (e) => {
+                e.preventDefault();
+                let vol = settings.lingqVolume;
+                if (e.deltaY < 0) {
+                    vol = Math.min(1.0, vol + 0.1);
+                } else {
+                    vol = Math.max(0.0, vol - 0.1);
+                }
+                vol = Math.round(vol * 10) / 10;
+                setLingqVolume(vol);
+                updateIcon();
+            });
+            
+            volumeBtn.appendChild(iconWrapper);
+            volumeWrapper.appendChild(volumeBtn);
+            
+            const lyricsBtn = controllers.querySelector('.controller-item--lyrics');
+            if (lyricsBtn) {
+                let targetSibling = lyricsBtn;
+                while (targetSibling.parentElement && targetSibling.parentElement !== controllers) {
+                    targetSibling = targetSibling.parentElement;
+                }
+                controllers.insertBefore(volumeWrapper, targetSibling);
+            } else {
+                controllers.appendChild(volumeWrapper);
+            }
+        }
+        
         function resetLocalVideo() {
             const container = document.getElementById("local-video-container");
             if (container) {
@@ -7051,10 +7204,9 @@
                         pronunciationElem.textContent = `[${cleanText}]`;
 
                         pronunciationElem.addEventListener("click", async (e) => {
-                            if (e.ctrlKey || e.metaKey) {
-                                if (pronunciationElem.querySelector("input")) return;
-                                
-                                const currentText = pronunciationElem.textContent.trim();
+                            if (pronunciationElem.querySelector("input")) return;
+                            
+                            const currentText = pronunciationElem.textContent.trim();
                                 
                                 const input = createElement("input", {
                                     type: "text",
@@ -7107,12 +7259,7 @@
                                     await finishEdit();
                                 });
                                 
-                                return;
-                            }
-                            
-                            navigator.clipboard.writeText(pronunciationElem?.textContent?.trim() || "")
-                                .then(() => showToast("Pronunciation Copied!", true))
-                                .catch(() => showToast("Failed to copy pronunciation.", false));
+
                         });
                     }
                     
