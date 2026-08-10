@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      14.6.0
+// @version      14.8.0
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @grant       GM_xmlhttpRequest
@@ -160,7 +160,7 @@
             : {};
         
         if (typeof settings[settingKey] !== "object" && settings[settingKey] !== undefined && settings[settingKey] !== null) {
-            scopedSettings = { [language]: settings[settingKey] };
+            scopedSettings = {[language]: settings[settingKey]};
         }
         
         if (Object.hasOwn(scopedSettings, language)) return;
@@ -197,7 +197,7 @@
             return true;
         }
     });
-
+    
     let supabaseClient;
     
     const CENTRAL_SUPABASE_URL = "https://hzmjdmliorfotjbbkrni.supabase.co";
@@ -560,7 +560,7 @@
     let isToastProcessing = false;
     
     function showToast(inputMessage, success = true) {
-        toastQueue.push({ inputMessage, success });
+        toastQueue.push({inputMessage, success});
         if (!isToastProcessing) {
             processToastQueue();
         }
@@ -573,7 +573,7 @@
         }
         
         isToastProcessing = true;
-        const { inputMessage, success } = toastQueue.shift();
+        const {inputMessage, success} = toastQueue.shift();
         
         const toast = createElement("div", {
             className: 'userToast',
@@ -922,7 +922,8 @@
                                             if (json.type === "message_stop") {
                                                 stopParsing = true;
                                             }
-                                        } catch (e) {}
+                                        } catch (e) {
+                                        }
                                     });
                                     
                                     if (stopParsing) {
@@ -944,9 +945,21 @@
                         }
                     })();
                 },
-                onload: () => { if (!isErrorStatus && !isResolved) finish(); },
-                onerror: () => { if (!isResolved) { isResolved = true; reject(new Error("Network Error")); } },
-                ontimeout: () => { if (!isResolved) { isResolved = true; reject(new Error("Request Timed Out")); } }
+                onload: () => {
+                    if (!isErrorStatus && !isResolved) finish();
+                },
+                onerror: () => {
+                    if (!isResolved) {
+                        isResolved = true;
+                        reject(new Error("Network Error"));
+                    }
+                },
+                ontimeout: () => {
+                    if (!isResolved) {
+                        isResolved = true;
+                        reject(new Error("Request Timed Out"));
+                    }
+                }
             });
         });
     }
@@ -1363,6 +1376,7 @@
             }
         }));
     }
+    
     async function importPrivateKey(pem) {
         const pemContents = pem
             .replace(/-----BEGIN PRIVATE KEY-----/g, "")
@@ -1378,7 +1392,7 @@
         return await window.crypto.subtle.importKey(
             "pkcs8",
             binaryDer.buffer,
-            { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" },
+            {name: "RSASSA-PKCS1-v1_5", hash: "SHA-256"},
             false,
             ["sign"]
         );
@@ -1386,7 +1400,7 @@
     
     async function getAccessTokenFromServiceAccount(clientEmail, privateKey) {
         const now = Math.floor(Date.now() / 1000);
-        const header = { alg: "RS256", typ: "JWT" };
+        const header = {alg: "RS256", typ: "JWT"};
         const payload = {
             iss: clientEmail,
             scope: "https://www.googleapis.com/auth/cloud-platform",
@@ -1415,7 +1429,7 @@
         
         const response = await gmFetch("https://oauth2.googleapis.com/token", {
             method: "POST",
-            headers: { "Content-Type": "application/x-www-form-urlencoded" },
+            headers: {"Content-Type": "application/x-www-form-urlencoded"},
             body: new URLSearchParams({
                 grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer",
                 assertion: signedJwt
@@ -1428,7 +1442,7 @@
         }
         return data.access_token;
     }
-
+    
     async function getValidVertexToken() {
         const now = Math.floor(Date.now() / 1000);
         if (settings.vertexAccessToken && settings.vertexTokenExpiry && now < settings.vertexTokenExpiry - 300) {
@@ -1445,7 +1459,7 @@
         settings.vertexTokenExpiry = now + 3600;
         return token;
     }
-
+    
     async function buildRequestConfig(provider, apiKey, forcePriority = false) {
         let api_url;
         let headers = {'Content-Type': 'application/json'};
@@ -1507,7 +1521,7 @@
                 role = "user";
             }
             
-            return { role, content: m.content };
+            return {role, content: m.content};
         });
         
         if (provider === "anthropic") {
@@ -1517,7 +1531,7 @@
                 if (lastMsg && lastMsg.role === msg.role) {
                     lastMsg.content += `\n\n${msg.content}`;
                 } else {
-                    mergedHistory.push({ role: msg.role, content: msg.content });
+                    mergedHistory.push({role: msg.role, content: msg.content});
                 }
             });
             mappedHistory = mergedHistory;
@@ -1528,7 +1542,7 @@
             reqModel = model.startsWith("google/") ? model : `google/${model}`;
         }
         
-        const body = { model: reqModel, messages: mappedHistory };
+        const body = {model: reqModel, messages: mappedHistory};
         if (stream) body.stream = true;
         
         if (provider === "openai" && model.includes("gpt-5")) {
@@ -1538,7 +1552,7 @@
         if (provider === "google" || provider === "vertex") {
             body.reasoning_effort = "minimal";
             if (cacheName) {
-                body.extra_body = { google: { cached_content: cacheName } };
+                body.extra_body = {google: {cached_content: cacheName}};
             }
             body.stream_options = {include_usage: true};
         }
@@ -1555,7 +1569,7 @@
         }
         
         if (provider === "deepseek") {
-            body.thinking = { type: "disabled" };
+            body.thinking = {type: "disabled"};
         }
         
         if (provider === "cerebras") {
@@ -1744,7 +1758,128 @@
         return URL.createObjectURL(blob);
     }
     
+    let cachedLocalVideoFiles, attemptAutoMatch;
+    
     function handleLocalVideoContainerVisibility() {
+        async function bindLingQPlayerControls(videoElement) {
+            const sliderHandle = await waitForElement('.audio-player--progress .rc-slider-handle', 10000);
+            const playButton = await waitForElement(".section--player button.lingq-audio-player", 10000);
+            const speedLabel = await waitForElement(".audio-player--controllers span.leading-none.text-xl", 10000);
+            const miniProgressBar = document.getElementById("local-video-mini-progress");
+            
+            if (!sliderHandle || !playButton) {
+                console.warn("Required LingQ control elements missing. Sync binder stopped.");
+                return;
+            }
+            
+            const playButtonSvg = playButton.querySelector("svg");
+            if (!playButtonSvg) return;
+            
+            const syncPlaybackRate = () => {
+                if (!speedLabel) return;
+                const currentSpeed = parseFloat(speedLabel.textContent) || 1.0;
+                
+                // Reverted: Removed defaultPlaybackRate overwrite to fix initial double-speed glitch
+                if (videoElement.playbackRate !== currentSpeed) {
+                    videoElement.playbackRate = currentSpeed;
+                    console.log('[Sync]', `Playback speed updated to ${currentSpeed}x`);
+                }
+            };
+            
+            const playerObserver = new MutationObserver(() => {
+                // 1. Sync Play/Pause State
+                const isLingQPlaying = playButtonSvg.classList.contains("svg-icon--pause");
+                if (isLingQPlaying && videoElement.paused) {
+                    videoElement.play().catch(() => {
+                    });
+                } else if (!isLingQPlaying && !videoElement.paused) {
+                    videoElement.pause();
+                }
+                
+                // 2. Sync Precise Timeline
+                const preciseTargetTime = parseFloat(sliderHandle.getAttribute("aria-valuenow")) || 0;
+                console.log(`video time: ${videoElement.currentTime}, controller time: ${preciseTargetTime}, diff: ${videoElement.currentTime - preciseTargetTime}`); // FIXME
+                if (Math.abs(videoElement.currentTime - preciseTargetTime) > 0.5) {
+                    const seekOffset = (!videoElement.paused) ? 0.3 : 0;
+                    videoElement.currentTime = preciseTargetTime + seekOffset;
+                }
+                
+                // 3. Update Mini Progress Bar
+                if (miniProgressBar) {
+                    const maxVal = parseFloat(sliderHandle.getAttribute("aria-valuemax")) || 1;
+                    const percentage = (preciseTargetTime / maxVal) * 100;
+                    miniProgressBar.style.width = `${percentage}%`;
+                }
+            });
+            
+            const speedObserver = new MutationObserver(() => {
+                syncPlaybackRate();
+            });
+            
+            playerObserver.observe(sliderHandle, {attributes: true, attributeFilter: ["aria-valuenow", "style"]});
+            playerObserver.observe(playButtonSvg, {attributes: true, attributeFilter: ["class"]});
+            
+            if (speedLabel) {
+                speedObserver.observe(speedLabel, {childList: true, characterData: true, subtree: true});
+            }
+            
+            // Ensure accurate tracking across playback status switches
+            videoElement.addEventListener("play", syncPlaybackRate);
+            videoElement.addEventListener("playing", syncPlaybackRate);
+            videoElement.addEventListener("loadedmetadata", syncPlaybackRate);
+            
+            const isLingQPlayingInit = playButtonSvg.classList.contains("svg-icon--pause");
+            if (isLingQPlayingInit && videoElement.paused) {
+                videoElement.play().catch(() => {
+                });
+            }
+            syncPlaybackRate();
+        }
+        
+        function getLessonTitle() {
+            const titleWrapper = document.querySelector(".sentence-text-head > .title-wrapper");
+            if (!titleWrapper) return "";
+            const clone = titleWrapper.cloneNode(true);
+            const collection = clone.querySelector(".collection-title-wrapper");
+            if (collection) collection.remove();
+            return clone.textContent.trim();
+        }
+        
+        function findBestMatchingFiles(files, lessonTitle) {
+            const titleTokens = lessonTitle.toLowerCase().split(/[\s\[\]\(\)-_]+/).filter(Boolean);
+            
+            let bestVideo = null;
+            let bestVideoScore = -1;
+            let bestSub = null;
+            let bestSubScore = -1;
+            
+            for (const file of files) {
+                const nameLower = file.name.toLowerCase();
+                let score = 0;
+                for (const token of titleTokens) {
+                    if (nameLower.includes(token)) score++;
+                }
+                
+                if (nameLower.includes(lessonTitle.toLowerCase())) score += 100;
+                
+                if (score === 0) continue;
+                
+                if (file.type.startsWith("video/") || nameLower.endsWith(".mp4")) {
+                    if (score > bestVideoScore) {
+                        bestVideoScore = score;
+                        bestVideo = file;
+                    }
+                } else if (nameLower.endsWith(".srt") || nameLower.endsWith(".vtt")) {
+                    if (score > bestSubScore) {
+                        bestSubScore = score;
+                        bestSub = file;
+                    }
+                }
+            }
+            
+            return {video: bestVideo, sub: bestSub};
+        }
+        
         const lessonReader = document.getElementById("lesson-reader");
         if (!lessonReader) return;
         
@@ -1772,17 +1907,39 @@
         let selectedVideoFile = null;
         let selectedSubtitleFile = null;
         
+        const buttonRow = createElement("div", {
+            style: "display: flex; gap: 10px; width: 100%; margin-bottom: 5px;"
+        });
+        
         const fileInput = createElement("input", {
             className: "local-video-file-input",
             type: "file",
             multiple: true,
-            accept: "video/*,.srt,.vtt"
+            accept: "video/*,.srt,.vtt",
+            style: "display: none;"
         });
         const fileLabel = createElement("label", {
             className: "local-video-button",
-            textContent: "Choose Files (Video + Subtitle)"
+            style: "flex: 1; text-align: center;",
+            textContent: "Choose Files"
         });
         fileLabel.appendChild(fileInput);
+        
+        const folderInput = createElement("input", {
+            className: "local-video-folder-input",
+            type: "file",
+            webkitdirectory: true,
+            directory: true,
+            style: "display: none;"
+        });
+        const folderLabel = createElement("label", {
+            className: "local-video-button",
+            style: "flex: 1; text-align: center;",
+            textContent: "Select Folder (Auto-match)"
+        });
+        folderLabel.appendChild(folderInput);
+        
+        buttonRow.append(fileLabel, folderLabel);
         
         const startButton = createElement("button", {
             className: "local-video-button",
@@ -1790,7 +1947,7 @@
             disabled: true,
         });
         
-        setupBox.append(title, fileLabel, startButton);
+        setupBox.append(title, buttonRow, startButton);
         container.appendChild(setupBox);
         lessonReader.appendChild(container);
         
@@ -1822,6 +1979,31 @@
         progressWrapper.appendChild(miniProgressBar);
         container.appendChild(progressWrapper);
         
+        attemptAutoMatch = async function attemptAutoMatch() {
+            if (!cachedLocalVideoFiles) return false;
+            
+            const titleWrapper = await waitForElement(".sentence-text-head > .title-wrapper", 3000);
+            if (!titleWrapper) return false;
+            
+            const title = getLessonTitle();
+            if (!title) return false;
+            
+            const match = findBestMatchingFiles(cachedLocalVideoFiles, title);
+            if (match.video) {
+                selectedVideoFile = match.video;
+                selectedSubtitleFile = match.sub;
+                
+                let statusText = `${selectedVideoFile.name}`;
+                if (selectedSubtitleFile) statusText += ` + ${selectedSubtitleFile.name}`;
+                
+                folderLabel.textContent = statusText;
+                folderLabel.appendChild(folderInput);
+                startButton.disabled = false;
+                return true;
+            }
+            return false;
+        }
+        
         fileInput.addEventListener("change", (event) => {
             const files = Array.from(event.target.files).slice(0, 2);
             selectedVideoFile = files.find(file => file.type.startsWith("video/"));
@@ -1841,6 +2023,22 @@
                 selectedSubtitleFile = null;
             }
         });
+        
+        folderInput.addEventListener("change", async (event) => {
+            const files = Array.from(event.target.files);
+            if (files.length > 0) {
+                cachedLocalVideoFiles = files;
+                const matched = await attemptAutoMatch();
+                if (!matched) {
+                    folderLabel.textContent = "No match found in folder.";
+                    folderLabel.appendChild(folderInput);
+                }
+            }
+        });
+        
+        if (cachedLocalVideoFiles) {
+            attemptAutoMatch();
+        }
         
         startButton.addEventListener("click", () => {
             if (!selectedVideoFile) return;
@@ -1889,77 +2087,6 @@
         });
     }
     
-    async function bindLingQPlayerControls(videoElement) {
-        const sliderHandle = await waitForElement('.audio-player--progress .rc-slider-handle', 10000);
-        const playButton = await waitForElement(".section--player button.lingq-audio-player", 10000);
-        const speedLabel = await waitForElement(".audio-player--controllers span.leading-none.text-xl", 10000);
-        const miniProgressBar = document.getElementById("local-video-mini-progress");
-        
-        if (!sliderHandle || !playButton) {
-            console.warn("Required LingQ control elements missing. Sync binder stopped.");
-            return;
-        }
-        
-        const playButtonSvg = playButton.querySelector("svg");
-        if (!playButtonSvg) return;
-        
-        const syncPlaybackRate = () => {
-            if (!speedLabel) return;
-            const currentSpeed = parseFloat(speedLabel.textContent) || 1.0;
-            
-            // Reverted: Removed defaultPlaybackRate overwrite to fix initial double-speed glitch
-            if (videoElement.playbackRate !== currentSpeed) {
-                videoElement.playbackRate = currentSpeed;
-                console.log('[Sync]', `Playback speed updated to ${currentSpeed}x`);
-            }
-        };
-        
-        const playerObserver = new MutationObserver(() => {
-            // 1. Sync Play/Pause State
-            const isLingQPlaying = playButtonSvg.classList.contains("svg-icon--pause");
-            if (isLingQPlaying && videoElement.paused) {
-                videoElement.play().catch(() => {});
-            } else if (!isLingQPlaying && !videoElement.paused) {
-                videoElement.pause();
-            }
-            
-            // 2. Sync Precise Timeline
-            const preciseTargetTime = parseFloat(sliderHandle.getAttribute("aria-valuenow")) || 0;
-            if (Math.abs(videoElement.currentTime - preciseTargetTime) > 0.5) {
-                videoElement.currentTime = preciseTargetTime;
-            }
-            
-            // 3. Update Mini Progress Bar
-            if (miniProgressBar) {
-                const maxVal = parseFloat(sliderHandle.getAttribute("aria-valuemax")) || 1;
-                const percentage = (preciseTargetTime / maxVal) * 100;
-                miniProgressBar.style.width = `${percentage}%`;
-            }
-        });
-        
-        const speedObserver = new MutationObserver(() => {
-            syncPlaybackRate();
-        });
-        
-        playerObserver.observe(sliderHandle, { attributes: true, attributeFilter: ["aria-valuenow", "style"] });
-        playerObserver.observe(playButtonSvg, { attributes: true, attributeFilter: ["class"] });
-        
-        if (speedLabel) {
-            speedObserver.observe(speedLabel, { childList: true, characterData: true, subtree: true });
-        }
-        
-        // Ensure accurate tracking across playback status switches
-        videoElement.addEventListener("play", syncPlaybackRate);
-        videoElement.addEventListener("playing", syncPlaybackRate);
-        videoElement.addEventListener("loadedmetadata", syncPlaybackRate);
-        
-        const isLingQPlayingInit = playButtonSvg.classList.contains("svg-icon--pause");
-        if (isLingQPlayingInit && videoElement.paused) {
-            videoElement.play().catch(() => {});
-        }
-        syncPlaybackRate();
-    }
-    
     /* Features */
     
     // Volume Control & Local Video Audio Mute Hook
@@ -1969,31 +2096,31 @@
         const volumeDescriptor = Object.getOwnPropertyDescriptor(PageMediaElement.prototype, 'volume');
         const originalVolumeSetter = volumeDescriptor.set;
         const originalVolumeGetter = volumeDescriptor.get;
-
+        
         Object.defineProperty(PageMediaElement.prototype, 'volume', {
-            get: function() {
+            get: function () {
                 return originalVolumeGetter.call(this);
             },
-            set: function(val) {
+            set: function (val) {
                 const src = this.src || '';
-
+                
                 if (src.startsWith('data:') || src.includes('/tts/')) {
                     return originalVolumeSetter.call(this, val);
                 }
-
+                
                 const lessonLang = typeof getLessonLanguage === 'function' ? getLessonLanguage() : null;
                 if (lessonLang && settings.styleType[lessonLang] === "localVideo" && this.id !== "addonLocalVideo") {
                     return originalVolumeSetter.call(this, 0);
                 }
-
+                
                 const targetVolume = settings.lingqVolume;
                 const adjustedVolume = Math.min(Math.max(val * targetVolume, 0), 1);
                 return originalVolumeSetter.call(this, adjustedVolume);
             }
         });
-
+        
         const originalPlay = PageMediaElement.prototype.play;
-        PageMediaElement.prototype.play = function() {
+        PageMediaElement.prototype.play = function () {
             const src = this.src || '';
             if (!src.startsWith('data:') && !src.includes('/tts/')) {
                 if (!mediaInstances.has(this)) {
@@ -2004,14 +2131,14 @@
             return originalPlay.apply(this, arguments);
         };
     }
-
+    
     function setLingqVolume(vol) {
         settings.lingqVolume = Math.min(Math.max(vol, 0), 1);
         mediaInstances.forEach(media => {
             if (media) media.volume = 1.0;
         });
     }
-
+    
     function globalSetup() {
         function resizeToast() {
             const css = `
@@ -2425,7 +2552,7 @@
             const vertexCredentialsContainer = createElement("div", {id: "vertexCredentialsContainer"});
             vertexCredentialsContainer.style.display = settings.llmProvider === "vertex" ? "block" : "none";
             apiKeyContainer.style.display = settings.llmProvider === "vertex" ? "none" : "flex";
-
+            
             const addVertexField = (id, label, value, isPassword) => {
                 const row = createElement("div", {
                     className: "popup-row",
@@ -2446,12 +2573,15 @@
                 vertexCredentialsContainer.appendChild(row);
                 return input;
             };
-
+            
             addVertexField("vertexProjectIdInput", "Project ID:", vertexCreds.projectId, false);
             addVertexField("vertexClientEmailInput", "Client Email:", vertexCreds.clientEmail, false);
             addVertexField("vertexPrivateKeyInput", "Private Key:", vertexCreds.privateKey, true);
             
-            const jsonUploadRow = createElement("div", {className: "popup-row", style: "display: flex; justify-content: flex-end;"});
+            const jsonUploadRow = createElement("div", {
+                className: "popup-row",
+                style: "display: flex; justify-content: flex-end;"
+            });
             const jsonUploadLabel = createElement("label", {
                 className: "popup-button",
                 textContent: "Load from JSON",
@@ -3157,8 +3287,8 @@
                 const position = videoPositionSelector.value;
                 const isVideoMode = ["video", "localVideo"].includes(baseType);
                 
-                settings.styleType = { ...settings.styleType, [language]: baseType };
-                settings.videoPosition = { ...settings.videoPosition, [language]: position };
+                settings.styleType = {...settings.styleType, [language]: baseType};
+                settings.videoPosition = {...settings.videoPosition, [language]: position};
                 
                 positionSettingsContainer.style.display = isVideoMode ? "block" : "none";
                 document.getElementById("videoSettings").style.display = isVideoMode && ["Top", "Bottom"].includes(position) ? "block" : "none";
@@ -4576,7 +4706,7 @@
                     max-height: 90vh;
                     overflow-y: auto;
                 }
-                
+
                 .popup-close-top-btn {
                     position: absolute;
                     top: 3px;
@@ -4667,7 +4797,7 @@
                 option {
                     background: var(--background-color) !important;
                 }
-                
+
                 #flashcardPopupHeader {
                     display: flex;
                     justify-content: space-between;
@@ -4676,7 +4806,7 @@
                     margin: 10px 0;
                     height: 45px;
                 }
-                
+
                 #flashcardSearchInput {
                     width: 300px;
                     margin-left: auto;
@@ -4684,17 +4814,17 @@
                     padding: 3px 8px !important;
                     border-radius: 4px !important;
                 }
-                
+
                 #flashcardPagination {
                     display: flex;
                     align-items: center;
                 }
-                
+
                 #flashcardTableContainer {
                     height: 435px;
                     overflow-y: auto;
                 }
-                
+
                 #flashcardTable {
                     table-layout: fixed;
                     width: 100%;
@@ -4702,100 +4832,100 @@
                     border-spacing: 0 5px;
                     padding: 0 5px;
                 }
-                
+
                 #flashcardTable thead {
                     position: sticky;
                     top: 0;
                     background: var(--background-color);
                 }
-                
+
                 #flashcardTable thead th {
                     cursor: pointer;
                     user-select: none;
                 }
-                
+
                 #flashcardTable td {
                     white-space: nowrap;
                     overflow: hidden;
                     text-overflow: ellipsis;
                     font-size: 0.9em;
                 }
-                
+
                 #flashcardTable td + td {
                     padding-left: 10px;
                 }
-                
+
                 #flashcardTable th:nth-child(1),
                 #flashcardTable td:nth-child(1) {
                     width: 20px;
                 }
-                
+
                 #flashcardTable th:nth-child(2),
                 #flashcardTable td:nth-child(2) {
                     width: 50px;
                 }
-                
+
                 #flashcardTable th:nth-child(3),
                 #flashcardTable td:nth-child(3) {
                     width: 20%;
                 }
-                
+
                 #flashcardTable th:nth-child(4),
                 #flashcardTable td:nth-child(4) {
                     width: 20%;
                 }
-                
+
                 #flashcardTable th:nth-child(5),
                 #flashcardTable td:nth-child(5) {
                     width: 60%;
                 }
-                
+
                 #flashcardStatsContainer {
                     padding: 10px 0;
                     margin: 5px 0;
                     border-top: 1px solid rgb(125 125 125 / 20%);
                     border-bottom: 1px solid rgb(125 125 125 / 20%);
                 }
-                
+
                 #flashcardStatsHeader {
                     display: flex;
                     justify-content: space-between;
                     align-items: center;
                 }
-                
+
                 #flashcardStatsTitle {
                     font-size: 0.9em;
                     color: var(--font-color);
                 }
-                
+
                 .flashcard-period-tabs {
                     display: flex;
                     gap: 5px;
                     justify-content: space-between;
                 }
-                
+
                 .flashcard-period-tabs .btn-ghost {
                     flex: 1;
                     padding: 0 5px;
                     color: var(--font-color);
                     border-radius: 5px;
                 }
-                
+
                 .flashcard-period-tabs .btn-ghost.active {
                     background-color: var(--border);
                     font-weight: bold;
                 }
-                
+
                 .flashcard-chart-wrapper {
                     height: 150px;
                     width: 100%;
                 }
-                
+
                 #flashcardTable .delete-row-btn {
                     width: 10px;
                     height: 10px;
                 }
-                
+
                 #flashcardPopupButtons {
                     display: flex; justify-content: flex-end; margin: 10px 0;
                 }
@@ -4874,7 +5004,7 @@
                         }
                     }
                 });
-                audioPlayerObserver.observe(playerContainer, { childList: true, subtree: true });
+                audioPlayerObserver.observe(playerContainer, {childList: true, subtree: true});
                 setupVolumeController();
             }
         });
@@ -4885,7 +5015,7 @@
             
             // Skip if this is the YouTube video controller (distinguished by its specific speed button class)
             if (controllers.querySelector('.controller-item--speed')) return;
-    
+            
             const volumeWrapper = createElement("div", {
                 id: "addon-volume-controller",
                 style: "display: inline;"
@@ -4904,7 +5034,7 @@
             const svgMute = `<svg style="flex-shrink: 0;" width="25" height="25" class="svg-icon is-dark stroke-current fill-current" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><path fill="none" stroke="#050d18" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" class="is-stroke" d="M12 21l-5-5H3V10h4l5-5v16z"></path><line fill="none" stroke="#050d18" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" class="is-stroke" x1="23" y1="9" x2="17" y2="15"></line><line fill="none" stroke="#050d18" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" class="is-stroke" x1="17" y1="9" x2="23" y2="15"></line></svg>`;
             const svgLow = `<svg style="flex-shrink: 0;" width="25" height="25" class="svg-icon is-dark stroke-current fill-current" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><path fill="none" stroke="#050d18" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" class="is-stroke" d="M14 21l-5-5H5V10h4l5-5v16z"></path><path fill="none" stroke="#050d18" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" class="is-stroke" d="M19 11c1.5 1.5 1.5 3.5 0 5"></path></svg>`;
             const svgHigh = `<svg style="flex-shrink: 0;" width="25" height="25" class="svg-icon is-dark stroke-current fill-current" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><path fill="none" stroke="#050d18" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" class="is-stroke" d="M12 21l-5-5H3V10h4l5-5v16z"></path><path fill="none" stroke="#050d18" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" class="is-stroke" d="M17 11c1.5 1.5 1.5 3.5 0 5"></path><path fill="none" stroke="#050d18" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" class="is-stroke" d="M21 7c3 3 3 7 0 12"></path></svg>`;
-    
+            
             function updateIcon() {
                 const vol = settings.lingqVolume;
                 const volPct = Math.round(vol * 100);
@@ -5031,7 +5161,7 @@
             
             baseCSS += layoutCSS;
             baseCSS += specificCSS;
-            if(settings.skipEndPage) {
+            if (settings.skipEndPage) {
                 baseCSS += `
                 [id$="-content-lessonCompleted"] > div.pb-24 > div:nth-child(1) > div.gap-2,
                 [id$="-content-lessonCompleted"] > div.pb-24 > :is(div:nth-child(2), div:nth-child(4)),
@@ -5058,8 +5188,8 @@
                 const position = videoPositionSelector.value;
                 const isVideoMode = ["video", "localVideo"].includes(baseType);
                 
-                settings.styleType = { ...settings.styleType, [language]: baseType };
-                settings.videoPosition = { ...settings.videoPosition, [language]: position };
+                settings.styleType = {...settings.styleType, [language]: baseType};
+                settings.videoPosition = {...settings.videoPosition, [language]: position};
                 
                 positionSettingsContainer.style.display = isVideoMode ? "block" : "none";
                 document.getElementById("videoSettings").style.display = isVideoMode && ["Top", "Bottom"].includes(position) ? "block" : "none";
@@ -5083,7 +5213,7 @@
             });
         }
         
-      
+        
         function generateBaseCSS(colorSettings) {
             return `
                 :root {
@@ -5163,14 +5293,14 @@
                 }
 
                 /*Chat*/
-                
+
                 #chat-widget {
                     display: flex;
                     flex-direction: column;
                     min-height: 150px;
                     max-height: var(--chat-widget-height, 100px);
                 }
-                
+
                 #chat-container {
                     flex: 1;
                     margin-bottom:5px;
@@ -5234,13 +5364,13 @@
                     background-color: rgb(125 125 125 / 15%);
                     min-height: 30px;
                 }
-                
+
                 .bot-message:empty {
                     background: linear-gradient(90deg, #7d7d7d26 25%, #7d7d7d40 50%, #7d7d7d26 75%);
                     background-size: 200% 100%;
                     animation: shimmerAnim 1.5s linear infinite;
                 }
-                
+
                 @keyframes shimmerAnim {
                     0% { background-position: 100% 0; }
                     100% { background-position: -100% 0; }
@@ -5251,22 +5381,22 @@
                     font-size: 1.05rem;
                     font-weight: 600;
                 }
-                
+
                 #chat-container :is(.word-message, .sentence-message) b:nth-of-type(1):hover {
                     color: ${settings.colorMode === "dark" ? "white" : "black"};
                     cursor: pointer;
                 }
-                
+
                 #chat-container .word-message p:nth-of-type(1):hover {
                     color: ${settings.colorMode === "dark" ? "white" : "black"};
                     cursor: pointer;
                 }
-                
+
                 #chat-container .word-message ul:nth-last-of-type(1):hover {
                     color: ${settings.colorMode === "dark" ? "white" : "black"};
                     cursor: pointer;
                 }
-                
+
                 #flashcard-popup {
                     display: flex;
                     flex-direction: column;
@@ -5279,11 +5409,11 @@
                     color: var(--font-color, #e0e0e0);
                     border: 1px solid rgb(125 125 125 / 50%);
                 }
-                
+
                 .word-message b:has(.flashcard-count-badge) {
                     margin-right: 5px;
                 }
-                
+
                 .flashcard-count-badge {
                     position: absolute;
                     top: 1px;
@@ -5292,36 +5422,36 @@
                     font-size: 10px;
                     border-radius: 3px;
                     line-height: 1;
-                    
+
                     pointer-events: none;
                     user-select: none;
                     -webkit-user-select: none;
                 }
-                
+
                 .flashcard-count-badge::after {
                     content: attr(data-display);
                 }
-                
+
                 .flashcard-row {
                     display:flex;
                     align-items:center;
                     gap:5px;
                     cursor: pointer;
                 }
-                
+
                 .popup-delete-button {
                     width: 10px;
                     height: 10px;
                     margin-right: 5px;
                 }
-                
+
                 .meaning-edit-input {
                     width: 100%;
                     border: none;
                     outline: none;
                     padding: 3px;
                 }
-                
+
                 .pronunciation-edit-input {
                     width: 120px;
                     border: none;
@@ -5347,11 +5477,11 @@
                     height: 1px;
                     background-color: rgb(125 125 125 / 50%);
                 }
-                
+
                 #chat-container p {
                     margin: 0.3rem 0;
                 }
-                
+
                 .message-button-container {
                     display: flex;
                     gap: 5px;
@@ -5384,30 +5514,30 @@
                     flex-direction: column;
                     padding: 10px 0;
                 }
-                
+
                 .quick-summary rt {
                     user-select: none;
                     -webkit-user-select: none;
                     font-size: 0.6em;
                 }
-                
+
                 .summary-content {
                     display: flex;
                     flex-direction: column;
                     gap: 10px;
                 }
-                
+
                 .summary-content b {
                     font-size: 1.5rem;
                 }
-                
+
                 .close-summary-btn {
                     padding: 0px 10px;
                     border: 1px solid rgb(125, 125, 125, 50%);
                     border-radius: 5px;
                     margin: 0 10px 0 auto;
                 }
-                
+
                 .userToast {
                     position: absolute;
                     top: 15px;
@@ -5439,15 +5569,15 @@
                 --reader-layout-columns: 1fr var(--widget-width);
                 --reader-layout-rows: var(--article-height) calc(var(--height-big) - var(--footer-height)) var(--footer-height);
             }
-            
+
             /*font settings*/
-    
+
             .reader-container {
                 font-family: var(--custom-font, inherit) !important;
                 line-height: var(--line-height) !important;
                 font-size: var(--font-size) !important;
             }
-    
+
             .sentence-text-head {
                 min-height: 4.5rem !important;
             }
@@ -5455,113 +5585,113 @@
             .reader-container p {
                 margin-top: 0 !important;
             }
-            
+
             /*highlightings*/
-            
+
             .phrase-cluster:not(:has(.phrase-item-status--4, .phrase-item-status--4x2)) {
                 border: 1px solid var(--lingq-border) !important;
             }
-            
+
             .phrase-cluster:has(.phrase-item-status--4, .phrase-item-status--4x2) {
                 border: 1px solid var(--lingq-border-learned) !important;
             }
-            
+
             .reader-container .sentence .lingq-word:not(.is-learned) {
                 border: 1px solid var(--lingq-border) !important;
             }
-            
+
             .reader-container .sentence .lingq-word.is-learned {
                 border: 1px solid var(--lingq-border-learned) !important;
             }
-            
+
             .reader-container .sentence .blue-word {
                 border: 1px solid var(--unknown-border) !important;
             }
-            
+
             /*header settings*/
-    
+
             .main-wrapper {
                 padding: 0 !important;
             }
-            
+
             #app > .main-wrapper > [data-slot="sidebar-wrapper"] > header {
                 position: absolute;
                 z-index: 10;
             }
-    
+
             #main-nav {
                 z-index: 1;
             }
-    
+
             #main-nav > nav {
                 height: var(--header-height);
             }
-    
+
             #main-nav > nav > div:nth-child(1) {
                 height: var(--header-height);
             }
-    
+
             .main-header {
                 z-index: 20;
                 pointer-events: none;
             }
-    
+
             .main-header > div {
                 grid-template-columns: 1fr 150px !important;
             }
-    
+
             .main-header section:nth-child(1) {
                 /* display: none; */
             }
-    
+
             .main-header section {
                 pointer-events: auto;
                 z-index: 1;
             }
-    
+
             .main-header svg {
                 width: 20px !important;
                 height: 20px !important;
             }
-    
+
             .main-header section .dropdown-content {
                 /*position: fixed;*/
             }
-    
+
             .lesson-progress-section {
                 grid-template-rows: unset !important;
                 grid-template-columns: unset !important;
                 grid-column: 1 !important;
                 pointer-events: auto;
             }
-    
+
             .lesson-progress-section .rc-slider{
                 grid-row: unset !important;
                 grid-column: unset !important;
                 width: 50% !important;
             }
-    
+
             /*layout*/
-    
+
             #lesson-reader {
                 grid-template-columns: var(--reader-layout-columns);
                 grid-template-rows: var(--reader-layout-rows);
                 overflow: hidden;
                 height: auto !important;
             }
-    
+
             .sentence-text {
                 max-width: max(80%, 1200px) !important;
                 height: calc(var(--article-height) - var(--header-height)) !important;
                 padding: 0 0 20px !important;
             }
-    
+
             .reader-container-wrapper {
                 height: 100% !important;
                 overflow-y: ${isPageMode ? "auto" : "visible"} !important;
                 outline: none !important;
             }
-    
+
             .widget-area {
                 padding: var(--header-height) 0 10px !important;
                 margin: 0 10px !important;
@@ -5569,7 +5699,7 @@
                 display: flex;
                 flex-direction: column;
             }
-    
+
             .reader-widget {
                 position: relative;
                 display: flow !important;
@@ -5580,50 +5710,50 @@
                 scrollbar-width: none !important;
                 margin-bottom: 15px !important;
             }
-    
+
             .reader-widget:not(.reader-widget--resources) {
                 padding: 10px !important;
             }
-    
+
             .reader-widget.reader-widget--resources {
                 padding: 10px 15px !important;
             }
-            
+
             .reader-widget--resources-content {
                 height: 40vh !important;
             }
-    
+
             .reference-main {
                 margin-bottom: 5px;
             }
-    
+
             .reference-word {
                 white-space: pre-line !important;
             }
-    
+
             .section-widget--main {
                 margin: 0 !important;
                 padding: 0 !important;
             }
-    
+
             .appCue-poular-hints {
                 max-height: 250px;
                 overflow-y: auto;
                 scrollbar-width: none !important;
             }
-    
+
             .reference-input-text {
                 font-size: 0.9rem !important;
                 scrollbar-width: none !important;
             }
-            
+
             #memo-widget-container {
                 display: flex;
                 background-color: var(--readerWidgetBoxBackground);
                 padding: 10px;
                 border-radius: 1.25rem;
             }
-            
+
             .memo-textarea {
                 width: 100%;
                 min-height: 2.5em;
@@ -5636,31 +5766,31 @@
                 overflow-y: auto;
                 field-sizing: content;
             }
-    
+
             .section-widget--foot {
                 margin: 0 !important;
                 padding: 10px 0 0 !important;
                 display: block !important;
             }
-    
+
             .dictionary-resources {
                 width: 100% !important;
             }
-    
+
             .word-status-bar {
                 width: 100%;
                 grid-template-columns: repeat(6, 1fr) !important;
                 grid-gap: 10px !important;
             }
-    
+
             .reference-helper-coin-value {
                 display: none !important;
             }
-            
+
             .section-widget--head .reference-helpers {
                 grid-template-columns: 1fr !important;
             }
-            
+
             .section-widget--head .reference-helpers:not(:has(.reference-helper-tags)) {
                 display: none !important;
                 min-height: 0 !important;
@@ -5668,53 +5798,53 @@
                 margin: 0 !important;
                 border: none !important;
             }
-    
+
             .main-footer {
                 grid-area: 3 / 1 / 3 / 1 !important;
                 align-self: end;
                 padding: 5px 10px 10px;
                 height: 100%;
             }
-    
+
             .main-footer > div {
                 height: 100%;
             }
-    
+
             .lesson-bottom > div {
                 position: unset !important;
             }
-    
+
             .main-content {
                 grid-template-rows: var(--header-height) 1fr !important;
                 overflow: hidden;
                 align-items: center;
             }
-    
+
             /*make prev/next page buttons compact*/
-    
+
             .reader-component {
                 grid-template-columns: ${isPageMode ? "2rem" : "0"} 1fr 2rem !important;
             }
-    
+
             .reader-component > .nav--left {
                 visibility: ${isPageMode ? "visible" : "hidden"} !important;
             }
-    
+
             .reader-component > div > a.button > span {
                 width: 0.5rem !important;
             }
-    
+
             .reader-component > div > a.button > span > svg {
                 width: 15px !important;
                 height: 15px !important;
             }
-    
+
             .loadedContent {
                 padding: 0 0 0 10px !important;;
             }
-    
+
             /*font settings*/
-    
+
             .reader-container {
                 padding: 0 !important;
                 margin: 0 !important;
@@ -5726,105 +5856,105 @@
                 height: ${isPageMode ? "1780px" : "100%"} !important;
                 outline: none !important;
             }
-            
+
             .reader-container .sentence-item--transliteration:not(.has-furigana) {
                 margin-bottom: 0 !important;
             }
-    
+
             /*video viewer*/
-    
+
             .video-player:not(.is-minimized) {
                 display: flex !important;
                 justify-content: flex-end !important;
                 pointer-events: none;
                 z-index: 38 !important;
             }
-    
+
             .video-player.is-minimized {
                 bottom: 0 !important;
                 right: 0 !important;
                 align-items: end !important;
             }
-    
+
             .video-player > .modal-background {
                 background-color: rgb(26 28 30 / 0%) !important;
             }
-    
+
             .video-player:not(.is-minimized) > .modal-content {
                 max-width: var(--width-big) !important;
                 margin: 0 0 10px 10px !important;
                 border-radius: 0.75rem !important;
             }
-    
+
             .video-player.is-minimized > .modal-content {
                 width: calc(var(--widget-width) - 20px) !important;
                 max-width: unset !important;
                 margin: 0 10px var(--footer-height) 0 !important;
             }
-    
+
             .video-player .modal-section {
                 display: none !important;
             }
-    
+
             .video-player:not(.is-minimized) .video-wrapper {
                 height: var(--height-big) !important;
                 overflow: hidden;
                 pointer-events: auto;
             }
-    
+
             .video-player.is-minimized .video-wrapper {
                 height: 250px !important;
             }
-    
+
             /*video controller*/
-    
+
             .rc-slider-rail {
                 background-color: dimgrey !important;
             }
-    
+
             .rc-slider-step {
                 margin-top: -8px !important;
                 height: 1.2rem !important;
             }
-    
+
             .lingq-audio-player {
                 margin-left: 10px;
             }
-    
+
             .section--player.is-expanded {
                 width: 100% !important;
                 height: 100%;
                 padding: 0 !important;
             }
-    
+
             .sentence-mode-button {
                 margin: 0 0 10px 0;
             }
-    
+
             .player-wrapper {
                 grid-template-columns: 1fr 40px !important;
                 padding: 0 !important;
             }
-    
+
             .audio-player {
                 padding: 0 0.5rem !important;
                 grid-template-rows: 16px 16px auto !important;
             }
-    
+
             .audio-player--controllers {
                 grid-gap: unset !important;
             }
-    
+
             .audio-player--controllers a {
                 height: 25px !important;
                 padding: 0 1em !important;
                 margin: 5px 0;
             }
-    
+
             .audio-player--controllers span {
                 height: 25px !important;
             }
-            
+
             #lesson-reader > div.h-full > div[dir=ltr] > header {
                 margin-top: 60px;
             }
@@ -6081,7 +6211,7 @@
             
             return `
             ${layoutCSS}
-            
+
             :root {
                 --caption-font-size: ${settings.captionFontsize}px;
             }
@@ -6169,32 +6299,32 @@
             :root {
                 --width-big: calc(var(--widget-width) - 20px);
                 --height-big: calc(var(--widget-width) * 0.6);
-    
+
                 --reader-layout-rows: var(--article-height) var(--footer-height);
                 --article-height: calc(var(--app-height) - var(--footer-height));
             }
-            
+
             .main-header > div {
                 padding: 0 0 0 420px !important;
             }
-    
+
             .main-content {
                 grid-area: 1 / 1 / 2 / 2 !important;
             }
-    
+
             .widget-area {
                 grid-area: 1 / 2 / 2 / 2 !important;
             }
-    
+
             .main-footer {
                 grid-area: 2 / 1 / 3 / 2 !important;
                 align-self: end;
             }
-    
+
             .video-player:not(.is-minimized) {
                 align-items: end !important;
             }
-    
+
             .video-player:not(.is-minimized) > .modal-content {
                 margin: 0 10px 10px !important;
             }
@@ -6210,17 +6340,17 @@
                 --right-pos: 0.5%;
                 --bottom-pos: 5.5%;
             }
-            
+
             .main-header > div {
                 padding: 0 0 0 420px !important;
             }
-            
+
             .quick-summary {
                 display: none !important;
             }
-    
+
             /*video player*/
-    
+
             .video-player.is-minimized .video-wrapper,
             .sent-video-player.is-minimized .video-wrapper {
                 height: var(--height-small);
@@ -6228,13 +6358,13 @@
                 overflow: auto;
                 resize: both;
             }
-    
+
             .video-player.is-minimized .modal-content,
             .sent-video-player.is-minimized .modal-content {
                 max-width: calc(var(--width-small)* 3);
                 margin-bottom: 0;
             }
-    
+
             .video-player.is-minimized,
             .sent-video-player.is-minimized {
                 left: auto;
@@ -6244,22 +6374,22 @@
                 z-index: 99999999;
                 overflow: visible
             }
-    
+
             /*sentence mode video player*/
             .loadedContent:has(#sentence-video-player-portal) {
                 grid-template-rows: var(--sentence-height) auto 1fr !important;
             }
-    
+
             #sentence-video-player-portal .video-section {
                 width: 100% !important;
                 max-width: none !important;
             }
-    
+
             #sentence-video-player-portal .video-wrapper {
                 height: 100% !important;
                 max-height: none !important;
             }
-    
+
             #sentence-video-player-portal div:has(> iframe) {
                 height: 100% !important;
             }
@@ -6491,7 +6621,7 @@
                         return;
                     }
                     
-                    console.log('[PageAdvance]' ,'All conditions passed — advance to next page.');
+                    console.log('[PageAdvance]', 'All conditions passed — advance to next page.');
                     moveNextPage();
                 }
                 
@@ -6544,13 +6674,13 @@
                     const summaryPrompt = `
                         # Role
                         Generate a comprehensive English note of the given content, serving as persistent context for downstream tasks — including Q&A about the lesson and AI dictionary lookups that require full contextual awareness.
-                    
+
                         # Content Rules
                         - Objective and factual; base ONLY on the given content
                         - Preserve ALL key details, named entities, terminology, and plot/argument structure
                         - Retain original-language terms when translation would lose precision (e.g., proper nouns, culturally specific concepts)
                         - No preface or closing remarks
-                    
+
                         # Output Format
                         - Language: English; use original-language terms inline when necessary for fidelity
                         - Format: plain text only, not HTML or Markdown format.
@@ -6574,14 +6704,14 @@
                         ? settings.summaryDifficulty[language]
                         : settings.summaryDifficulty;
                     const difficulty = rawDifficulty || "unset";
-                    const difficultyPrompt = difficulty && difficulty !== "unset" 
+                    const difficultyPrompt = difficulty && difficulty !== "unset"
                         ? `- Ensure the summary uses vocabulary and grammar suitable for a CEFR ${difficulty} learner.`
                         : "";
-
+                    
                     const summaryPrompt = `
                         # Role
                         Summarize the lesson content, helping learners grasp the topic before reading.
-                    
+
                         # Output Format
                         - Language: match the lesson's original language (${lessonLanguage})
                         - Structure: 2–3 <p> paragraphs
@@ -6591,12 +6721,12 @@
                             If ${lessonLanguage} uses logographic or complex scripts (e.g., Japanese, Chinese), annotate Kanji/words with phonetic readings using HTML <ruby> tags (e.g., <ruby>漢字<rt>かんじ</rt></ruby>).
                             If not (e.g., English), never use <ruby> tags.
                             Example: "<p><ruby>私<rt>わたし</rt></ruby>は<ruby>日本語<rt>にほんご</rt></ruby>を<ruby>勉強<rt>べんきょう</rt></ruby>しています。...</p>"
-                    
+
                         # Content Rules
                         - Objective and factual; base ONLY on the given content
                         - Summary body ONLY — no preface, title restatement, or closing remarks
                         ${difficultyPrompt}
-                    
+
                         # Format
                         <p>first paragraph</p> <p>second paragraph</p>
                         `;
@@ -6638,7 +6768,8 @@
                     summaryElement.append(contentWrapper);
                     
                     const btnContainer = createElement("div", {
-                        style: "display: flex; gap: 10px; align-items: center; justify-content: flex-end; margin: 0 10px 0 auto;"}
+                            style: "display: flex; gap: 10px; align-items: center; justify-content: flex-end; margin: 0 10px 0 auto;"
+                        }
                     );
                     
                     const ttsButton = createElement("button", {
@@ -6663,7 +6794,10 @@
                         playAudio(audioData, 1.0);
                     });
                     
-                    const closeButton = createElement("button", {className: "close-summary-btn", style: "margin: 0;"}, ["close"]);
+                    const closeButton = createElement("button", {
+                        className: "close-summary-btn",
+                        style: "margin: 0;"
+                    }, ["close"]);
                     closeButton.addEventListener("click", () => summaryElement.remove());
                     
                     btnContainer.append(ttsButton, closeButton);
@@ -6716,7 +6850,7 @@
                                 : "LLM Chat/Summary";
                         
                         if (!acc[category]) {
-                            acc[category] = { calls: 0, cost: 0, uncachedCost: 0 };
+                            acc[category] = {calls: 0, cost: 0, uncachedCost: 0};
                         }
                         
                         acc[category].calls += 1;
@@ -6726,7 +6860,7 @@
                         acc.totalUncachedCost += (usage.uncachedCost ?? usage.cost);
                         
                         return acc;
-                    }, { totalCost: 0, totalUncachedCost: 0 });
+                    }, {totalCost: 0, totalUncachedCost: 0});
                     
                     const totalSavedPercent = usageStats.totalUncachedCost > 0
                         ? (((usageStats.totalUncachedCost - usageStats.totalCost) / usageStats.totalUncachedCost) * 100).toFixed(1)
@@ -6747,7 +6881,7 @@
                         if (completionElement.getAttribute("data-state") === "active") {
                             clickElement("div.player-wrapper > div.player-close a");
                             resetLocalVideo();
-                            document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
+                            document.dispatchEvent(new KeyboardEvent("keydown", {key: "Escape"}));
                             
                             const nextButton = document.querySelector("#lesson-reader > div.h-full > div > header > div.col-3 > button");
                             if (!nextButton) return;
@@ -6906,7 +7040,7 @@
         
         async function createGeminiCache(provider, apiKey, model, summaryHTML, sysPlain, sysWord) {
             let apiUrl = 'https://generativelanguage.googleapis.com/v1beta/cachedContents';
-            let headers = { 'Content-Type': 'application/json' };
+            let headers = {'Content-Type': 'application/json'};
             let formattedModel = model.startsWith('models/') ? model : `models/${model}`;
             let isPriority = false;
             
@@ -6928,16 +7062,16 @@
             }
             
             const contents = [
-                { role: "user", parts: [{ text: `<summary>${summaryHTML}</summary>` }] },
-                { role: "user", parts: [{ text: sysPlain }] },
-                { role: "user", parts: [{ text: sysWord }] }
+                {role: "user", parts: [{text: `<summary>${summaryHTML}</summary>`}]},
+                {role: "user", parts: [{text: sysPlain}]},
+                {role: "user", parts: [{text: sysWord}]}
             ];
             
             try {
                 const response = await gmFetch(apiUrl, {
                     method: 'POST',
                     headers,
-                    body: JSON.stringify({ model: formattedModel, contents })
+                    body: JSON.stringify({model: formattedModel, contents})
                 });
                 
                 if (!response.ok) {
@@ -7202,64 +7336,64 @@
                     if (pronunciationElem) {
                         const cleanText = pronunciationElem.textContent.replace(/[\[\]\/]/g, "").trim();
                         pronunciationElem.textContent = `[${cleanText}]`;
-
+                        
                         pronunciationElem.addEventListener("click", async (e) => {
                             if (pronunciationElem.querySelector("input")) return;
                             
                             const currentText = pronunciationElem.textContent.trim();
+                            
+                            const input = createElement("input", {
+                                type: "text",
+                                value: currentText,
+                                className: "pronunciation-edit-input",
+                            });
+                            
+                            pronunciationElem.textContent = "";
+                            pronunciationElem.appendChild(input);
+                            input.focus();
+                            
+                            const finishEdit = async () => {
+                                const rawValue = input.value.trim();
+                                const cleanText = rawValue.replace(/[\[\]\/]/g, "").trim();
+                                const newValue = cleanText ? `[${cleanText}]` : "";
+                                pronunciationElem.textContent = newValue;
                                 
-                                const input = createElement("input", {
-                                    type: "text",
-                                    value: currentText,
-                                    className: "pronunciation-edit-input",
-                                });
+                                if (newValue === currentText) return;
                                 
-                                pronunciationElem.textContent = "";
-                                pronunciationElem.appendChild(input);
-                                input.focus();
+                                navigator.clipboard.writeText(newValue)
+                                    .then(() => showToast("Pronunciation Copied!", true))
+                                    .catch(() => showToast("Failed to copy pronunciation.", false));
                                 
-                                const finishEdit = async () => {
-                                    const rawValue = input.value.trim();
-                                    const cleanText = rawValue.replace(/[\[\]\/]/g, "").trim();
-                                    const newValue = cleanText ? `[${cleanText}]` : "";
-                                    pronunciationElem.textContent = newValue;
-                                    
-                                    if (newValue === currentText) return;
-                                    
-                                    navigator.clipboard.writeText(newValue)
-                                        .then(() => showToast("Pronunciation Copied!", true))
-                                        .catch(() => showToast("Failed to copy pronunciation.", false));
-                                    
-                                    const storedIdx = botMessageDiv.dataset.wordIdx;
-                                    if (!storedIdx) return;
-                                    
-                                    const {error: updateError} = await getDbClient()
-                                        .from(getTableName())
-                                        .update({pronunciation: newValue})
-                                        .eq("idx", storedIdx);
-                                    
-                                    if (updateError) {
-                                        console.error("Pronunciation update error:", updateError);
-                                        showToast("Failed to update pronunciation.", false);
-                                    } else {
-                                        showToast("Pronunciation updated!", true);
-                                    }
-                                };
+                                const storedIdx = botMessageDiv.dataset.wordIdx;
+                                if (!storedIdx) return;
                                 
-                                input.addEventListener("keydown", async (event) => {
-                                    if (event.key === "Enter") {
-                                        event.preventDefault();
-                                        input.blur();
-                                    } else if (event.key === "Escape") {
-                                        pronunciationElem.textContent = currentText;
-                                    }
-                                });
+                                const {error: updateError} = await getDbClient()
+                                    .from(getTableName())
+                                    .update({pronunciation: newValue})
+                                    .eq("idx", storedIdx);
                                 
-                                input.addEventListener("blur", async () => {
-                                    await finishEdit();
-                                });
-                                
-
+                                if (updateError) {
+                                    console.error("Pronunciation update error:", updateError);
+                                    showToast("Failed to update pronunciation.", false);
+                                } else {
+                                    showToast("Pronunciation updated!", true);
+                                }
+                            };
+                            
+                            input.addEventListener("keydown", async (event) => {
+                                if (event.key === "Enter") {
+                                    event.preventDefault();
+                                    input.blur();
+                                } else if (event.key === "Escape") {
+                                    pronunciationElem.textContent = currentText;
+                                }
+                            });
+                            
+                            input.addEventListener("blur", async () => {
+                                await finishEdit();
+                            });
+                            
+                            
                         });
                     }
                     
@@ -7546,7 +7680,11 @@
                                     
                                     const {data: inserted, error: insertError} = await getDbClient()
                                         .from(getTableName())
-                                        .insert([{...newItem, meaning: currentMeaning, pronunciation: currentPronunciation}])
+                                        .insert([{
+                                            ...newItem,
+                                            meaning: currentMeaning,
+                                            pronunciation: currentPronunciation
+                                        }])
                                         .select("idx");
                                     
                                     if (insertError) {
@@ -7602,7 +7740,7 @@
                 }
                 
                 function updateChatHistoryState(currentHistory, message, role, id = null) {
-                    const newItem = { role: role, content: message };
+                    const newItem = {role: role, content: message};
                     if (id) newItem.id = id;
                     return [...currentHistory, newItem];
                 }
@@ -7769,7 +7907,7 @@
                     const userMessageId = generateUniqueId();
                     chatHistory = updateChatHistoryState(chatHistory, formattedUserMessage, "user", userMessageId);
                     
-                    const userButtonContainer = createElement("div", { className: "message-button-container" });
+                    const userButtonContainer = createElement("div", {className: "message-button-container"});
                     userButtonContainer.appendChild(createDeleteButton(userMessageDiv, userMessageId));
                     userMessageDiv.appendChild(userButtonContainer);
                     
@@ -7999,16 +8137,16 @@
         
         const systemPrompt = `
         # System Capabilities & Format Protocol
-        
+
         ## Core Responsibility
         - Tone: Objective and concise.
         - Latency Control: Skip prefaces (e.g., "Here is the answer"). Output the result immediately.
-        
+
         ## STRICT Output Formatting (HTML Only)
         - Content Type: Raw HTML string.
         - Forbidden: Markdown syntax (No \`\`\`html blocks, no bold, no # headers), conversational filler.
         - Spacing: Use <p> tags for structural spacing. Use <br> only for line breaks inside a specific block if absolutely necessary.
-        
+
         ## Language Configuration
         - Presentation Language: '${userLanguage}' (Used for explanations, definitions, translations).
         - Target Language: '${lessonLanguage}' (Used for original examples, base forms).
@@ -8016,10 +8154,10 @@
         `;
         const wordPhrasePrompt = `
         # Single Word/Phrase Extraction
-        
+
         ## Task: Linguistic Analysis
         Analyze the input: 'Input: "Term" Context: "Sentence"'.
-        
+
         1. Lemma Extraction (Base Form)
             - Nouns: Singular form.
             - Verbs: Infinitive form.
@@ -8029,7 +8167,7 @@
             - Negative Examples
                 - Avoid: "smoothly, seamlessly" / Prefer: "smoothly"
                 - Avoid: "nearby, in the neighborhood" / Prefer: "nearby"
-        
+
         2. IPA Pronunciation
             - Provide IPA for the Base Form (lemma) enclosed in brackets [].
             - Use a single, consistent transcription system throughout the whole word. Do not mix broad IPA symbols with romanized/orthographic letters (e.g., Pinyin, Revised Romanization) within the same transcription.
@@ -8042,7 +8180,7 @@
                 - Incorrect: 읽고 → [일꼬] (hangul used as a pronunciation guide) / Correct: [ilkʰo]
                 - Incorrect: 我们 → [wǒmen] (pinyin with tone marks) / Correct: [wo˨˩˦mən]
                 - Incorrect: كتاب → [kitab] (Latin transliteration) / Correct: [kitaːb]
-        
+
         3. Contextual Definition
             - This field represents the core meaning of the lemma — the general concept as understood in ${lessonLanguage}, not a meaning narrowed to fit only this specific sentence.
             - Identify a single standard dictionary definition of the Base Form in ${userLanguage} that best covers the sense used in the context.
@@ -8057,14 +8195,14 @@
         4. Contextual Explanation
             - This is where you bridge the "Standard Definition" and the "Specific Context".
             - Structure your explanation into two parts: First, state the inherent nuance or register of the word (e.g., formal, slang, archaic, colloquial). Second, explain how its specific grammatical inflection (e.g., subjunctive mood, causative-passive, perfective aspect) or metaphorical usage colors the provided context.
-        
+
         5. Example Generation
             - Create a new, high-quality penetrating example sentence in ${lessonLanguage} using the Base Form.
             - And translate the example sentence accurately into ${userLanguage}.
             - Ensure the usage helps the user understand the general applicability of this specific sense.
-        
+
         ## Output Structure (HTML)
-        
+
         <div class="word-card">
             <b>[Base Form in ${lessonLanguage}]</b> <span>/[IPA]/</span> <i>([Part of Speech in ${userLanguage}])</i>
             <p>[Standard Dictionary Definition in ${userLanguage}]</p>
@@ -8076,9 +8214,9 @@
               <li>[Translation of the example sentence in ${userLanguage}]</li>
             </ul>
         </div>
-        
+
         ## Examples
-        
+
         ### Example 1: Noun (Original: English, User: Korean)
         User Input: 'Input: "translators", Context: "However, the ESV translators chose to translate that same word as 'servant'."'
         Assistant Output:
@@ -8093,7 +8231,7 @@
               <li>많은 번역가들이 자유롭게 일합니다.</li>
             </ul>
         </div>
-        
+
         ### Example 2: Verb (Original: Spanish, User: English)
         User Input: 'Input: "lograr", Context: "Debemos lograr nuestros objetivos."'
         Assistant Output:
@@ -8108,7 +8246,7 @@
               <li>I hope to achieve all my goals.</li>
             </ul>
         </div>
-        
+
         ### Example 3: Context-Specific Sense (Original: German, User: French)
         User Input: 'Input: "anstellen", Context: "Was hast du mit der Schere angestellt?"'
         Assistant Output:
@@ -8123,7 +8261,7 @@
               <li>Il a encore fait quelque chose de stupide.</li>
             </ul>
         </div>
-        
+
         ### Example 4: Adverb Retention (Original: English, User: Japanese)
         User Input: 'Input: "recklessly", Context: "He drove recklessly through the rain."'
         Assistant Output:
@@ -8153,7 +8291,7 @@
               <li>너무나 아름다운 광경에 그는 그 자리에 멈춰 섰다.</li>
             </ul>
         </div>
-        
+
         ### Example 6: Lexicalized Negation / Fixed Expression (Original: Japanese, User: Korean)
         User Input: 'Input: "仕方がありません", Context: "雨が降り始めてしまったので、今日の遠足が中止になるのは仕方がありません。"'
         Assistant Output:
@@ -8168,7 +8306,7 @@
               <li>아무리 후회해도 지난 일은 어쩔 수 없다.</li>
             </ul>
         </div>
-        
+
         ### Example 7: Orthographic Adaptation (Original: Japanese, User: Korean)
         User Input: 'Input: "カワイイ", Context: "彼女が着ている服は、いつもすごくカワイイですね。"'
         Assistant Output:
@@ -8183,7 +8321,7 @@
               <li>공원에서 귀여운 새끼 고양이를 발견했습니다.</li>
             </ul>
         </div>
-        
+
         ### Example 8: Kanji Phonetic Disambiguation (Original: Japanese, User: Korean)
         User Input: 'Input: "市場", Context: "新鮮な野菜を買うために、朝早く地元の市場に行きました。"'
         Assistant Output:
@@ -8213,7 +8351,7 @@
               <li>She stood me up on our first date.</li>
             </ul>
         </div>
-        
+
         ### Example 10: Culture-Bound Concept & Comma Exception (Original: Portuguese, User: English)
         User Input: 'Input: "saudade", Context: "Morar no exterior é bom, mas sinto muita saudade da minha terra natal."'
         Assistant Output:
@@ -8228,7 +8366,7 @@
               <li>The nostalgic longing hit hard today.</li>
             </ul>
         </div>
-        
+
         ### Example 11: Separated Phrasal Verb (Original: English, User: Chinese)
         User Input: 'Input: "figure", Context: "I finally managed to figure the complicated puzzle out after hours of trying."'
         Assistant Output:
@@ -8246,25 +8384,25 @@
         `;
         const sentencePrompt = `
         # Sentence Analysis
-        
+
         ## Task: Full Text Parsing
         Input: 'Input: "Sentences"'.
-        
+
         1. Translation Strategy
            - Translate ALL input sentences into a single flowing block in ${userLanguage}.
            - Wrap the entire translation in <p><b>...</b></p>.
-        
+
         2. Holistic Explanation
            - Analyze the "Big Picture": Meaning, tone, speaker intent, and nuance.
            - Explain beyond the literal translation.
-        
+
         3. Key Element Extraction
            - Select 2-4 distinct elements (Difficult words, Collocations, Idioms).
            - Criteria: Choose elements where the whole is greater than the sum of parts, or where detailed nuance is needed.
            - Format: [Original Term]: [Concise Definition in ${userLanguage}].
-        
+
         ## Output Structure (HTML)
-        
+
         <p><b>[Full Translation in ${userLanguage}]</b></p>
         <hr>
         <p>[Holistic Explanation in ${userLanguage}]</p>
@@ -8273,9 +8411,9 @@
           <li><b>[Element 1 in ${lessonLanguage}]:</b> [Definition in ${userLanguage}]</li>
           <li><b>[Element 2 in ${lessonLanguage}]:</b> [Definition in ${userLanguage}]</li>
         </ul>
-        
+
         ## Examples
-        
+
         ### Example 1: Standard Sentence (Original: French, User: Japanese)
         User Input: 'Input: "Il a réussi à convaincre ses collègues malgré les difficultés."'
         Assistant Output:
@@ -8287,7 +8425,7 @@
           <li><b>réussi à convaincre:</b> 説得に成功した、納得させた。</li>
           <li><b>malgré:</b> ～にもかかわらず（対立や譲歩を表す前置詞）。</li>
         </ul>
-        
+
         ### Example 2: Contrast/Nuance (Original: Italian, User: German)
         User Input: 'Input: "Nonostante la pioggia, siamo andati al concerto."'
         Assistant Output:
@@ -8299,7 +8437,7 @@
           <li><b>Nonostante:</b> Trotz; obwohl.</li>
           <li><b>siamo andati:</b> wir sind gegangen (Vergangenheitsform von "andare").</li>
         </ul>
-        
+
         ### Example 3: Idiomatic Expression (Original: English, User: Korean)
         User Input: 'Input: "Don't worry, it's not rocket science, you'll figure it out quickly."'
         Assistant Output:
@@ -8311,7 +8449,7 @@
           <li><b>it's not rocket science:</b> (관용구) 몹시 어려운 일이 아니다, 아주 복잡하지 않다.</li>
           <li><b>figure it out:</b> (문제 등을) 해결하다, 이해하다, 답을 알아내다.</li>
         </ul>
-        
+
         ### Example 4: Multiple Sentences (Original: Spanish, User: French)
         User Input: 'Input: "El sol brillaba con fuerza. Los pájaros cantaban en los árboles." 'r
         Assistant Output:
@@ -8326,28 +8464,28 @@
         `;
         const plainTextPrompt = `
         # Conversational Mode & Correction Protocol
-        
+
         ## Context Awareness
         You are in a follow-up state. The user has either:
         1. Explicitly requested a correction to the previous analysis.
         2. Asked a general or referential question.
-        
+
         ## Logic Branching via Intent Detection
-        
+
         ### Condition A: Correction Request
         Trigger: Only when the user explicitly requests a fix of the previously generated word card using direct commands such as "Wrong word", "Fix the base form", "Use X instead of Y", "Correct the IPA".
         Action: Output conversational explanation first (optional), then output the corrected word card wrapped strictly inside <div class="word-card">.
         Restriction:
             - Carefully inspect the "Previous Response" and locate the exact slot requested for modification.
             - Except for the explicitly requested changes, all other content (definitions, contextual explanations, and examples) must be copied verbatim from the "Previous Response".
-        
+
         ### Condition B: General or Referential Query
         Trigger: The user asks a question or makes a general comment.
         Action: Answer in Raw HTML (<p>, <b> <ul>, <li>). Markdown syntax (code blocks, bold, and headers) is forbidden.
         Restriction: Using <div class="word-card"> format is not permitted. This format is reserved for the Correction Protocol (Condition A).
-        
+
         ## Examples
-        
+
         ### Example 1: Strict Correction (no preface needed)
         Scenario: Target Language is English, Presentation Language (User Language) is Japanese. The word "happily" in the context of "He played happily" was incorrectly analyzed with the base form "happy" and the part of speech marked as an adjective (形容詞).
         Previous Response:
@@ -8375,7 +8513,7 @@
                 <li>彼は楽しそうに遊んだ。</li>
             </ul>
         </div>
-        
+
         ### Example 2: Strict Correction with Preface
         Scenario: Target Language is Japanese, Presentation Language (User Language) is Korean. The word "角" in the context of turning a corner ("次の角を右に曲がってください") was incorrectly analyzed with the pronunciation of "horn" ([tsɯno]).
         Previous Response:
@@ -8404,7 +8542,7 @@
                 <li>다음 길모퉁이에서 우회전해 주세요.</li>
             </ul>
         </div>
-        
+
         ### Example 3: General Conversation
         User Input: "Why is English so hard?"
         Assistant Output:
@@ -8798,7 +8936,7 @@
                             fragment.appendChild(document.createTextNode(text.substring(lastIndex, index)));
                         }
                         
-                        const span = createElement("span", { className: "lingQ", textContent: word });
+                        const span = createElement("span", {className: "lingQ", textContent: word});
                         fragment.appendChild(span);
                         
                         lastIndex = index + word.length;
@@ -8910,7 +9048,7 @@
                 :root {
                     --caption-font-size: ${settings.captionFontsize}px;
                 }
-                
+
                 .caption-window.ytp-caption-window-bottom {
                     display: unset !important;
                     width: 90% !important;
@@ -8964,6 +9102,7 @@
             });
             resizeObserver.observe(player);
         }
+        
         if (settings.relocateCaption !== "default") adjustCaptionPosition();
     }
     
