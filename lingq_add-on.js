@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      14.8.0
+// @version      14.8.1
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @grant       GM_xmlhttpRequest
@@ -1775,14 +1775,13 @@
             const playButtonSvg = playButton.querySelector("svg");
             if (!playButtonSvg) return;
             
+            const getLingQSpeed = () => parseFloat(speedLabel?.textContent ?? 1.0);
+            
             const syncPlaybackRate = () => {
-                if (!speedLabel) return;
-                const currentSpeed = parseFloat(speedLabel.textContent) || 1.0;
-                
-                // Reverted: Removed defaultPlaybackRate overwrite to fix initial double-speed glitch
-                if (videoElement.playbackRate !== currentSpeed) {
-                    videoElement.playbackRate = currentSpeed;
-                    console.log('[Sync]', `Playback speed updated to ${currentSpeed}x`);
+                const targetSpeed = getLingQSpeed();
+                if (videoElement.playbackRate !== targetSpeed) {
+                    videoElement.playbackRate = targetSpeed;
+                    console.log('[Sync]', `Playback speed updated to ${targetSpeed}x`);
                 }
             };
             
@@ -1790,18 +1789,44 @@
                 // 1. Sync Play/Pause State
                 const isLingQPlaying = playButtonSvg.classList.contains("svg-icon--pause");
                 if (isLingQPlaying && videoElement.paused) {
-                    videoElement.play().catch(() => {
-                    });
+                    videoElement.play().catch(() => {});
                 } else if (!isLingQPlaying && !videoElement.paused) {
                     videoElement.pause();
                 }
                 
                 // 2. Sync Precise Timeline
                 const preciseTargetTime = parseFloat(sliderHandle.getAttribute("aria-valuenow")) || 0;
-                console.log(`video time: ${videoElement.currentTime}, controller time: ${preciseTargetTime}, diff: ${videoElement.currentTime - preciseTargetTime}`); // FIXME
-                if (Math.abs(videoElement.currentTime - preciseTargetTime) > 0.5) {
+                const diff = videoElement.currentTime - preciseTargetTime;
+                
+                // Adjust threshold based on paused state (no seek delay when paused)
+                const syncThreshold = videoElement.paused ? 0.1 : 0.5;
+                let syncStatus = "In Sync";
+                
+                if (Math.abs(diff) > syncThreshold) {
+                    // Hard Seek: Compensate for average seek delay when playing (~0.3s)
                     const seekOffset = (!videoElement.paused) ? 0.3 : 0;
                     videoElement.currentTime = preciseTargetTime + seekOffset;
+                    syncStatus = "Hard Seek";
+                } else if (!videoElement.paused) {
+                    // Soft Sync: Adjust playback rate slightly to catch up without stuttering
+                    const baseSpeed = getLingQSpeed();
+                    const catchUpThreshold = 0.15;
+                    
+                    if (diff < -catchUpThreshold) {
+                        // Video is behind: play 10% faster to catch up
+                        videoElement.playbackRate = baseSpeed * 1.1;
+                        syncStatus = "Soft Sync (Speed Up)";
+                    } else if (diff > catchUpThreshold) {
+                        // Video is ahead: play 10% slower to wait
+                        videoElement.playbackRate = baseSpeed * 0.9;
+                        syncStatus = "Soft Sync (Slow Down)";
+                    } else {
+                        // Within stable range: restore base speed
+                        if (videoElement.playbackRate !== baseSpeed) {
+                            videoElement.playbackRate = baseSpeed;
+                            syncStatus = "Restored Speed";
+                        }
+                    }
                 }
                 
                 // 3. Update Mini Progress Bar
