@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      14.8.2
+// @version      14.8.3
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @grant       GM_xmlhttpRequest
@@ -1871,245 +1871,243 @@
         }
         
         function findBestMatchingFiles(files, lessonTitle) {
-            const titleTokens = lessonTitle.toLowerCase().split(/[\s\[\]\(\)-_]+/).filter(Boolean);
+            const targetTitle = lessonTitle.toLowerCase().trim();
             
             let bestVideo = null;
-            let bestVideoScore = -1;
             let bestSub = null;
-            let bestSubScore = -1;
             
             for (const file of files) {
                 const nameLower = file.name.toLowerCase();
-                let score = 0;
-                for (const token of titleTokens) {
-                    if (nameLower.includes(token)) score++;
-                }
                 
-                if (nameLower.includes(lessonTitle.toLowerCase())) score += 100;
-                
-                if (score === 0) continue;
+                if (!nameLower.includes(targetTitle)) continue;
                 
                 if (file.type.startsWith("video/") || nameLower.endsWith(".mp4")) {
-                    if (score > bestVideoScore) {
-                        bestVideoScore = score;
-                        bestVideo = file;
-                    }
+                    if (!bestVideo) bestVideo = file;
                 } else if (nameLower.endsWith(".srt") || nameLower.endsWith(".vtt")) {
-                    if (score > bestSubScore) {
-                        bestSubScore = score;
-                        bestSub = file;
-                    }
+                    if (!bestSub) bestSub = file;
                 }
             }
             
             return {video: bestVideo, sub: bestSub};
         }
         
-        const lessonReader = document.getElementById("lesson-reader");
-        if (!lessonReader) return;
-        
-        const currentStyle = settings.styleType[getLessonLanguage()];
-        let container = document.getElementById("local-video-container");
-        
-        if (currentStyle !== "localVideo") {
-            if (container) container.style.display = "none";
-            return;
-        }
-        
-        if (container) {
-            container.style.display = "flex";
-            return;
-        }
-        
-        container = createElement("div", {id: "local-video-container"});
-        
-        const setupBox = createElement("div", {className: "local-video-setup-box"});
-        const title = createElement("span", {
-            style: "font-weight: bold; font-size: 1.1em;",
-            textContent: "Local Video Player Setup"
-        });
-        
-        let selectedVideoFile = null;
-        let selectedSubtitleFile = null;
-        
-        const buttonRow = createElement("div", {
-            style: "display: flex; gap: 10px; width: 100%; margin-bottom: 5px;"
-        });
-        
-        const fileInput = createElement("input", {
-            className: "local-video-file-input",
-            type: "file",
-            multiple: true,
-            accept: "video/*,.srt,.vtt",
-            style: "display: none;"
-        });
-        const fileLabel = createElement("label", {
-            className: "local-video-button",
-            style: "flex: 1; text-align: center;",
-            textContent: "Choose Files"
-        });
-        fileLabel.appendChild(fileInput);
-        
-        const folderInput = createElement("input", {
-            className: "local-video-folder-input",
-            type: "file",
-            webkitdirectory: true,
-            directory: true,
-            style: "display: none;"
-        });
-        const folderLabel = createElement("label", {
-            className: "local-video-button",
-            style: "flex: 1; text-align: center;",
-            textContent: "Select Folder (Auto-match)"
-        });
-        folderLabel.appendChild(folderInput);
-        
-        buttonRow.append(fileLabel, folderLabel);
-        
-        const startButton = createElement("button", {
-            className: "local-video-button",
-            textContent: "Start Player",
-            disabled: true,
-        });
-        
-        setupBox.append(title, buttonRow, startButton);
-        container.appendChild(setupBox);
-        lessonReader.appendChild(container);
-        
-        const videoElement = createElement("video", {
-            id: "addonLocalVideo",
-            muted: false,
-            style: "width: 100%; height: 100%; flex-grow: 1; object-fit: contain; display: none; cursor: pointer;"
-        });
-        
-        videoElement.addEventListener("click", () => {
-            clickElement(".section--player button.lingq-audio-player");
-        });
-        
-        const trackElement = createElement("track", {
-            kind: "subtitles",
-            srclang: "en",
-            label: "Local Sub",
-            id: "addonLocalVideoTrack"
-        });
-        
-        videoElement.appendChild(trackElement);
-        container.appendChild(videoElement);
-        
-        const progressWrapper = createElement("div", {
-            className: "local-video-progress-wrapper",
-            style: "display: none;"
-        });
-        const miniProgressBar = createElement("div", {id: "local-video-mini-progress"});
-        progressWrapper.appendChild(miniProgressBar);
-        container.appendChild(progressWrapper);
-        
-        attemptAutoMatch = async function attemptAutoMatch() {
-            if (!cachedLocalVideoFiles) return false;
+        function buildLocalVideoUI() {
+            const lessonReader = document.getElementById("lesson-reader");
+            if (!lessonReader) return;
             
-            const titleWrapper = await waitForElement(".sentence-text-head > .title-wrapper", 3000);
-            if (!titleWrapper) return false;
+            const currentStyle = settings.styleType[getLessonLanguage()];
+            let container = document.getElementById("local-video-container");
             
-            const title = getLessonTitle();
-            if (!title) return false;
-            
-            const match = findBestMatchingFiles(cachedLocalVideoFiles, title);
-            if (match.video) {
-                selectedVideoFile = match.video;
-                selectedSubtitleFile = match.sub;
-                
-                let statusText = `${selectedVideoFile.name}`;
-                if (selectedSubtitleFile) statusText += ` + ${selectedSubtitleFile.name}`;
-                
-                folderLabel.textContent = statusText;
-                folderLabel.appendChild(folderInput);
-                startButton.disabled = false;
-                return true;
+            if (currentStyle !== "localVideo") {
+                if (container) container.style.display = "none";
+                return;
             }
-            return false;
-        }
-        
-        fileInput.addEventListener("change", (event) => {
-            const files = Array.from(event.target.files).slice(0, 2);
-            selectedVideoFile = files.find(file => file.type.startsWith("video/"));
-            selectedSubtitleFile = files.find(file => file.name.endsWith(".srt") || file.name.endsWith(".vtt"));
             
-            if (selectedVideoFile) {
-                let statusText = `${selectedVideoFile.name}`;
-                if (selectedSubtitleFile) statusText += ` + ${selectedSubtitleFile.name}`;
-                else statusText += ` (Default Subtitle)`;
-                fileLabel.textContent = statusText;
-                fileLabel.appendChild(fileInput);
-                startButton.disabled = false;
-            } else {
-                fileLabel.textContent = "Missing Video File! Try Again.";
-                fileLabel.appendChild(fileInput);
-                startButton.disabled = true;
-                selectedSubtitleFile = null;
+            if (container) {
+                container.style.display = "flex";
+                return;
             }
-        });
-        
-        folderInput.addEventListener("change", async (event) => {
-            const files = Array.from(event.target.files);
-            if (files.length > 0) {
-                cachedLocalVideoFiles = files;
-                const matched = await attemptAutoMatch();
-                if (!matched) {
-                    folderLabel.textContent = "No match found in folder.";
-                    folderLabel.appendChild(folderInput);
+            
+            container = createElement("div", {id: "local-video-container"});
+            
+            const setupBox = createElement("div", {className: "local-video-setup-box"});
+            const title = createElement("span", {
+                style: "font-weight: bold; font-size: 1.1em;",
+                textContent: "Local Video Player Setup"
+            });
+            
+            let selectedVideoFile = null;
+            let selectedSubtitleFile = null;
+            
+            const buttonRow = createElement("div", {
+                style: "display: flex; gap: 10px; width: 100%; margin-bottom: 5px;"
+            });
+            
+            const fileInput = createElement("input", {
+                className: "local-video-file-input",
+                type: "file",
+                multiple: true,
+                accept: "video/*,.srt,.vtt",
+                style: "display: none;"
+            });
+            const fileLabel = createElement("label", {
+                className: "local-video-button",
+                style: "flex: 1; text-align: center;",
+                textContent: "Choose Files"
+            });
+            fileLabel.appendChild(fileInput);
+            
+            const folderInput = createElement("input", {
+                className: "local-video-folder-input",
+                type: "file",
+                webkitdirectory: true,
+                directory: true,
+                style: "display: none;"
+            });
+            const folderLabel = createElement("label", {
+                className: "local-video-button",
+                style: "flex: 1; text-align: center;",
+                textContent: "Select Folder (Auto-match)"
+            });
+            folderLabel.appendChild(folderInput);
+            
+            buttonRow.append(fileLabel, folderLabel);
+            
+            const startButton = createElement("button", {
+                className: "local-video-button",
+                textContent: "Start Player",
+                disabled: true,
+            });
+            
+            const handleSpacebarStart = (event) => {
+                if (event.code === "Space" && !startButton.disabled && setupBox.style.display !== "none") {
+                    startButton.click();
                 }
+            };
+            document.addEventListener("keydown", handleSpacebarStart);
+            
+            setupBox.append(title, buttonRow, startButton);
+            container.appendChild(setupBox);
+            lessonReader.appendChild(container);
+            
+            const videoElement = createElement("video", {
+                id: "addonLocalVideo",
+                muted: false,
+                style: "width: 100%; height: 100%; flex-grow: 1; object-fit: contain; display: none; cursor: pointer;"
+            });
+            
+            videoElement.addEventListener("click", () => {
+                clickElement(".section--player button.lingq-audio-player");
+            });
+            
+            const trackElement = createElement("track", {
+                kind: "subtitles",
+                srclang: "en",
+                label: "Local Sub",
+                id: "addonLocalVideoTrack"
+            });
+            
+            videoElement.appendChild(trackElement);
+            container.appendChild(videoElement);
+            
+            const progressWrapper = createElement("div", {
+                className: "local-video-progress-wrapper",
+                style: "display: none;"
+            });
+            const miniProgressBar = createElement("div", {id: "local-video-mini-progress"});
+            progressWrapper.appendChild(miniProgressBar);
+            container.appendChild(progressWrapper);
+            
+            attemptAutoMatch = async function attemptAutoMatch() {
+                if (!cachedLocalVideoFiles) return false;
+                
+                const titleWrapper = await waitForElement(".sentence-text-head > .title-wrapper", 3000);
+                if (!titleWrapper) return false;
+                
+                const title = getLessonTitle();
+                if (!title) return false;
+                
+                const match = findBestMatchingFiles(cachedLocalVideoFiles, title);
+                if (match.video) {
+                    selectedVideoFile = match.video;
+                    selectedSubtitleFile = match.sub;
+                    
+                    let statusText = `${selectedVideoFile.name}`;
+                    if (selectedSubtitleFile) statusText += ` + ${selectedSubtitleFile.name}`;
+                    
+                    folderLabel.textContent = statusText;
+                    folderLabel.appendChild(folderInput);
+                    startButton.disabled = false;
+                    return true;
+                }
+                return false;
             }
-        });
-        
-        if (cachedLocalVideoFiles) {
-            attemptAutoMatch();
+            
+            fileInput.addEventListener("change", (event) => {
+                const files = Array.from(event.target.files).slice(0, 2);
+                selectedVideoFile = files.find(file => file.type.startsWith("video/"));
+                selectedSubtitleFile = files.find(file => file.name.endsWith(".srt") || file.name.endsWith(".vtt"));
+                
+                if (selectedVideoFile) {
+                    let statusText = `${selectedVideoFile.name}`;
+                    if (selectedSubtitleFile) statusText += ` + ${selectedSubtitleFile.name}`;
+                    else statusText += ` (Default Subtitle)`;
+                    fileLabel.textContent = statusText;
+                    fileLabel.appendChild(fileInput);
+                    startButton.disabled = false;
+                } else {
+                    fileLabel.textContent = "Missing Video File! Try Again.";
+                    fileLabel.appendChild(fileInput);
+                    startButton.disabled = true;
+                    selectedSubtitleFile = null;
+                }
+            });
+            
+            folderInput.addEventListener("change", async (event) => {
+                const files = Array.from(event.target.files);
+                if (files.length > 0) {
+                    cachedLocalVideoFiles = files;
+                    const matched = await attemptAutoMatch();
+                    if (!matched) {
+                        folderLabel.textContent = "No match found in folder.";
+                        folderLabel.appendChild(folderInput);
+                    }
+                }
+            });
+            
+            if (cachedLocalVideoFiles) {
+                attemptAutoMatch();
+            }
+            
+            startButton.addEventListener("click", () => {
+                if (!selectedVideoFile) return;
+                
+                videoElement.src = URL.createObjectURL(selectedVideoFile);
+                
+                if (selectedSubtitleFile) {
+                    const reader = new FileReader();
+                    reader.onload = (e) => {
+                        const text = e.target.result;
+                        const vttUrl = selectedSubtitleFile.name.endsWith(".srt")
+                            ? convertSrtToVttBlobUrl(text)
+                            : URL.createObjectURL(selectedSubtitleFile);
+                        
+                        trackElement.src = vttUrl;
+                        trackElement.track.mode = "showing";
+                    };
+                    reader.readAsText(selectedSubtitleFile);
+                } else {
+                    const lessonLanguage = getLessonLanguage();
+                    const lessonId = getLessonId();
+                    
+                    getLessonSentences(lessonLanguage, lessonId)
+                        .then((sentences) => {
+                            if (sentences && sentences.length > 0) {
+                                trackElement.src = convertSentencesToVttBlobUrl(sentences);
+                                trackElement.track.mode = "showing";
+                            }
+                        })
+                        .catch((error) => {
+                            console.error("Failed to fetch default subtitles:", error);
+                        });
+                }
+                
+                setupBox.style.display = "none";
+                videoElement.style.display = "block";
+                progressWrapper.style.display = "block";
+                
+                const playButton = document.querySelector(".section--player button.lingq-audio-player");
+                const playButtonSvg = playButton?.querySelector("svg");
+                if (playButton && playButtonSvg && playButtonSvg.classList.contains("svg-icon--play")) {
+                    playButton.click();
+                }
+                
+                bindLingQPlayerControls(videoElement);
+                document.removeEventListener("keydown", handleSpacebarStart);
+            });
         }
         
-        startButton.addEventListener("click", () => {
-            if (!selectedVideoFile) return;
-            
-            videoElement.src = URL.createObjectURL(selectedVideoFile);
-            
-            if (selectedSubtitleFile) {
-                const reader = new FileReader();
-                reader.onload = (e) => {
-                    const text = e.target.result;
-                    const vttUrl = selectedSubtitleFile.name.endsWith(".srt")
-                        ? convertSrtToVttBlobUrl(text)
-                        : URL.createObjectURL(selectedSubtitleFile);
-                    
-                    trackElement.src = vttUrl;
-                    trackElement.track.mode = "showing";
-                };
-                reader.readAsText(selectedSubtitleFile);
-            } else {
-                const lessonLanguage = getLessonLanguage();
-                const lessonId = getLessonId();
-                
-                getLessonSentences(lessonLanguage, lessonId)
-                    .then((sentences) => {
-                        if (sentences && sentences.length > 0) {
-                            trackElement.src = convertSentencesToVttBlobUrl(sentences);
-                            trackElement.track.mode = "showing";
-                        }
-                    })
-                    .catch((error) => {
-                        console.error("Failed to fetch default subtitles:", error);
-                    });
-            }
-            
-            setupBox.style.display = "none";
-            videoElement.style.display = "block";
-            progressWrapper.style.display = "block";
-            
-            const playButton = document.querySelector(".section--player button.lingq-audio-player");
-            const playButtonSvg = playButton?.querySelector("svg");
-            if (playButton && playButtonSvg && playButtonSvg.classList.contains("svg-icon--play")) {
-                playButton.click();
-            }
-            
-            bindLingQPlayerControls(videoElement);
-        });
+        buildLocalVideoUI();
     }
     
     /* Features */
