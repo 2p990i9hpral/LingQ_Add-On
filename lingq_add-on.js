@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      14.8.1
+// @version      14.8.2
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @grant       GM_xmlhttpRequest
@@ -795,7 +795,7 @@
     }
     
     function addElementToNavBar(element) {
-        const anchorElement = document.querySelector('#app > .main-wrapper > [data-slot="sidebar-wrapper"] > header > div > a');
+        const anchorElement = document.querySelector('#app > div > div > header > div > div:first-child');
         if (!anchorElement) return;
         
         const headerDiv = anchorElement.parentElement;
