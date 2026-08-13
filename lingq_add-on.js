@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      14.8.3
+// @version      14.8.4
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @grant       GM_xmlhttpRequest
@@ -119,6 +119,9 @@
     
     const llmModelsByProvider = {
         "openai": [
+            {value: "gpt-5.6-sol", text: "GPT-5.6 Sol ($5/$30)"},
+            {value: "gpt-5.6-terra", text: "GPT-5.6 Terra ($2/$12)"},
+            {value: "gpt-5.6-luna", text: "GPT-5.6 Luna ($0.2/$1.2)"},
             {value: "gpt-5.5", text: "GPT-5.5 ($5/$30)"},
             {value: "gpt-5.4", text: "GPT-5.4 ($2.5/$15)"},
             {value: "gpt-5.4-mini", text: "GPT-5.4 mini ($0.75/$4.5)"}
@@ -1789,7 +1792,8 @@
                 // 1. Sync Play/Pause State
                 const isLingQPlaying = playButtonSvg.classList.contains("svg-icon--pause");
                 if (isLingQPlaying && videoElement.paused) {
-                    videoElement.play().catch(() => {});
+                    videoElement.play().catch(() => {
+                    });
                 } else if (!isLingQPlaying && !videoElement.paused) {
                     videoElement.pause();
                 }
@@ -6759,16 +6763,24 @@
                         {role: "user", content: content}
                     ]
                     
+                    let summaryRafId = null;
                     await streamOpenAIResponse(
                         provider, apikey, model, summary_history,
                         (chunk) => {
                             quickSummary += chunk;
-                            const summaryContent = document.querySelector(".quick-summary .summary-content");
-                            if (summaryContent) summaryContent.innerHTML = quickSummary;
+                            if (!summaryRafId) {
+                                summaryRafId = requestAnimationFrame(() => {
+                                    const summaryContent = document.querySelector(".quick-summary .summary-content");
+                                    if (summaryContent) summaryContent.innerHTML = quickSummary;
+                                    summaryRafId = null;
+                                });
+                            }
                         },
                         (finalContent) => {
                             quickSummary = finalContent;
                             console.log('[Quick summary]\n', finalContent);
+                            const summaryContent = document.querySelector(".quick-summary .summary-content");
+                            if (summaryContent) summaryContent.innerHTML = quickSummary;
                         },
                         (error) => {
                             console.error("Failed to fetch summary:", error);
@@ -6827,7 +6839,18 @@
                     summaryElement.append(btnContainer);
                     
                     changeScrollAmount(".quick-summary", 0.2);
-                    summaryElement.addEventListener('wheel', (event) => event.stopPropagation());
+                    summaryElement.addEventListener('wheel', (event) => {
+                        const {scrollTop, scrollHeight, clientHeight} = summaryElement;
+                        const isScrollingUp = event.deltaY < 0;
+                        const isScrollingDown = event.deltaY > 0;
+                        
+                        const isAtTop = scrollTop <= 0;
+                        const isAtBottom = scrollTop + clientHeight >= scrollHeight - 1;
+                        
+                        if ((isScrollingUp && !isAtTop) || (isScrollingDown && !isAtBottom)) {
+                            event.stopPropagation();
+                        }
+                    }, {passive: false});
                     section.parentNode.prepend(summaryElement);
                 }
                 
@@ -7033,13 +7056,6 @@
                 
                 await waitForElement('.sentence-text p', 10000);
                 await generateLessonSummary(node);
-                
-                const summaryElement = node.querySelector(".quick-summary");
-                if (summaryElement) {
-                    summaryElement.addEventListener('wheel', (event) => {
-                        event.stopPropagation();
-                    }, {passive: false});
-                }
                 
                 setupNavClickListeners();
             }
@@ -7383,10 +7399,6 @@
                                 
                                 if (newValue === currentText) return;
                                 
-                                navigator.clipboard.writeText(newValue)
-                                    .then(() => showToast("Pronunciation Copied!", true))
-                                    .catch(() => showToast("Failed to copy pronunciation.", false));
-                                
                                 const storedIdx = botMessageDiv.dataset.wordIdx;
                                 if (!storedIdx) return;
                                 
@@ -7434,14 +7446,6 @@
                     const exampleTranslation = exampleTranslationElem?.textContent?.trim() || "";
                     
                     if (!word) return;
-                    
-                    /*
-                    wordElem.addEventListener("click", async () => {
-                        navigator.clipboard.writeText(word)
-                            .then(() => showToast("Word Copied!", true))
-                            .catch(() => showToast("Failed to copy word.", false));
-                    });
-                    */
                     
                     if (meaningElem) {
                         meaningElem.addEventListener("click", async (e) => {
@@ -7634,27 +7638,6 @@
                             chatContainer.addEventListener("scroll", closePopup);
                         });
                         
-                        getDbClient()
-                            .from(getTableName())
-                            .select("*", {count: "exact", head: true})
-                            .eq("word", word)
-                            .then(({count, error}) => {
-                                if (error) {
-                                    console.error("Flashcard count error:", error);
-                                    return;
-                                }
-                                if (count > 0) {
-                                    const existingBadge = wordElem.querySelector(".flashcard-count-badge");
-                                    if (existingBadge) return;
-                                    const badge = createElement("span", {
-                                        className: "flashcard-count-badge",
-                                        ariaHidden: "true",
-                                    });
-                                    syncFlashcardBadge(badge, count);
-                                    wordElem.appendChild(badge);
-                                }
-                            });
-                        
                         const newItem = {
                             ...(settings.useCentralDb && {user_id: centralUserId}),
                             language: getLessonLanguage(),
@@ -7738,7 +7721,35 @@
                             const regenerateButton = messageButtonContainer.querySelector(".regenerate-button");
                             if (regenerateButton) messageButtonContainer.insertBefore(saveFlashcardButton, regenerateButton);
                             else messageButtonContainer.appendChild(saveFlashcardButton);
+                        } else {
+                            saveFlashcardButton.disabled = true;
                         }
+                        
+                        getDbClient()
+                            .from(getTableName())
+                            .select("*", {count: "exact", head: true})
+                            .eq("word", word)
+                            .then(({count, error}) => {
+                                if (error) {
+                                    console.error("Flashcard count error:", error);
+                                    return;
+                                }
+                                if (count > 0) {
+                                    const existingBadge = wordElem.querySelector(".flashcard-count-badge");
+                                    if (existingBadge) return;
+                                    const badge = createElement("span", {
+                                        className: "flashcard-count-badge",
+                                        ariaHidden: "true",
+                                    });
+                                    syncFlashcardBadge(badge, count);
+                                    wordElem.appendChild(badge);
+                                }
+                            })
+                            .finally(() => {
+                                if (saveFlashcardButton) {
+                                    saveFlashcardButton.disabled = false;
+                                }
+                            });
                     }
                 }
                 
@@ -7805,6 +7816,7 @@
                     }
                     const cacheToUse = (isWordRequest && (llmProvider === "google" || llmProvider === "vertex")) ? currentGeminiCacheName : null;
                     
+                    let chatRafId = null;
                     await streamOpenAIResponse(
                         llmProvider,
                         llmApiKey,
@@ -7814,12 +7826,23 @@
                             const content = typeof chunk === "string" ? chunk : chunk.choices?.[0]?.delta?.content;
                             if (content) {
                                 fullBotResponse += content;
-                                botMessageDiv.innerHTML = fullBotResponse;
-                                const isNearBottom = chatContainer.scrollTop + chatContainer.clientHeight >= chatContainer.scrollHeight - 80;
-                                if (isNearBottom) smoothScrollTo(chatContainer, chatContainer.scrollHeight, 100);
+                                
+                                if (!chatRafId) {
+                                    chatRafId = requestAnimationFrame(() => {
+                                        botMessageDiv.innerHTML = fullBotResponse;
+                                        const isNearBottom = chatContainer.scrollTop + chatContainer.clientHeight >= chatContainer.scrollHeight - 80;
+                                        if (isNearBottom) smoothScrollTo(chatContainer, chatContainer.scrollHeight, 100);
+                                        
+                                        chatRafId = null;
+                                    });
+                                }
                             }
                         },
                         (finalContent) => {
+                            if (chatRafId) {
+                                cancelAnimationFrame(chatRafId);
+                                chatRafId = null;
+                            }
                             const stripped = finalContent.replace(/^```(?:\w+\n)?/, '').replace(/```\s*$/, '');
                             const cleanedContent = shouldConvertToHTML(stripped)
                                 ? convertMarkdownToHTML(stripped)
@@ -8209,8 +8232,8 @@
             - Identify a single standard dictionary definition of the Base Form in ${userLanguage} that best covers the sense used in the context.
             - Select the definition at the correct semantic granularity: broad enough to reflect the word's general dictionary entry, yet specific enough to distinguish it from other listed senses.
             - Prioritize formal equivalence: if the target language has a direct lexical counterpart (e.g., a cognate or loanword), prefer it over a paraphrase or a semantically narrowed synonym.
-            - Single lexical item constraint: The definition must be a single word or a single fixed phrase. A comma-separated string is prohibited by default — this applies whether the additional items are synonyms, nuance complements, or context variants.
-            - Permitted exception: A comma may be used only when ${userLanguage} genuinely has no single lexical item corresponding to the concept, so that a compound expression is structurally unavoidable (typically for abstract or culture-bound concepts). In that case, the comma functions as an internal separator within one fixed expression, not as a list of alternatives.
+            - Single lexical item constraint: The definition must be a single word or a single fixed phrase. A comma-separated string and any form of listing multiple candidate translations are prohibited.
+            - Permitted exception: Even if ${userLanguage} has no perfect one-to-one equivalent (typically for abstract or culture-bound concepts), you must still commit to the single closest word or fixed phrase. Any nuance the chosen word fails to capture must be placed in the Contextual Explanation field instead.
             - Resolution rule: If more than one candidate translation is possible, select the one that best represents the general dictionary sense per the granularity rule above, and place any remaining nuance, tense implication, or context-specific coloring into the Contextual Explanation field instead.
             - Do not use parentheses for alternative meanings or additional explanation.
             - Output must be a definitive, short phrase or single word.
@@ -8380,7 +8403,7 @@
         Assistant Output:
         <div class="word-card">
             <b>saudade</b> <span>[sawˈdadʒi]</span> <i>(noun)</i>
-            <p>nostalgic longing, profound melancholy</p>
+            <p>nostalgic longing</p>
             <hr>
             <p>A deep emotional state of melancholic longing for a person, place, or time that is absent. Because English lacks a single exact lexical equivalent for this culturally specific concept, a descriptive compound phrase separated by a comma is exceptionally permitted here according to the rule.</p>
             <hr>
