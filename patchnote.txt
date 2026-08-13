@@ -82,3 +82,31 @@
 - 10.7: Make each language have its own layout setting.
 
 - 11.0: Append a flashcard generation history plot to the flashcard manager popup.
+- 11.2: support the Claude API endpoint.
+- 11.3: Implement response streaming for the quick summary.
+- 11.4: Support multi-line input in the chat widget.
+- 11.7: The page automatically turns after the last sentence is finished.
+
+- 12.1: Set up Supabase auth, add a built-in flashcard database option.
+- 12.2: The media player is now automatically closed after finishing a lesson.
+- 12.3: Enable the shift + arrow key action on the lesson finish page.
+- 12.5: Add subtitle relocation and font size adjusting logic for embedded YouTube videos.
+- 12.7: Add options for custom fonts, end-page skipping, and video caption relocation.
+- 12.9: Enhance chat messages by adding a delete button. Improve word-card behavior.
+- 12.10: Implement a notepad widget feature. Support new models (Gemini 3.5 Flash, Gemini 3.1 Flash-Lite).
+- 12.11: Develop new video layouts and improve the subtitle location adjusting logic.
+
+- 13.0: Introduce the local video layout and player feature.
+- 13.1: Implement a "use lesson subtitle" option. Subtitle font size is now determined by the caption-font-size option.
+- 13.2: Add more video layout options and unify layout logic for online and local videos.
+- 13.3: Add Cerebras as a new LLM provider.
+- 13.4: Separate the LLM provider and model selector. Implement local video resetting logic.
+- 13.5: Redesign the quick-summary section and implement automatic promo-banner closing logic.
+
+- 14.0: Implement explicit caching and usage logging for Google Gemini models.
+- 14.2: Support new Gemini models and improve word-phrase system prompts.
+- 14.3: Make the difficulty of the quick-summary adjustable and add a "Read Quick Summary" button.
+- 14.4: Implement phonetic annotation in the quick-summary and lazy loading for Gemini caching. Add Google Vertex as a new LLM provider.
+- 14.5: Make the pronunciation field editable. Make LingQ default audio player's volume adjustable and make local videos use their own audio tracks.
+- 14.6: Enhance the local video player with automatic file (folder) selection. Implement soft syncing,  and space-key playback for local video player.
+- 14.7: Support new GPT models, and optimize LLM streaming logic for better performance.
