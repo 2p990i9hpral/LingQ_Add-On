@@ -45,8 +45,6 @@ Customizable layouts, AI-powered chat & TTS, flashcard system, local video playe
 -   **AI TTS:**
     AI-based text-to-speech for words, sentences, and full lesson audio generation.
 
-    <img src="images/lesson audio generation.png" width=800></br>
-
 -   **Appearance Customization:**
     Dark/Light themes, custom color palette, adjustable font size and line height, and custom font support.
 
