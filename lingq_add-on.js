@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      14.9.0
+// @version      14.9.1
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @grant       GM_xmlhttpRequest
@@ -1555,7 +1555,7 @@
         }
         
         if (provider === "google" || provider === "vertex") {
-            body.reasoning_effort = "minimal";
+            body.reasoning_effort = "low";
             if (cacheName) {
                 body.extra_body = {google: {cached_content: cacheName}};
             }
@@ -3075,10 +3075,26 @@
                             className: "popup-row",
                             style: "display: flex; justify-content: flex-end; gap: 10px; margin: 10px 0;"
                         },
-                        createElement("button", {
-                            id: "flashcardAiReportBtn",
-                            className: "popup-button"
-                        }, "AI Report"),
+                        createElement("div", {className: "split-btn-group"},
+                            createElement("button", {
+                                id: "flashcardAiReportBtn",
+                                className: "popup-button split-btn-main"
+                            }, "AI Report"),
+                            createElement("button", {
+                                id: "flashcardAiReportDropdownBtn",
+                                className: "popup-button split-btn-dropdown"
+                            }, "▾"),
+                            createElement("div", {
+                                id: "flashcardAiReportMenu",
+                                className: "split-btn-menu",
+                                style: "display: none;"
+                            },
+                                createElement("div", {className: "split-btn-menu-item", dataset: {words: 50}}, "50 words"),
+                                createElement("div", {className: "split-btn-menu-item", dataset: {words: 100}}, "100 words"),
+                                createElement("div", {className: "split-btn-menu-item", dataset: {words: 300}}, "300 words"),
+                                createElement("div", {className: "split-btn-menu-item", dataset: {words: 500}}, "500 words")
+                            )
+                        ),
                         createElement("button", {
                             id: "flashcardCsvDownload",
                             className: "popup-button"
@@ -4699,111 +4715,168 @@
                 }
             });
             
-            document.getElementById("flashcardAiReportBtn").addEventListener("click", async (event) => {
-                const btn = event.currentTarget;
+            const reportMainBtn = document.getElementById("flashcardAiReportBtn");
+            const reportDropdownBtn = document.getElementById("flashcardAiReportDropdownBtn");
+            const reportMenu = document.getElementById("flashcardAiReportMenu");
+
+            reportDropdownBtn.addEventListener("click", (e) => {
+                e.stopPropagation();
+                reportMenu.style.display = reportMenu.style.display === "none" ? "flex" : "none";
+            });
+
+            document.addEventListener("click", () => {
+                if (reportMenu) reportMenu.style.display = "none";
+            });
+
+            async function generateAiReport(limitCount) {
+                limitCount = Number.isInteger(limitCount) && limitCount > 0 ? limitCount : 100;
                 const listView = document.getElementById("flashcardListView");
                 const reportContainer = document.getElementById("flashcardReportContainer");
 
-                if (reportContainer.style.display === "none" || reportContainer.style.display === "") {
-                    listView.style.display = "none";
-                    reportContainer.style.display = "flex";
-                    btn.textContent = "Back to List";
-                    reportContainer.innerHTML = "<em>Generating AI Learning Report...</em>";
+                listView.style.display = "none";
+                reportContainer.style.display = "flex";
+                reportMainBtn.textContent = "Back to List";
+                reportDropdownBtn.style.display = "none";
+                reportMainBtn.classList.add("single-btn-mode");
+                
+                reportContainer.innerHTML = `
+                    <div id="flashcardReportHeader">
+                        A report based on recent ${limitCount} words
+                    </div>
+                    <div id="flashcardReportBody" style="display: flex; flex-direction: column;">
+                        <em>Generating AI Learning Report<span class="loading-text"></span></em>
+                    </div>
+                `;
 
-                    try {
-                        const {data, error} = await getDbClient()
-                            .from(getTableName())
-                            .select("idx, word, meaning, explanation")
-                            .eq("language", language)
-                            .order("idx", {ascending: false})
-                            .limit(500);
+                try {
+                    const {data, error} = await getDbClient()
+                        .from(getTableName())
+                        .select("idx, word, meaning, explanation")
+                        .eq("language", language)
+                        .order("idx", {ascending: false})
+                        .limit(limitCount);
 
-                        if (error) throw error;
-                        
-                        if (!data || data.length === 0) {
-                            reportContainer.innerHTML = "<em>No flashcards found for the current language.</em>";
-                            return;
-                        }
+                    if (error) throw error;
+                    
+                    const reportHeader = document.getElementById("flashcardReportHeader");
+                    const reportBody = document.getElementById("flashcardReportBody");
 
-                        let reportContent = "";
-                        reportContainer.innerHTML = "";
-                        
-                        const userDictLang = await getDictionaryLanguage();
-                        const localePairs = await getDictionaryLocalePairs();
-                        const userNativeLang = localePairs[userDictLang];
+                    if (!data || data.length === 0) {
+                        reportBody.innerHTML = "<em>No flashcards found for the current language.</em>";
+                        return;
+                    }
+                    
+                    if (reportHeader) {
+                        reportHeader.textContent = `A report based on recent ${data.length} words`;
+                    }
 
-                        const wordsCSV = data.reverse().map(item => `${item.word}, ${item.meaning}, ${item.explanation}`).join('\n');
-                        const prompt = `
-                        Act as a corpus linguist and SLA (Second Language Acquisition) diagnostician, auditing a learner's vocabulary acquisition log for ${language}.
-                        
-                        Context: The JSON array below lists words the learner marked as unknown recently, each with 'word', 'meaning', 'explanation'. IDs mark chronological order of encounter.
-                        
-                        Analyze using these directives, in prose paragraphs — never as one bullet per word. The goal is a thematic and difficulty trajectory, not an inventory of individual word facts.
-                        
-                        1. Source & Trajectory Narrative: Group words by ID proximity and explanation content to infer the probable content type per phase (news article, casual essay, exam material, product manual, livestream/subtitle, etc.). Read ID order as a timeline, and explain why the shift from one phase to the next likely happened. State the general proficiency range this reflects in qualitative terms only (e.g., intermediate entering advanced) — never enumerate exact counts or percentages.
-                        2. Thematic Cluster & Difficulty Fusion: Group the words into named thematic clusters (by ID proximity and explanation content). For each cluster, write one flowing paragraph that: names the cluster, lists its member words inline (not as a table or per-word bullet list), infers the likely content source, and states the cluster's difficulty band (JLPT/CEFR/HSK) together with the domain-level reason for that band — e.g., whether it demands compounding kanji literacy, cultural schema unrelated to raw language skill, or nuance beyond dictionary definition. Close with what mastering this cluster signals about the learner's current stage. End the section with one synthesis sentence giving the overall difficulty band across all clusters and what the phase shift represents (e.g., moving from exam-oriented to life-oriented acquisition).
-                        3. Notable Patterns: Independent of any single cluster, note aggregate characteristics of the whole set — density of idiomatic/phrasal expressions versus single-morpheme vocabulary, density of domain-specific jargon, mixed written/spoken register, or spelling irregularities suggesting audio/subtitle-based intake. State these as generalizations about the collection's character; you may cite a few words as supporting evidence within a sentence, but do not give each word its own dedicated explanation.
-                        
-                        Never explain an individual word's difficulty by comparing it to ${userNativeLang} cognates or loanword similarity — the report's focus is the learner's overall trajectory, not word-level mechanics.
-                        
-                        Write the full report in ${userNativeLang}. Output as HTML using the template below; do not deviate from this structure, and do not include markdown code blocks, backticks, or any text outside the HTML.
-                        
-                        <div class="report-content">
-                          <h2>1. Overview</h2>
-                          <p>[Trajectory narrative: how content type and topic shifted across the ID timeline, why each shift likely happened, and the qualitative proficiency range this reflects]</p>
-                        
-                          <h2>2. Thematic Clusters &amp; Difficulty</h2>
-                          <p>[One paragraph per cluster: name, member words inline, inferred source, difficulty band with domain-level reasoning, and what mastering it signals]</p>
-                          <p>[Synthesis sentence: overall difficulty band and what the phase shift represents]</p>
-                        
-                          <h2>3. Notable Patterns</h2>
-                          <p>[Aggregate observations about idiom density, jargon density, register mix, or intake-method traces across the whole set]</p>
-                        </div>
-                        
-                        Vocabulary Data:
-                        ${wordsCSV}`;
+                    let reportContent = "";
+                    
+                    const userDictLang = await getDictionaryLanguage();
+                    const localePairs = await getDictionaryLocalePairs();
+                    const userNativeLang = localePairs[userDictLang];
 
-                        let rafId = null;
-                        await streamOpenAIResponse(
-                            settings.llmProvider,
-                            settings.llmApiKey,
-                            settings.llmModel,
-                            [{role: "user", content: removeIndent(prompt)}],
-                            (chunk) => {
-                                const content = typeof chunk === "string" ? chunk : chunk.choices?.[0]?.delta?.content;
-                                if (content) {
-                                    reportContent += content;
-                                    if (!rafId) {
-                                        rafId = requestAnimationFrame(() => {
-                                            reportContainer.innerHTML = reportContent;
-                                            reportContainer.scrollTop = reportContainer.scrollHeight;
-                                            rafId = null;
-                                        });
-                                    }
+                    const wordsCSV = data.reverse().map(item => `${item.word}, ${item.meaning}, ${item.explanation}`).join('\n');
+                    const prompt = `
+                    Act as a corpus linguist and SLA (Second Language Acquisition) diagnostician, auditing a learner's vocabulary acquisition log for ${language}.
+
+                    The CSV data below lists words the learner marked as unknown recently, each with 'word', 'meaning', 'explanation'. IDs mark chronological order of encounter.
+                    Analyze using these directives, in prose paragraphs — never as one bullet per word. The goal is a thematic and difficulty trajectory, not an inventory of individual word facts.
+                    
+                    1. Source & Trajectory Narrative:
+                        Group words by ID proximity and explanation content to infer the probable content type per phase (news article, casual essay, exam material, product manual, livestream/subtitle, etc.).
+                        Read ID order as a timeline, and explain why the shift from one phase to the next likely happened.
+                        State the general proficiency range this reflects using standard difficulty bands (e.g., CEFR/HSK/JLPT).
+                    2. Thematic Cluster & Difficulty Fusion:
+                        Group the words into named thematic clusters (by ID proximity and explanation content).
+                        For each cluster, write one flowing paragraph that: names the cluster, cites only 3-5 representative member words inline as examples, infers the likely content source, and states the cluster's difficulty band (JLPT/CEFR/HSK) together with the domain-level reason for that band
+                            — e.g., whether it demands compounding kanji literacy, cultural schema unrelated to raw language skill, or nuance beyond dictionary definition.
+                        Close with what mastering this cluster signals about the learner's current stage.
+                        End the section with one synthesis sentence giving the overall difficulty band across all clusters and what the phase shift represents (e.g., moving from exam-oriented to life-oriented acquisition).
+                    3. Notable Patterns:
+                        Independent of any single cluster, note aggregate characteristics of the whole set
+                            — density of idiomatic/phrasal expressions versus single-morpheme vocabulary, density of domain-specific jargon, mixed written/spoken register, or spelling irregularities suggesting audio/subtitle-based intake.
+                        State these as generalizations about the collection's character; you may cite a few words as supporting evidence within a sentence, but do not give each word its own dedicated explanation.
+                    
+                    Do not explain an individual word's difficulty by comparing it to ${userNativeLang} cognates or loanword similarity — the report's focus is the learner's overall trajectory, not word-level mechanics.
+                    Write the full report in ${userNativeLang}. Output as HTML using the template below; do not deviate from this structure, and do not include markdown code blocks, backticks, or any text outside the HTML.
+                    
+                    <div class="report-content">
+                        <h2>1. Overview</h2>
+                        <p>[Trajectory narrative: how content type and topic shifted across the ID timeline, why each shift likely happened, and the qualitative proficiency range this reflects]</p>
+                    
+                        <h2>2. Thematic Clusters &amp; Difficulty</h2>
+                        <p>[One paragraph per cluster: name, member words inline, inferred source, difficulty band with domain-level reasoning, and what mastering it signals]</p>
+                        <p>[Synthesis sentence: overall difficulty band and what the phase shift represents]</p>
+                    
+                        <h2>3. Notable Patterns</h2>
+                        <p>[Aggregate observations about idiom density, jargon density, register mix, or intake-method traces across the whole set]</p>
+                    </div>
+                    
+                    Vocabulary Data:
+                    ${wordsCSV}`;
+
+                    let rafId = null;
+                    await streamOpenAIResponse(
+                        settings.llmProvider,
+                        settings.llmApiKey,
+                        settings.llmModel,
+                        [{role: "user", content: removeIndent(prompt)}],
+                        (chunk) => {
+                            const content = typeof chunk === "string" ? chunk : chunk.choices?.[0]?.delta?.content;
+                            if (content) {
+                                reportContent += content;
+                                if (!rafId) {
+                                    rafId = requestAnimationFrame(() => {
+                                        if (reportBody) reportBody.innerHTML = reportContent;
+                                        reportContainer.scrollTop = reportContainer.scrollHeight;
+                                        rafId = null;
+                                    });
                                 }
-                            },
-                            (finalContent) => {
-                                if (rafId) {
-                                    cancelAnimationFrame(rafId);
-                                    rafId = null;
-                                }
-                                const stripped = finalContent.replace(/^\s*```(html)?\n?/i, '').replace(/```\s*$/, '');
-                                reportContainer.innerHTML = stripped;
-                            },
-                            (err) => {
-                                console.error("Report generation error", err);
-                                reportContainer.innerHTML = `<em>Error generating report: ${err.message}</em>`;
                             }
-                        );
-                    } catch (err) {
-                        console.error("Report data fetch error", err);
+                        },
+                        (finalContent) => {
+                            if (rafId) {
+                                cancelAnimationFrame(rafId);
+                                rafId = null;
+                            }
+                            const stripped = finalContent.replace(/^\s*```(html)?\n?/i, '').replace(/```\s*$/, '');
+                            if (reportBody) reportBody.innerHTML = stripped;
+                        },
+                        (err) => {
+                            console.error("Report generation error", err);
+                            if (reportBody) reportBody.innerHTML = `<em>Error generating report: ${err.message}</em>`;
+                        }
+                    );
+                } catch (err) {
+                    console.error("Report data fetch error", err);
+                    const reportBody = document.getElementById("flashcardReportBody");
+                    if (reportBody) {
+                        reportBody.innerHTML = `<em>Failed to fetch data: ${err.message}</em>`;
+                    } else {
                         reportContainer.innerHTML = `<em>Failed to fetch data: ${err.message}</em>`;
                     }
-                } else {
-                    reportContainer.style.display = "none";
-                    listView.style.display = "block";
-                    btn.textContent = "AI Report";
                 }
+            }
+
+            reportMainBtn.addEventListener("click", () => {
+                const reportContainer = document.getElementById("flashcardReportContainer");
+                if (reportContainer.style.display === "flex") {
+                    reportContainer.style.display = "none";
+                    document.getElementById("flashcardListView").style.display = "block";
+                    reportMainBtn.textContent = "AI Report";
+                    reportDropdownBtn.style.display = "";
+                    reportMainBtn.classList.remove("single-btn-mode");
+                } else {
+                    generateAiReport(100);
+                }
+            });
+
+            document.querySelectorAll(".split-btn-menu-item").forEach(item => {
+                item.addEventListener("click", (e) => {
+                    const count = parseInt(e.target.dataset.words, 10);
+                    generateAiReport(count);
+                });
             });
         }
         
@@ -5118,6 +5191,63 @@
                 #flashcardReportContainer strong,
                 #flashcardReportContainer b {
                     font-weight: 700 !important;
+                }
+
+                .split-btn-group {
+                    position: relative;
+                    display: inline-flex;
+                }
+                .split-btn-main {
+                    border-top-right-radius: 0 !important;
+                    border-bottom-right-radius: 0 !important;
+                    border-right: 1px solid rgba(0, 0, 0, 0.2) !important;
+                }
+                .split-btn-main.single-btn-mode {
+                    border-top-right-radius: 5px !important;
+                    border-bottom-right-radius: 5px !important;
+                    border-right: 1px solid rgb(125 125 125 / 50%) !important;
+                }
+                .split-btn-dropdown {
+                    border-top-left-radius: 0 !important;
+                    border-bottom-left-radius: 0 !important;
+                    padding: 0 8px !important;
+                }
+                .split-btn-menu {
+                    position: absolute;
+                    bottom: 100%;
+                    left: 0;
+                    margin-bottom: 5px;
+                    background-color: var(--background-color);
+                    border: 1px solid rgb(125 125 125 / 30%);
+                    border-radius: 4px;
+                    box-shadow: 0 -4px 8px rgba(0, 0, 0, 0.2);
+                    z-index: 10002;
+                    min-width: 110px;
+                    display: flex;
+                    flex-direction: column;
+                    overflow: hidden;
+                }
+                .split-btn-menu-item {
+                    padding: 8px 15px;
+                    cursor: pointer;
+                    color: var(--font-color);
+                    font-size: 13px;
+                }
+                .split-btn-menu-item:hover {
+                    background-color: rgba(125, 125, 125, 0.2);
+                }
+
+                @keyframes dots-animation {
+                    0% { content: "."; }
+                    33% { content: ".."; }
+                    66% { content: "..."; }
+                }
+                .loading-text::after {
+                    content: ".";
+                    animation: dots-animation 1.5s infinite steps(1);
+                    display: inline-block;
+                    width: 15px;
+                    text-align: left;
                 }
             `;
         }
