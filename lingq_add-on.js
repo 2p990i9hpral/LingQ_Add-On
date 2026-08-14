@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      14.8.4
+// @version      14.9.0
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @grant       GM_xmlhttpRequest
@@ -127,7 +127,8 @@
             {value: "gpt-5.4-mini", text: "GPT-5.4 mini ($0.75/$4.5)"}
         ],
         "google": [
-            {value: "gemini-3.6-flash", text: "Gemini 3.6 Flash ($1.5/$7.5)"},
+            {value: "gemini-3.7-flash", text: "Gemini 3.7 Flash ($0.75/$3.75)"},
+            {value: "gemini-3.6-flash", text: "Gemini 3.6 Flash ($0.75/$3.75)"},
             {value: "gemini-3.5-flash", text: "Gemini 3.5 Flash ($1.5/$9)"},
             {value: "gemini-3-flash-preview", text: "Gemini 3.0 Flash ($0.5/$3)"},
             {value: "gemini-3.5-flash-lite", text: "Gemini 3.5 Flash-Light ($0.3/$2.5)"},
@@ -136,7 +137,8 @@
             {value: "gemini-2.5-flash-lite", text: "Gemini 2.5 Flash-Light ($0.1/$0.4)"}
         ],
         "vertex": [
-            {value: "gemini-3.6-flash", text: "Gemini 3.6 Flash ($1.5/$7.5)"},
+            {value: "gemini-3.7-flash", text: "Gemini 3.7 Flash ($0.75/$3.75)"},
+            {value: "gemini-3.6-flash", text: "Gemini 3.6 Flash ($0.75/$3.75)"},
             {value: "gemini-3.5-flash", text: "Gemini 3.5 Flash ($1.5/$9)"},
             {value: "gemini-3-flash-preview", text: "Gemini 3.0 Flash ($0.5/$3)"},
             {value: "gemini-3.5-flash-lite", text: "Gemini 3.5 Flash-Light ($0.3/$2.5)"},
@@ -3051,21 +3053,32 @@
                     createElement("h3", {textContent: "Flashcard Manager"})
                 ),
                 createElement("div", {style: "padding: 0 15px; width: 800px;"},
-                    createElement("div", {id: "flashcardPopupHeader"},
-                        createElement("span", {id: "flashcardCount"}, "Flashcards:"),
-                        createElement("input", {
-                            id: "flashcardSearchInput",
-                            type: "text",
-                            placeholder: "Search word or meaning..."
-                        }),
-                        paginationContainer
+                    createElement("div", {id: "flashcardListView", style: "display: block;"},
+                        createElement("div", {id: "flashcardPopupHeader"},
+                            createElement("span", {id: "flashcardCount"}, "Flashcards:"),
+                            createElement("input", {
+                                id: "flashcardSearchInput",
+                                type: "text",
+                                placeholder: "Search word or meaning..."
+                            }),
+                            paginationContainer
+                        ),
+                        flashcardTableContainer,
+                        statsContainer
                     ),
-                    flashcardTableContainer,
-                    statsContainer,
+                    createElement("div", {
+                        id: "flashcardReportContainer",
+                        className: "popup-row",
+                        style: "display: none; flex-direction: column; min-height: 400px; max-height: 600px; overflow-y: auto; margin: 10px 0; padding: 15px; border: 1px solid var(--border-color); border-radius: 5px; background: var(--bg-color); font-size: 14px; line-height: 1.6;"
+                    }),
                     createElement("div", {
                             className: "popup-row",
                             style: "display: flex; justify-content: flex-end; gap: 10px; margin: 10px 0;"
                         },
+                        createElement("button", {
+                            id: "flashcardAiReportBtn",
+                            className: "popup-button"
+                        }, "AI Report"),
                         createElement("button", {
                             id: "flashcardCsvDownload",
                             className: "popup-button"
@@ -4685,6 +4698,113 @@
                     exportButton.disabled = false;
                 }
             });
+            
+            document.getElementById("flashcardAiReportBtn").addEventListener("click", async (event) => {
+                const btn = event.currentTarget;
+                const listView = document.getElementById("flashcardListView");
+                const reportContainer = document.getElementById("flashcardReportContainer");
+
+                if (reportContainer.style.display === "none" || reportContainer.style.display === "") {
+                    listView.style.display = "none";
+                    reportContainer.style.display = "flex";
+                    btn.textContent = "Back to List";
+                    reportContainer.innerHTML = "<em>Generating AI Learning Report...</em>";
+
+                    try {
+                        const {data, error} = await getDbClient()
+                            .from(getTableName())
+                            .select("idx, word, meaning, explanation")
+                            .eq("language", language)
+                            .order("idx", {ascending: false})
+                            .limit(500);
+
+                        if (error) throw error;
+                        
+                        if (!data || data.length === 0) {
+                            reportContainer.innerHTML = "<em>No flashcards found for the current language.</em>";
+                            return;
+                        }
+
+                        let reportContent = "";
+                        reportContainer.innerHTML = "";
+                        
+                        const userDictLang = await getDictionaryLanguage();
+                        const localePairs = await getDictionaryLocalePairs();
+                        const userNativeLang = localePairs[userDictLang];
+
+                        const wordsCSV = data.reverse().map(item => `${item.word}, ${item.meaning}, ${item.explanation}`).join('\n');
+                        const prompt = `
+                        Act as a corpus linguist and SLA (Second Language Acquisition) diagnostician, auditing a learner's vocabulary acquisition log for ${language}.
+                        
+                        Context: The JSON array below lists words the learner marked as unknown recently, each with 'word', 'meaning', 'explanation'. IDs mark chronological order of encounter.
+                        
+                        Analyze using these directives, in prose paragraphs — never as one bullet per word. The goal is a thematic and difficulty trajectory, not an inventory of individual word facts.
+                        
+                        1. Source & Trajectory Narrative: Group words by ID proximity and explanation content to infer the probable content type per phase (news article, casual essay, exam material, product manual, livestream/subtitle, etc.). Read ID order as a timeline, and explain why the shift from one phase to the next likely happened. State the general proficiency range this reflects in qualitative terms only (e.g., intermediate entering advanced) — never enumerate exact counts or percentages.
+                        2. Thematic Cluster & Difficulty Fusion: Group the words into named thematic clusters (by ID proximity and explanation content). For each cluster, write one flowing paragraph that: names the cluster, lists its member words inline (not as a table or per-word bullet list), infers the likely content source, and states the cluster's difficulty band (JLPT/CEFR/HSK) together with the domain-level reason for that band — e.g., whether it demands compounding kanji literacy, cultural schema unrelated to raw language skill, or nuance beyond dictionary definition. Close with what mastering this cluster signals about the learner's current stage. End the section with one synthesis sentence giving the overall difficulty band across all clusters and what the phase shift represents (e.g., moving from exam-oriented to life-oriented acquisition).
+                        3. Notable Patterns: Independent of any single cluster, note aggregate characteristics of the whole set — density of idiomatic/phrasal expressions versus single-morpheme vocabulary, density of domain-specific jargon, mixed written/spoken register, or spelling irregularities suggesting audio/subtitle-based intake. State these as generalizations about the collection's character; you may cite a few words as supporting evidence within a sentence, but do not give each word its own dedicated explanation.
+                        
+                        Never explain an individual word's difficulty by comparing it to ${userNativeLang} cognates or loanword similarity — the report's focus is the learner's overall trajectory, not word-level mechanics.
+                        
+                        Write the full report in ${userNativeLang}. Output as HTML using the template below; do not deviate from this structure, and do not include markdown code blocks, backticks, or any text outside the HTML.
+                        
+                        <div class="report-content">
+                          <h2>1. Overview</h2>
+                          <p>[Trajectory narrative: how content type and topic shifted across the ID timeline, why each shift likely happened, and the qualitative proficiency range this reflects]</p>
+                        
+                          <h2>2. Thematic Clusters &amp; Difficulty</h2>
+                          <p>[One paragraph per cluster: name, member words inline, inferred source, difficulty band with domain-level reasoning, and what mastering it signals]</p>
+                          <p>[Synthesis sentence: overall difficulty band and what the phase shift represents]</p>
+                        
+                          <h2>3. Notable Patterns</h2>
+                          <p>[Aggregate observations about idiom density, jargon density, register mix, or intake-method traces across the whole set]</p>
+                        </div>
+                        
+                        Vocabulary Data:
+                        ${wordsCSV}`;
+
+                        let rafId = null;
+                        await streamOpenAIResponse(
+                            settings.llmProvider,
+                            settings.llmApiKey,
+                            settings.llmModel,
+                            [{role: "user", content: removeIndent(prompt)}],
+                            (chunk) => {
+                                const content = typeof chunk === "string" ? chunk : chunk.choices?.[0]?.delta?.content;
+                                if (content) {
+                                    reportContent += content;
+                                    if (!rafId) {
+                                        rafId = requestAnimationFrame(() => {
+                                            reportContainer.innerHTML = reportContent;
+                                            reportContainer.scrollTop = reportContainer.scrollHeight;
+                                            rafId = null;
+                                        });
+                                    }
+                                }
+                            },
+                            (finalContent) => {
+                                if (rafId) {
+                                    cancelAnimationFrame(rafId);
+                                    rafId = null;
+                                }
+                                const stripped = finalContent.replace(/^\s*```(html)?\n?/i, '').replace(/```\s*$/, '');
+                                reportContainer.innerHTML = stripped;
+                            },
+                            (err) => {
+                                console.error("Report generation error", err);
+                                reportContainer.innerHTML = `<em>Error generating report: ${err.message}</em>`;
+                            }
+                        );
+                    } catch (err) {
+                        console.error("Report data fetch error", err);
+                        reportContainer.innerHTML = `<em>Failed to fetch data: ${err.message}</em>`;
+                    }
+                } else {
+                    reportContainer.style.display = "none";
+                    listView.style.display = "block";
+                    btn.textContent = "AI Report";
+                }
+            });
         }
         
         function generatePopupCSS() {
@@ -4955,6 +5075,49 @@
 
                 #flashcardPopupButtons {
                     display: flex; justify-content: flex-end; margin: 10px 0;
+                }
+
+                #flashcardReportContainer h2 {
+                    font-size: 1.4em !important;
+                    font-weight: 700 !important;
+                    margin-top: 15px !important;
+                    margin-bottom: 10px !important;
+                    border-bottom: 1px solid var(--border-color, #444) !important;
+                    padding-bottom: 5px !important;
+                    color: var(--font-color) !important;
+                }
+
+                #flashcardReportContainer h3 {
+                    font-size: 1.15em !important;
+                    font-weight: 600 !important;
+                    margin-top: 12px !important;
+                    margin-bottom: 6px !important;
+                    color: var(--font-color) !important;
+                }
+
+                #flashcardReportContainer p {
+                    margin-bottom: 12px !important;
+                    font-size: 14px !important;
+                    line-height: 1.6 !important;
+                    color: var(--font-color) !important;
+                }
+
+                #flashcardReportContainer ul {
+                    list-style-type: disc !important;
+                    padding-left: 25px !important;
+                    margin-bottom: 15px !important;
+                }
+
+                #flashcardReportContainer li {
+                    margin-bottom: 6px !important;
+                    font-size: 14px !important;
+                    line-height: 1.6 !important;
+                    color: var(--font-color) !important;
+                }
+                
+                #flashcardReportContainer strong,
+                #flashcardReportContainer b {
+                    font-weight: 700 !important;
                 }
             `;
         }
