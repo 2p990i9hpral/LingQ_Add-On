@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      14.9.1
+// @version      14.9.2
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @grant       GM_xmlhttpRequest
@@ -1967,10 +1967,12 @@
             
             const handleSpacebarStart = (event) => {
                 if (event.code === "Space" && !startButton.disabled && setupBox.style.display !== "none") {
+                    event.preventDefault();
+                    event.stopImmediatePropagation();
                     startButton.click();
                 }
             };
-            document.addEventListener("keydown", handleSpacebarStart);
+            window.addEventListener("keydown", handleSpacebarStart, true);
             
             setupBox.append(title, buttonRow, startButton);
             container.appendChild(setupBox);
@@ -2109,7 +2111,7 @@
                 }
                 
                 bindLingQPlayerControls(videoElement);
-                document.removeEventListener("keydown", handleSpacebarStart);
+                window.removeEventListener("keydown", handleSpacebarStart, true);
             });
         }
         
@@ -4067,7 +4069,7 @@
             const pageSize = 15;
             let totalCount = 0;
             let filteredCount = 0;
-            const language = getLessonLanguage();
+            const targetLanguage = getLessonLanguage();
             
             let currentSortField = "idx";
             let currentSortOrder = "desc";
@@ -4152,7 +4154,7 @@
                 let queryBase = getDbClient()
                     .from(getTableName())
                     .select("idx, word, meaning, explanation", {count: "exact"})
-                    .eq("language", language);
+                    .eq("language", targetLanguage);
                 
                 if (searchKeyword) {
                     const isNumber = /^\d+$/.test(searchKeyword);
@@ -4278,7 +4280,7 @@
                     getDbClient()
                         .from(getTableName())
                         .select("*", {count: "exact", head: true})
-                        .eq("language", language)
+                        .eq("language", targetLanguage)
                         .then(({count}) => {
                             totalCount = count || 0;
                             countLabel.textContent = `Flashcards: ${totalCount}`;
@@ -4511,7 +4513,7 @@
                     drawFlashcardStatsChart(labels, periodicData, cumulativeData, selectedPeriod, periodicLabel);
                 }
                 
-                flashcardAllDates = await fetchFlashcardsInBatches(language, "created_at", "created_at");
+                flashcardAllDates = await fetchFlashcardsInBatches(targetLanguage, "created_at", "created_at");
                 if (!flashcardAllDates.length) return;
                 
                 const container = document.getElementById("flashcardStatsContainer");
@@ -4682,7 +4684,7 @@
                         return context;
                     }
                     
-                    const allData = await fetchFlashcardsInBatches(language, "*", "idx");
+                    const allData = await fetchFlashcardsInBatches(targetLanguage, "*", "idx");
                     if (!allData.length) return;
                     
                     const processedData = allData.map(row => ({
@@ -4702,7 +4704,7 @@
                     
                     const link = createElement("a", {
                         href: URL.createObjectURL(blob),
-                        download: `flashcards_${language}.csv`
+                        download: `flashcards_${targetLanguage}.csv`
                     });
                     
                     document.body.appendChild(link);
@@ -4752,7 +4754,7 @@
                     const {data, error} = await getDbClient()
                         .from(getTableName())
                         .select("idx, word, meaning, explanation")
-                        .eq("language", language)
+                        .eq("language", targetLanguage)
                         .order("idx", {ascending: false})
                         .limit(limitCount);
 
@@ -4778,32 +4780,43 @@
 
                     const wordsCSV = data.reverse().map(item => `${item.word}, ${item.meaning}, ${item.explanation}`).join('\n');
                     const prompt = `
-                    Act as a corpus linguist and SLA (Second Language Acquisition) diagnostician, auditing a learner's vocabulary acquisition log for ${language}.
-
-                    The CSV data below lists words the learner marked as unknown recently, each with 'word', 'meaning', 'explanation'. IDs mark chronological order of encounter.
-                    Analyze using these directives, in prose paragraphs — never as one bullet per word. The goal is a thematic and difficulty trajectory, not an inventory of individual word facts.
+                    Act as a corpus linguist and SLA (Second Language Acquisition) diagnostician, auditing a learner's vocabulary acquisition log for ${targetLanguage}.
+                    
+                    Data: CSV columns are idx (chronological order of encounter), word, meaning, explanation. Rows list words the learner marked as unknown recently.
+                    
+                    Global Rules (apply across all sections):
+                    - Treat every word as inline supporting evidence only; never as a standalone bullet or dedicated sub-explanation. Write in flowing thematic prose, not one-bullet-per-word inventories.
+                    - Explain difficulty via domain knowledge, register, or cultural schema only; never via ${userNativeLang} cognate or loanword comparison, since surface-level lexical similarity does not reflect actual acquisition difficulty.
+                    - Use "difficulty band" consistently (e.g., CEFR/HSK/JLPT) as the single term for proficiency level throughout the report; do not alternate with "level," "grade," or "tier."
+                    - Clustering basis: group words by idx proximity (chronological closeness) combined with explanation content (semantic/topical similarity). Refer to this combined basis as "clustering basis" in later sections instead of restating both criteria.
+                    
+                    Analyze the data using these directives, producing prose paragraphs per the Global Rules above:
                     
                     1. Source & Trajectory Narrative:
-                        Group words by ID proximity and explanation content to infer the probable content type per phase (news article, casual essay, exam material, product manual, livestream/subtitle, etc.).
-                        Read ID order as a timeline, and explain why the shift from one phase to the next likely happened.
-                        State the general proficiency range this reflects using standard difficulty bands (e.g., CEFR/HSK/JLPT).
+                        Read idx order as a timeline, grouping words by the clustering basis to infer the probable content type per phase (news article, casual essay, exam material, product manual, livestream/subtitle, etc.), and explain why each phase shift likely happened.
+                        State the general difficulty band this reflects.
+                        Resolution rule: If the data shows no clear phase shift (e.g., a single continuous source), state this explicitly and describe the single trajectory instead of inventing artificial phases.
                     2. Thematic Cluster & Difficulty Fusion:
-                        Group the words into named thematic clusters (by ID proximity and explanation content).
-                        For each cluster, write one flowing paragraph that: names the cluster, cites only 3-5 representative member words inline as examples, infers the likely content source, and states the cluster's difficulty band (JLPT/CEFR/HSK) together with the domain-level reason for that band
-                            — e.g., whether it demands compounding kanji literacy, cultural schema unrelated to raw language skill, or nuance beyond dictionary definition.
-                        Close with what mastering this cluster signals about the learner's current stage.
-                        End the section with one synthesis sentence giving the overall difficulty band across all clusters and what the phase shift represents (e.g., moving from exam-oriented to life-oriented acquisition).
+                        Group the words into named thematic clusters using the clustering basis.
+                        For each cluster, write one flowing paragraph containing:
+                        - Cluster name; 3-5 representative member words cited inline
+                        - Inferred content source
+                        - Difficulty band with domain-level reason (e.g., compounding literacy demands, cultural schema unrelated to raw language skill, or nuance beyond dictionary definition)
+                        - What this cluster signals about the learner's current stage
+                        Close the section with one synthesis sentence giving the overall difficulty band across all clusters and what the phase shift represents (e.g., moving from exam-oriented to life-oriented acquisition).
+                        Resolution rule: If fewer than two distinct clusters emerge, present the single cluster and explicitly note the lack of thematic diversity rather than forcing artificial splits.
                     3. Notable Patterns:
-                        Independent of any single cluster, note aggregate characteristics of the whole set
-                            — density of idiomatic/phrasal expressions versus single-morpheme vocabulary, density of domain-specific jargon, mixed written/spoken register, or spelling irregularities suggesting audio/subtitle-based intake.
-                        State these as generalizations about the collection's character; you may cite a few words as supporting evidence within a sentence, but do not give each word its own dedicated explanation.
+                        Independent of any single cluster, state generalizations about the collection's character as a whole
+                        — density of idiomatic/phrasal expressions versus single-morpheme vocabulary; density of domain-specific jargon; mixed written/spoken register; spelling irregularities suggesting audio/subtitle-based intake.
+                        You may cite a few words as supporting evidence within a sentence, but do not give each word its own dedicated analysis.
                     
-                    Do not explain an individual word's difficulty by comparing it to ${userNativeLang} cognates or loanword similarity — the report's focus is the learner's overall trajectory, not word-level mechanics.
-                    Write the full report in ${userNativeLang}. Output as HTML using the template below; do not deviate from this structure, and do not include markdown code blocks, backticks, or any text outside the HTML.
+                    Output Rules:
+                    - Language: ${userNativeLang}
+                    - Format: HTML only, per the template below; no markdown code blocks, backticks, or text outside the <div>
                     
                     <div class="report-content">
                         <h2>1. Overview</h2>
-                        <p>[Trajectory narrative: how content type and topic shifted across the ID timeline, why each shift likely happened, and the qualitative proficiency range this reflects]</p>
+                        <p>[Trajectory narrative: how content type and topic shifted across the idx timeline, why each shift likely happened, and the difficulty band this reflects]</p>
                     
                         <h2>2. Thematic Clusters &amp; Difficulty</h2>
                         <p>[One paragraph per cluster: name, member words inline, inferred source, difficulty band with domain-level reasoning, and what mastering it signals]</p>
