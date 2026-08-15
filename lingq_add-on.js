@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      14.9.2
+// @version      14.10.0
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @grant       GM_xmlhttpRequest
@@ -999,36 +999,37 @@
             return `\x00${codePlaceholders.length - 1}\x00`;
         });
         
+        const parseInline = (t) => t
+            .replace(/\*\*(.+?)\*\*/gs, '<b>$1</b>')
+            .replace(/\*(.+?)\*/gs, '<i>$1</i>');
+        
         const htmlContent = protectedText.split(/\n\n+/).map((block) => {
-            if (block.trim() === '---') return '<hr>';
+            if (block.trim() === '---' || block.trim() === '***') return '<hr>';
             
             if (/^#+ /m.test(block)) {
                 const content = block
                     .replace(/^#+ (.+)$/gm, '<b><u>$1</u></b>')
                     .replace(/\n/g, '<br>');
-                return `<p>${content}</p>`;
+                return `<p>${parseInline(content)}</p>`;
             }
             
             if (/^\s*[-*]\s+/m.test(block)) {
                 const items = block.split('\n')
                     .map((line) => line.replace(/^\s*[-*]\s+(.+)$/, '<li>$1</li>'))
                     .join('');
-                return `<ul>${items}</ul>`;
+                return `<ul>${parseInline(items)}</ul>`;
             }
             
             return block
-                .split(/^---$/m)
+                .split(/^---$|^\*\*\*$/m)
                 .map((subBlock) => {
                     const trimmedSubBlock = subBlock.trim();
-                    return trimmedSubBlock ? `<p>${trimmedSubBlock.replace(/\n/g, '<br>')}</p>` : '';
+                    return trimmedSubBlock ? `<p>${parseInline(trimmedSubBlock).replace(/\n/g, '<br>')}</p>` : '';
                 })
                 .join('<hr>');
         }).join('');
         
-        return htmlContent
-            .replace(/\*\*(.+?)\*\*/gs, '<b>$1</b>')
-            .replace(/\*(.+?)\*/gs, '<i>$1</i>')
-            .replace(/\x00(\d+)\x00/g, (_, i) => codePlaceholders[Number(i)]);
+        return htmlContent.replace(/\x00(\d+)\x00/g, (_, i) => codePlaceholders[Number(i)]);
     }
     
     function getDbClient() {
@@ -1510,7 +1511,7 @@
         return {api_url, headers, isPriority};
     }
     
-    function buildRequestBody(provider, model, history, stream = false, cacheName = null) {
+    function buildRequestBody(provider, model, history, stream = false, cacheName = null, includeThoughts = false) {
         const processedHistory = ((provider === "google" || provider === "vertex") && cacheName)
             ? history.filter(m => {
                 if (m.role === "user" && m.content.startsWith("<summary>")) return false;
@@ -1551,13 +1552,20 @@
         if (stream) body.stream = true;
         
         if (provider === "openai" && model.includes("gpt-5")) {
-            body.reasoning_effort = "none";
+            body.reasoning_effort = "low";
         }
         
         if (provider === "google" || provider === "vertex") {
-            body.reasoning_effort = "low";
+            body.extra_body = body.extra_body || {};
+            body.extra_body.google = body.extra_body.google || {};
+            body.extra_body.google.thinking_config = {
+                thinking_level: "low"
+            };
+            if (includeThoughts) {
+                body.extra_body.google.thinking_config.include_thoughts = true;
+            }
             if (cacheName) {
-                body.extra_body = {google: {cached_content: cacheName}};
+                body.extra_body.google.cached_content = cacheName;
             }
             body.stream_options = {include_usage: true};
         }
@@ -1640,11 +1648,11 @@
         }
     }
     
-    async function streamOpenAIResponse(provider, apiKey, model, history, onChunkReceived, onStreamEnd, onError, cacheName = null, onCacheExpired = null, retryCount = 0) {
+    async function streamOpenAIResponse(provider, apiKey, model, history, onChunkReceived, onStreamEnd, onError, cacheName = null, onCacheExpired = null, retryCount = 0, includeThoughts = false) {
         const forcePriority = (provider === "vertex" && retryCount > 0);
         const {api_url, headers, isPriority} = await buildRequestConfig(provider, apiKey, forcePriority);
         if (provider === "anthropic") headers['Accept'] = 'text/event-stream';
-        const body = buildRequestBody(provider, model, history, true, cacheName);
+        const body = buildRequestBody(provider, model, history, true, cacheName, includeThoughts);
         
         let lastUsage = null;
         
@@ -1682,22 +1690,22 @@
                 const newCacheName = await onCacheExpired();
                 if (newCacheName) {
                     console.log(`Cache recreated successfully. Retrying with new cache: ${newCacheName}`);
-                    return streamOpenAIResponse(provider, apiKey, model, history, onChunkReceived, onStreamEnd, onError, newCacheName, onCacheExpired, 1);
+                    return streamOpenAIResponse(provider, apiKey, model, history, onChunkReceived, onStreamEnd, onError, newCacheName, onCacheExpired, 1, includeThoughts);
                 }
                 console.warn("Cache recreation failed. Falling back to non-cached request.");
-                return streamOpenAIResponse(provider, apiKey, model, history, onChunkReceived, onStreamEnd, onError, null, null, 1);
+                return streamOpenAIResponse(provider, apiKey, model, history, onChunkReceived, onStreamEnd, onError, null, null, 1, includeThoughts);
             }
             
             if (provider === "vertex" && error.message.includes("401") && retryCount === 0) {
                 console.warn("Vertex token expired. Regenerating and retrying...");
                 settings.vertexTokenExpiry = 0;
-                return streamOpenAIResponse(provider, apiKey, model, history, onChunkReceived, onStreamEnd, onError, cacheName, onCacheExpired, 1);
+                return streamOpenAIResponse(provider, apiKey, model, history, onChunkReceived, onStreamEnd, onError, cacheName, onCacheExpired, 1, includeThoughts);
             }
             
             if (error.message.includes("429") && retryCount === 0) {
                 console.warn("429 Resource Exhausted. Retrying once after 2 seconds...");
                 await new Promise(r => setTimeout(r, 1000));
-                return streamOpenAIResponse(provider, apiKey, model, history, onChunkReceived, onStreamEnd, onError, cacheName, onCacheExpired, 1);
+                return streamOpenAIResponse(provider, apiKey, model, history, onChunkReceived, onStreamEnd, onError, cacheName, onCacheExpired, 1, includeThoughts);
             }
             
             onError(error);
@@ -3087,14 +3095,26 @@
                                 className: "popup-button split-btn-dropdown"
                             }, "▾"),
                             createElement("div", {
-                                id: "flashcardAiReportMenu",
-                                className: "split-btn-menu",
-                                style: "display: none;"
-                            },
-                                createElement("div", {className: "split-btn-menu-item", dataset: {words: 50}}, "50 words"),
-                                createElement("div", {className: "split-btn-menu-item", dataset: {words: 100}}, "100 words"),
-                                createElement("div", {className: "split-btn-menu-item", dataset: {words: 300}}, "300 words"),
-                                createElement("div", {className: "split-btn-menu-item", dataset: {words: 500}}, "500 words")
+                                    id: "flashcardAiReportMenu",
+                                    className: "split-btn-menu",
+                                    style: "display: none;"
+                                },
+                                createElement("div", {
+                                    className: "split-btn-menu-item",
+                                    dataset: {words: 50}
+                                }, "50 words"),
+                                createElement("div", {
+                                    className: "split-btn-menu-item",
+                                    dataset: {words: 100}
+                                }, "100 words"),
+                                createElement("div", {
+                                    className: "split-btn-menu-item",
+                                    dataset: {words: 300}
+                                }, "300 words"),
+                                createElement("div", {
+                                    className: "split-btn-menu-item",
+                                    dataset: {words: 500}
+                                }, "500 words")
                             )
                         ),
                         createElement("button", {
@@ -4720,21 +4740,21 @@
             const reportMainBtn = document.getElementById("flashcardAiReportBtn");
             const reportDropdownBtn = document.getElementById("flashcardAiReportDropdownBtn");
             const reportMenu = document.getElementById("flashcardAiReportMenu");
-
+            
             reportDropdownBtn.addEventListener("click", (e) => {
                 e.stopPropagation();
                 reportMenu.style.display = reportMenu.style.display === "none" ? "flex" : "none";
             });
-
+            
             document.addEventListener("click", () => {
                 if (reportMenu) reportMenu.style.display = "none";
             });
-
+            
             async function generateAiReport(limitCount) {
                 limitCount = Number.isInteger(limitCount) && limitCount > 0 ? limitCount : 100;
                 const listView = document.getElementById("flashcardListView");
                 const reportContainer = document.getElementById("flashcardReportContainer");
-
+                
                 listView.style.display = "none";
                 reportContainer.style.display = "flex";
                 reportMainBtn.textContent = "Back to List";
@@ -4749,7 +4769,7 @@
                         <em>Generating AI Learning Report<span class="loading-text"></span></em>
                     </div>
                 `;
-
+                
                 try {
                     const {data, error} = await getDbClient()
                         .from(getTableName())
@@ -4757,12 +4777,12 @@
                         .eq("language", targetLanguage)
                         .order("idx", {ascending: false})
                         .limit(limitCount);
-
+                    
                     if (error) throw error;
                     
                     const reportHeader = document.getElementById("flashcardReportHeader");
                     const reportBody = document.getElementById("flashcardReportBody");
-
+                    
                     if (!data || data.length === 0) {
                         reportBody.innerHTML = "<em>No flashcards found for the current language.</em>";
                         return;
@@ -4771,13 +4791,13 @@
                     if (reportHeader) {
                         reportHeader.textContent = `A report based on recent ${data.length} words`;
                     }
-
+                    
                     let reportContent = "";
                     
                     const userDictLang = await getDictionaryLanguage();
                     const localePairs = await getDictionaryLocalePairs();
                     const userNativeLang = localePairs[userDictLang];
-
+                    
                     const wordsCSV = data.reverse().map(item => `${item.word}, ${item.meaning}, ${item.explanation}`).join('\n');
                     const prompt = `
                     Act as a corpus linguist and SLA (Second Language Acquisition) diagnostician, auditing a learner's vocabulary acquisition log for ${targetLanguage}.
@@ -4828,7 +4848,7 @@
                     
                     Vocabulary Data:
                     ${wordsCSV}`;
-
+                    
                     let rafId = null;
                     await streamOpenAIResponse(
                         settings.llmProvider,
@@ -4871,7 +4891,7 @@
                     }
                 }
             }
-
+            
             reportMainBtn.addEventListener("click", () => {
                 const reportContainer = document.getElementById("flashcardReportContainer");
                 if (reportContainer.style.display === "flex") {
@@ -4884,7 +4904,7 @@
                     generateAiReport(100);
                 }
             });
-
+            
             document.querySelectorAll(".split-btn-menu-item").forEach(item => {
                 item.addEventListener("click", (e) => {
                     const count = parseInt(e.target.dataset.words, 10);
@@ -5251,9 +5271,10 @@
                 }
 
                 @keyframes dots-animation {
-                    0% { content: "."; }
-                    33% { content: ".."; }
-                    66% { content: "..."; }
+                    0% { content: ""; }
+                    25% { content: "."; }
+                    50% { content: ".."; }
+                    75% { content: "..."; }
                 }
                 .loading-text::after {
                     content: ".";
@@ -5728,6 +5749,64 @@
                 #chat-container .word-message ul:nth-last-of-type(1):hover {
                     color: ${settings.colorMode === "dark" ? "white" : "black"};
                     cursor: pointer;
+                }
+
+                .thought-process {
+                    margin-bottom: 8px;
+                }
+                
+                .thought-process summary {
+                    cursor: pointer;
+                    opacity: 0.6;
+                    font-size: 1em;
+                    user-select: none;
+                    list-style: none;
+                    display: flex;
+                    align-items: center;
+                    gap: 4px;
+                }
+                
+                .thought-process summary span {
+                    font-style: italic;
+                }
+                
+                .thought-process summary span.thinking-text {
+                    min-width: 60px;
+                }
+                
+                .thought-process summary .chevron {
+                    width: 12px; height: 12px; transition: transform 0.2s;
+                }
+                
+                .thought-process summary::-webkit-details-marker {
+                    display: none;
+                }
+                
+                .thought-process[open] summary .chevron {
+                    transform: rotate(180deg);
+                }
+                
+                .thought-content {
+                    font-size: 0.9em;
+                    opacity: 0.8;
+                    padding-left: 10px;
+                    border-left: 2px solid rgb(125 125 125 / 50%);
+                    margin-top: 5px; margin-bottom: 10px;
+                }
+                
+                @keyframes thinkingDots {
+                    0% { content: ""; }
+                    25% { content: "."; }
+                    50% { content: ".."; }
+                    75% { content: "..."; }
+                }
+                
+                .thinking-dots::after {
+                    content: "";
+                    animation: thinkingDots 1.5s infinite steps(1);
+                    display: inline-block;
+                    width: 1em;
+                    text-align: left;
                 }
 
                 #flashcard-popup {
@@ -8122,7 +8201,9 @@
                     }
                     const cacheToUse = (isWordRequest && (llmProvider === "google" || llmProvider === "vertex")) ? currentGeminiCacheName : null;
                     
-                    let chatRafId = null;
+                    let chatUpdateTimeoutId = null;
+                    let lastUpdateTime = 0;
+                    
                     await streamOpenAIResponse(
                         llmProvider,
                         llmApiKey,
@@ -8133,27 +8214,131 @@
                             if (content) {
                                 fullBotResponse += content;
                                 
-                                if (!chatRafId) {
-                                    chatRafId = requestAnimationFrame(() => {
-                                        botMessageDiv.innerHTML = fullBotResponse;
-                                        const isNearBottom = chatContainer.scrollTop + chatContainer.clientHeight >= chatContainer.scrollHeight - 80;
-                                        if (isNearBottom) smoothScrollTo(chatContainer, chatContainer.scrollHeight, 100);
+                                const updateChatDOM = () => {
+                                    const wasOpen = botMessageDiv.querySelector('.thought-process')?.open;
+                                    const isNearBottom = chatContainer.scrollTop + chatContainer.clientHeight >= chatContainer.scrollHeight - 120;
+                                    
+                                    let thoughtText = '';
+                                    let messageText = fullBotResponse;
+                                    let isThinking = false;
+                                    let hasThought = false;
+                                    
+                                    if ((llmProvider === "google" || llmProvider === "vertex") && !fullBotResponse.includes('</thought>') && fullBotResponse.length < 20 && !fullBotResponse.includes('<thought>')) {
+                                        hasThought = true;
+                                        isThinking = true;
+                                        thoughtText = fullBotResponse.replace(/^<t?h?o?u?g?h?t?>?/, '');
+                                        messageText = '';
+                                    } else if (fullBotResponse.includes('<thought>')) {
+                                        hasThought = true;
+                                        const startIndex = fullBotResponse.indexOf('<thought>') + '<thought>'.length;
+                                        const endIndex = fullBotResponse.indexOf('</thought>');
                                         
-                                        chatRafId = null;
-                                    });
+                                        if (endIndex !== -1) {
+                                            thoughtText = fullBotResponse.substring(startIndex, endIndex).trim();
+                                            messageText = fullBotResponse.substring(endIndex + '</thought>'.length).trim();
+                                        } else {
+                                            isThinking = true;
+                                            thoughtText = fullBotResponse.substring(startIndex).trim();
+                                            messageText = '';
+                                        }
+                                    }
+                                    
+                                    let finalHtml = '';
+                                    if (hasThought) {
+                                        const summaryText = isThinking ? 'Thinking<span class="thinking-dots"></span>' : 'Thought';
+                                        
+                                        finalHtml += `
+                                        <details class="thought-process">
+                                            <summary onclick="setTimeout(() => { const c = document.getElementById('chat-container'); c.scrollTop = c.scrollHeight; }, 10)">
+                                                <span class="thinking-text">${summaryText}</span>
+                                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="chevron"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                                            </summary>
+                                            <div class="thought-content" style="white-space: pre-wrap;">${thoughtText}</div>
+                                        </details>
+                                        `;
+                                    }
+                                    finalHtml += messageText;
+                                    
+                                    botMessageDiv.innerHTML = finalHtml;
+                                    
+                                    if (wasOpen) {
+                                        const details = botMessageDiv.querySelector('.thought-process');
+                                        if (details) details.open = true;
+                                    }
+                                    
+                                    if (isNearBottom) smoothScrollTo(chatContainer, chatContainer.scrollHeight, 100);
+                                };
+                                
+                                const now = Date.now();
+                                if (now - lastUpdateTime > 100) {
+                                    updateChatDOM();
+                                    lastUpdateTime = now;
+                                } else if (!chatUpdateTimeoutId) {
+                                    chatUpdateTimeoutId = setTimeout(() => {
+                                        updateChatDOM();
+                                        lastUpdateTime = Date.now();
+                                        chatUpdateTimeoutId = null;
+                                    }, 100 - (now - lastUpdateTime));
                                 }
                             }
                         },
                         (finalContent) => {
-                            if (chatRafId) {
-                                cancelAnimationFrame(chatRafId);
-                                chatRafId = null;
+                            if (chatUpdateTimeoutId) {
+                                clearTimeout(chatUpdateTimeoutId);
+                                chatUpdateTimeoutId = null;
                             }
-                            const stripped = finalContent.replace(/^```(?:\w+\n)?/, '').replace(/```\s*$/, '');
-                            const cleanedContent = shouldConvertToHTML(stripped)
+                            
+                            const wasOpen = botMessageDiv.querySelector('.thought-process')?.open;
+                            
+                            let thoughtTextFinal = '';
+                            let messageTextFinal = finalContent;
+                            let finalHasThought = false;
+                            
+                            if (finalContent.includes('<thought>')) {
+                                finalHasThought = true;
+                                const startIndex = finalContent.indexOf('<thought>') + '<thought>'.length;
+                                const endIndex = finalContent.indexOf('</thought>');
+                                
+                                if (endIndex !== -1) {
+                                    thoughtTextFinal = finalContent.substring(startIndex, endIndex).trim();
+                                    messageTextFinal = finalContent.substring(endIndex + '</thought>'.length).trim();
+                                } else {
+                                    thoughtTextFinal = finalContent.substring(startIndex).trim();
+                                    messageTextFinal = '';
+                                }
+                            }
+                            
+                            const stripped = messageTextFinal.replace(/^```(?:\w+\n)?/, '').replace(/```\s*$/, '');
+                            let cleanedContent = shouldConvertToHTML(stripped)
                                 ? convertMarkdownToHTML(stripped)
                                 : applyInlineMarkdown(stripped);
+                            
+                            if (finalHasThought) {
+                                let cleanedThought = thoughtTextFinal;
+                                if (cleanedThought) {
+                                    cleanedThought = shouldConvertToHTML(cleanedThought)
+                                        ? convertMarkdownToHTML(cleanedThought)
+                                        : applyInlineMarkdown(cleanedThought);
+                                }
+                                
+                                const thoughtHtml = `
+                                <details class="thought-process">
+                                    <summary>
+                                        <span class="thought-label">Thought</span>
+                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="chevron"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                                    </summary>
+                                    <div class="thought-content" style="${shouldConvertToHTML(thoughtTextFinal) ? "" : "white-space: pre-wrap;"}">${cleanedThought}</div>
+                                </details>
+                                `;
+                                cleanedContent = thoughtHtml + cleanedContent;
+                            }
+                            
                             botMessageDiv.innerHTML = cleanedContent;
+                            
+                            if (wasOpen) {
+                                const details = botMessageDiv.querySelector('.thought-process');
+                                if (details) details.open = true;
+                            }
                             
                             const botMessageId = generateUniqueId();
                             chatHistory = updateChatHistoryState(chatHistory, cleanedContent, "assistant", botMessageId);
@@ -8236,10 +8421,16 @@
                             onStreamCompleted(cleanedContent);
                         },
                         (error) => {
+                            if (chatUpdateTimeoutId) {
+                                clearTimeout(chatUpdateTimeoutId);
+                                chatUpdateTimeoutId = null;
+                            }
                             botMessageDiv.innerHTML = `⚠️ Error: ${error.message}`;
                         },
                         cacheToUse,
-                        refreshGeminiCache
+                        refreshGeminiCache,
+                        0,
+                        true
                     );
                 }
                 
