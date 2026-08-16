@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      14.10.0
+// @version      14.10.1
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @grant       GM_xmlhttpRequest
@@ -982,6 +982,7 @@
         const codePlaceholders = [];
         
         return text
+            .replace(/\n{3,}/g, '\n\n')
             .replace(/`([^`]+)`/g, (_, code) => {
                 codePlaceholders.push(`<code>${code}</code>`);
                 return `\x00${codePlaceholders.length - 1}\x00`;
@@ -994,10 +995,13 @@
     function convertMarkdownToHTML(text) {
         const codePlaceholders = [];
         
-        const protectedText = text.trim().replace(/`([^`]+)`/g, (_, code) => {
-            codePlaceholders.push(`<code>${code}</code>`);
-            return `\x00${codePlaceholders.length - 1}\x00`;
-        });
+        const protectedText = text
+            .trim()
+            .replace(/\n{3,}/g, '\n\n')
+            .replace(/`([^`]+)`/g, (_, code) => {
+                codePlaceholders.push(`<code>${code}</code>`);
+                return `\x00${codePlaceholders.length - 1}\x00`;
+            });
         
         const parseInline = (t) => t
             .replace(/\*\*(.+?)\*\*/gs, '<b>$1</b>')
@@ -5751,13 +5755,14 @@
                     cursor: pointer;
                 }
 
-                .thought-process {
-                    margin-bottom: 8px;
+                .thought-process.with-margin {
+                    margin-bottom: 5px;
                 }
                 
                 .thought-process summary {
                     cursor: pointer;
                     opacity: 0.6;
+                    margin: 2px 0 0 3px;
                     font-size: 1em;
                     user-select: none;
                     list-style: none;
@@ -8106,9 +8111,8 @@
                             const regenerateButton = messageButtonContainer.querySelector(".regenerate-button");
                             if (regenerateButton) messageButtonContainer.insertBefore(saveFlashcardButton, regenerateButton);
                             else messageButtonContainer.appendChild(saveFlashcardButton);
-                        } else {
-                            saveFlashcardButton.disabled = true;
                         }
+                        saveFlashcardButton.disabled = true;
                         
                         getDbClient()
                             .from(getTableName())
@@ -8176,8 +8180,7 @@
                     return messageDiv;
                 }
                 
-                async function callStreamOpenAI(botMessageDiv, chatContainer, focus, onStreamCompleted = () => {
-                }) {
+                async function callStreamOpenAI(botMessageDiv, chatContainer, focus, onStreamCompleted = () => {}) {
                     const userInput = document.getElementById("user-input");
                     const sendButton = document.getElementById("send-button");
                     
@@ -8245,28 +8248,29 @@
                                     
                                     let finalHtml = '';
                                     if (hasThought) {
+                                        thoughtText = thoughtText.replace(/\n{3,}/g, '\n\n');
+                                        
                                         const summaryText = isThinking ? 'Thinking<span class="thinking-dots"></span>' : 'Thought';
+                                        const extraClass = messageText.trim() ? ' with-margin' : '';
+                                        const openAttr = wasOpen ? ' open' : '';
                                         
                                         finalHtml += `
-                                        <details class="thought-process">
+                                        <details class="thought-process${extraClass}"${openAttr}>
                                             <summary onclick="setTimeout(() => { const c = document.getElementById('chat-container'); c.scrollTop = c.scrollHeight; }, 10)">
                                                 <span class="thinking-text">${summaryText}</span>
                                                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="chevron"><polyline points="6 9 12 15 18 9"></polyline></svg>
                                             </summary>
                                             <div class="thought-content" style="white-space: pre-wrap;">${thoughtText}</div>
                                         </details>
-                                        `;
+        `;
                                     }
                                     finalHtml += messageText;
                                     
                                     botMessageDiv.innerHTML = finalHtml;
                                     
-                                    if (wasOpen) {
-                                        const details = botMessageDiv.querySelector('.thought-process');
-                                        if (details) details.open = true;
+                                    if (isNearBottom) {
+                                        chatContainer.scrollTop = chatContainer.scrollHeight;
                                     }
-                                    
-                                    if (isNearBottom) smoothScrollTo(chatContainer, chatContainer.scrollHeight, 100);
                                 };
                                 
                                 const now = Date.now();
@@ -8320,9 +8324,10 @@
                                         ? convertMarkdownToHTML(cleanedThought)
                                         : applyInlineMarkdown(cleanedThought);
                                 }
+                                const extraClass = stripped.trim() ? ' with-margin' : '';
                                 
                                 const thoughtHtml = `
-                                <details class="thought-process">
+                                <details class="thought-process${extraClass}">
                                     <summary>
                                         <span class="thought-label">Thought</span>
                                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="chevron"><polyline points="6 9 12 15 18 9"></polyline></svg>
