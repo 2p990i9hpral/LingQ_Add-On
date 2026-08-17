@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      14.10.1
+// @version      14.10.2
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @grant       GM_xmlhttpRequest
@@ -430,6 +430,13 @@
         
         children.forEach(child => child && element.append(child));
         return element;
+    }
+    
+    function escapeHTML(str) {
+        return str
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;");
     }
     
     function clickElement(selector) {
@@ -4804,35 +4811,44 @@
                     
                     const wordsCSV = data.reverse().map(item => `${item.word}, ${item.meaning}, ${item.explanation}`).join('\n');
                     const prompt = `
-                    Act as a corpus linguist and SLA (Second Language Acquisition) diagnostician, auditing a learner's vocabulary acquisition log for ${targetLanguage}.
+                    Act as a corpus linguist and SLA (Second Language Acquisition) diagnostician, auditing a learner's recent vocabulary intake of ${limitCount} words for ${targetLanguage}.
                     
-                    Data: CSV columns are idx (chronological order of encounter), word, meaning, explanation. Rows list words the learner marked as unknown recently.
+                    Data: CSV columns are idx (chronological order of encounter), word, meaning, explanation. Rows list words marked as unknown recently.
                     
-                    Global Rules (apply across all sections):
-                    - Treat every word as inline supporting evidence only; never as a standalone bullet or dedicated sub-explanation. Write in flowing thematic prose, not one-bullet-per-word inventories.
-                    - Explain difficulty via domain knowledge, register, or cultural schema only; never via ${userNativeLang} cognate or loanword comparison, since surface-level lexical similarity does not reflect actual acquisition difficulty.
-                    - Use "difficulty band" consistently (e.g., CEFR/HSK/JLPT) as the single term for proficiency level throughout the report; do not alternate with "level," "grade," or "tier."
-                    - Clustering basis: group words by idx proximity (chronological closeness) combined with explanation content (semantic/topical similarity). Refer to this combined basis as "clustering basis" in later sections instead of restating both criteria.
+                    Global Core Directives (apply across all sections):
+                    - Evidence Integration: Treat every word strictly as inline supporting evidence within flowing prose. Never format words as standalone lists, tables, or itemized inventories.
+                    - Citation Budget: Strictly cite 3 to 5 representative member words inline per paragraph. Do not exceed this limit; prioritize deep domain and linguistic analysis over vocabulary enumeration.
+                    - Difficulty Calibration: Ground all difficulty explanations solely in domain-specific knowledge schemas, stylistic formality, or cultural prerequisites. Never compare against ${userNativeLang} cognates or surface-level loanwords.
+                    - Consistent Proficiency Nomenclature: Use "difficulty band" (specifying CEFR, HSK, or JLPT benchmarks) as the sole standard term throughout the entire report.
+                    - Scope Limitation: Treat this dataset as a short-term cross-sectional sample (${limitCount} words). Profile the linguistic and cognitive demands of the consumed texts themselves; do not infer longitudinal learner developmental leaps or milestone acquisitions.
                     
-                    Analyze the data using these directives, producing prose paragraphs per the Global Rules above:
+                    Prose Style & Tone Constraints:
+                    - No Meta-Discourse: Write entirely from the perspective of an objective linguistic profiler. Never reference the dataset, log, table, or analytical process itself. Begin all paragraphs directly with the subject matter, reading stream, or linguistic phenomena.
+                    - No Defensive Contrasts or Disclaimers: State diagnostic observations directly without qualifying what the analysis is not doing, or contrasting with alternative interpretations.
+                    - Direct Thematic Openings: Begin every thematic paragraph directly with the topical domain or contextual setting of the source text. Do not use ordinal numbers, chronological step labels, or chapter/episode markers.
+                    - Natural Native Phrasing: Write in idiomatic, professional ${userNativeLang} suitable for executive briefing reports. Render linguistic and stylistic concepts using native descriptive phrasing rather than transliterating academic jargon.
+                    - Natural Paragraph Closure: Conclude each thematic block immediately upon detailing the domain schema and linguistic demands of that text group, without appending formulaic summary statements regarding learner mastery.
                     
-                    1. Source & Trajectory Narrative:
-                        Read idx order as a timeline, grouping words by the clustering basis to infer the probable content type per phase (news article, casual essay, exam material, product manual, livestream/subtitle, etc.), and explain why each phase shift likely happened.
-                        State the general difficulty band this reflects.
-                        Resolution rule: If the data shows no clear phase shift (e.g., a single continuous source), state this explicitly and describe the single trajectory instead of inventing artificial phases.
-                    2. Thematic Cluster & Difficulty Fusion:
-                        Group the words into named thematic clusters using the clustering basis.
-                        For each cluster, write one flowing paragraph containing:
-                        - Cluster name; 3-5 representative member words cited inline
-                        - Inferred content source
-                        - Difficulty band with domain-level reason (e.g., compounding literacy demands, cultural schema unrelated to raw language skill, or nuance beyond dictionary definition)
-                        - What this cluster signals about the learner's current stage
-                        Close the section with one synthesis sentence giving the overall difficulty band across all clusters and what the phase shift represents (e.g., moving from exam-oriented to life-oriented acquisition).
-                        Resolution rule: If fewer than two distinct clusters emerge, present the single cluster and explicitly note the lack of thematic diversity rather than forcing artificial splits.
-                    3. Notable Patterns:
-                        Independent of any single cluster, state generalizations about the collection's character as a whole
-                        — density of idiomatic/phrasal expressions versus single-morpheme vocabulary; density of domain-specific jargon; mixed written/spoken register; spelling irregularities suggesting audio/subtitle-based intake.
-                        You may cite a few words as supporting evidence within a sentence, but do not give each word its own dedicated analysis.
+                    Section Directives:
+                    
+                    1. Macro Source & Trajectory Roadmap:
+                        Read the idx sequence as an unbroken chronological timeline from start to finish.
+                        Write a concise macro narrative directly charting the progression of consumed topics, genres, and mediums across the timeline, and state the baseline difficulty band required by these materials.
+                    
+                    2. Content Timeline & Difficulty:
+                        Follow the chronological idx timeline to partition the thematic flow into exactly ${limitCount <= 70 ? "2 to 3" : limitCount <= 150 ? "3 to 5" : limitCount <= 350 ? "5 to 8" : "7 to 10"} fluid, coherent paragraphs.
+                        For each thematic stream, write one paragraph containing:
+                        - Direct opening identifying the topical domain; exactly 3-5 representative member words cited inline
+                        - Inferred content style, medium, and discourse characteristics using natural native vocabulary
+                        - Difficulty band supported by domain-level reasoning (e.g., specialized schema, compounding literacy demands, metaphorical nuance beyond literal translation, or cultural pragmatics)
+                        Close Section 2 with exactly one synthesis sentence summarizing the overall difficulty band and the breadth of text genres covered across the timeline.
+                    
+                    3. Notable Linguistic & Corpus Patterns:
+                        Independent of chronological flow, provide corpus-level generalizations across the vocabulary intake in ${limitCount >= 300 ? "2 distinct paragraphs" : "1 comprehensive paragraph"}:
+                        - Morphological & syntactic composition: density of compound words, multi-word collocations, and phrasal expressions versus single-morpheme roots.
+                        - Stylistic & formality distribution: proportion and contrast between formal/academic written prose and informal/conversational/mimetic expressions.
+                        - Semantic complexity: presence of metaphorical/figurative extensions (e.g., physical terms used in political/abstract discourse) versus technical domain jargon.
+                        Cite 3-5 representative words inline as supporting evidence within flowing sentences.
                     
                     Output Rules:
                     - Language: ${userNativeLang}
@@ -4840,14 +4856,18 @@
                     
                     <div class="report-content">
                         <h2>1. Overview</h2>
-                        <p>[Trajectory narrative: how content type and topic shifted across the idx timeline, why each shift likely happened, and the difficulty band this reflects]</p>
+                        <p>[Macro roadmap: chronological trajectory of content themes/sources from start to finish, and the general difficulty band of the consumed texts]</p>
                     
-                        <h2>2. Thematic Clusters &amp; Difficulty</h2>
-                        <p>[One paragraph per cluster: name, member words inline, inferred source, difficulty band with domain-level reasoning, and what mastering it signals]</p>
-                        <p>[Synthesis sentence: overall difficulty band and what the phase shift represents]</p>
+                        <h2>2. Content Timeline &amp; Difficulty</h2>
+                        <!-- Render exactly ${limitCount <= 70 ? "2 to 3" : limitCount <= 150 ? "3 to 5" : limitCount <= 350 ? "5 to 8" : "7 to 10"} thematic paragraphs + 1 synthesis sentence -->
+                        <p>[Thematic stream paragraph 1...]</p>
+                        <p>[Thematic stream paragraph 2...]</p>
+                        <p>[Thematic stream paragraph N...]</p>
+                        <p>[Single synthesis sentence summarizing overall difficulty band and genre breadth]</p>
                     
                         <h2>3. Notable Patterns</h2>
-                        <p>[Aggregate observations about idiom density, jargon density, register mix, or intake-method traces across the whole set]</p>
+                        <!-- Render ${limitCount >= 300 ? "2 distinct paragraphs" : "1 comprehensive paragraph"} -->
+                        <p>[Aggregate corpus observations: syntactic/morphological composition, stylistic/formality distribution, and semantic/metaphorical complexity]</p>
                     </div>
                     
                     Vocabulary Data:
@@ -5936,6 +5956,10 @@
                     user-select: none;
                     -webkit-user-select: none;
                     font-size: 0.6em;
+                }
+
+                .quick-summary .lesson-summary-details {
+                    margin-bottom: 12px;
                 }
 
                 .summary-content {
@@ -7178,6 +7202,35 @@
                     );
                 }
                 
+                function renderLessonSummaryDetails(targetSummaryElement = null) {
+                    if (!lessonSummary) return;
+                    const summaryElements = targetSummaryElement ? [targetSummaryElement] : document.querySelectorAll(".quick-summary");
+                    summaryElements.forEach((element) => {
+                        if (element.querySelector(".lesson-summary-details")) return;
+                        
+                        const details = createElement("details", {
+                            className: "thought-process lesson-summary-details with-margin"
+                        });
+                        
+                        const summary = createElement("summary", {
+                            style: "font-size: 0.8em;",
+                            innerHTML: `
+                                <span class="thought-label">Lesson Summary</span>
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="chevron"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                            `
+                        });
+                        
+                        const content = createElement("div", {
+                            className: "thought-content",
+                            style: "font-size: 0.7em;",
+                            innerHTML: lessonSummary
+                        });
+                        
+                        details.append(summary, content);
+                        element.prepend(details);
+                    });
+                }
+                
                 function createAndPrependSummaryElement(section) {
                     if (section.parentNode.querySelector(".quick-summary")) return;
                     
@@ -7185,6 +7238,10 @@
                         className: "quick-summary",
                         style: `position: relative; ${(settings.prependSummary[language]) ? '' : 'display: none;'}`
                     });
+                    
+                    if (lessonSummary) {
+                        renderLessonSummaryDetails(summaryElement);
+                    }
                     
                     const contentWrapper = createElement("div", {
                         className: "summary-content",
@@ -7245,6 +7302,7 @@
                 }
                 
                 quickSummary = "";
+                lessonSummary = "";
                 const existingSection = readerContainer.querySelector('section');
                 if (existingSection) createAndPrependSummaryElement(existingSection);
                 
@@ -7272,6 +7330,7 @@
                 getLessonSummary(llmProvider, llmApiKey, llmModel, lessonContent)
                     .then(summary => {
                         lessonSummary = convertMarkdownToHTML(summary);
+                        renderLessonSummaryDetails();
                     });
                 
             }
@@ -8260,7 +8319,7 @@
                                                 <span class="thinking-text">${summaryText}</span>
                                                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="chevron"><polyline points="6 9 12 15 18 9"></polyline></svg>
                                             </summary>
-                                            <div class="thought-content" style="white-space: pre-wrap;">${thoughtText}</div>
+                                            <div class="thought-content" style="white-space: pre-wrap;">${escapeHTML(thoughtText)}</div>
                                         </details>
         `;
                                     }
@@ -8318,7 +8377,7 @@
                                 : applyInlineMarkdown(stripped);
                             
                             if (finalHasThought) {
-                                let cleanedThought = thoughtTextFinal;
+                                let cleanedThought = escapeHTML(thoughtTextFinal);
                                 if (cleanedThought) {
                                     cleanedThought = shouldConvertToHTML(cleanedThought)
                                         ? convertMarkdownToHTML(cleanedThought)
