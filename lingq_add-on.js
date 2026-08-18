@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      14.10.2
+// @version      14.10.3
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @grant       GM_xmlhttpRequest
@@ -8263,8 +8263,87 @@
                     }
                     const cacheToUse = (isWordRequest && (llmProvider === "google" || llmProvider === "vertex")) ? currentGeminiCacheName : null;
                     
-                    let chatUpdateTimeoutId = null;
-                    let lastUpdateTime = 0;
+                    let chatRafId = null;
+                    
+                    function updateChatDOM() {
+                        const wasOpen = botMessageDiv.querySelector('.thought-process')?.open;
+                        const isNearBottom = chatContainer.scrollTop + chatContainer.clientHeight >= chatContainer.scrollHeight - 120;
+                        
+                        let thoughtText = '';
+                        let messageText = fullBotResponse;
+                        let isThinking = false;
+                        let hasThought = false;
+                        
+                        if ((llmProvider === "google" || llmProvider === "vertex") && !fullBotResponse.includes('</thought>') && fullBotResponse.length < 20 && !fullBotResponse.includes('<thought>')) {
+                            hasThought = true;
+                            isThinking = true;
+                            thoughtText = fullBotResponse.replace(/^<t?h?o?u?g?h?t?>?/, '');
+                            messageText = '';
+                        } else if (fullBotResponse.includes('<thought>')) {
+                            hasThought = true;
+                            const startIndex = fullBotResponse.indexOf('<thought>') + '<thought>'.length;
+                            const endIndex = fullBotResponse.indexOf('</thought>');
+                            
+                            if (endIndex !== -1) {
+                                thoughtText = fullBotResponse.substring(startIndex, endIndex).trim();
+                                messageText = fullBotResponse.substring(endIndex + '</thought>'.length).trim();
+                            } else {
+                                isThinking = true;
+                                thoughtText = fullBotResponse.substring(startIndex).trim();
+                                messageText = '';
+                            }
+                        }
+                        
+                        if (hasThought) {
+                            thoughtText = thoughtText.replace(/\n{3,}/g, '\n\n');
+                            let thoughtDetails = botMessageDiv.querySelector('.thought-process');
+                            
+                            if (!thoughtDetails) {
+                                botMessageDiv.innerHTML = `
+                                <details class="thought-process">
+                                    <summary onclick="setTimeout(() => { const c = document.getElementById('chat-container'); c.scrollTop = c.scrollHeight; }, 10)">
+                                        <span class="thinking-text">Thinking<span class="thinking-dots"></span></span>
+                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="chevron"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                                    </summary>
+                                    <div class="thought-content" style="white-space: pre-wrap;"></div>
+                                </details>
+                                <div class="bot-stream-text"></div>
+                                `;
+                                thoughtDetails = botMessageDiv.querySelector('.thought-process');
+                                if (wasOpen) thoughtDetails.open = true;
+                            }
+                            
+                            const thinkingLabel = thoughtDetails.querySelector('.thinking-text');
+                            const expectedSummaryHtml = isThinking ? 'Thinking<span class="thinking-dots"></span>' : 'Thought';
+                            if (thinkingLabel && thinkingLabel.innerHTML !== expectedSummaryHtml) {
+                                thinkingLabel.innerHTML = expectedSummaryHtml;
+                            }
+                            
+                            thoughtDetails.classList.toggle('with-margin', Boolean(messageText.trim()));
+                            
+                            const contentDiv = thoughtDetails.querySelector('.thought-content');
+                            if (contentDiv && contentDiv.textContent !== thoughtText) {
+                                contentDiv.textContent = thoughtText;
+                            }
+                            
+                            let textContainer = botMessageDiv.querySelector('.bot-stream-text');
+                            if (!textContainer) {
+                                textContainer = createElement('div', { className: 'bot-stream-text' });
+                                botMessageDiv.appendChild(textContainer);
+                            }
+                            if (textContainer.innerHTML !== messageText) {
+                                textContainer.innerHTML = messageText;
+                            }
+                        } else {
+                            if (botMessageDiv.innerHTML !== messageText) {
+                                botMessageDiv.innerHTML = messageText;
+                            }
+                        }
+                        
+                        if (isNearBottom) {
+                            chatContainer.scrollTop = chatContainer.scrollHeight;
+                        }
+                    }
                     
                     await streamOpenAIResponse(
                         llmProvider,
@@ -8275,80 +8354,18 @@
                             const content = typeof chunk === "string" ? chunk : chunk.choices?.[0]?.delta?.content;
                             if (content) {
                                 fullBotResponse += content;
-                                
-                                const updateChatDOM = () => {
-                                    const wasOpen = botMessageDiv.querySelector('.thought-process')?.open;
-                                    const isNearBottom = chatContainer.scrollTop + chatContainer.clientHeight >= chatContainer.scrollHeight - 120;
-                                    
-                                    let thoughtText = '';
-                                    let messageText = fullBotResponse;
-                                    let isThinking = false;
-                                    let hasThought = false;
-                                    
-                                    if ((llmProvider === "google" || llmProvider === "vertex") && !fullBotResponse.includes('</thought>') && fullBotResponse.length < 20 && !fullBotResponse.includes('<thought>')) {
-                                        hasThought = true;
-                                        isThinking = true;
-                                        thoughtText = fullBotResponse.replace(/^<t?h?o?u?g?h?t?>?/, '');
-                                        messageText = '';
-                                    } else if (fullBotResponse.includes('<thought>')) {
-                                        hasThought = true;
-                                        const startIndex = fullBotResponse.indexOf('<thought>') + '<thought>'.length;
-                                        const endIndex = fullBotResponse.indexOf('</thought>');
-                                        
-                                        if (endIndex !== -1) {
-                                            thoughtText = fullBotResponse.substring(startIndex, endIndex).trim();
-                                            messageText = fullBotResponse.substring(endIndex + '</thought>'.length).trim();
-                                        } else {
-                                            isThinking = true;
-                                            thoughtText = fullBotResponse.substring(startIndex).trim();
-                                            messageText = '';
-                                        }
-                                    }
-                                    
-                                    let finalHtml = '';
-                                    if (hasThought) {
-                                        thoughtText = thoughtText.replace(/\n{3,}/g, '\n\n');
-                                        
-                                        const summaryText = isThinking ? 'Thinking<span class="thinking-dots"></span>' : 'Thought';
-                                        const extraClass = messageText.trim() ? ' with-margin' : '';
-                                        const openAttr = wasOpen ? ' open' : '';
-                                        
-                                        finalHtml += `
-                                        <details class="thought-process${extraClass}"${openAttr}>
-                                            <summary onclick="setTimeout(() => { const c = document.getElementById('chat-container'); c.scrollTop = c.scrollHeight; }, 10)">
-                                                <span class="thinking-text">${summaryText}</span>
-                                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="chevron"><polyline points="6 9 12 15 18 9"></polyline></svg>
-                                            </summary>
-                                            <div class="thought-content" style="white-space: pre-wrap;">${escapeHTML(thoughtText)}</div>
-                                        </details>
-        `;
-                                    }
-                                    finalHtml += messageText;
-                                    
-                                    botMessageDiv.innerHTML = finalHtml;
-                                    
-                                    if (isNearBottom) {
-                                        chatContainer.scrollTop = chatContainer.scrollHeight;
-                                    }
-                                };
-                                
-                                const now = Date.now();
-                                if (now - lastUpdateTime > 100) {
-                                    updateChatDOM();
-                                    lastUpdateTime = now;
-                                } else if (!chatUpdateTimeoutId) {
-                                    chatUpdateTimeoutId = setTimeout(() => {
+                                if (!chatRafId) {
+                                    chatRafId = requestAnimationFrame(() => {
                                         updateChatDOM();
-                                        lastUpdateTime = Date.now();
-                                        chatUpdateTimeoutId = null;
-                                    }, 100 - (now - lastUpdateTime));
+                                        chatRafId = null;
+                                    });
                                 }
                             }
                         },
                         (finalContent) => {
-                            if (chatUpdateTimeoutId) {
-                                clearTimeout(chatUpdateTimeoutId);
-                                chatUpdateTimeoutId = null;
+                            if (chatRafId) {
+                                cancelAnimationFrame(chatRafId);
+                                chatRafId = null;
                             }
                             
                             const wasOpen = botMessageDiv.querySelector('.thought-process')?.open;
@@ -8485,9 +8502,9 @@
                             onStreamCompleted(cleanedContent);
                         },
                         (error) => {
-                            if (chatUpdateTimeoutId) {
-                                clearTimeout(chatUpdateTimeoutId);
-                                chatUpdateTimeoutId = null;
+                            if (chatRafId) {
+                                cancelAnimationFrame(chatRafId);
+                                chatRafId = null;
                             }
                             botMessageDiv.innerHTML = `⚠️ Error: ${error.message}`;
                         },
