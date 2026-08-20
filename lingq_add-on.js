@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      14.10.4
+// @version      14.10.5
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @grant       GM_xmlhttpRequest
@@ -1112,7 +1112,7 @@
         const apiUrl = "https://api.openai.com/v1/audio/speech";
         
         if (!API_KEY) throw new Error("Invalid or missing OpenAI API key. Please set the API_KEY");
-        console.log('[TTS]', `${modelId}, ${voice}`);
+        console.log('[TTS]', `${modelId}, ${voice}`, `"${text}"`);
         
         try {
             const response = await fetch(apiUrl, {
@@ -1190,6 +1190,7 @@
         const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${modelId}:generateContent?key=${API_KEY}`;
         
         if (!API_KEY) throw new Error("Invalid or missing Google API key. Please set the API_KEY");
+        console.log('[TTS]', `${modelId}, ${voice}`, `"${text}"`);
         
         const maxRetries = 3;
         for (let attempt = 0; attempt < maxRetries; attempt++) {
@@ -1233,7 +1234,7 @@
                     const outputTokens = data.usageMetadata.candidatesTokenCount;
                     const approxCost = inputTokens * 0.5 / 1000000 + outputTokens * 10 / 1000000;
                     
-                    trackLLMUsage("TTS", modelId, 0, inputTokens, 0, outputTokens, approxCost);
+                    trackLLMUsage("TTS", modelId, 0, inputTokens, 0, outputTokens, approxCost, false, "google gemini");
                     
                     const binaryString = atob(audioDataBase64);
                     const len = binaryString.length;
@@ -1276,7 +1277,7 @@
         const apiUrl = `https://texttospeech.googleapis.com/v1/text:synthesize?key=${API_KEY}`;
         
         if (!API_KEY) throw new Error("Invalid or missing Google API key. Please set the API_KEY");
-        console.log('[TTS]', `${voice}`);
+        console.log('[TTS]', `${voice}`, `"${text}"`);
         
         try {
             const response = await fetch(apiUrl, {
@@ -1385,7 +1386,37 @@
         return { cachedTokens, inputTokens, reasoningTokens, outputTokens };
     }
     
-    function trackLLMUsage(contextType, model, cachedTokens, inputTokens, reasoningTokens, outputTokens, overrideCost = null, isPriority = false) {
+    function saveLLMUsageToStorage(usageDetail) {
+        try {
+            const storageKey = "lingq_llm_usage_history";
+            const rawData = localStorage.getItem(storageKey);
+            const history = rawData ? JSON.parse(rawData) : [];
+            
+            const now = new Date();
+            const dateStr = now.toLocaleDateString('sv');
+            const timeStr = now.toTimeString().split(' ')[0];
+            
+            const entry = {
+                timestamp: now.getTime(),
+                date: dateStr,
+                time: timeStr,
+                provider: usageDetail.provider || settings.llmProvider,
+                model: usageDetail.model,
+                type: usageDetail.type,
+                tokens: usageDetail.tokens || { cached: 0, input: 0, reasoning: 0, output: 0 },
+                cost: usageDetail.cost || 0,
+                uncachedCost: usageDetail.uncachedCost ?? usageDetail.cost ?? 0,
+                isPriority: Boolean(usageDetail.isPriority)
+            };
+            
+            history.push(entry);
+            localStorage.setItem(storageKey, JSON.stringify(history));
+        } catch (e) {
+            console.error("Failed to save LLM usage to localStorage:", e);
+        }
+    }
+    
+    function trackLLMUsage(contextType, model, cachedTokens, inputTokens, reasoningTokens, outputTokens, overrideCost = null, isPriority = false, provider = null) {
         let approxCost = 0;
         let uncachedCost = 0;
         let savedPercentStr = "";
@@ -1413,9 +1444,12 @@
         const priorityStr = isPriority ? " (Priority)" : "";
         console.log('[LLM usage]', `[${contextType}]`, `${model}${priorityStr}, tokens: (${cachedTokens}/${inputTokens}/${reasoningTokens}/${outputTokens}), ${logMessage}`);
         
+        const resolvedProvider = provider || settings.llmProvider;
+        
         document.dispatchEvent(new CustomEvent("addon:llmUsage", {
             detail: {
                 type: contextType,
+                provider: resolvedProvider,
                 model: model,
                 tokens: {
                     cached: cachedTokens,
@@ -1424,7 +1458,8 @@
                     output: outputTokens
                 },
                 cost: approxCost,
-                uncachedCost: uncachedCost
+                uncachedCost: uncachedCost,
+                isPriority: isPriority
             }
         }));
     }
@@ -1693,7 +1728,7 @@
             const content = provider === "anthropic" ? data.content[0]?.text : data.choices[0]?.message?.content;
             const { cachedTokens, inputTokens, reasoningTokens, outputTokens } = extractTokenUsage(data.usage);
             
-            trackLLMUsage("Chat Batch", model, cachedTokens, inputTokens, reasoningTokens, outputTokens, null, isPriority);
+            trackLLMUsage("Chat Batch", model, cachedTokens, inputTokens, reasoningTokens, outputTokens, null, isPriority, provider);
             
             return content || "Sorry, could not get a response.";
         } catch (error) {
@@ -1731,7 +1766,7 @@
             if ((provider === "google" || provider === "vertex") && lastUsage) {
                 const { cachedTokens, inputTokens, reasoningTokens, outputTokens } = extractTokenUsage(lastUsage);
                 
-                trackLLMUsage("Chat Stream", model, cachedTokens, inputTokens, reasoningTokens, outputTokens, null, isPriority);
+                trackLLMUsage("Chat Stream", model, cachedTokens, inputTokens, reasoningTokens, outputTokens, null, isPriority, provider);
             }
             
             onStreamEnd(finalContent);
@@ -7629,7 +7664,7 @@
                 
                 showToast("Cache Created", true);
                 
-                trackLLMUsage("Cache Creation", model, 0, totalTokens, 0, 0, totalInitialCost, isPriority);
+                trackLLMUsage("Cache Creation", model, 0, totalTokens, 0, 0, totalInitialCost, isPriority, provider);
                 
                 return data.name;
             } catch (error) {
@@ -8806,6 +8841,7 @@
         
         document.addEventListener("addon:llmUsage", (event) => {
             lessonUsageHistory.push(event.detail);
+            saveLLMUsageToStorage(event.detail);
         });
         
         const language = getLessonLanguage();
