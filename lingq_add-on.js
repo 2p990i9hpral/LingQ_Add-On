@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      15.0.0
+// @version      15.0.1
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @grant       GM_xmlhttpRequest
@@ -4602,7 +4602,7 @@
                     const d = new Date(date);
                     d.setHours(0, 0, 0, 0);
                     d.setDate(d.getDate() - d.getDay());
-                    return d.toISOString().slice(0, 10);
+                    return getLocalDateKey(d);
                 }
                 
                 function buildChartData(selectedPeriod) {
