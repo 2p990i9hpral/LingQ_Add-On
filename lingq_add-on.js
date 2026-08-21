@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      14.10.5
+// @version      15.0.0
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @grant       GM_xmlhttpRequest
@@ -1348,14 +1348,16 @@
         }
     }
     
-    function getLLMPricing(llmModel) {
-        const llmInfo = document.querySelector(`#llmModelSelector > option[value="${llmModel}"]`).text;
-        const [inputPrice, outputPrice] = llmInfo.match(/\$(\d+(?:\.\d+)?)\/\$(\d+(?:\.\d+)?)\)/).slice(1, 3).map(num => parseFloat(num) / 1000000);
-        return [inputPrice, outputPrice];
+    function getLLMPricing(model, provider = settings.llmProvider) {
+        const models = (provider && llmModelsByProvider[provider]) || Object.values(llmModelsByProvider).flat();
+        const modelObj = models.find(m => m.value === model);
+        const match = modelObj?.text.match(/\$(\d+(?:\.\d+)?)\/\$(\d+(?:\.\d+)?)\)/);
+        
+        return match ? [parseFloat(match[1]) / 1e6, parseFloat(match[2]) / 1e6] : [0, 0];
     }
     
     function extractTokenUsage(usage) {
-        if (!usage) return { cachedTokens: 0, inputTokens: 0, reasoningTokens: 0, outputTokens: 0 };
+        if (!usage) return {cachedTokens: 0, inputTokens: 0, reasoningTokens: 0, outputTokens: 0};
         
         const cachedTokens = usage.prompt_tokens_details?.cached_tokens || usage.prompt_cache_hit_tokens || usage.cache_read_input_tokens || 0;
         const rawInputTokens = usage.prompt_tokens || usage.input_tokens || 0;
@@ -1383,7 +1385,7 @@
             }
         }
         
-        return { cachedTokens, inputTokens, reasoningTokens, outputTokens };
+        return {cachedTokens, inputTokens, reasoningTokens, outputTokens};
     }
     
     function saveLLMUsageToStorage(usageDetail) {
@@ -1392,20 +1394,14 @@
             const rawData = localStorage.getItem(storageKey);
             const history = rawData ? JSON.parse(rawData) : [];
             
-            const now = new Date();
-            const dateStr = now.toLocaleDateString('sv');
-            const timeStr = now.toTimeString().split(' ')[0];
+            const currentLang = usageDetail.language || getLessonLanguage();
             
             const entry = {
-                timestamp: now.getTime(),
-                date: dateStr,
-                time: timeStr,
+                timestamp: Date.now(),
+                language: currentLang,
                 provider: usageDetail.provider || settings.llmProvider,
                 model: usageDetail.model,
-                type: usageDetail.type,
-                tokens: usageDetail.tokens || { cached: 0, input: 0, reasoning: 0, output: 0 },
-                cost: usageDetail.cost || 0,
-                uncachedCost: usageDetail.uncachedCost ?? usageDetail.cost ?? 0,
+                tokens: usageDetail.tokens || {cached: 0, input: 0, reasoning: 0, output: 0},
                 isPriority: Boolean(usageDetail.isPriority)
             };
             
@@ -1445,10 +1441,12 @@
         console.log('[LLM usage]', `[${contextType}]`, `${model}${priorityStr}, tokens: (${cachedTokens}/${inputTokens}/${reasoningTokens}/${outputTokens}), ${logMessage}`);
         
         const resolvedProvider = provider || settings.llmProvider;
+        const currentLang = typeof getLessonLanguage === 'function' ? getLessonLanguage() : null;
         
         document.dispatchEvent(new CustomEvent("addon:llmUsage", {
             detail: {
                 type: contextType,
+                language: currentLang,
                 provider: resolvedProvider,
                 model: model,
                 tokens: {
@@ -1726,7 +1724,7 @@
             
             const data = await response.json();
             const content = provider === "anthropic" ? data.content[0]?.text : data.choices[0]?.message?.content;
-            const { cachedTokens, inputTokens, reasoningTokens, outputTokens } = extractTokenUsage(data.usage);
+            const {cachedTokens, inputTokens, reasoningTokens, outputTokens} = extractTokenUsage(data.usage);
             
             trackLLMUsage("Chat Batch", model, cachedTokens, inputTokens, reasoningTokens, outputTokens, null, isPriority, provider);
             
@@ -1764,7 +1762,7 @@
             });
             
             if ((provider === "google" || provider === "vertex") && lastUsage) {
-                const { cachedTokens, inputTokens, reasoningTokens, outputTokens } = extractTokenUsage(lastUsage);
+                const {cachedTokens, inputTokens, reasoningTokens, outputTokens} = extractTokenUsage(lastUsage);
                 
                 trackLLMUsage("Chat Stream", model, cachedTokens, inputTokens, reasoningTokens, outputTokens, null, isPriority, provider);
             }
@@ -2725,6 +2723,19 @@
             
             chatWidgetSection.appendChild(vertexCredentialsContainer);
             
+            const usageLogRow = createElement("div", {
+                className: "popup-row",
+                style: "display: flex; justify-content: flex-end;"
+            });
+            const usageLogButton = createElement("button", {
+                id: "llmUsageLogBtn",
+                className: "popup-button",
+                textContent: "Usage Log",
+                type: "button"
+            });
+            usageLogRow.appendChild(usageLogButton);
+            chatWidgetSection.appendChild(usageLogRow);
+            
             addCheckbox(chatWidgetSection, "askSelectedCheckbox", "Enable asking with selected text", settings.askSelected);
             addCheckbox(chatWidgetSection, "prependSummaryCheckbox", "Prepend a quick Summary", settings.prependSummary[language]);
             
@@ -3217,6 +3228,88 @@
                 className: "popup-close-top-btn",
                 textContent: "×",
             });
+            closeTopButton.addEventListener("click", () => {
+                popup.style.display = "none";
+            });
+            popup.appendChild(closeTopButton);
+            
+            return popup;
+        }
+        
+        function createLLMUsagePopup() {
+            const languageSelector = createElement("select", {
+                    id: "llmUsageLanguageSelector",
+                    className: "popup-input",
+                    style: "width: auto; min-width: 80px; margin: 0; padding: 2px 8px; font-size: 0.85em; cursor: pointer;"
+                },
+                createElement("option", {value: "all"}, "All")
+            );
+            
+            const statsContainer = createElement("div", {id: "llmUsageStatsContainer", className: "popup-section"},
+                createElement("div", {
+                        id: "llmUsageStatsHeader",
+                        className: "popup-row",
+                        style: "display: flex; justify-content: space-between; align-items: center;"
+                    },
+                    createElement("span", {
+                        id: "llmUsageStatsTitle",
+                        style: "font-size: 0.95em; font-weight: bold;"
+                    }, "LLM Usage Cost per Week"),
+                    createElement("div", {style: "display: flex; align-items: center; gap: 8px;"},
+                        languageSelector,
+                        createElement("div", {className: "flashcard-period-tabs llm-usage-period-tabs"},
+                            createElement("button", {className: "btn-ghost active", dataset: {period: "week"}}, "Week"),
+                            createElement("button", {className: "btn-ghost", dataset: {period: "month"}}, "Month"),
+                            createElement("button", {className: "btn-ghost", dataset: {period: "year"}}, "Year"),
+                            createElement("button", {className: "btn-ghost", dataset: {period: "all"}}, "All")
+                        )
+                    )
+                ),
+                createElement("div", {
+                        className: "flashcard-chart-wrapper",
+                        style: "height: 350px; width: 100%; margin-top: 10px;"
+                    },
+                    createElement("canvas", {id: "llmUsageStatsChart"})
+                )
+            );
+            
+            const popup = createElement("div", {id: "llmUsagePopup", className: "popup"},
+                createElement("div", {id: "llmUsageDragHandle", className: "popup-drag-handle"},
+                    createElement("h3", {textContent: "LLM Usage Log"})
+                ),
+                createElement("div", {style: "padding: 0 15px; width: 800px;"},
+                    statsContainer,
+                    createElement("div", {
+                            className: "popup-row",
+                            style: "display: flex; justify-content: space-between; align-items: center; margin: 15px 0 10px;"
+                        },
+                        createElement("span", {
+                            id: "llmUsageTotalSummary",
+                            style: "font-size: 0.9em; opacity: 0.85;"
+                        }, "Total: $0.0000 (0 requests)"),
+                        createElement("div", {style: "display: flex; gap: 8px; align-items: center;"},
+                            createElement("button", {id: "exportLLMUsageBtn", className: "popup-button"}, "Export"),
+                            createElement("label", {
+                                    id: "importLLMUsageLabel",
+                                    className: "popup-button",
+                                    style: "cursor: pointer; margin: 0; display: inline-flex; align-items: center;"
+                                },
+                                "Import",
+                                createElement("input", {
+                                    type: "file",
+                                    id: "importLLMUsageInput",
+                                    accept: ".json",
+                                    style: "display: none;"
+                                })
+                            ),
+                            createElement("button", {id: "clearLLMUsageBtn", className: "popup-button"}, "Clear Log"),
+                            createElement("button", {id: "closeLLMUsagePopupBtn", className: "popup-button"}, "Close")
+                        )
+                    )
+                )
+            );
+            
+            const closeTopButton = createElement("button", {className: "popup-close-top-btn", textContent: "×"});
             closeTopButton.addEventListener("click", () => {
                 popup.style.display = "none";
             });
@@ -4512,69 +4605,37 @@
                     return d.toISOString().slice(0, 10);
                 }
                 
-                function buildCreatedDateMap() {
-                    return flashcardAllDates.reduce((map, {created_at}) => {
-                        const key = getLocalDateKey(new Date(created_at));
-                        map[key] = (map[key] || 0) + 1;
-                        return map;
-                    }, {});
-                }
-                
-                function getDayCount(createdDateMap, date) {
-                    return createdDateMap[getLocalDateKey(date)] || 0;
-                }
-                
-                function getMonthCount(createdDateMap, year, month, endDate) {
-                    let sum = 0;
-                    for (let d = new Date(year, month, 1); d <= endDate; d.setDate(d.getDate() + 1)) {
-                        sum += getDayCount(createdDateMap, d);
-                    }
-                    return sum;
-                }
-                
                 function buildChartData(selectedPeriod) {
                     const today = new Date();
                     today.setHours(0, 0, 0, 0);
                     
-                    const createdDateMap = buildCreatedDateMap();
-                    const labels = [];
-                    const periodicData = [];
-                    const cumulativeData = [];
-                    let runningTotal = 0;
                     let periodicLabel = "Daily";
-                    
-                    function pushPoint(label, value) {
-                        runningTotal += value;
-                        labels.push(label);
-                        periodicData.push(value);
-                        cumulativeData.push(runningTotal);
-                    }
+                    const buckets = [];
                     
                     if (selectedPeriod === "week") {
-                        periodicLabel = "Daily";
-                        
                         const start = new Date(today);
                         start.setDate(today.getDate() - 6);
                         
                         for (let d = new Date(start); d <= today; d.setDate(d.getDate() + 1)) {
-                            pushPoint(
-                                d.toLocaleString("en-US", {weekday: "short"}),
-                                getDayCount(createdDateMap, d)
-                            );
+                            buckets.push({
+                                key: getLocalDateKey(d),
+                                label: d.toLocaleString("en-US", {weekday: "short"}),
+                                count: 0
+                            });
                         }
                     } else if (selectedPeriod === "month") {
-                        periodicLabel = "Daily";
-                        
                         const start = new Date(today);
                         start.setMonth(today.getMonth() - 1);
                         
-                        if (start.getDate() !== today.getDate()) {
-                            start.setDate(0);
-                        }
-                        start.setDate(start.getDate() + 1);
+                        if (start.getDate() !== today.getDate()) start.setDate(0);
                         
+                        start.setDate(start.getDate() + 1);
                         for (let d = new Date(start); d <= today; d.setDate(d.getDate() + 1)) {
-                            pushPoint(String(d.getDate()), getDayCount(createdDateMap, d));
+                            buckets.push({
+                                key: getLocalDateKey(d),
+                                label: String(d.getDate()),
+                                count: 0
+                            });
                         }
                     } else if (selectedPeriod === "year") {
                         periodicLabel = "Monthly";
@@ -4582,35 +4643,51 @@
                         const startMonth = new Date(today.getFullYear(), today.getMonth() - 11, 1);
                         
                         for (let m = new Date(startMonth); m <= today; m.setMonth(m.getMonth() + 1)) {
-                            const year = m.getFullYear();
-                            const month = m.getMonth();
-                            const endOfMonth = new Date(year, month + 1, 0);
-                            const endDate = endOfMonth > today ? today : endOfMonth;
-                            const value = getMonthCount(createdDateMap, year, month, endDate);
-                            
-                            pushPoint(m.toLocaleString("en-US", {month: "short"}), value);
+                            buckets.push({
+                                key: getLocalDateKey(m).slice(0, 7),
+                                label: m.toLocaleString("en-US", {month: "short"}),
+                                count: 0
+                            });
                         }
                     } else {
-                        const firstDate = new Date(flashcardAllDates[0].created_at);
-                        const lastDate = new Date(flashcardAllDates[flashcardAllDates.length - 1].created_at);
-                        const weekCount = Math.ceil((lastDate - firstDate) / (7 * 24 * 60 * 60 * 1000));
-                        const useMonthly = weekCount > 52 * 2;
-                        
+                        const firstDate = new Date(flashcardAllDates[0]?.created_at || 0);
+                        const lastDate = new Date(flashcardAllDates[flashcardAllDates.length - 1]?.created_at || 0);
+                        const useMonthly = Math.ceil((lastDate - firstDate) / (7 * 24 * 60 * 60 * 1000)) > 52 * 2;
                         periodicLabel = useMonthly ? "Monthly" : "Weekly";
                         
-                        const bucketMap = {};
-                        flashcardAllDates.forEach(({created_at}) => {
-                            const key = useMonthly
-                                ? created_at.slice(0, 7)
-                                : getWeekStartKey(new Date(created_at));
-                            
-                            bucketMap[key] = (bucketMap[key] || 0) + 1;
-                        });
+                        const distinctKeys = [...new Set(flashcardAllDates.map(e => {
+                            const d = new Date(e.created_at);
+                            return useMonthly ? getLocalDateKey(d).slice(0, 7) : getWeekStartKey(d);
+                        }))].sort();
                         
-                        Object.keys(bucketMap).sort().forEach(key => {
-                            pushPoint(key, bucketMap[key]);
-                        });
+                        distinctKeys.forEach(key => buckets.push({
+                            key,
+                            label: key,
+                            count: 0
+                        }));
                     }
+                    
+                    const bucketMap = new Map(buckets.map(b => [b.key, b]));
+                    
+                    flashcardAllDates.forEach(({created_at}) => {
+                        const d = new Date(created_at);
+                        const matchKey = (selectedPeriod === "year" || (selectedPeriod === "all" && periodicLabel === "Monthly"))
+                            ? getLocalDateKey(d).slice(0, 7)
+                            : (selectedPeriod === "all" && periodicLabel === "Weekly")
+                                ? getWeekStartKey(d)
+                                : getLocalDateKey(d);
+                        
+                        const bucket = bucketMap.get(matchKey);
+                        if (bucket) bucket.count++;
+                    });
+                    
+                    const labels = buckets.map(b => b.label);
+                    const periodicData = buckets.map(b => b.count);
+                    let runningTotal = 0;
+                    const cumulativeData = buckets.map(b => {
+                        runningTotal += b.count;
+                        return runningTotal;
+                    });
                     
                     return {labels, periodicData, cumulativeData, periodicLabel};
                 }
@@ -5011,6 +5088,501 @@
                     generateAiReport(count);
                 });
             });
+        }
+        
+        function setupLLMUsageEventListeners() {
+            let llmUsageStatsChart = null;
+            
+            function getChartThemeColors() {
+                const isDark = settings.colorMode === "dark";
+                return {
+                    fontColor: getComputedStyle(document.body).getPropertyValue('--font-color').trim(),
+                    gridColor: isDark ? "rgba(255, 255, 255, 0.1)" : "rgba(0, 0, 0, 0.1)"
+                };
+            }
+            
+            function calculateEntryTokenCosts(entry) {
+                const {model, provider, tokens = {}, isPriority} = entry;
+                const [inputPrice, outputPrice] = getLLMPricing(model, provider);
+                const multiplier = isPriority ? 1.8 : 1.0;
+                
+                const costTypes = [
+                    {type: "cached", cost: (tokens.cached) * (inputPrice / 10) * multiplier},
+                    {type: "input", cost: (tokens.input) * inputPrice * multiplier},
+                    {type: "reasoning", cost: (tokens.reasoning) * outputPrice * multiplier},
+                    {type: "output", cost: (tokens.output) * outputPrice * multiplier}
+                ];
+                
+                return costTypes
+                    .filter(item => item.cost > 0)
+                    .map(({type, cost}) => ({key: `${model} - ${type}`, cost}));
+            }
+            
+            function getLocalDateKey(date) {
+                const year = date.getFullYear();
+                const month = String(date.getMonth() + 1).padStart(2, "0");
+                const day = String(date.getDate()).padStart(2, "0");
+                return `${year}-${month}-${day}`;
+            }
+            
+            function getWeekStartKey(date) {
+                const d = new Date(date);
+                d.setHours(0, 0, 0, 0);
+                d.setDate(d.getDate() - d.getDay());
+                return d.toISOString().slice(0, 10);
+            }
+            
+            function buildLLMUsageChartData(history, selectedPeriod) {
+                const today = new Date();
+                today.setHours(0, 0, 0, 0);
+                
+                let periodicLabel = "Daily";
+                const buckets = [];
+                
+                if (selectedPeriod === "week") {
+                    const start = new Date(today);
+                    start.setDate(today.getDate() - 6);
+                    
+                    for (let d = new Date(start); d <= today; d.setDate(d.getDate() + 1)) {
+                        buckets.push({
+                            key: getLocalDateKey(d),
+                            label: d.toLocaleString("en-US", {weekday: "short"}),
+                            costs: {}
+                        });
+                    }
+                } else if (selectedPeriod === "month") {
+                    const start = new Date(today);
+                    start.setMonth(today.getMonth() - 1);
+                    
+                    if (start.getDate() !== today.getDate()) start.setDate(0);
+                    
+                    start.setDate(start.getDate() + 1);
+                    for (let d = new Date(start); d <= today; d.setDate(d.getDate() + 1)) {
+                        buckets.push({
+                            key: getLocalDateKey(d),
+                            label: String(d.getDate()), costs:
+                                {}
+                        });
+                    }
+                } else if (selectedPeriod === "year") {
+                    periodicLabel = "Monthly";
+                    
+                    const startMonth = new Date(today.getFullYear(), today.getMonth() - 11, 1);
+                    
+                    for (let m = new Date(startMonth); m <= today; m.setMonth(m.getMonth() + 1)) {
+                        buckets.push({
+                            key: getLocalDateKey(m).slice(0, 7),
+                            label: m.toLocaleString("en-US", {month: "short"}),
+                            costs: {}
+                        });
+                    }
+                } else {
+                    const firstDate = new Date(history[0]?.timestamp || 0);
+                    const lastDate = new Date(history[history.length - 1]?.timestamp || 0);
+                    const useMonthly = Math.ceil((lastDate - firstDate) / (7 * 24 * 60 * 60 * 1000)) > 52 * 2;
+                    periodicLabel = useMonthly ? "Monthly" : "Weekly";
+                    
+                    const distinctKeys = [...new Set(history.map(e => {
+                        const d = new Date(e.timestamp);
+                        return useMonthly ? getLocalDateKey(d).slice(0, 7) : getWeekStartKey(d);
+                    }))].sort();
+                    
+                    distinctKeys.forEach(key => buckets.push({
+                        key,
+                        label: key,
+                        costs: {}
+                    }));
+                }
+                
+                const allSeriesSet = new Set();
+                const bucketMap = new Map(buckets.map(b => [b.key, b]));
+                
+                history.forEach(entry => {
+                    const items = calculateEntryTokenCosts(entry);
+                    if (!items.length) return;
+                    
+                    const entryDate = new Date(entry.timestamp);
+                    const matchKey = (selectedPeriod === "year" || (selectedPeriod === "all" && periodicLabel === "Monthly"))
+                        ? getLocalDateKey(entryDate).slice(0, 7)
+                        : (selectedPeriod === "all" && periodicLabel === "Weekly")
+                            ? getWeekStartKey(entryDate)
+                            : getLocalDateKey(entryDate);
+                    
+                    const bucket = bucketMap.get(matchKey);
+                    if (bucket) {
+                        items.forEach(({key, cost}) => {
+                            bucket.costs[key] = (bucket.costs[key] || 0) + cost;
+                            allSeriesSet.add(key);
+                        });
+                    }
+                });
+                
+                const allSeriesKeys = Array.from(allSeriesSet);
+                const labels = buckets.map(b => b.label);
+                let runningTotal = 0;
+                
+                const cumulativeData = buckets.map(b => {
+                    const periodicTotal = allSeriesKeys.reduce((sum, key) => sum + (b.costs[key] || 0), 0);
+                    runningTotal += periodicTotal;
+                    return runningTotal;
+                });
+                
+                const colorPalette = [
+                    "#4285F4", "#EA4335", "#FBBC05", "#34A853",
+                    "#FF6D01", "#46BDC6", "#7BAAF7", "#F07B72",
+                    "#FCD068", "#5BB974", "#AF5CF7", "#E8710A",
+                    "#12B5CB", "#FA903E", "#80868B", "#E52592",
+                    "#1A73E8", "#D93025", "#188038", "#9334E6"
+                ];
+                
+                const barDatasets = allSeriesKeys.length
+                    ? allSeriesKeys.map((seriesKey, idx) => ({
+                        type: "bar",
+                        label: seriesKey,
+                        yAxisID: "yPeriodic",
+                        stack: "costStack",
+                        data: buckets.map(b => b.costs[seriesKey] || 0),
+                        backgroundColor: colorPalette[idx % colorPalette.length],
+                        borderRadius: 2,
+                        barPercentage: 0.6
+                    }))
+                    : [{
+                        type: "bar",
+                        label: "Cost",
+                        yAxisID: "yPeriodic",
+                        stack: "costStack",
+                        data: buckets.map(() => 0),
+                        backgroundColor: "#7f8fa6"
+                    }];
+                
+                const cumulativeDataset = {
+                    type: "line",
+                    label: "Cumulative",
+                    yAxisID: "yCumulative",
+                    data: cumulativeData,
+                    borderColor: "#b07c6a",
+                    backgroundColor: "#b07c6a25",
+                    fill: true,
+                    tension: 0.3,
+                    pointRadius: 2
+                };
+                
+                return {labels, barDatasets, cumulativeDataset, periodicLabel};
+            }
+            
+            function drawLLMUsageStatsChart(labels, barDatasets, cumulativeDataset, selectedPeriod, periodicLabelOverride) {
+                const titleMap = {
+                    week: "LLM Usage Cost per Week",
+                    month: "LLM Usage Cost per Month",
+                    year: "LLM Usage Cost per Year",
+                    all: "LLM Usage Cost (All Time)"
+                };
+                const defaultPeriodLabelMap = {
+                    week: "Daily",
+                    month: "Daily",
+                    year: "Monthly",
+                    all: "Monthly"
+                };
+                const periodLabel = periodicLabelOverride || defaultPeriodLabelMap[selectedPeriod] || "Daily";
+                const titleText = titleMap[selectedPeriod] || titleMap.week;
+                
+                const titleEl = document.getElementById("llmUsageStatsTitle");
+                if (titleEl) titleEl.textContent = titleText;
+                
+                const ctx = document.getElementById("llmUsageStatsChart")?.getContext("2d");
+                if (!ctx) return;
+                
+                const {fontColor, gridColor} = getChartThemeColors();
+                
+                if (llmUsageStatsChart) {
+                    llmUsageStatsChart.data.labels = labels;
+                    llmUsageStatsChart.data.datasets = [...barDatasets, cumulativeDataset];
+                    llmUsageStatsChart.options.scales.yPeriodic.title.text = `${periodLabel} Cost ($)`;
+                    llmUsageStatsChart.options.plugins.legend.labels.color = fontColor;
+                    llmUsageStatsChart.options.scales.x.ticks.color = fontColor;
+                    llmUsageStatsChart.options.scales.yPeriodic.title.color = fontColor;
+                    llmUsageStatsChart.options.scales.yPeriodic.ticks.color = fontColor;
+                    llmUsageStatsChart.options.scales.yPeriodic.grid.color = gridColor;
+                    llmUsageStatsChart.options.scales.yCumulative.title.color = fontColor;
+                    llmUsageStatsChart.options.scales.yCumulative.ticks.color = fontColor;
+                    llmUsageStatsChart.update();
+                    return;
+                }
+                
+                llmUsageStatsChart = new Chart(ctx, {
+                    data: {
+                        labels,
+                        datasets: [...barDatasets, cumulativeDataset]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        layout: {
+                            padding: {
+                                top: 15,
+                                bottom: 5,
+                                left: 5,
+                                right: 5
+                            }
+                        },
+                        interaction: {
+                            mode: "index",
+                            intersect: false
+                        },
+                        plugins: {
+                            legend: {
+                                display: true,
+                                position: "bottom",
+                                labels: {
+                                    boxWidth: 10,
+                                    boxHeight: 10,
+                                    padding: 12,
+                                    color: fontColor,
+                                    font: {size: 10}
+                                }
+                            },
+                            tooltip: {
+                                callbacks: {
+                                    label: (context) => {
+                                        const val = context.parsed.y;
+                                        if (val === 0 && context.dataset.type === "bar") return null;
+                                        const formatted = val < 0.01 ? `$${val.toFixed(5)}` : `$${val.toFixed(4)}`;
+                                        return ` ${context.dataset.label}: ${formatted}`;
+                                    },
+                                    footer: (tooltipItems) => {
+                                        let periodicSum = 0;
+                                        tooltipItems.forEach(item => {
+                                            if (item.dataset.type === "bar") {
+                                                periodicSum += item.parsed.y;
+                                            }
+                                        });
+                                        return periodicSum > 0 ? `Period Total: ${periodicSum < 0.01 ? `$${periodicSum.toFixed(5)}` : `$${periodicSum.toFixed(4)}`}` : "";
+                                    }
+                                }
+                            }
+                        },
+                        scales: {
+                            x: {
+                                stacked: true,
+                                grid: {display: false},
+                                ticks: {
+                                    autoSkip: true,
+                                    color: fontColor
+                                }
+                            },
+                            yPeriodic: {
+                                type: "linear",
+                                position: "left",
+                                stacked: true,
+                                beginAtZero: true,
+                                title: {
+                                    display: true,
+                                    text: `${periodLabel} Cost ($)`,
+                                    color: fontColor
+                                },
+                                grid: {
+                                    color: gridColor
+                                },
+                                ticks: {
+                                    color: fontColor,
+                                    callback: (val) => {
+                                        if (val === 0) return "$0";
+                                        if (val < 0.001) return "$" + val.toFixed(4);
+                                        if (val < 0.01) return "$" + val.toFixed(3);
+                                        return "$" + val.toFixed(2);
+                                    }
+                                }
+                            },
+                            yCumulative: {
+                                type: "linear",
+                                position: "right",
+                                beginAtZero: true,
+                                grid: {drawOnChartArea: false},
+                                title: {
+                                    display: true,
+                                    text: "Cumulative ($)",
+                                    color: fontColor
+                                },
+                                ticks: {
+                                    color: fontColor,
+                                    callback: (val) => {
+                                        if (val === 0) return "$0";
+                                        if (val < 0.001) return "$" + val.toFixed(4);
+                                        if (val < 0.01) return "$" + val.toFixed(3);
+                                        return "$" + val.toFixed(2);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                });
+            }
+            
+            function loadLLMUsageStats() {
+                const rawData = localStorage.getItem("lingq_llm_usage_history");
+                const allHistory = rawData ? JSON.parse(rawData) : [];
+                
+                const languageSelector = document.getElementById("llmUsageLanguageSelector");
+                const currentSelectedLang = languageSelector?.value || "all";
+                
+                const uniqueLanguages = Array.from(new Set(allHistory.map(e => e.language).filter(Boolean))).sort();
+                
+                if (languageSelector) {
+                    languageSelector.innerHTML = "";
+                    const allOpt = createElement("option", {value: "all", textContent: "All"});
+                    languageSelector.appendChild(allOpt);
+                    
+                    uniqueLanguages.forEach(lang => {
+                        const opt = createElement("option", {value: lang, textContent: lang});
+                        languageSelector.appendChild(opt);
+                    });
+                    
+                    languageSelector.value = uniqueLanguages.includes(currentSelectedLang) ? currentSelectedLang : "all";
+                }
+                
+                function getFilteredHistory() {
+                    const selectedLang = languageSelector?.value || "all";
+                    if (selectedLang === "all") return allHistory;
+                    return allHistory.filter(e => e.language === selectedLang);
+                }
+                
+                function updateSummaryAndChart(selectedPeriod) {
+                    const history = getFilteredHistory();
+                    
+                    let totalCost = 0;
+                    history.forEach(entry => {
+                        const items = calculateEntryTokenCosts(entry);
+                        items.forEach(({cost}) => {
+                            totalCost += cost;
+                        });
+                    });
+                    
+                    const summaryEl = document.getElementById("llmUsageTotalSummary");
+                    if (summaryEl) {
+                        summaryEl.textContent = `Total: $${totalCost.toFixed(4)} (${history.length} requests)`;
+                    }
+                    
+                    const {
+                        labels,
+                        barDatasets,
+                        cumulativeDataset,
+                        periodicLabel
+                    } = buildLLMUsageChartData(history, selectedPeriod);
+                    drawLLMUsageStatsChart(labels, barDatasets, cumulativeDataset, selectedPeriod, periodicLabel);
+                }
+                
+                const container = document.getElementById("llmUsageStatsContainer");
+                if (!container) return;
+                const tabs = container.querySelectorAll(".llm-usage-period-tabs .btn-ghost");
+                
+                if (!container.dataset.initialized) {
+                    tabs.forEach(btn => {
+                        btn.addEventListener("click", () => {
+                            tabs.forEach(tab => tab.classList.remove("active"));
+                            btn.classList.add("active");
+                            const activePeriod = btn.dataset.period;
+                            updateSummaryAndChart(activePeriod);
+                        });
+                    });
+                    
+                    if (languageSelector) {
+                        languageSelector.addEventListener("change", () => {
+                            const activeTab = container.querySelector(".llm-usage-period-tabs .btn-ghost.active");
+                            updateSummaryAndChart(activeTab?.dataset.period || "week");
+                        });
+                    }
+                    
+                    container.dataset.initialized = "1";
+                }
+                
+                const activeTab = container.querySelector(".llm-usage-period-tabs .btn-ghost.active");
+                updateSummaryAndChart(activeTab?.dataset.period || "week");
+            }
+            
+            const usageLogBtn = document.getElementById("llmUsageLogBtn");
+            const usagePopup = document.getElementById("llmUsagePopup");
+            if (usageLogBtn && usagePopup) {
+                usageLogBtn.addEventListener("click", () => {
+                    usagePopup.style.display = "block";
+                    makeDraggable(usagePopup, document.getElementById("llmUsageDragHandle"));
+                    loadLLMUsageStats();
+                });
+            }
+            
+            const closeBtn = document.getElementById("closeLLMUsagePopupBtn");
+            if (closeBtn && usagePopup) {
+                closeBtn.addEventListener("click", () => {
+                    usagePopup.style.display = "none";
+                });
+            }
+            
+            const clearBtn = document.getElementById("clearLLMUsageBtn");
+            if (clearBtn) {
+                clearBtn.addEventListener("click", () => {
+                    if (confirm("Are you sure you want to clear the LLM usage history?")) {
+                        localStorage.removeItem("lingq_llm_usage_history");
+                        loadLLMUsageStats();
+                    }
+                });
+            }
+            
+            const exportBtn = document.getElementById("exportLLMUsageBtn");
+            if (exportBtn) {
+                exportBtn.addEventListener("click", () => {
+                    const rawData = localStorage.getItem("lingq_llm_usage_history") || "[]";
+                    const blob = new Blob([rawData], {type: "application/json"});
+                    const dateStr = new Date().toISOString().slice(0, 10);
+                    const fileName = `lingq_llm_usage_history_${dateStr}.json`;
+                    
+                    const url = URL.createObjectURL(blob);
+                    const a = createElement("a", {href: url, download: fileName});
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    URL.revokeObjectURL(url);
+                });
+            }
+            
+            const importInput = document.getElementById("importLLMUsageInput");
+            if (importInput) {
+                importInput.addEventListener("change", (event) => {
+                    const file = event.target.files?.[0];
+                    if (!file) return;
+                    
+                    const reader = new FileReader();
+                    reader.onload = (e) => {
+                        try {
+                            const importedData = JSON.parse(e.target.result);
+                            if (!Array.isArray(importedData)) {
+                                alert("Invalid JSON format: Expected an array of log entries.");
+                                return;
+                            }
+                            
+                            const currentHistory = JSON.parse(localStorage.getItem("lingq_llm_usage_history") || "[]");
+                            const existingKeys = new Set(currentHistory.map(item => `${item.timestamp}_${item.model}`));
+                            
+                            const newEntries = importedData.filter(item => {
+                                const key = `${item.timestamp}_${item.model}`;
+                                if (existingKeys.has(key)) return false;
+                                existingKeys.add(key);
+                                return true;
+                            });
+                            
+                            const merged = [...currentHistory, ...newEntries].sort((a, b) => a.timestamp - b.timestamp);
+                            
+                            localStorage.setItem("lingq_llm_usage_history", JSON.stringify(merged));
+                            loadLLMUsageStats();
+                            
+                            alert(`Import completed: ${newEntries.length} new entries added (${merged.length} total).`);
+                        } catch (err) {
+                            console.error("Import error:", err);
+                            alert("Failed to parse JSON file.");
+                        }
+                        event.target.value = "";
+                    };
+                    reader.readAsText(file);
+                });
+            }
         }
         
         function generatePopupCSS() {
@@ -5436,12 +6008,16 @@
         const flashcardPopup = createFlashcardPopup();
         document.body.appendChild(flashcardPopup);
         
+        const llmUsagePopup = createLLMUsagePopup();
+        document.body.appendChild(llmUsagePopup);
+        
         const popupCSS = generatePopupCSS();
         applyCSS(popupCSS);
         setupSettingEventListeners();
         setupDownloadWordsEventListeners();
         setupTTSPlaygroundEventListeners();
         setupFlashcardPopupEventListeners();
+        setupLLMUsageEventListeners();
     }
     
     async function setupReader() {
@@ -7425,7 +8001,7 @@
                                 calls: 0,
                                 cost: 0,
                                 uncachedCost: 0,
-                                tokens: { cached: 0, input: 0, reasoning: 0, output: 0 }
+                                tokens: {cached: 0, input: 0, reasoning: 0, output: 0}
                             };
                         }
                         
@@ -8327,7 +8903,8 @@
                     return messageDiv;
                 }
                 
-                async function callStreamOpenAI(botMessageDiv, chatContainer, focus, onStreamCompleted = () => {}, reasoningLevel = "low") {
+                async function callStreamOpenAI(botMessageDiv, chatContainer, focus, onStreamCompleted = () => {
+                }, reasoningLevel = "low") {
                     const userInput = document.getElementById("user-input");
                     const sendButton = document.getElementById("send-button");
                     
@@ -8416,7 +8993,7 @@
                             
                             let textContainer = botMessageDiv.querySelector('.bot-stream-text');
                             if (!textContainer) {
-                                textContainer = createElement('div', { className: 'bot-stream-text' });
+                                textContainer = createElement('div', {className: 'bot-stream-text'});
                                 botMessageDiv.appendChild(textContainer);
                             }
                             if (textContainer.innerHTML !== messageText) {
