@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      15.0.1
+// @version      15.0.2
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @grant       GM_xmlhttpRequest
@@ -5228,11 +5228,10 @@
                 });
                 
                 const colorPalette = [
-                    "#4285F4", "#EA4335", "#FBBC05", "#34A853",
-                    "#FF6D01", "#46BDC6", "#7BAAF7", "#F07B72",
-                    "#FCD068", "#5BB974", "#AF5CF7", "#E8710A",
-                    "#12B5CB", "#FA903E", "#80868B", "#E52592",
-                    "#1A73E8", "#D93025", "#188038", "#9334E6"
+                    "#4F75FF", "#E15B64", "#F4B251", "#43A783",
+                    "#9D78DA", "#3EB5BD", "#EB7E53", "#D6688D",
+                    "#7AA35A", "#64748B", "#6C7CE8", "#D96B9A",
+                    "#3AAFA9", "#E08244", "#8C68C8", "#708090"
                 ];
                 
                 const barDatasets = allSeriesKeys.length
@@ -5500,14 +5499,20 @@
             }
             
             const usageLogBtn = document.getElementById("llmUsageLogBtn");
+            
+            const usageButtons = [
+                document.getElementById("llmUsageButton"),
+                document.getElementById("llmUsageLogBtn")
+            ].filter(Boolean);
             const usagePopup = document.getElementById("llmUsagePopup");
-            if (usageLogBtn && usagePopup) {
-                usageLogBtn.addEventListener("click", () => {
+            
+            usageButtons.forEach(btn => {
+                btn.addEventListener("click", () => {
                     usagePopup.style.display = "block";
                     makeDraggable(usagePopup, document.getElementById("llmUsageDragHandle"));
                     loadLLMUsageStats();
                 });
-            }
+            });
             
             const closeBtn = document.getElementById("closeLLMUsagePopupBtn");
             if (closeBtn && usagePopup) {
@@ -5991,10 +5996,18 @@
             className: "nav-button"
         });
         
+        const llmUsageButton = createElement("button", {
+            id: "llmUsageButton",
+            textContent: "📊",
+            title: "LLM Usage Log",
+            className: "nav-button"
+        });
+        
         addElementToNavBar(settingsButton);
         addElementToNavBar(downloadWordsButton);
         addElementToNavBar(ttsPlaygroundButton);
         addElementToNavBar(flashcardManagerButton);
+        addElementToNavBar(llmUsageButton);
         
         const settingsPopup = createSettingsPopup();
         document.body.appendChild(settingsPopup);
@@ -10423,10 +10436,12 @@
         const url = document.URL.split("?")[0];
         if (url.includes("lingq")) {
             globalSetup();
-            if (url.includes("/reader")) {
+            if (url.includes("/library#")) {
+                setupPopups();
+            } else if (url.includes("/reader")) {
                 setupPopups();
                 setupReader();
-            } else if (url.includes("/editor")) {
+            } else if (url.includes("/editor/") && !url.includes("/editor/courses")) {
                 setupPopups();
                 setupEditor();
             } else if (url.includes("/library/course")) {
