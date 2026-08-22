@@ -102,9 +102,25 @@ To store flashcards in the cloud, set up your own Supabase project and connect i
         flashcard boolean DEFAULT false,
         created_at timestamptz DEFAULT now()
     );
+    CREATE INDEX idx_word_data_word ON public.word_data (word);
+    CREATE INDEX idx_word_data_lang_created ON public.word_data (language, created_at DESC);
+
+    CREATE TABLE public.llm_usage_logs (
+        idx SERIAL PRIMARY KEY,
+        language text,
+        provider text NOT NULL,
+        model text NOT NULL,
+        cached_tokens int DEFAULT 0,
+        input_tokens int DEFAULT 0,
+        reasoning_tokens int DEFAULT 0,
+        output_tokens int DEFAULT 0,
+        is_priority boolean DEFAULT false, 
+        created_at timestamptz DEFAULT now()
+    );
+    CREATE INDEX idx_llm_usage_logs_created_at ON public.llm_usage_logs (created_at DESC);
    ```
    Click **Run** to initialize your database structure.
-   You should now see a new table named `word_data` inside your project.
+   You should now see `word_data` and `llm_usage_logs` tables inside your project.
 
 3. **Get the URL and Key**
    Go to **Project Settings > Data API**, and copy the **Project URL**.

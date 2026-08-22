@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      15.0.2
+// @version      15.1.0
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @grant       GM_xmlhttpRequest
@@ -1052,6 +1052,10 @@
         return settings.useCentralDb ? "word_data_central" : "word_data";
     }
     
+    function getLLMUsageTableName() {
+        return settings.useCentralDb ? "llm_usage_logs_central" : "llm_usage_logs";
+    }
+    
     function isDbReady() {
         return settings.useCentralDb ? centralUserId : supabaseClient;
     }
@@ -1388,24 +1392,50 @@
         return {cachedTokens, inputTokens, reasoningTokens, outputTokens};
     }
     
-    function saveLLMUsageToStorage(usageDetail) {
+    async function saveLLMUsageToStorage(usageDetail) {
+        const currentLang = usageDetail.language || (typeof getLessonLanguage === "function" ? getLessonLanguage() : null);
+        const resolvedProvider = usageDetail.provider || settings.llmProvider;
+        const tokens = usageDetail.tokens || {cached: 0, input: 0, reasoning: 0, output: 0};
+        const isPriority = Boolean(usageDetail.isPriority);
+        
+        if (isDbReady()) {
+            try {
+                const row = {
+                    ...(settings.useCentralDb && {user_id: centralUserId}),
+                    language: currentLang,
+                    provider: resolvedProvider,
+                    model: usageDetail.model,
+                    cached_tokens: tokens.cached || 0,
+                    input_tokens: tokens.input || 0,
+                    reasoning_tokens: tokens.reasoning || 0,
+                    output_tokens: tokens.output || 0,
+                    is_priority: isPriority
+                };
+                
+                const {error} = await getDbClient()
+                    .from(getLLMUsageTableName())
+                    .insert([row]);
+                
+                if (!error) return;
+                console.error("Failed to insert LLM usage log into DB:", error);
+            } catch (e) {
+                console.error("Exception inserting LLM usage log into DB:", e);
+            }
+        }
+        
         try {
             const storageKey = "lingq_llm_usage_history";
             const rawData = localStorage.getItem(storageKey);
             const history = rawData ? JSON.parse(rawData) : [];
             
-            const currentLang = usageDetail.language || getLessonLanguage();
-            
-            const entry = {
+            history.push({
                 timestamp: Date.now(),
                 language: currentLang,
-                provider: usageDetail.provider || settings.llmProvider,
+                provider: resolvedProvider,
                 model: usageDetail.model,
-                tokens: usageDetail.tokens || {cached: 0, input: 0, reasoning: 0, output: 0},
-                isPriority: Boolean(usageDetail.isPriority)
-            };
-            
-            history.push(entry);
+                tokens,
+                isPriority
+            });
             localStorage.setItem(storageKey, JSON.stringify(history));
         } catch (e) {
             console.error("Failed to save LLM usage to localStorage:", e);
@@ -5417,9 +5447,48 @@
                 });
             }
             
-            function loadLLMUsageStats() {
+            async function fetchLLMUsageLogs() {
+                if (isDbReady()) {
+                    try {
+                        let query = getDbClient()
+                            .from(getLLMUsageTableName())
+                            .select("*")
+                            .order("created_at", {ascending: true});
+                        
+                        if (settings.useCentralDb) {
+                            query = query.eq("user_id", centralUserId);
+                        }
+                        
+                        const {data, error} = await query;
+                        if (error) {
+                            console.error("Failed to fetch LLM usage logs from DB:", error);
+                        } else if (data) {
+                            return data.map(row => ({
+                                idx: row.idx,
+                                timestamp: new Date(row.created_at).getTime(),
+                                language: row.language,
+                                provider: row.provider,
+                                model: row.model,
+                                tokens: {
+                                    cached: row.cached_tokens || 0,
+                                    input: row.input_tokens || 0,
+                                    reasoning: row.reasoning_tokens || 0,
+                                    output: row.output_tokens || 0
+                                },
+                                isPriority: Boolean(row.is_priority)
+                            }));
+                        }
+                    } catch (err) {
+                        console.error("DB query exception:", err);
+                    }
+                }
+                
                 const rawData = localStorage.getItem("lingq_llm_usage_history");
-                const allHistory = rawData ? JSON.parse(rawData) : [];
+                return rawData ? JSON.parse(rawData) : [];
+            }
+            
+            async function loadLLMUsageStats() {
+                const allHistory = await fetchLLMUsageLogs();
                 
                 const languageSelector = document.getElementById("llmUsageLanguageSelector");
                 const currentSelectedLang = languageSelector?.value || "all";
@@ -5498,8 +5567,6 @@
                 updateSummaryAndChart(activeTab?.dataset.period || "week");
             }
             
-            const usageLogBtn = document.getElementById("llmUsageLogBtn");
-            
             const usageButtons = [
                 document.getElementById("llmUsageButton"),
                 document.getElementById("llmUsageLogBtn")
@@ -5523,19 +5590,35 @@
             
             const clearBtn = document.getElementById("clearLLMUsageBtn");
             if (clearBtn) {
-                clearBtn.addEventListener("click", () => {
-                    if (confirm("Are you sure you want to clear the LLM usage history?")) {
-                        localStorage.removeItem("lingq_llm_usage_history");
-                        loadLLMUsageStats();
+                clearBtn.addEventListener("click", async () => {
+                    if (!confirm("Are you sure you want to clear the LLM usage history?")) return;
+                    
+                    if (isDbReady()) {
+                        try {
+                            let query = getDbClient().from(getLLMUsageTableName()).delete();
+                            if (settings.useCentralDb) {
+                                query = query.eq("user_id", centralUserId);
+                            } else {
+                                query = query.neq("idx", 0);
+                            }
+                            const {error} = await query;
+                            if (error) {
+                                console.error("Failed to delete logs from DB:", error);
+                            }
+                        } catch (err) {
+                            console.error("Clear DB exception:", err);
+                        }
                     }
+                    localStorage.removeItem("lingq_llm_usage_history");
+                    await loadLLMUsageStats();
                 });
             }
             
             const exportBtn = document.getElementById("exportLLMUsageBtn");
             if (exportBtn) {
-                exportBtn.addEventListener("click", () => {
-                    const rawData = localStorage.getItem("lingq_llm_usage_history") || "[]";
-                    const blob = new Blob([rawData], {type: "application/json"});
+                exportBtn.addEventListener("click", async () => {
+                    const history = await fetchLLMUsageLogs();
+                    const blob = new Blob([JSON.stringify(history, null, 2)], {type: "application/json"});
                     const dateStr = new Date().toISOString().slice(0, 10);
                     const fileName = `lingq_llm_usage_history_${dateStr}.json`;
                     
@@ -5555,7 +5638,7 @@
                     if (!file) return;
                     
                     const reader = new FileReader();
-                    reader.onload = (e) => {
+                    reader.onload = async (e) => {
                         try {
                             const importedData = JSON.parse(e.target.result);
                             if (!Array.isArray(importedData)) {
@@ -5563,7 +5646,7 @@
                                 return;
                             }
                             
-                            const currentHistory = JSON.parse(localStorage.getItem("lingq_llm_usage_history") || "[]");
+                            const currentHistory = await fetchLLMUsageLogs();
                             const existingKeys = new Set(currentHistory.map(item => `${item.timestamp}_${item.model}`));
                             
                             const newEntries = importedData.filter(item => {
@@ -5573,17 +5656,42 @@
                                 return true;
                             });
                             
-                            const merged = [...currentHistory, ...newEntries].sort((a, b) => a.timestamp - b.timestamp);
+                            if (isDbReady() && newEntries.length > 0) {
+                                const rowsToInsert = newEntries.map(item => ({
+                                    ...(settings.useCentralDb && {user_id: centralUserId}),
+                                    language: item.language || null,
+                                    provider: item.provider || settings.llmProvider,
+                                    model: item.model || "unknown",
+                                    cached_tokens: item.tokens?.cached || 0,
+                                    input_tokens: item.tokens?.input || 0,
+                                    reasoning_tokens: item.tokens?.reasoning || 0,
+                                    output_tokens: item.tokens?.output || 0,
+                                    is_priority: Boolean(item.isPriority),
+                                    created_at: new Date(item.timestamp).toISOString()
+                                }));
+                                
+                                const {error} = await getDbClient()
+                                    .from(getLLMUsageTableName())
+                                    .insert(rowsToInsert);
+                                
+                                if (error) {
+                                    console.error("DB import error:", error);
+                                    alert("Failed to insert imported logs into DB: " + error.message);
+                                    return;
+                                }
+                            } else if (!isDbReady()) {
+                                const merged = [...currentHistory, ...newEntries].sort((a, b) => a.timestamp - b.timestamp);
+                                localStorage.setItem("lingq_llm_usage_history", JSON.stringify(merged));
+                            }
                             
-                            localStorage.setItem("lingq_llm_usage_history", JSON.stringify(merged));
-                            loadLLMUsageStats();
-                            
-                            alert(`Import completed: ${newEntries.length} new entries added (${merged.length} total).`);
+                            await loadLLMUsageStats();
+                            alert(`Import completed: ${newEntries.length} new entries added.`);
                         } catch (err) {
                             console.error("Import error:", err);
                             alert("Failed to parse JSON file.");
+                        } finally {
+                            event.target.value = "";
                         }
-                        event.target.value = "";
                     };
                     reader.readAsText(file);
                 });
