@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      15.1.0
+// @version      15.1.1
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @grant       GM_xmlhttpRequest
@@ -1999,20 +1999,34 @@
             return clone.textContent.trim();
         }
         
+        function normalizeTitle(str) {
+            return str
+                .toLowerCase()
+                .normalize("NFKC")
+                .replace(/[\\/:*?"<>|?？:：*＊"＂<＜>＞|｜/／\＼]/g, " ")
+                .replace(/\s+/g, " ")
+                .trim();
+        }
+        
         function findBestMatchingFiles(files, lessonTitle) {
-            const targetTitle = lessonTitle.toLowerCase().trim();
+            const targetTitle = normalizeTitle(lessonTitle);
+            if (!targetTitle) return {video: null, sub: null};
             
             let bestVideo = null;
             let bestSub = null;
             
             for (const file of files) {
-                const nameLower = file.name.toLowerCase();
+                const nameWithoutExt = file.name.replace(/\.[^/.]+$/, "");
+                const normalizedName = normalizeTitle(nameWithoutExt);
                 
-                if (!nameLower.includes(targetTitle)) continue;
+                if (!normalizedName.includes(targetTitle) && !targetTitle.includes(normalizedName)) continue;
                 
-                if (file.type.startsWith("video/") || nameLower.endsWith(".mp4")) {
+                const isVideo = file.type.startsWith("video/") || /\.(mp4)$/i.test(file.name);
+                const isSub = /\.(srt|vtt)$/i.test(file.name);
+                
+                if (isVideo) {
                     if (!bestVideo) bestVideo = file;
-                } else if (nameLower.endsWith(".srt") || nameLower.endsWith(".vtt")) {
+                } else if (isSub) {
                     if (!bestSub) bestSub = file;
                 }
             }
@@ -6397,51 +6411,72 @@
 
                 /*highlightings*/
 
-                .phrase-item {
-                    padding: 0 !important;
-                }
-
-                .phrase-item:not(.phrase-item-status--4, .phrase-item-status--4x2) {
-                    background-color: var(--lingq-background) !important;
-                }
-
-                .phrase-item.phrase-item-status--4,
-                .phrase-item.phrase-item-status--4x2 {
-                    background-color: rgba(0, 0, 0, 0) !important;
-                }
-
-                .phrase-cluster:not(:has(.phrase-item-status--4, .phrase-item-status--4x2)) {
-                    border-radius: .25rem;
-                }
-
-                .phrase-cluster:has(.phrase-item-status--4, .phrase-item-status--4x2) {
-                    border-radius: .25rem;
-                }
-
-                .reader-container .sentence .lingq-word:not(.is-learned) {
-                    background-color: var(--lingq-background) !important;
-                }
-
-                .reader-container .sentence .lingq-word.is-learned {
-                }
-
-                .reader-container .sentence .blue-word {
-                    background-color: var(--unknown-background) !important;;
-                }
-
-                .phrase-cluster:hover,
-                .phrase-created:hover {
-                    padding: 0 !important;
-                }
-
-                .phrase-cluster:hover .phrase-item,
-                .phrase-created .phrase-item {
-                    padding: 0 !important;
-                }
-
-                .reader-container .sentence .selected-text {
-                    padding: 0 !important;
-                }
+                    .phrase-item {
+                        padding: 0 !important;
+                        background-color: var(--lingq-background) !important;
+                    }
+                
+                    .phrase-item.phrase-item-status--1 {
+                        background-color: color-mix(in srgb, var(--lingq-background) 65%, transparent) !important;
+                    }
+                
+                    .phrase-item.phrase-item-status--2 {
+                        background-color: color-mix(in srgb, var(--lingq-background) 35%, transparent) !important;
+                    }
+                
+                    .phrase-item.phrase-item-status--3 {
+                        background-color: color-mix(in srgb, var(--lingq-background) 15%, transparent) !important;
+                    }
+                
+                    .phrase-item.phrase-item-status--4 {
+                        background-color: rgba(0, 0, 0, 0) !important;
+                    }
+                
+                    .phrase-cluster:not(:has(.phrase-item-status--4)) {
+                        border-radius: .25rem;
+                    }
+                
+                    .phrase-cluster:has(.phrase-item-status--4) {
+                        border-radius: .25rem;
+                    }
+                
+                    .reader-container .sentence .lingq-word {
+                        background-color: var(--lingq-background) !important;
+                    }
+                
+                    .reader-container .sentence .lingq-word.lingq-status-1 {
+                        background-color: color-mix(in srgb, var(--lingq-background) 65%, transparent) !important;
+                    }
+                
+                    .reader-container .sentence .lingq-word.lingq-status-2 {
+                        background-color: color-mix(in srgb, var(--lingq-background) 35%, transparent) !important;
+                    }
+                
+                    .reader-container .sentence .lingq-word.lingq-status-3 {
+                        background-color: color-mix(in srgb, var(--lingq-background) 15%, transparent) !important;
+                    }
+                
+                    .reader-container .sentence .lingq-word.is-learned {
+                        background-color: rgba(0, 0, 0, 0) !important;
+                    }
+                
+                    .reader-container .sentence .blue-word {
+                        background-color: var(--unknown-background) !important;
+                    }
+                
+                    .phrase-cluster:hover,
+                    .phrase-created:hover {
+                        padding: 0 !important;
+                    }
+                
+                    .phrase-cluster:hover .phrase-item,
+                    .phrase-created .phrase-item {
+                        padding: 0 !important;
+                    }
+                
+                    .reader-container .sentence .selected-text {
+                        padding: 0 !important;
+                    }
 
                 /*Chat*/
 
