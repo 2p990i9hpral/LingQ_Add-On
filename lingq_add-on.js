@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      15.1.1
+// @version      15.2.0
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @grant       GM_xmlhttpRequest
@@ -1879,7 +1879,7 @@
             const endTime = formatTime(sentence.timestamp[1]);
             const text = sentence.text || "";
             
-            vttLines.push(`${startTime} --> ${endTime} size:80% align:middle\n${text}\n`);
+            vttLines.push(`${startTime} --> ${endTime} size:60% align:middle\n${text}\n`);
         });
         
         const blob = new Blob([vttLines.join("\n")], {type: "text/vtt"});
@@ -3187,7 +3187,7 @@
             
             const statsContainer = createElement("div", {id: "flashcardStatsContainer"},
                 createElement("div", {id: "flashcardStatsHeader"},
-                    createElement("span", {id: "flashcardStatsTitle"}, "Flashcards Created per Week"),
+                    createElement("span", {id: "flashcardStatsTitle"}, "Flashcards Created (Past Week)"),
                     createElement("div", {className: "flashcard-period-tabs"},
                         createElement("button", {className: "btn-ghost active", dataset: {period: "week"}}, "Week"),
                         createElement("button", {className: "btn-ghost", dataset: {period: "month"}}, "Month"),
@@ -3298,8 +3298,12 @@
                     createElement("span", {
                         id: "llmUsageStatsTitle",
                         style: "font-size: 0.95em; font-weight: bold;"
-                    }, "LLM Usage Cost per Week"),
+                    }, "LLM Usage Cost (Past Week)"),
                     createElement("div", {style: "display: flex; align-items: center; gap: 8px;"},
+                        createElement("div", {className: "flashcard-period-tabs llm-usage-mode-tabs"},
+                            createElement("button", {className: "btn-ghost active", dataset: {mode: "cost"}}, "Cost"),
+                            createElement("button", {className: "btn-ghost", dataset: {mode: "tokens"}}, "Tokens")
+                        ),
                         languageSelector,
                         createElement("div", {className: "flashcard-period-tabs llm-usage-period-tabs"},
                             createElement("button", {className: "btn-ghost active", dataset: {period: "week"}}, "Week"),
@@ -4536,9 +4540,9 @@
             
             function drawFlashcardStatsChart(labels, periodicData, cumulativeData, selectedPeriod, periodicLabelOverride) {
                 const titleMap = {
-                    week: "Flashcards Created per Week",
-                    month: "Flashcards Created per Month",
-                    year: "Flashcards Created per Year",
+                    week: "Flashcards Created (Past Week)",
+                    month: "Flashcards Created (Past Month)",
+                    year: "Flashcards Created (Past Year)",
                     all: "Flashcards Created (All Time)",
                 };
                 
@@ -5145,21 +5149,34 @@
                 };
             }
             
-            function calculateEntryTokenCosts(entry) {
+            function calculateEntryMetrics(entry, mode = "cost") {
                 const {model, provider, tokens = {}, isPriority} = entry;
+                
+                if (mode === "tokens") {
+                    const tokenTypes = [
+                        {type: "cached", value: tokens.cached || 0},
+                        {type: "input", value: tokens.input || 0},
+                        {type: "reasoning", value: tokens.reasoning || 0},
+                        {type: "output", value: tokens.output || 0}
+                    ];
+                    return tokenTypes
+                        .filter(item => item.value > 0)
+                        .map(({type, value}) => ({key: `${model} - ${type}`, value}));
+                }
+                
                 const [inputPrice, outputPrice] = getLLMPricing(model, provider);
                 const multiplier = isPriority ? 1.8 : 1.0;
                 
                 const costTypes = [
-                    {type: "cached", cost: (tokens.cached) * (inputPrice / 10) * multiplier},
-                    {type: "input", cost: (tokens.input) * inputPrice * multiplier},
-                    {type: "reasoning", cost: (tokens.reasoning) * outputPrice * multiplier},
-                    {type: "output", cost: (tokens.output) * outputPrice * multiplier}
+                    {type: "cached", value: (tokens.cached || 0) * (inputPrice / 10) * multiplier},
+                    {type: "input", value: (tokens.input || 0) * inputPrice * multiplier},
+                    {type: "reasoning", value: (tokens.reasoning || 0) * outputPrice * multiplier},
+                    {type: "output", value: (tokens.output || 0) * outputPrice * multiplier}
                 ];
                 
                 return costTypes
-                    .filter(item => item.cost > 0)
-                    .map(({type, cost}) => ({key: `${model} - ${type}`, cost}));
+                    .filter(item => item.value > 0)
+                    .map(({type, value}) => ({key: `${model} - ${type}`, value}));
             }
             
             function getLocalDateKey(date) {
@@ -5176,7 +5193,7 @@
                 return d.toISOString().slice(0, 10);
             }
             
-            function buildLLMUsageChartData(history, selectedPeriod) {
+            function buildLLMUsageChartData(history, selectedPeriod, selectedMode = "cost") {
                 const today = new Date();
                 today.setHours(0, 0, 0, 0);
                 
@@ -5191,7 +5208,8 @@
                         buckets.push({
                             key: getLocalDateKey(d),
                             label: d.toLocaleString("en-US", {weekday: "short"}),
-                            costs: {}
+                            values: {},
+                            requestCount: 0
                         });
                     }
                 } else if (selectedPeriod === "month") {
@@ -5204,8 +5222,9 @@
                     for (let d = new Date(start); d <= today; d.setDate(d.getDate() + 1)) {
                         buckets.push({
                             key: getLocalDateKey(d),
-                            label: String(d.getDate()), costs:
-                                {}
+                            label: String(d.getDate()),
+                            values: {},
+                            requestCount: 0
                         });
                     }
                 } else if (selectedPeriod === "year") {
@@ -5217,7 +5236,8 @@
                         buckets.push({
                             key: getLocalDateKey(m).slice(0, 7),
                             label: m.toLocaleString("en-US", {month: "short"}),
-                            costs: {}
+                            values: {},
+                            requestCount: 0
                         });
                     }
                 } else {
@@ -5234,7 +5254,8 @@
                     distinctKeys.forEach(key => buckets.push({
                         key,
                         label: key,
-                        costs: {}
+                        values: {},
+                        requestCount: 0
                     }));
                 }
                 
@@ -5242,9 +5263,6 @@
                 const bucketMap = new Map(buckets.map(b => [b.key, b]));
                 
                 history.forEach(entry => {
-                    const items = calculateEntryTokenCosts(entry);
-                    if (!items.length) return;
-                    
                     const entryDate = new Date(entry.timestamp);
                     const matchKey = (selectedPeriod === "year" || (selectedPeriod === "all" && periodicLabel === "Monthly"))
                         ? getLocalDateKey(entryDate).slice(0, 7)
@@ -5254,8 +5272,10 @@
                     
                     const bucket = bucketMap.get(matchKey);
                     if (bucket) {
-                        items.forEach(({key, cost}) => {
-                            bucket.costs[key] = (bucket.costs[key] || 0) + cost;
+                        bucket.requestCount = (bucket.requestCount || 0) + 1;
+                        const items = calculateEntryMetrics(entry, selectedMode);
+                        items.forEach(({key, value}) => {
+                            bucket.values[key] = (bucket.values[key] || 0) + value;
                             allSeriesSet.add(key);
                         });
                     }
@@ -5263,10 +5283,11 @@
                 
                 const allSeriesKeys = Array.from(allSeriesSet);
                 const labels = buckets.map(b => b.label);
+                const requestCounts = buckets.map(b => b.requestCount);
                 let runningTotal = 0;
                 
                 const cumulativeData = buckets.map(b => {
-                    const periodicTotal = allSeriesKeys.reduce((sum, key) => sum + (b.costs[key] || 0), 0);
+                    const periodicTotal = allSeriesKeys.reduce((sum, key) => sum + (b.values[key] || 0), 0);
                     runningTotal += periodicTotal;
                     return runningTotal;
                 });
@@ -5283,17 +5304,17 @@
                         type: "bar",
                         label: seriesKey,
                         yAxisID: "yPeriodic",
-                        stack: "costStack",
-                        data: buckets.map(b => b.costs[seriesKey] || 0),
+                        stack: "metricStack",
+                        data: buckets.map(b => b.values[seriesKey] || 0),
                         backgroundColor: colorPalette[idx % colorPalette.length],
                         borderRadius: 2,
                         barPercentage: 0.6
                     }))
                     : [{
                         type: "bar",
-                        label: "Cost",
+                        label: selectedMode === "tokens" ? "Tokens" : "Cost",
                         yAxisID: "yPeriodic",
-                        stack: "costStack",
+                        stack: "metricStack",
                         data: buckets.map(() => 0),
                         backgroundColor: "#7f8fa6"
                     }];
@@ -5310,15 +5331,16 @@
                     pointRadius: 2
                 };
                 
-                return {labels, barDatasets, cumulativeDataset, periodicLabel};
+                return {labels, barDatasets, cumulativeDataset, periodicLabel, requestCounts};
             }
             
-            function drawLLMUsageStatsChart(labels, barDatasets, cumulativeDataset, selectedPeriod, periodicLabelOverride) {
+            function drawLLMUsageStatsChart(labels, barDatasets, cumulativeDataset, selectedPeriod, periodicLabelOverride, selectedMode = "cost", requestCounts = []) {
+                const metricName = selectedMode === "tokens" ? "Tokens" : "Cost";
                 const titleMap = {
-                    week: "LLM Usage Cost per Week",
-                    month: "LLM Usage Cost per Month",
-                    year: "LLM Usage Cost per Year",
-                    all: "LLM Usage Cost (All Time)"
+                    week: `LLM Usage ${metricName} (Past Week)`,
+                    month: `LLM Usage ${metricName} (Past Month)`,
+                    year: `LLM Usage ${metricName} (Past Year)`,
+                    all: `LLM Usage ${metricName} (All Time)`
                 };
                 const defaultPeriodLabelMap = {
                     week: "Daily",
@@ -5338,19 +5360,28 @@
                 const {fontColor, gridColor} = getChartThemeColors();
                 
                 if (llmUsageStatsChart) {
-                    llmUsageStatsChart.data.labels = labels;
-                    llmUsageStatsChart.data.datasets = [...barDatasets, cumulativeDataset];
-                    llmUsageStatsChart.options.scales.yPeriodic.title.text = `${periodLabel} Cost ($)`;
-                    llmUsageStatsChart.options.plugins.legend.labels.color = fontColor;
-                    llmUsageStatsChart.options.scales.x.ticks.color = fontColor;
-                    llmUsageStatsChart.options.scales.yPeriodic.title.color = fontColor;
-                    llmUsageStatsChart.options.scales.yPeriodic.ticks.color = fontColor;
-                    llmUsageStatsChart.options.scales.yPeriodic.grid.color = gridColor;
-                    llmUsageStatsChart.options.scales.yCumulative.title.color = fontColor;
-                    llmUsageStatsChart.options.scales.yCumulative.ticks.color = fontColor;
-                    llmUsageStatsChart.update();
-                    return;
+                    llmUsageStatsChart.destroy();
+                    llmUsageStatsChart = null;
                 }
+                
+                const formatValue = (val) => {
+                    if (selectedMode === "tokens") {
+                        return `${Math.round(val).toLocaleString()} tokens`;
+                    }
+                    return val < 0.01 ? `$${val.toFixed(5)}` : `$${val.toFixed(4)}`;
+                };
+                
+                const formatAxisTick = (val) => {
+                    if (selectedMode === "tokens") {
+                        if (val >= 1000000) return (val / 1000000).toFixed(1) + "M";
+                        if (val >= 1000) return (val / 1000).toFixed(0) + "k";
+                        return val.toLocaleString();
+                    }
+                    if (val === 0) return "$0";
+                    if (val < 0.001) return "$" + val.toFixed(4);
+                    if (val < 0.01) return "$" + val.toFixed(3);
+                    return "$" + val.toFixed(2);
+                };
                 
                 llmUsageStatsChart = new Chart(ctx, {
                     data: {
@@ -5389,17 +5420,25 @@
                                     label: (context) => {
                                         const val = context.parsed.y;
                                         if (val === 0 && context.dataset.type === "bar") return null;
-                                        const formatted = val < 0.01 ? `$${val.toFixed(5)}` : `$${val.toFixed(4)}`;
-                                        return ` ${context.dataset.label}: ${formatted}`;
+                                        return ` ${context.dataset.label}: ${formatValue(val)}`;
                                     },
                                     footer: (tooltipItems) => {
                                         let periodicSum = 0;
+                                        const dataIndex = tooltipItems[0]?.dataIndex;
+                                        const rowCount = requestCounts[dataIndex] || 0;
+                                        
                                         tooltipItems.forEach(item => {
                                             if (item.dataset.type === "bar") {
                                                 periodicSum += item.parsed.y;
                                             }
                                         });
-                                        return periodicSum > 0 ? `Period Total: ${periodicSum < 0.01 ? `$${periodicSum.toFixed(5)}` : `$${periodicSum.toFixed(4)}`}` : "";
+                                        
+                                        const lines = [];
+                                        if (periodicSum > 0) {
+                                            lines.push(`Period Total: ${formatValue(periodicSum)}`);
+                                        }
+                                        lines.push(`Requests: ${rowCount} calls`);
+                                        return lines.join("\n");
                                     }
                                 }
                             }
@@ -5420,7 +5459,7 @@
                                 beginAtZero: true,
                                 title: {
                                     display: true,
-                                    text: `${periodLabel} Cost ($)`,
+                                    text: selectedMode === "tokens" ? `${periodLabel} Tokens` : `${periodLabel} Cost ($)`,
                                     color: fontColor
                                 },
                                 grid: {
@@ -5428,12 +5467,7 @@
                                 },
                                 ticks: {
                                     color: fontColor,
-                                    callback: (val) => {
-                                        if (val === 0) return "$0";
-                                        if (val < 0.001) return "$" + val.toFixed(4);
-                                        if (val < 0.01) return "$" + val.toFixed(3);
-                                        return "$" + val.toFixed(2);
-                                    }
+                                    callback: formatAxisTick
                                 }
                             },
                             yCumulative: {
@@ -5443,17 +5477,12 @@
                                 grid: {drawOnChartArea: false},
                                 title: {
                                     display: true,
-                                    text: "Cumulative ($)",
+                                    text: selectedMode === "tokens" ? "Cumulative Tokens" : "Cumulative ($)",
                                     color: fontColor
                                 },
                                 ticks: {
                                     color: fontColor,
-                                    callback: (val) => {
-                                        if (val === 0) return "$0";
-                                        if (val < 0.001) return "$" + val.toFixed(4);
-                                        if (val < 0.01) return "$" + val.toFixed(3);
-                                        return "$" + val.toFixed(2);
-                                    }
+                                    callback: formatAxisTick
                                 }
                             }
                         }
@@ -5528,57 +5557,82 @@
                     return allHistory.filter(e => e.language === selectedLang);
                 }
                 
-                function updateSummaryAndChart(selectedPeriod) {
+                function updateSummaryAndChart(selectedPeriod, selectedMode) {
                     const history = getFilteredHistory();
+                    const containerEl = document.getElementById("llmUsageStatsContainer");
+                    const period = selectedPeriod || containerEl?.querySelector(".llm-usage-period-tabs .btn-ghost.active")?.dataset.period || "week";
+                    const mode = selectedMode || containerEl?.querySelector(".llm-usage-mode-tabs .btn-ghost.active")?.dataset.mode || "cost";
                     
                     let totalCost = 0;
+                    let totalTokens = 0;
                     history.forEach(entry => {
-                        const items = calculateEntryTokenCosts(entry);
-                        items.forEach(({cost}) => {
-                            totalCost += cost;
+                        const costItems = calculateEntryMetrics(entry, "cost");
+                        costItems.forEach(({value}) => {
+                            totalCost += value;
+                        });
+                        const tokenItems = calculateEntryMetrics(entry, "tokens");
+                        tokenItems.forEach(({value}) => {
+                            totalTokens += value;
                         });
                     });
                     
                     const summaryEl = document.getElementById("llmUsageTotalSummary");
                     if (summaryEl) {
-                        summaryEl.textContent = `Total: $${totalCost.toFixed(4)} (${history.length} requests)`;
+                        if (mode === "tokens") {
+                            summaryEl.textContent = `Total: ${Math.round(totalTokens).toLocaleString()} tokens (${history.length} requests)`;
+                        } else {
+                            summaryEl.textContent = `Total: $${totalCost.toFixed(4)} (${history.length} requests)`;
+                        }
                     }
                     
                     const {
                         labels,
                         barDatasets,
                         cumulativeDataset,
-                        periodicLabel
-                    } = buildLLMUsageChartData(history, selectedPeriod);
-                    drawLLMUsageStatsChart(labels, barDatasets, cumulativeDataset, selectedPeriod, periodicLabel);
+                        periodicLabel,
+                        requestCounts
+                    } = buildLLMUsageChartData(history, period, mode);
+                    drawLLMUsageStatsChart(labels, barDatasets, cumulativeDataset, period, periodicLabel, mode, requestCounts);
                 }
                 
                 const container = document.getElementById("llmUsageStatsContainer");
                 if (!container) return;
-                const tabs = container.querySelectorAll(".llm-usage-period-tabs .btn-ghost");
+                const periodTabs = container.querySelectorAll(".llm-usage-period-tabs .btn-ghost");
+                const modeTabs = container.querySelectorAll(".llm-usage-mode-tabs .btn-ghost");
                 
                 if (!container.dataset.initialized) {
-                    tabs.forEach(btn => {
+                    modeTabs.forEach(btn => {
                         btn.addEventListener("click", () => {
-                            tabs.forEach(tab => tab.classList.remove("active"));
+                            modeTabs.forEach(tab => tab.classList.remove("active"));
                             btn.classList.add("active");
-                            const activePeriod = btn.dataset.period;
-                            updateSummaryAndChart(activePeriod);
+                            const activePeriod = container.querySelector(".llm-usage-period-tabs .btn-ghost.active")?.dataset.period || "week";
+                            updateSummaryAndChart(activePeriod, btn.dataset.mode);
+                        });
+                    });
+
+                    periodTabs.forEach(btn => {
+                        btn.addEventListener("click", () => {
+                            periodTabs.forEach(tab => tab.classList.remove("active"));
+                            btn.classList.add("active");
+                            const activeMode = container.querySelector(".llm-usage-mode-tabs .btn-ghost.active")?.dataset.mode || "cost";
+                            updateSummaryAndChart(btn.dataset.period, activeMode);
                         });
                     });
                     
                     if (languageSelector) {
                         languageSelector.addEventListener("change", () => {
-                            const activeTab = container.querySelector(".llm-usage-period-tabs .btn-ghost.active");
-                            updateSummaryAndChart(activeTab?.dataset.period || "week");
+                            const activePeriod = container.querySelector(".llm-usage-period-tabs .btn-ghost.active")?.dataset.period || "week";
+                            const activeMode = container.querySelector(".llm-usage-mode-tabs .btn-ghost.active")?.dataset.mode || "cost";
+                            updateSummaryAndChart(activePeriod, activeMode);
                         });
                     }
                     
                     container.dataset.initialized = "1";
                 }
                 
-                const activeTab = container.querySelector(".llm-usage-period-tabs .btn-ghost.active");
-                updateSummaryAndChart(activeTab?.dataset.period || "week");
+                const activePeriod = container.querySelector(".llm-usage-period-tabs .btn-ghost.active")?.dataset.period || "week";
+                const activeMode = container.querySelector(".llm-usage-mode-tabs .btn-ghost.active")?.dataset.mode || "cost";
+                updateSummaryAndChart(activePeriod, activeMode);
             }
             
             const usageButtons = [
@@ -8216,20 +8270,29 @@
                 });
             }
             
+            function resetScroll() {
+                const performReset = () => {
+                    const wrapper = document.querySelector(".reader-container-wrapper");
+                    const container = document.querySelector(".reader-container");
+                    if (wrapper) {
+                        wrapper.scrollTop = 0;
+                        wrapper.scrollLeft = 0;
+                    }
+                    if (container) {
+                        container.scrollTop = 0;
+                        container.scrollLeft = 0;
+                    }
+                };
+                performReset();
+                setTimeout(performReset, 50);
+                setTimeout(performReset, 150);
+            }
+            
             function setupNavClickListeners() {
                 const navSelectors = [
                     ".reader-component .nav--left a",
                     ".reader-component .nav--right a"
                 ];
-                
-                function resetScroll() {
-                    setTimeout(() => {
-                        const wrapper = document.querySelector(".reader-container-wrapper");
-                        const container = document.querySelector(".reader-container");
-                        if (wrapper) wrapper.scrollTop = 0;
-                        if (container) wrapper.scrollLeft = 0;
-                    }, 150);
-                }
                 
                 function removeSummary() {
                     document.querySelector(".quick-summary")?.remove();
@@ -8238,7 +8301,6 @@
                 navSelectors.forEach((selector) => {
                     waitForElement(selector, 5000).then((button) => {
                         if (!button) return;
-                        button.addEventListener("click", resetScroll);
                         button.addEventListener("click", removeSummary, true);
                         button.addEventListener("click", handleLessonCompletion, true);
                     });
@@ -8249,13 +8311,6 @@
                 window.addEventListener("keydown", (event) => {
                     if (!event.shiftKey) return;
                     if (!(event.key === "ArrowRight" || event.key === "ArrowLeft")) return;
-                    
-                    setTimeout(() => {
-                        const wrapper = document.querySelector(".reader-container-wrapper");
-                        const container = document.querySelector(".reader-container");
-                        if (wrapper) wrapper.scrollTop = 0;
-                        if (container) wrapper.scrollLeft = 0;
-                    }, 150);
                     
                     const nextBtn = document.querySelector("#lesson-reader > div.h-full > div > header > div.col-3 > button");
                     const prevBtn = document.querySelector("#lesson-reader > div.h-full > div > header > div:nth-child(1) > button");
@@ -8293,6 +8348,8 @@
             }
             
             async function handleLoadedContent(node) {
+                resetScroll();
+                
                 currentGeminiCacheName = null;
                 lessonUsageHistory = [];
                 console.log('[Lesson Stats]', 'Lesson started. Usage history reset.');
@@ -8333,17 +8390,33 @@
             
             const observer = new MutationObserver(function (mutations) {
                 mutations.forEach((mutation) => {
-                    mutation.addedNodes.forEach((node) => {
-                        if (node.nodeType !== Node.ELEMENT_NODE) return;
-                        if (!node.matches(".loadedContent")) return;
-                        handleLoadedContent(node);
-                    });
+                    if (mutation.type === "childList") {
+                        mutation.addedNodes.forEach((node) => {
+                            if (node.nodeType !== Node.ELEMENT_NODE) return;
+                            if (!node.matches(".loadedContent")) return;
+                            handleLoadedContent(node);
+                        });
+                    } else if (mutation.type === "attributes" && mutation.attributeName === "class") {
+                        const oldClass = mutation.oldValue || "";
+                        const newClass = mutation.target.className || "";
+                        const oldPage = oldClass.match(/\bis-page-(\d+)\b/)?.[1];
+                        const newPage = newClass.match(/\bis-page-(\d+)\b/)?.[1];
+                        
+                        if (newPage && oldPage !== newPage) {
+                            resetScroll();
+                        }
+                    }
                 });
             });
             
             const sentenceText = await waitForElement('.sentence-text', 10000);
             sentenceText.querySelectorAll(".loadedContent").forEach(handleLoadedContent);
-            observer.observe(sentenceText, {childList: true});
+            observer.observe(sentenceText, {
+                childList: true,
+                attributes: true,
+                attributeFilter: ['class'],
+                attributeOldValue: true
+            });
         }
         
         async function createGeminiCache(provider, apiKey, model, summaryHTML, sysPlain, sysWord) {

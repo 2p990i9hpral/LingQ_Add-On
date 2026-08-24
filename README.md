@@ -22,7 +22,6 @@ Customizable layouts, AI-powered chat & TTS, flashcard system, local video playe
 > To use AI features (Chat, TTS, Quick Summary), you'll need an API key from one of the [supported providers](#supported-ai-providers).
 
 ## Features
-
 -   **Reader Layouts:**
     Preset layouts optimized for video, audio, or text-focused study. Includes a resizable video option.
 
@@ -48,7 +47,12 @@ Customizable layouts, AI-powered chat & TTS, flashcard system, local video playe
 -   **Appearance Customization:**
     Dark/Light themes, custom color palette, adjustable font size and line height, and custom font support.
 
-    <img src="images/settings.png" width=400></br>
+    <img src="images/styles.png" width=400></br>
+
+-   **Customizable Keyboard Shortcuts:**
+    Streamline your study workflow with fully configurable hotkeys.
+
+    <img src="images/hotkeys.png" width=300></br>
 
 -   **Vocabulary Tools:**
     Download Entire known/unknown words and phrases as CSV.
