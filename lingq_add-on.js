@@ -3223,6 +3223,13 @@
                 )
             );
             
+            const languageSelector = createElement("select", {
+                    id: "flashcardLanguageSelector",
+                    className: "popup-input",
+                    style: "width: auto; min-width: 70px; margin: 0; padding: 2px 8px; font-size: 0.85em; cursor: pointer;"
+                }
+            );
+            
             const popup = createElement("div", {id: "flashcardPopup", className: "popup"},
                 createElement("div", {id: "flashcardDragHandle", className: "popup-drag-handle"},
                     createElement("h3", {textContent: "Flashcard Manager"})
@@ -3231,12 +3238,15 @@
                     createElement("div", {id: "flashcardListView", style: "display: block;"},
                         createElement("div", {id: "flashcardPopupHeader"},
                             createElement("span", {id: "flashcardCount"}, "Flashcards:"),
-                            createElement("input", {
-                                id: "flashcardSearchInput",
-                                type: "text",
-                                placeholder: "Search word or meaning..."
-                            }),
-                            paginationContainer
+                            createElement("div", {style: "display: flex; align-items: center; gap: 8px; margin-left: auto;"},
+                                languageSelector,
+                                createElement("input", {
+                                    id: "flashcardSearchInput",
+                                    type: "text",
+                                    placeholder: "Search word or meaning..."
+                                }),
+                                paginationContainer
+                            )
                         ),
                         flashcardTableContainer,
                         statsContainer
@@ -4363,12 +4373,13 @@
             const flashcardTableBody = flashcardPopup.querySelector("tbody");
             const countLabel = document.getElementById("flashcardCount");
             const searchInput = document.getElementById("flashcardSearchInput");
+            const languageSelector = document.getElementById("flashcardLanguageSelector");
             
             let currentPage = 1;
             const pageSize = 15;
             let totalCount = 0;
             let filteredCount = 0;
-            const targetLanguage = getLessonLanguage();
+            let targetLanguage = getLessonLanguage();
             
             let currentSortField = "idx";
             let currentSortOrder = "desc";
@@ -4376,6 +4387,59 @@
             
             let flashcardStatsChart = null;
             let flashcardAllDates = [];
+            
+            async function fetchUniqueFlashcardLanguages() {
+                if (!isDbReady()) return [getLessonLanguage() || "en"];
+                try {
+                    let query = getDbClient()
+                        .from(getTableName())
+                        .select("language");
+                    
+                    if (settings.useCentralDb && centralUserId) {
+                        query = query.eq("user_id", centralUserId);
+                    }
+                    
+                    const {data, error} = await query;
+                    if (error) {
+                        console.error("Failed to fetch flashcard languages:", error);
+                        return [getLessonLanguage() || "en"];
+                    }
+                    
+                    const currentLang = getLessonLanguage();
+                    const uniqueSet = new Set((data || []).map(r => r.language).filter(Boolean));
+                    if (currentLang) uniqueSet.add(currentLang);
+                    return Array.from(uniqueSet).sort();
+                } catch (err) {
+                    console.error("fetchUniqueFlashcardLanguages error:", err);
+                    return [getLessonLanguage() || "en"];
+                }
+            }
+            
+            async function populateLanguageSelector() {
+                if (!languageSelector) return;
+                const languages = await fetchUniqueFlashcardLanguages();
+                const currentSelected = targetLanguage;
+                languageSelector.innerHTML = "";
+                languages.forEach((lang) => {
+                    languageSelector.appendChild(createElement("option", {
+                        value: lang,
+                        textContent: lang,
+                        selected: lang === currentSelected
+                    }));
+                });
+                languageSelector.value = currentSelected;
+            }
+            
+            if (languageSelector) {
+                languageSelector.addEventListener("change", (event) => {
+                    targetLanguage = event.target.value;
+                    currentPage = 1;
+                    totalCount = 0;
+                    searchKeyword = "";
+                    if (searchInput) searchInput.value = "";
+                    loadFlashcardPage(1);
+                });
+            }
             
             async function fetchFlashcardsInBatches(language, columns, sortBy) {
                 let allData = [];
@@ -4797,7 +4861,15 @@
                 }
                 
                 flashcardAllDates = await fetchFlashcardsInBatches(targetLanguage, "created_at", "created_at");
-                if (!flashcardAllDates.length) return;
+                if (!flashcardAllDates.length) {
+                    if (flashcardStatsChart) {
+                        flashcardStatsChart.data.labels = [];
+                        flashcardStatsChart.data.datasets[0].data = [];
+                        flashcardStatsChart.data.datasets[1].data = [];
+                        flashcardStatsChart.update();
+                    }
+                    return;
+                }
                 
                 const container = document.getElementById("flashcardStatsContainer");
                 const tabs = container.querySelectorAll(".flashcard-period-tabs .btn-ghost");
@@ -4817,16 +4889,31 @@
                 updateChart(activeTab?.dataset.period || "week");
             }
             
-            flashcardButton.addEventListener("click", async () => {
+            flashcardButton.addEventListener("click", () => {
                 flashcardPopup.style.display = "block";
                 makeDraggable(flashcardPopup, document.getElementById("flashcardDragHandle"));
                 
+                targetLanguage = getLessonLanguage() || targetLanguage;
+                
+                if (languageSelector && !languageSelector.options.length) {
+                    languageSelector.innerHTML = "";
+                    languageSelector.appendChild(createElement("option", {
+                        value: targetLanguage,
+                        textContent: targetLanguage,
+                        selected: true
+                    }));
+                }
+                if (languageSelector) languageSelector.value = targetLanguage;
+                
                 currentPage = 1;
+                totalCount = 0;
                 searchKeyword = "";
                 if (searchInput) searchInput.value = "";
                 
                 loadFlashcardPage(1);
                 searchInput?.focus();
+                
+                populateLanguageSelector();
             });
             
             document.getElementById("closeFlashcardPopupBtn").addEventListener("click", () => {
@@ -5968,7 +6055,6 @@
 
                 #flashcardSearchInput {
                     width: 300px;
-                    margin-left: auto;
                     border: 1px solid #444 !important;
                     padding: 3px 8px !important;
                     border-radius: 4px !important;
