@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      15.5.2
+// @version      15.5.3
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @grant       GM_xmlhttpRequest
@@ -2566,6 +2566,8 @@
             const baseType = settings.styleType[language] || "video";
             const position = settings.videoPosition[language] || "Right";
             
+            addCheckbox(container1, "usePageModeCheckbox", "Use Paging Mode", settings.usePageMode[language]);
+            
             addSelect(container1, "styleTypeSelector", "Layout Style:", [
                 {value: "audio", text: "Audio Only"},
                 {value: "video", text: "YouTube Video"},
@@ -2653,18 +2655,20 @@
             
             container1.appendChild(colorSection);
             
-            addCheckbox(container1, "autoFinishingCheckbox", "Finish Lesson Automatically", settings.autoFinishing);
-            addCheckbox(container1, "focusPlayingSentenceCheckbox", "Focus on Playing Sentence", settings.focusPlayingSentence);
-            addCheckbox(container1, "showTranslationCheckbox", "Show Translation Automatically", settings.showTranslation);
-            addCheckbox(container1, "usePageModeCheckbox", "Use Paging Mode", settings.usePageMode[language]);
-            addCheckbox(container1, "skipEndPageCheckbox", "Skip End Page", settings.skipEndPage);
-            addRadioGroup(container1, "relocateCaption", "Video Caption:", [
+            const videoCaptionSection = createElement("div", {className: "popup-section"});
+            addSlider(videoCaptionSection, "captionFontsizeSlider", "Video Caption Font Size", "captionFontsizeValue", settings.captionFontsize, "px", 10, 30, 1);
+            addRadioGroup(videoCaptionSection, "relocateCaption", "Location:", [
                 {value: "default", text: "Default"},
                 {value: "inside", text: "Inside"},
                 {value: "below", text: "Below"}
             ], settings.relocateCaption);
-            addSlider(container1, "captionFontsizeSlider", "Video Caption Font Size", "captionFontsizeValue", settings.captionFontsize, "px", 10, 30, 1);
+            container1.appendChild(videoCaptionSection);
+            
+            addCheckbox(container1, "focusPlayingSentenceCheckbox", "Focus on Playing Sentence", settings.focusPlayingSentence);
             addCheckbox(container1, "showMemoWidgetCheckbox", "Show Memo Widget", settings.showMemoWidget);
+            addCheckbox(container1, "skipEndPageCheckbox", "Skip End Page", settings.skipEndPage);
+            addCheckbox(container1, "autoFinishingCheckbox", "Finish Lesson Automatically", settings.autoFinishing);
+            addCheckbox(container1, "showTranslationCheckbox", "Show Translation Automatically", settings.showTranslation);
             
             columns.appendChild(container1);
             
