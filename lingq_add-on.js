@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      15.5.1
+// @version      15.5.2
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @grant       GM_xmlhttpRequest
@@ -9666,11 +9666,10 @@
                     
                     // if (chatHistory.findIndex(item => item.role === "system-plain") !== -1) chatHistory = chatHistory.filter(item => (item.role !== "system-word" && item.role !== "system-sentence"));
                     
-                    const formattedUserMessage = convertMarkdownToHTML(userMessage);
-                    const userMessageDiv = addMessageToUI(formattedUserMessage, "user-message", chatContainer, true);
+                    const userMessageDiv = addMessageToUI(userMessage, "user-message", chatContainer, true);
                     
                     const userMessageId = generateUniqueId();
-                    chatHistory = updateChatHistoryState(chatHistory, formattedUserMessage, "user", userMessageId);
+                    chatHistory = updateChatHistoryState(chatHistory, userMessage, "user", userMessageId);
                     
                     const userButtonContainer = createElement("div", {className: "message-button-container"});
                     userButtonContainer.appendChild(createDeleteButton(userMessageDiv, userMessageId));
@@ -10247,6 +10246,8 @@
         Restriction:
             - Carefully inspect the "Previous Response" and locate the exact slot requested for modification.
             - Except for the explicitly requested changes, all other content (definitions, contextual explanations, and examples) must be copied verbatim from the "Previous Response".
+            - Keep any explanation about the correction brief and direct. This text must be placed entirely outside and before the '<div class="word-card">' container.
+            - Do not write any text regarding the correction process inside the '<div class="word-card">' (especially not in the contextual explanation '<p>' tag). The inner contents must strictly focus on the word itself.
 
         ### Condition B: General or Referential Query
         Trigger: The user asks a question or makes a general comment.
@@ -10316,6 +10317,25 @@
         User Input: "Why is English so hard?"
         Assistant Output:
         <p>English can be difficult due to its inconsistent spelling rules and vast vocabulary borrowed from multiple languages.</p>
+        
+        ### Example 4: General Conversation (Topic Shift)
+        Scenario: The previous turn was a word card analysis, but the user suddenly asks a completely unrelated technical or general knowledge question. There is no correction requested.
+        User Input: "How is an ALBM launched? Do fighter jets fire it while climbing?"
+        Assistant Output:
+        <p>An <b>ALBM (Air-Launched Ballistic Missile)</b> is typically dropped from a large bomber or transport aircraft, igniting its rocket motor mid-air during free fall.</p>
+        <p>While fighter jets sometimes use a pitch-up (climbing) maneuver to release conventional bombs or short-range missiles, bulky ALBMs are generally released in level flight after reaching sufficient altitude and speed.</p>
+        
+        ### Example 5: Referential Query (Asking for more details, NOT correcting)
+        Scenario: The user asks an additional question about the previously explained word or concept, but does NOT request any changes to the word card itself.
+        User Input: "Is the word you just showed me okay to use in business emails without sounding rude?"
+        Assistant Output:
+        <p>Yes, it is a <b>polite expression</b> that is perfectly acceptable in business correspondence.</p>
+        <p>It is particularly appropriate in the following situations:</p>
+        <ul>
+          <li>When making an inquiry to a new client</li>
+          <li>When submitting an official report to a supervisor</li>
+        </ul>
+        
         `;
         
         setupStyleEventListeners();
