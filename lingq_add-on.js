@@ -4,12 +4,13 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      15.4.0
+// @version      15.5.0
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @grant       GM_xmlhttpRequest
 // @require https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js
 // @require https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js
+// @require https://cdn.jsdelivr.net/npm/html-to-image@1.11.11/dist/html-to-image.min.js
 // @namespace https://greasyfork.org/users/1458847
 // @downloadURL https://update.greasyfork.org/scripts/533096/LingQ%20Addon.user.js
 // @updateURL https://update.greasyfork.org/scripts/533096/LingQ%20Addon.meta.js
@@ -3296,6 +3297,11 @@
                             id: "flashcardCsvDownload",
                             className: "popup-button"
                         }, "Export as CSV"),
+                        createElement("button", {
+                            id: "flashcardDownloadReportBtn",
+                            className: "popup-button",
+                            style: "display: none;"
+                        }, "Download the Report"),
                         createElement("button", {id: "closeFlashcardPopupBtn", className: "popup-button"}, "Close")
                     )
                 )
@@ -5112,6 +5118,11 @@
                 reportDropdownBtn.style.display = "none";
                 reportMainBtn.classList.add("single-btn-mode");
                 
+                const csvBtn = document.getElementById("flashcardCsvDownload");
+                const downloadReportBtn = document.getElementById("flashcardDownloadReportBtn");
+                if (csvBtn) csvBtn.style.display = "none";
+                if (downloadReportBtn) downloadReportBtn.style.display = "";
+                
                 reportContainer.innerHTML = `
                     <div id="flashcardReportHeader">
                         A report based on recent ${limitCount} words
@@ -5265,6 +5276,11 @@
                     reportMainBtn.textContent = "AI Report";
                     reportDropdownBtn.style.display = "";
                     reportMainBtn.classList.remove("single-btn-mode");
+                    
+                    const csvBtn = document.getElementById("flashcardCsvDownload");
+                    const downloadReportBtn = document.getElementById("flashcardDownloadReportBtn");
+                    if (csvBtn) csvBtn.style.display = "";
+                    if (downloadReportBtn) downloadReportBtn.style.display = "none";
                 } else {
                     generateAiReport(100);
                 }
@@ -5276,6 +5292,64 @@
                     generateAiReport(count);
                 });
             });
+            
+            const downloadReportBtn = document.getElementById("flashcardDownloadReportBtn");
+            if (downloadReportBtn) {
+                downloadReportBtn.addEventListener("click", async () => {
+                    const reportContainer = document.getElementById("flashcardReportContainer");
+                    if (!reportContainer || reportContainer.style.display === "none") return;
+                    
+                    downloadReportBtn.disabled = true;
+                    const originalText = downloadReportBtn.textContent;
+                    downloadReportBtn.textContent = "Capturing...";
+                    
+                    try {
+                        const prevMaxHeight = reportContainer.style.maxHeight;
+                        const prevOverflowY = reportContainer.style.overflowY;
+                        const prevHeight = reportContainer.style.height;
+                        const prevScrollTop = reportContainer.scrollTop;
+                        
+                        reportContainer.style.maxHeight = "none";
+                        reportContainer.style.overflowY = "visible";
+                        reportContainer.style.height = "auto";
+                        reportContainer.scrollTop = 0;
+                        
+                        const fullHeight = reportContainer.scrollHeight;
+                        const fullWidth = reportContainer.offsetWidth;
+                        
+                        const dataUrl = await htmlToImage.toPng(reportContainer, {
+                            backgroundColor: settings.colorMode === "dark" ? "#2a2c2e" : "#ffffff",
+                            pixelRatio: 2,
+                            width: fullWidth,
+                            height: fullHeight,
+                            style: {
+                                maxHeight: "none",
+                                overflowY: "visible",
+                                height: `${fullHeight}px`
+                            }
+                        });
+                        
+                        reportContainer.style.maxHeight = prevMaxHeight;
+                        reportContainer.style.overflowY = prevOverflowY;
+                        reportContainer.style.height = prevHeight;
+                        reportContainer.scrollTop = prevScrollTop;
+                        
+                        const link = createElement("a", {
+                            href: dataUrl,
+                            download: `learning_report_${targetLanguage}.png`
+                        });
+                        document.body.appendChild(link);
+                        link.click();
+                        document.body.removeChild(link);
+                    } catch (err) {
+                        console.error("Report capture failed:", err);
+                        alert("Failed to capture the report image.");
+                    } finally {
+                        downloadReportBtn.disabled = false;
+                        downloadReportBtn.textContent = originalText;
+                    }
+                });
+            }
         }
         
         function setupLLMUsageEventListeners() {
