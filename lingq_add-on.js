@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      15.2.0
+// @version      15.3.0
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @grant       GM_xmlhttpRequest
@@ -88,7 +88,7 @@
         askSelected: false,
         prependSummary: {},
         summaryDifficulty: {},
-        useCentralDb: false,
+        useCentralDb: true,
         dbUrl: "",
         dbKey: "",
         
@@ -104,7 +104,7 @@
     };
     
     const languageScopedDefaults = {
-        styleType: "video",
+        styleType: "audio",
         videoPosition: "Right",
         customFont: "",
         prependSummary: false,
@@ -451,6 +451,21 @@
             element.focus();
             element.setSelectionRange(element.value.length, element.value.length);
         }
+    }
+    
+    async function setLingQMeaning(newMeaning) {
+        const textarea = document.querySelector(".reference-input-text");
+        if (!textarea) return;
+        
+        textarea.focus();
+        textarea.dispatchEvent(new FocusEvent("focus", { bubbles: true }));
+        
+        Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")?.set.call(textarea, newMeaning);
+        textarea.dispatchEvent(new InputEvent("input", { bubbles: true, composed: true, data: newMeaning }));
+        textarea.dispatchEvent(new Event("change", { bubbles: true }));
+        
+        textarea.blur();
+        textarea.dispatchEvent(new FocusEvent("focusout", { bubbles: true }));
     }
     
     function waitForElement(selector, timeout = 1000) {
@@ -2799,8 +2814,8 @@
             difficultyContainer.style.display = settings.prependSummary[language] ? "block" : "none";
             
             addRadioGroup(chatWidgetSection, "dbMode", "DB Type:", [
-                {value: "personal", text: "Custom"},
-                {value: "central", text: "Built-in"}
+                {value: "central", text: "Built-in"},
+                {value: "personal", text: "Custom"}
             ], settings.useCentralDb ? "central" : "personal");
             
             const personalDbSection = createElement("div", {id: "personalDbSection"});
@@ -4769,12 +4784,13 @@
             flashcardButton.addEventListener("click", async () => {
                 flashcardPopup.style.display = "block";
                 makeDraggable(flashcardPopup, document.getElementById("flashcardDragHandle"));
-                loadFlashcardPage(currentPage);
                 
-                const searchInput = document.getElementById("flashcardSearchInput");
-                searchInput.value = "";
-                searchInput.dispatchEvent(new Event("input"));
-                searchInput.focus();
+                currentPage = 1;
+                searchKeyword = "";
+                if (searchInput) searchInput.value = "";
+                
+                loadFlashcardPage(1);
+                searchInput?.focus();
             });
             
             document.getElementById("closeFlashcardPopupBtn").addEventListener("click", () => {
@@ -6230,7 +6246,7 @@
         
         function setupVolumeController() {
             const controllers = document.querySelector('.audio-player--controllers');
-            if (!controllers || document.getElementById('addon-volume-controller')) return;
+            if (!controllers || controllers.querySelector('#addon-volume-controller')) return;
             
             // Skip if this is the YouTube video controller (distinguished by its specific speed button class)
             if (controllers.querySelector('.controller-item--speed')) return;
@@ -8226,16 +8242,26 @@
                             acc[category].tokens.input += (usage.tokens.input || 0);
                             acc[category].tokens.reasoning += (usage.tokens.reasoning || 0);
                             acc[category].tokens.output += (usage.tokens.output || 0);
+                            
+                            acc.totalTokens.cached += (usage.tokens.cached || 0);
+                            acc.totalTokens.input += (usage.tokens.input || 0);
+                            acc.totalTokens.reasoning += (usage.tokens.reasoning || 0);
+                            acc.totalTokens.output += (usage.tokens.output || 0);
                         }
                         
                         return acc;
-                    }, {totalCost: 0, totalUncachedCost: 0});
+                    }, {
+                        totalCost: 0,
+                        totalUncachedCost: 0,
+                        totalTokens: {cached: 0, input: 0, reasoning: 0, output: 0}
+                    });
                     
                     const totalSavedPercent = usageStats.totalUncachedCost > 0
                         ? (((usageStats.totalUncachedCost - usageStats.totalCost) / usageStats.totalUncachedCost) * 100).toFixed(1)
                         : '0.0';
                     
-                    console.log('[Lesson Stats]', `Total Cost: $${usageStats.totalCost.toFixed(6)} (${totalSavedPercent}% saved)`);
+                    const {cached: tCached, input: tInput, reasoning: tReasoning, output: tOutput} = usageStats.totalTokens;
+                    console.log('[Lesson Stats]', `tokens: (${tCached}/${tInput}/${tReasoning}/${tOutput}), Total Cost: $${usageStats.totalCost.toFixed(6)} (${totalSavedPercent}% saved)`);
                     
                     Object.entries(usageStats)
                         .filter(([key]) => !key.startsWith("total"))
@@ -8243,7 +8269,8 @@
                             const savedPercent = data.uncachedCost > 0
                                 ? (((data.uncachedCost - data.cost) / data.uncachedCost) * 100).toFixed(1)
                                 : '0.0';
-                            console.log(`  - ${category}: ${data.calls} calls, $${data.cost.toFixed(6)} (${savedPercent}% saved)`);
+                            const {cached, input, reasoning, output} = data.tokens;
+                            console.log(`  - ${category}: ${data.calls} calls, tokens: (${cached}/${input}/${reasoning}/${output}), $${data.cost.toFixed(6)} (${savedPercent}% saved)`);
                         });
                     
                     setTimeout(async () => {
@@ -8356,6 +8383,7 @@
                 
                 resetLocalVideo();
                 handleLocalVideoContainerVisibility();
+                waitForElement('.audio-player--controllers', 5000).then(() => setupVolumeController());
                 
                 const isPageMode = settings.usePageMode[language];
                 if (isPageMode) {
@@ -8881,11 +8909,8 @@
                         });
                     }
                     
-                    const lingqMeaningElement = document.querySelector(".reference-input-text");
-                    const hasMeaning = lingqMeaningElement ? lingqMeaningElement.value : false;
-                    const textToCopyForLingq = (hasMeaning ? "\n" : "") + meaning;
-                    if (textToCopyForLingq.trim() !== "") {
-                        navigator.clipboard.writeText(textToCopyForLingq)
+                    if (meaning.trim() !== "") {
+                        navigator.clipboard.writeText(meaning)
                             .then(() => showToast("Meaning Copied!", true))
                             .catch(() => showToast("Failed to copy meaning.", false));
                     }
@@ -9012,6 +9037,17 @@
                                 try {
                                     const currentMeaning = meaningElem?.textContent?.trim() || "";
                                     const currentPronunciation = pronunciationElem?.textContent?.trim() || "";
+                                    
+                                    const lingqMeaningElement = document.querySelector(".reference-input-text");
+                                    if (lingqMeaningElement && currentMeaning) {
+                                        const existingValue = lingqMeaningElement.value.trim();
+                                        const existingLines = existingValue ? existingValue.split("\n").map(line => line.trim()) : [];
+                                        
+                                        if (!existingLines.includes(currentMeaning)) {
+                                            const updatedMeaning = existingValue ? `${existingValue}\n${currentMeaning}` : currentMeaning;
+                                            setLingQMeaning(updatedMeaning);
+                                        }
+                                    }
                                     
                                     const {data: existing} = await getDbClient()
                                         .from(getTableName())
