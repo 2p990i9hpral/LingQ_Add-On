@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      15.3.0
+// @version      15.4.0
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @grant       GM_xmlhttpRequest
@@ -85,6 +85,7 @@
         llmModel: "gpt-5.4-mini",
         llmApiKeys: {},
         llmModels: {},
+        llmResponseLanguage: "auto",
         askSelected: false,
         prependSummary: {},
         summaryDifficulty: {},
@@ -311,13 +312,16 @@
         return await userProfile.dictionary_languages[0];
     }
     
+    let cachedDictionaryLocalePairs = null;
     async function getDictionaryLocalePairs() {
+        if (cachedDictionaryLocalePairs) return cachedDictionaryLocalePairs;
         const url = `https://www.lingq.com/api/v2/dictionary-locales/`;
         
         const response = await fetch(url);
         const data = await response.json();
         
-        return Object.fromEntries(data.map(item => [item.code, item.title]));
+        cachedDictionaryLocalePairs = Object.fromEntries(data.map(item => [item.code, item.title]));
+        return cachedDictionaryLocalePairs;
     }
     
     async function getLessonInfo(lessonId) {
@@ -2795,6 +2799,10 @@
             usageLogRow.appendChild(usageLogButton);
             chatWidgetSection.appendChild(usageLogRow);
             
+            addSelect(chatWidgetSection, "llmResponseLanguageSelector", "Response Language:", [
+                {value: "auto", text: "Auto"}
+            ], settings.llmResponseLanguage || "auto");
+            
             addCheckbox(chatWidgetSection, "askSelectedCheckbox", "Enable asking with selected text", settings.askSelected);
             addCheckbox(chatWidgetSection, "prependSummaryCheckbox", "Prepend a quick Summary", settings.prependSummary[language]);
             
@@ -3786,6 +3794,33 @@
                 };
             });
             
+            const llmResponseLanguageSelector = document.getElementById("llmResponseLanguageSelector");
+            if (llmResponseLanguageSelector) {
+                getDictionaryLocalePairs().then((localePairs) => {
+                    if (!localePairs) return;
+                    const currentLang = settings.llmResponseLanguage || "auto";
+                    const languageNames = Object.values(localePairs).sort((a, b) => a.localeCompare(b));
+                    
+                    llmResponseLanguageSelector.innerHTML = "";
+                    llmResponseLanguageSelector.appendChild(createElement("option", {
+                        value: "auto",
+                        textContent: "Auto"
+                    }));
+                    languageNames.forEach((langName) => {
+                        llmResponseLanguageSelector.appendChild(createElement("option", {
+                            value: langName,
+                            textContent: langName,
+                            selected: currentLang === langName
+                        }));
+                    });
+                    llmResponseLanguageSelector.value = currentLang;
+                }).catch(console.error);
+
+                llmResponseLanguageSelector.addEventListener("change", (event) => {
+                    settings.llmResponseLanguage = event.target.value;
+                });
+            }
+            
             const askSelectedCheckbox = document.getElementById("askSelectedCheckbox");
             askSelectedCheckbox.addEventListener('change', (event) => {
                 settings.askSelected = event.target.checked
@@ -4009,6 +4044,7 @@
                 llmProviderSelector.dispatchEvent(new Event("change"));
                 document.getElementById("llmModelSelector").value = defaults.llmModel;
                 settings.llmModel = defaults.llmModel;
+                document.getElementById("llmResponseLanguageSelector").value = defaults.llmResponseLanguage;
                 
                 document.getElementById("askSelectedCheckbox").value = defaults.askSelected;
                 document.getElementById("prependSummaryCheckbox").checked = languageScopedDefaults.prependSummary;
@@ -5022,9 +5058,10 @@
                     
                     let reportContent = "";
                     
-                    const userDictLang = await getDictionaryLanguage();
                     const localePairs = await getDictionaryLocalePairs();
-                    const userNativeLang = localePairs[userDictLang];
+                    const userNativeLang = (settings.llmResponseLanguage && settings.llmResponseLanguage !== "auto")
+                        ? settings.llmResponseLanguage
+                        : localePairs[await getDictionaryLanguage()] || "English";
                     
                     const wordsCSV = data.reverse().map(item => `${item.word}, ${item.meaning}, ${item.explanation}`).join('\n');
                     const prompt = `
@@ -9689,10 +9726,11 @@
         const language = getLessonLanguage();
         ensureLanguageSettings(language);
         
-        const userDictionaryLang = await getDictionaryLanguage();
-        const DictionaryLocalePairs = await getDictionaryLocalePairs()
+        const DictionaryLocalePairs = await getDictionaryLocalePairs();
         const lessonLanguage = DictionaryLocalePairs[language];
-        const userLanguage = DictionaryLocalePairs[userDictionaryLang];
+        const userLanguage = (settings.llmResponseLanguage && settings.llmResponseLanguage !== "auto")
+            ? settings.llmResponseLanguage
+            : DictionaryLocalePairs[await getDictionaryLanguage()] || "English";
         
         const systemPrompt = `
         # System Capabilities & Format Protocol
