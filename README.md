@@ -77,6 +77,8 @@ To use AI features, create an API key from any supported provider and enter it i
 | DeepSeek      | [Tutorial](https://www.youtube.com/watch?v=CpZFf6JkHgY) |
 | Cerebras      | — |
 
+Recommendation: Google - Gemini 3.1 Flash-Light
+
 ## Setup Guides
 
 <details>

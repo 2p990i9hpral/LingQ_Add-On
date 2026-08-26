@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      15.5.0
+// @version      15.5.1
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @grant       GM_xmlhttpRequest
@@ -6596,8 +6596,8 @@
             if (settings.skipEndPage) {
                 baseCSS += `
                 [id$="-content-lessonCompleted"] > div.pb-24 > div:nth-child(1) > div.gap-2,
-                [id$="-content-lessonCompleted"] > div.pb-24 > :is(div:nth-child(2), div:nth-child(4)),
-                [id$="-content-lessonCompleted"] > div.pb-24 > div.mb-6:last-child > div:not(:nth-child(4)) {
+                [id$="-content-lessonCompleted"] > div.pb-24 > :is(div:nth-child(2), div:nth-child(3)),
+                [id$="-content-lessonCompleted"] > div.pb-24 > div:nth-child(4) > div:not(:nth-child(4)) {
                     display: none !important;
                 }
                 `;
@@ -7603,6 +7603,12 @@
                     margin: var(--header-height) 0 10px 10px !important;
                     max-width: var(--width-big) !important;
                 }
+                #lesson-reader[data-lesson-completed-visible="true"] {
+                    grid-template-rows: 1fr var(--footer-height) !important;
+                }
+                #lesson-reader[data-lesson-completed-visible="true"] .main-content {
+                    grid-area: 1 / 1 / 3 / 2 !important;
+                }
                 `;
             }
             
@@ -7721,6 +7727,12 @@
                 #local-video-container {
                     grid-area: 1 / 1 / 2 / 2 !important;
                     margin: var(--header-height) 0 10px 10px;
+                }
+                #lesson-reader[data-lesson-completed-visible="true"] {
+                    grid-template-rows: 1fr var(--footer-height) !important;
+                }
+                #lesson-reader[data-lesson-completed-visible="true"] .main-content {
+                    grid-area: 1 / 1 / 3 / 2 !important;
                 }
                 `;
             }
