@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      15.5.3
+// @version      15.5.4
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @grant       GM_xmlhttpRequest
@@ -1877,7 +1877,7 @@
     
     function convertSrtToVttBlobUrl(srtText) {
         let vttText = "WEBVTT\n\n" + srtText.replace(/(\d{2}:\d{2}:\d{2}),(\d{3})/g, "$1.$2");
-        vttText = vttText.replace(/(--> \d{2}:\d{2}:\d{2}\.\d{3})/g, "$1 size:80% align:middle");
+        vttText = vttText.replace(/(--> \d{2}:\d{2}:\d{2}\.\d{3})/g, "$1 size:60% align:middle");
         const blob = new Blob([vttText], {type: "text/vtt"});
         return URL.createObjectURL(blob);
     }
@@ -10923,7 +10923,7 @@
         if (url.includes("lingq")) {
             globalSetup();
             if (url.includes("/library#")) {
-                setupPopups();
+            
             } else if (url.includes("/reader")) {
                 setupPopups();
                 setupReader();
