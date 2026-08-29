@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      15.5.4
+// @version      15.5.5
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @grant       GM_xmlhttpRequest
@@ -5748,13 +5748,15 @@
                 return rawData ? JSON.parse(rawData) : [];
             }
             
+            let currentLLMUsageHistory = [];
+            
             async function loadLLMUsageStats() {
-                const allHistory = await fetchLLMUsageLogs();
+                currentLLMUsageHistory = await fetchLLMUsageLogs();
                 
                 const languageSelector = document.getElementById("llmUsageLanguageSelector");
                 const currentSelectedLang = languageSelector?.value || "all";
                 
-                const uniqueLanguages = Array.from(new Set(allHistory.map(e => e.language).filter(Boolean))).sort();
+                const uniqueLanguages = Array.from(new Set(currentLLMUsageHistory.map(e => e.language).filter(Boolean))).sort();
                 
                 if (languageSelector) {
                     languageSelector.innerHTML = "";
@@ -5771,8 +5773,8 @@
                 
                 function getFilteredHistory() {
                     const selectedLang = languageSelector?.value || "all";
-                    if (selectedLang === "all") return allHistory;
-                    return allHistory.filter(e => e.language === selectedLang);
+                    if (selectedLang === "all") return currentLLMUsageHistory;
+                    return currentLLMUsageHistory.filter(e => e.language === selectedLang);
                 }
                 
                 function updateSummaryAndChart(selectedPeriod, selectedMode) {
@@ -6427,23 +6429,31 @@
     }
     
     async function setupReader() {
-        waitForElement(".section--player", 10000).then(playerContainer => {
-            if (playerContainer) {
-                const audioPlayerObserver = new MutationObserver((mutations) => {
-                    for (const mutation of mutations) {
-                        for (const node of mutation.addedNodes) {
-                            if (node.nodeType === Node.ELEMENT_NODE) {
-                                if (node.matches('.audio-player--controllers') || node.querySelector('.audio-player--controllers')) {
-                                    setupVolumeController();
-                                }
-                            }
+        let audioPlayerObserver = null;
+        
+        async function attachAudioPlayerObserver() {
+            const playerContainer = await waitForElement(".section--player", 10000);
+            if (!playerContainer) return;
+            
+            if (audioPlayerObserver) audioPlayerObserver.disconnect();
+            
+            audioPlayerObserver = new MutationObserver((mutations) => {
+                for (const mutation of mutations) {
+                    for (const node of mutation.addedNodes) {
+                        if (node.nodeType !== Node.ELEMENT_NODE) continue;
+                        
+                        if (node.matches('.audio-player--controllers') || node.querySelector('.audio-player--controllers')) {
+                            setupVolumeController();
                         }
                     }
-                });
-                audioPlayerObserver.observe(playerContainer, {childList: true, subtree: true});
-                setupVolumeController();
-            }
-        });
+                }
+            });
+            
+            audioPlayerObserver.observe(playerContainer, {childList: true, subtree: true});
+            setupVolumeController();
+        }
+        
+        attachAudioPlayerObserver();
         
         function setupVolumeController() {
             const controllers = document.querySelector('.audio-player--controllers');
@@ -8596,7 +8606,7 @@
                 
                 resetLocalVideo();
                 handleLocalVideoContainerVisibility();
-                waitForElement('.audio-player--controllers', 5000).then(() => setupVolumeController());
+                attachAudioPlayerObserver();
                 
                 const isPageMode = settings.usePageMode[language];
                 if (isPageMode) {
