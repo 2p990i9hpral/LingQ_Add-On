@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      15.5.6
+// @version      15.6.0
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @grant       GM_xmlhttpRequest
@@ -1875,9 +1875,27 @@
         document.head.appendChild(link);
     }
     
+    function getCalculatedVttCueSettings() {
+        const container = document.getElementById("local-video-container");
+        if (!container) return "size:80% align:middle line:90%";
+        
+        const containerWidth = container.clientWidth;
+        const containerHeight = container.clientHeight;
+        if (!containerWidth || !containerHeight) return "size:80% align:middle line:90%";
+        
+        const videoAspectRatio = 16 / 9;
+        const videoWidthRatio = Math.min(1.0, (containerHeight * videoAspectRatio) / containerWidth);
+        const targetSubtitlePercent = Math.max(20, Math.round(80 * videoWidthRatio));
+        
+        return `size:${targetSubtitlePercent}% align:center`;
+    }
+    
     function convertSrtToVttBlobUrl(srtText) {
-        let vttText = "WEBVTT\n\n" + srtText.replace(/(\d{2}:\d{2}:\d{2}),(\d{3})/g, "$1.$2");
-        vttText = vttText.replace(/(--> \d{2}:\d{2}:\d{2}\.\d{3})/g, "$1 size:60% align:middle");
+        const cueSettings = getCalculatedVttCueSettings();
+        let vttText = srtText.startsWith("WEBVTT")
+            ? srtText
+            : ("WEBVTT\n\n" + srtText.replace(/(\d{2}:\d{2}:\d{2}),(\d{3})/g, "$1.$2"));
+        vttText = vttText.replace(/(--> \d{2}:\d{2}:\d{2}\.\d{3})(?:[^\r\n]*)/g, `$1 ${cueSettings}`);
         const blob = new Blob([vttText], {type: "text/vtt"});
         return URL.createObjectURL(blob);
     }
@@ -1890,6 +1908,7 @@
             return `${match[1]}.${match[2]}`;
         }
         
+        const cueSettings = getCalculatedVttCueSettings();
         const vttLines = ["WEBVTT\n"];
         
         sentences.forEach((sentence) => {
@@ -1899,7 +1918,7 @@
             const endTime = formatTime(sentence.timestamp[1]);
             const text = sentence.text || "";
             
-            vttLines.push(`${startTime} --> ${endTime} size:60% align:middle\n${text}\n`);
+            vttLines.push(`${startTime} --> ${endTime} ${cueSettings}\n${text}\n`);
         });
         
         const blob = new Blob([vttLines.join("\n")], {type: "text/vtt"});
@@ -2239,9 +2258,7 @@
                     const reader = new FileReader();
                     reader.onload = (e) => {
                         const text = e.target.result;
-                        const vttUrl = selectedSubtitleFile.name.endsWith(".srt")
-                            ? convertSrtToVttBlobUrl(text)
-                            : URL.createObjectURL(selectedSubtitleFile);
+                        const vttUrl = convertSrtToVttBlobUrl(text);
                         
                         trackElement.src = vttUrl;
                         trackElement.track.mode = "showing";
