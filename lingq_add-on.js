@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      15.5.5
+// @version      15.5.6
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @grant       GM_xmlhttpRequest
@@ -2083,7 +2083,7 @@
             let selectedSubtitleFile = null;
             
             const buttonRow = createElement("div", {
-                style: "display: flex; gap: 10px; width: 100%; margin-bottom: 5px;"
+                style: "display: flex; gap: 10px; width: 100%; min-width: 0; box-sizing: border-box; margin-bottom: 5px;"
             });
             
             const fileInput = createElement("input", {
@@ -2095,8 +2095,9 @@
             });
             const fileLabel = createElement("label", {
                 className: "local-video-button",
-                style: "flex: 1; text-align: center;",
-                textContent: "Choose Files"
+                style: "flex: 1; min-width: 0; box-sizing: border-box; text-align: center;",
+                textContent: "Choose Files",
+                title: "Choose Files"
             });
             fileLabel.appendChild(fileInput);
             
@@ -2109,8 +2110,9 @@
             });
             const folderLabel = createElement("label", {
                 className: "local-video-button",
-                style: "flex: 1; text-align: center;",
-                textContent: "Select Folder (Auto-match)"
+                style: "flex: 1; min-width: 0; box-sizing: border-box; text-align: center;",
+                textContent: "Select Folder (Auto-match)",
+                title: "Select Folder (Auto-match)"
             });
             folderLabel.appendChild(folderInput);
             
@@ -2181,6 +2183,7 @@
                     if (selectedSubtitleFile) statusText += ` + ${selectedSubtitleFile.name}`;
                     
                     folderLabel.textContent = statusText;
+                    folderLabel.title = statusText;
                     folderLabel.appendChild(folderInput);
                     startButton.disabled = false;
                     return true;
@@ -2198,10 +2201,12 @@
                     if (selectedSubtitleFile) statusText += ` + ${selectedSubtitleFile.name}`;
                     else statusText += ` (Default Subtitle)`;
                     fileLabel.textContent = statusText;
+                    fileLabel.title = statusText;
                     fileLabel.appendChild(fileInput);
                     startButton.disabled = false;
                 } else {
                     fileLabel.textContent = "Missing Video File! Try Again.";
+                    fileLabel.title = "Missing Video File! Try Again.";
                     fileLabel.appendChild(fileInput);
                     startButton.disabled = true;
                     selectedSubtitleFile = null;
@@ -2215,6 +2220,7 @@
                     const matched = await attemptAutoMatch();
                     if (!matched) {
                         folderLabel.textContent = "No match found in folder.";
+                        folderLabel.title = "No match found in folder.";
                         folderLabel.appendChild(folderInput);
                     }
                 }
@@ -2824,6 +2830,7 @@
                 ? (settings.summaryDifficulty[language] || "unset")
                 : (settings.summaryDifficulty || "unset");
             const difficultyContainer = addSelect(chatWidgetSection, "summaryDifficultySelector", "Summary Difficulty (CEFR):", difficultyOptions, currentDifficulty);
+            difficultyContainer.id = "summaryDifficultySection";
             difficultyContainer.style.display = settings.prependSummary[language] ? "block" : "none";
             
             addRadioGroup(chatWidgetSection, "dbMode", "DB Type:", [
@@ -3849,7 +3856,10 @@
             const prependSummaryCheckbox = document.getElementById("prependSummaryCheckbox");
             prependSummaryCheckbox.addEventListener('change', (event) => {
                 settings.prependSummary = {...settings.prependSummary, [language]: event.target.checked};
-                document.getElementById("summaryDifficultySection").style.display = event.target.checked ? "flex" : "none";
+                const difficultySection = document.getElementById("summaryDifficultySection");
+                if (difficultySection) {
+                    difficultySection.style.display = event.target.checked ? "block" : "none";
+                }
             });
             
             const summaryDifficultySelector = document.getElementById("summaryDifficultySelector");
@@ -4069,7 +4079,10 @@
                 document.getElementById("askSelectedCheckbox").value = defaults.askSelected;
                 document.getElementById("prependSummaryCheckbox").checked = languageScopedDefaults.prependSummary;
                 document.getElementById("summaryDifficultySelector").value = languageScopedDefaults.summaryDifficulty || "unset";
-                document.getElementById("summaryDifficultySection").style.display = languageScopedDefaults.prependSummary ? "flex" : "none";
+                const summaryDifficultySection = document.getElementById("summaryDifficultySection");
+                if (summaryDifficultySection) {
+                    summaryDifficultySection.style.display = languageScopedDefaults.prependSummary ? "block" : "none";
+                }
                 
                 document.querySelectorAll('input[name="dbMode"]').forEach((radio) => {
                     radio.checked = radio.value === (settings.useCentralDb ? "central" : "personal");
@@ -7637,7 +7650,7 @@
                 :root {
                     --width-big: calc(50vw - calc(var(--widget-width) / 2) - 10px);
                     --height-big: calc(100vh - 65px);
-                    --reader-layout-columns: 1fr var(--widget-width) 1fr;
+                    --reader-layout-columns: minmax(0, 1fr) var(--widget-width) minmax(0, 1fr);
                     --reader-layout-rows: calc(var(--article-height) - var(--footer-height)) var(--footer-height);
                     --article-height: var(--app-height);
                 }
@@ -7646,6 +7659,7 @@
                 }
                 .main-content {
                     grid-area: 1 / 1 / 3 / 2 !important;
+                    min-width: 0;
                 }
                 .widget-area {
                     grid-area: 1 / 2 / 2 / 3 !important;
@@ -7663,7 +7677,7 @@
                 :root {
                     --width-big: calc(50vw - calc(var(--widget-width) / 2) - 10px);
                     --height-big: calc(100vh - 65px);
-                    --reader-layout-columns: 1fr var(--widget-width) 1fr;
+                    --reader-layout-columns: minmax(0, 1fr) var(--widget-width) minmax(0, 1fr);
                     --reader-layout-rows: calc(var(--article-height) - var(--footer-height)) var(--footer-height);
                     --article-height: var(--app-height);
                 }
@@ -7672,6 +7686,7 @@
                 }
                 .main-content {
                     grid-area: 1 / 3 / 3 / 4 !important;
+                    min-width: 0;
                 }
                 .widget-area {
                     grid-area: 1 / 2 / 2 / 3 !important;
@@ -7689,7 +7704,7 @@
                 :root {
                     --width-big: calc(100vw - var(--widget-width) - 10px);
                     --height-big: ${settings.heightBig}px;
-                    --reader-layout-columns: 1fr var(--widget-width);
+                    --reader-layout-columns: minmax(0, 1fr) var(--widget-width);
                     --reader-layout-rows: var(--article-height) calc(var(--height-big) - var(--footer-height)) var(--footer-height);
                     --article-height: calc(var(--app-height) - var(--height-big));
                 }
@@ -7698,6 +7713,7 @@
                 }
                 .main-content {
                     grid-area: 1 / 1 / 2 / 2 !important;
+                    min-width: 0;
                 }
                 .widget-area {
                     grid-area: 1 / 2 / 4 / 3 !important;
@@ -7715,7 +7731,7 @@
                 :root {
                     --width-big: calc(100vw - var(--widget-width) - 10px);
                     --height-big: ${settings.heightBig}px;
-                    --reader-layout-columns: 1fr var(--widget-width);
+                    --reader-layout-columns: minmax(0, 1fr) var(--widget-width);
                     --reader-layout-rows: calc(var(--height-big) + var(--header-height)) calc(var(--article-height) - var(--header-height) - var(--footer-height)) var(--footer-height);
                     --article-height: calc(var(--app-height) - var(--height-big));
                 }
@@ -7724,6 +7740,7 @@
                 }
                 .main-content {
                     grid-area: 2 / 1 / 3 / 2 !important;
+                    min-width: 0;
                 }
                 .reader-component {
                     height: 100%;
@@ -7766,6 +7783,8 @@
                 background-color: #000000;
                 position: relative !important;
                 height: ${position === "Bottom" ? "100%" : "calc(100% - var(--header-height) - 10px)"};
+                min-width: 0;
+                overflow: hidden;
             }
             .local-video-setup-box {
                 display: flex;
@@ -7775,6 +7794,8 @@
                 text-align: center;
                 width: calc(100% - 40px);
                 max-width: 70%;
+                min-width: 0;
+                box-sizing: border-box;
                 border: 2px dashed rgb(125 125 125 / 40%);
                 border-radius: 12px;
                 background-color: rgb(125 125 125 / 10%);
@@ -7789,6 +7810,8 @@
                 cursor: pointer;
                 font-size: 0.95em;
                 width: 100%;
+                min-width: 0;
+                box-sizing: border-box;
                 text-overflow: ellipsis;
                 overflow: hidden;
                 white-space: nowrap;
@@ -9680,7 +9703,8 @@
                     
                     // if (chatHistory.findIndex(item => item.role === "system-plain") !== -1) chatHistory = chatHistory.filter(item => (item.role !== "system-word" && item.role !== "system-sentence"));
                     
-                    const userMessageDiv = addMessageToUI(userMessage, "user-message", chatContainer, true);
+                    const formattedUserMessage = convertMarkdownToHTML(userMessage);
+                    const userMessageDiv = addMessageToUI(formattedUserMessage, "user-message", chatContainer, true);
                     
                     const userMessageId = generateUniqueId();
                     chatHistory = updateChatHistoryState(chatHistory, userMessage, "user", userMessageId);
