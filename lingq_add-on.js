@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      15.6.0
+// @version      15.6.1
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @grant       GM_xmlhttpRequest
@@ -129,6 +129,7 @@
             {value: "gpt-5.4-mini", text: "GPT-5.4 mini ($0.75/$4.5)"}
         ],
         "google": [
+            {value: "gemini-3.8-flash", text: "Gemini 3.8 Flash ($0.75/$3.75)"},
             {value: "gemini-3.7-flash", text: "Gemini 3.7 Flash ($0.75/$3.75)"},
             {value: "gemini-3.6-flash", text: "Gemini 3.6 Flash ($0.75/$3.75)"},
             {value: "gemini-3.5-flash", text: "Gemini 3.5 Flash ($1.5/$9)"},
@@ -2727,7 +2728,12 @@
                 style: `${settings.chatWidget ? "" : "display: none"}`
             });
             
-            addSlider(chatWidgetSection, "chatWidgetHeightSlider", "Chat Widget Height", "chatWidgetHeightValue", settings.chatWidgetHeight, "", 150, 500, 10);
+            addSelect(chatWidgetSection, "llmResponseLanguageSelector", "Response Language:",
+                [{value: "auto", text: "Auto"}],
+                settings.llmResponseLanguage || "auto"
+            );
+            
+            addSlider(chatWidgetSection, "chatWidgetHeightSlider", "Chat Widget Height", "chatWidgetHeightValue", settings.chatWidgetHeight, "", 150, 700, 10);
             
             addSelect(chatWidgetSection, "llmProviderSelector", "Chat Provider:", [
                 {value: "openai", text: "OpenAI"},
@@ -2826,10 +2832,6 @@
             });
             usageLogRow.appendChild(usageLogButton);
             chatWidgetSection.appendChild(usageLogRow);
-            
-            addSelect(chatWidgetSection, "llmResponseLanguageSelector", "Response Language:", [
-                {value: "auto", text: "Auto"}
-            ], settings.llmResponseLanguage || "auto");
             
             addCheckbox(chatWidgetSection, "askSelectedCheckbox", "Enable asking with selected text", settings.askSelected);
             addCheckbox(chatWidgetSection, "prependSummaryCheckbox", "Prepend a quick Summary", settings.prependSummary[language]);
