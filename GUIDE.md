@@ -378,9 +378,9 @@ CREATE INDEX idx_llm_usage_logs_created_at ON public.llm_usage_logs (created_at 
 
 ### Step 3: Copy URL and API Key
 1. In your Supabase dashboard, go to **Project Settings > Data API**.
-2. Copy the **Project URL**.
+2. Copy the **Project URL**. 
 <img src="images/supabase_url.png" width=800></br>
-3. Copy the **Publishable (anon) key**.
+3. Copy the **Publishable (anon) key**. 
 <img src="images/supabase_api.png" width=800></br>
 
 ### Step 4: Configure in Addon Settings
