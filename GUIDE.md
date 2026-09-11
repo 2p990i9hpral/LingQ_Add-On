@@ -340,7 +340,9 @@ To store flashcards and LLM usage logs in your own private cloud database:
 
 ### Step 2: Run Database Schema
 1. Open your project dashboard and click **SQL Editor** in the left sidebar.
-<img src="images/supabase_sql.png" width=800></br>
+
+   <img src="images/supabase_sql.png" width=800>
+
 2. Paste and run the following SQL script:
 
 ```sql
@@ -378,10 +380,13 @@ CREATE INDEX idx_llm_usage_logs_created_at ON public.llm_usage_logs (created_at 
 
 ### Step 3: Copy URL and API Key
 1. In your Supabase dashboard, go to **Project Settings > Data API**.
-2. Copy the **Project URL**. 
-<img src="images/supabase_url.png" width=800></br>
-3. Copy the **Publishable (anon) key**. 
-<img src="images/supabase_api.png" width=800></br>
+2. Copy the **Project URL**.
+
+   <img src="images/supabase_url.png" width=800>
+
+3. Copy the **Publishable (anon) key**.
+
+   <img src="images/supabase_api.png" width=800>
 
 ### Step 4: Configure in Addon Settings
 1. Open Addon **Settings** (⚙️).
@@ -404,7 +409,9 @@ In the addon's **Flashcard Manager**, click **Export as CSV**.
 ### Step 3: Import into Anki
 1. In Anki desktop, go to **File -> Import** and choose the downloaded CSV.
 2. In the import settings dialog:
-<img src="images/anki import.png" width=600></br>
+
+   <img src="images/anki import.png" width=600>
+
    - **Field separator**: Comma
    - **Allow HTML in fields**: `Enabled` (Checked).
    - **Note Type**: Choose `LingQ Flashcard`.
