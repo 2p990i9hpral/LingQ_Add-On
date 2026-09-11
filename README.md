@@ -150,7 +150,7 @@ You can import flashcard CSV exports into Anki using a matching card template.
    This will automatically add the "LingQ Flashcard" note type to your Anki collection.
 2. In Anki, go to **File -> Import**, and select the exported CSV file.
 3. When the Import dialog appears, set the following options:
-    - <img src="images/anki import settings.png" width=600></br>
+    - <img src="images/anki import.png" width=600></br>
     - **Allow HTML in fields:** Enabled
     - **Note Type:** `LingQ Flashcard`
     - **Field mapping:** Verify that columns align correctly with each field.

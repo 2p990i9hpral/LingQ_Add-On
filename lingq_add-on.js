@@ -9064,6 +9064,8 @@
                     const pronunciationElem = botMessageDiv.querySelector("span");
                     
                     if (pronunciationElem) {
+                        if (!e.ctrlKey && !e.metaKey) return;
+                        
                         const cleanText = pronunciationElem.textContent.replace(/[\[\]\/]/g, "").trim();
                         pronunciationElem.textContent = `[${cleanText}]`;
                         
