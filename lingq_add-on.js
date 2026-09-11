@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      15.6.1
+// @version      15.7.0
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @grant       GM_xmlhttpRequest
@@ -315,6 +315,7 @@
     }
     
     let cachedDictionaryLocalePairs = null;
+    
     async function getDictionaryLocalePairs() {
         if (cachedDictionaryLocalePairs) return cachedDictionaryLocalePairs;
         const url = `https://www.lingq.com/api/v2/dictionary-locales/`;
@@ -464,14 +465,14 @@
         if (!textarea) return;
         
         textarea.focus();
-        textarea.dispatchEvent(new FocusEvent("focus", { bubbles: true }));
+        textarea.dispatchEvent(new FocusEvent("focus", {bubbles: true}));
         
         Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")?.set.call(textarea, newMeaning);
-        textarea.dispatchEvent(new InputEvent("input", { bubbles: true, composed: true, data: newMeaning }));
-        textarea.dispatchEvent(new Event("change", { bubbles: true }));
+        textarea.dispatchEvent(new InputEvent("input", {bubbles: true, composed: true, data: newMeaning}));
+        textarea.dispatchEvent(new Event("change", {bubbles: true}));
         
         textarea.blur();
-        textarea.dispatchEvent(new FocusEvent("focusout", { bubbles: true }));
+        textarea.dispatchEvent(new FocusEvent("focusout", {bubbles: true}));
     }
     
     function waitForElement(selector, timeout = 1000) {
@@ -705,8 +706,17 @@
     
     function removeIndent(text) {
         const lines = text.split('\n');
-        const processedLines = lines.map(line => line.trimStart());
-        return processedLines.join('\n').trim();
+        
+        const indents = lines
+            .filter(line => line.trim() !== '')
+            .map(line => line.match(/^[ \t]*/)[0].length);
+        
+        const minIndent = indents.length ? Math.min(...indents) : 0;
+        
+        return lines
+            .map(line => line.slice(minIndent))
+            .join('\n')
+            .trim();
     }
     
     async function loadScript(url) {
@@ -3861,7 +3871,7 @@
                     });
                     llmResponseLanguageSelector.value = currentLang;
                 }).catch(console.error);
-
+                
                 llmResponseLanguageSelector.addEventListener("change", (event) => {
                     settings.llmResponseLanguage = event.target.value;
                 });
@@ -5198,7 +5208,17 @@
                         : localePairs[await getDictionaryLanguage()] || "English";
                     
                     const wordsCSV = data.reverse().map(item => `${item.word}, ${item.meaning}, ${item.explanation}`).join('\n');
-                    const prompt = `
+                    
+                    const timelineParagraphRangeByPreset = {
+                        50: "2 to 3",
+                        100: "3 to 5",
+                        300: "5 to 8",
+                        500: "7 to 10",
+                    };
+                    const timelineParagraphRange = timelineParagraphRangeByPreset[limitCount];
+                    const patternParagraphCount = limitCount < 300 ? "1 comprehensive paragraph": "2 distinct paragraphs";
+                    
+                    const aiReportPrompt = `
                     Act as a corpus linguist and SLA (Second Language Acquisition) diagnostician, auditing a learner's recent vocabulary intake of ${limitCount} words for ${targetLanguage}.
                     
                     Data: CSV columns are idx (chronological order of encounter), word, meaning, explanation. Rows list words marked as unknown recently.
@@ -5224,15 +5244,15 @@
                         Write a concise macro narrative directly charting the progression of consumed topics, genres, and mediums across the timeline, and state the baseline difficulty band required by these materials.
                     
                     2. Content Timeline & Difficulty:
-                        Follow the chronological idx timeline to partition the thematic flow into exactly ${limitCount <= 70 ? "2 to 3" : limitCount <= 150 ? "3 to 5" : limitCount <= 350 ? "5 to 8" : "7 to 10"} fluid, coherent paragraphs.
+                        Follow the chronological idx timeline to partition the thematic flow into ${timelineParagraphRange} fluid, coherent paragraphs.
                         For each thematic stream, write one paragraph containing:
-                        - Direct opening identifying the topical domain; exactly 3-5 representative member words cited inline
+                        - Direct opening identifying the topical domain; 3-5 representative member words cited inline
                         - Inferred content style, medium, and discourse characteristics using natural native vocabulary
                         - Difficulty band supported by domain-level reasoning (e.g., specialized schema, compounding literacy demands, metaphorical nuance beyond literal translation, or cultural pragmatics)
                         Close Section 2 with exactly one synthesis sentence summarizing the overall difficulty band and the breadth of text genres covered across the timeline.
                     
                     3. Notable Linguistic & Corpus Patterns:
-                        Independent of chronological flow, provide corpus-level generalizations across the vocabulary intake in ${limitCount >= 300 ? "2 distinct paragraphs" : "1 comprehensive paragraph"}:
+                        Independent of chronological flow, provide corpus-level generalizations across the vocabulary intake in ${patternParagraphCount}:
                         - Morphological & syntactic composition: density of compound words, multi-word collocations, and phrasal expressions versus single-morpheme roots.
                         - Stylistic & formality distribution: proportion and contrast between formal/academic written prose and informal/conversational/mimetic expressions.
                         - Semantic complexity: presence of metaphorical/figurative extensions (e.g., physical terms used in political/abstract discourse) versus technical domain jargon.
@@ -5247,14 +5267,14 @@
                         <p>[Macro roadmap: chronological trajectory of content themes/sources from start to finish, and the general difficulty band of the consumed texts]</p>
                     
                         <h2>2. Content Timeline &amp; Difficulty</h2>
-                        <!-- Render exactly ${limitCount <= 70 ? "2 to 3" : limitCount <= 150 ? "3 to 5" : limitCount <= 350 ? "5 to 8" : "7 to 10"} thematic paragraphs + 1 synthesis sentence -->
+                        <!-- Render ${timelineParagraphRange} thematic paragraphs + 1 synthesis sentence -->
                         <p>[Thematic stream paragraph 1...]</p>
                         <p>[Thematic stream paragraph 2...]</p>
                         <p>[Thematic stream paragraph N...]</p>
                         <p>[Single synthesis sentence summarizing overall difficulty band and genre breadth]</p>
                     
                         <h2>3. Notable Patterns</h2>
-                        <!-- Render ${limitCount >= 300 ? "2 distinct paragraphs" : "1 comprehensive paragraph"} -->
+                        <!-- Render ${patternParagraphCount} -->
                         <p>[Aggregate corpus observations: syntactic/morphological composition, stylistic/formality distribution, and semantic/metaphorical complexity]</p>
                     </div>
                     
@@ -5266,7 +5286,7 @@
                         settings.llmProvider,
                         settings.llmApiKey,
                         settings.llmModel,
-                        [{role: "user", content: removeIndent(prompt)}],
+                        [{role: "user", content: removeIndent(aiReportPrompt)}],
                         (chunk) => {
                             const content = typeof chunk === "string" ? chunk : chunk.choices?.[0]?.delta?.content;
                             if (content) {
@@ -5861,7 +5881,7 @@
                             updateSummaryAndChart(activePeriod, btn.dataset.mode);
                         });
                     });
-
+                    
                     periodTabs.forEach(btn => {
                         btn.addEventListener("click", () => {
                             periodTabs.forEach(tab => tab.classList.remove("active"));
@@ -7076,7 +7096,7 @@
                 .quick-summary rt {
                     user-select: none;
                     -webkit-user-select: none;
-                    font-size: 0.6em;
+                    font-size: 0.7em;
                 }
 
                 .quick-summary .lesson-summary-details {
@@ -8256,20 +8276,25 @@
             async function generateLessonSummary(readerContainer) {
                 async function getLessonSummary(provider, apikey, model, content) {
                     const summaryPrompt = `
-                        # Role
-                        Generate a comprehensive English note of the given content, serving as persistent context for downstream tasks — including Q&A about the lesson and AI dictionary lookups that require full contextual awareness.
-
-                        # Content Rules
-                        - Objective and factual; base ONLY on the given content
-                        - Preserve ALL key details, named entities, terminology, and plot/argument structure
-                        - Retain original-language terms when translation would lose precision (e.g., proper nouns, culturally specific concepts)
-                        - No preface or closing remarks
-
-                        # Output Format
-                        - Language: English; use original-language terms inline when necessary for fidelity
-                        - Format: plain text only, not HTML or Markdown format.
-                        - Length: Proportional to input length (about 15%–25%). For maximum context depth, aim for detailed coverage, but do not exceed 1,500 words in total.
-                        `;
+                    # Role
+                    Generate a comprehensive English note of the given content, serving as persistent macro-context for downstream tasks (e.g., Q&A, interpretation, translation), and readable by users. This note's core job is the big picture: overall structure, entities, and argument/plot flow.
+                
+                    # Content Rules
+                    - Objective and factual; base ONLY on the given content
+                    - Preserve ALL key details, named entities, terminology, and plot/argument structure
+                    - When an English term risks losing nuance (e.g., proper nouns, culturally specific concepts), append the original-language term in parentheses — e.g., "tact (눈치)"
+                    - No preface or closing remarks
+                
+                    # Output Format
+                    - Language: English throughout, following the parenthetical convention above for nuance-sensitive terms
+                    - Format: plain text, full grammatical sentences and paragraphs; no Markdown syntax (no #, **, -, etc.)
+                    - Style: dense and information-rich; do not reference the source's medium, structure, or presenter (e.g., "lesson," "video," "speaker," "list," "section," "discussed above")
+                        — state every fact as free-standing information. When the source voices a personal opinion or preference, attribute it with neutral phrasing (e.g., "X is often favored for...") instead of naming the speaker
+                    - Structure: follow the original content's order, one paragraph per major topic/section, connected with transitions that preserve causal/argumentative relationships
+                    - Entity reference: restate the specific noun (name/term) rather than relying on ambiguous pronouns across sentences
+                    - Length: no fixed target — as long as needed to satisfy the Content Rules above.
+                        - Soft-capped at 3,000 words; if reached before full coverage, compress via reduced density (shorter sentences, fewer illustrative details) rather than omitting entities, events, or sections
+                    `;
                     
                     const summary_history = [
                         {role: "system", content: removeIndent(summaryPrompt)},
@@ -8281,6 +8306,20 @@
                     return summary;
                 }
                 
+                function formatQuickSummaryHTML(text) {
+                    if (!text || !text.trim()) return "";
+                    
+                    let formatted = text.replace(/\[([^\]|]+)\|([^\]]+)\]/g, "<ruby>$1<rt>$2</rt></ruby>");
+                    formatted = formatted.replace(/\[([^\]|]+)\]/g, "$1");
+                    formatted = formatted.replace(/\[([^\]|]+)(?:\|[^\]]*)?$/, "$1");
+                    
+                    return formatted
+                        .trim()
+                        .split(/\n\n+/)
+                        .map((paragraph) => `<p>${paragraph.trim()}</p>`)
+                        .join("");
+                }
+                
                 async function getQuickSummary(provider, apikey, model, content) {
                     const DictionaryLocalePairs = await getDictionaryLocalePairs()
                     const lessonLanguage = DictionaryLocalePairs[language];
@@ -8289,31 +8328,43 @@
                         : settings.summaryDifficulty;
                     const difficulty = rawDifficulty || "unset";
                     const difficultyPrompt = difficulty && difficulty !== "unset"
-                        ? `- Ensure the summary uses vocabulary and grammar suitable for a CEFR ${difficulty} learner.`
+                        ? `- Target level: CEFR ${difficulty}. Simplify vocabulary and grammar toward this level, without exceeding the complexity already present in the source content — never introduce harder words or structures than the original, even if ${difficulty} is high.${["A1", "A2", "B1"].includes(difficulty) ? " Keep sentences short and straightforward to minimize cognitive load." : ""}`
                         : "";
                     
+                    const summaryWordsByDifficulty = {
+                        A1: 40,
+                        A2: 60,
+                        B1: 100,
+                        B2: 150,
+                        C1: 150,
+                        C2: 150
+                    };
+                    const targetWords = summaryWordsByDifficulty[difficulty] || 150;
+                    const targetParagraphs = targetWords <= 60 ? "1 paragraph" : targetWords <= 100 ? "1–2 paragraphs" : "2–3 paragraphs";
+                    
                     const summaryPrompt = `
-                        # Role
-                        Summarize the lesson content, helping learners grasp the topic before reading.
-
-                        # Output Format
-                        - Language: match the lesson's original language (${lessonLanguage})
-                        - Structure: 2–3 <p> paragraphs
-                        - Render target: The result will be used as the innerHTML of a DOM element. So, output raw HTML as plain text; not use Markdown syntax or code blocks
-                        - Length: 150 words max
-                        - Reading Aids:
-                            If ${lessonLanguage} uses logographic or complex scripts (e.g., Japanese, Chinese), annotate Kanji/words with phonetic readings using HTML <ruby> tags (e.g., <ruby>漢字<rt>かんじ</rt></ruby>).
-                            If not (e.g., English), never use <ruby> tags.
-                            Example: "<p><ruby>私<rt>わたし</rt></ruby>は<ruby>日本語<rt>にほんご</rt></ruby>を<ruby>勉強<rt>べんきょう</rt></ruby>しています。...</p>"
-
-                        # Content Rules
-                        - Objective and factual; base ONLY on the given content
-                        - Summary body ONLY — no preface, title restatement, or closing remarks
-                        ${difficultyPrompt}
-
-                        # Format
-                        <p>first paragraph</p> <p>second paragraph</p>
-                        `;
+                    # Role
+                    Generate a pre-reading summary of the given content, helping learners grasp the topic and practice reading before engaging with the full material.
+                
+                    # Output Format
+                    - Language: match the content's original language (${lessonLanguage})
+                    - Structure: ${targetParagraphs}, separated by a blank line
+                    - Format: plain text only; do NOT use HTML tags (no <p>, no <ruby>, no <rt>), no Markdown syntax
+                    - Length: ${targetWords} words as a soft target
+                    - Reading Aids:
+                        - If ${lessonLanguage} uses logographic scripts (e.g., Japanese, Chinese):
+                            Annotate words containing Kanji/Hanzi with phonetic readings using [Word|reading] format (Example: "[私|わたし]は[日本語|にほんご]を[勉強|べんきょう]しています。").
+                            Do not output brackets without a vertical bar like [word].
+                        - If ${lessonLanguage} uses alphabetic or purely phonetic scripts (e.g., English, Spanish, Korean, German):
+                            Never use phonetic annotations or bracket notation — output regular plain text only.
+                
+                    # Content Rules
+                    - Objective and factual; base ONLY on the given content
+                    - Ensure Coverage: When the given content is long, do not omit sections entirely; rather, you can reduce density and trim detail.
+                    - Present information directly as standalone facts; never reference the source itself (avoid phrases like "this lesson," "this lecture," "the text explains," "in this video")
+                    - Summary body ONLY: no preface, title restatement, or closing remarks
+                    ${difficultyPrompt}
+                    `;
                     
                     const summary_history = [
                         {role: "system", content: removeIndent(summaryPrompt)},
@@ -8328,7 +8379,7 @@
                             if (!summaryRafId) {
                                 summaryRafId = requestAnimationFrame(() => {
                                     const summaryContent = document.querySelector(".quick-summary .summary-content");
-                                    if (summaryContent) summaryContent.innerHTML = quickSummary;
+                                    if (summaryContent) summaryContent.innerHTML = formatQuickSummaryHTML(quickSummary);
                                     summaryRafId = null;
                                 });
                             }
@@ -8337,7 +8388,7 @@
                             quickSummary = finalContent;
                             console.log('[Quick summary]\n', finalContent);
                             const summaryContent = document.querySelector(".quick-summary .summary-content");
-                            if (summaryContent) summaryContent.innerHTML = quickSummary;
+                            if (summaryContent) summaryContent.innerHTML = formatQuickSummaryHTML(quickSummary);
                         },
                         (error) => {
                             console.error("Failed to fetch summary:", error);
@@ -8388,7 +8439,7 @@
                     
                     const contentWrapper = createElement("div", {
                         className: "summary-content",
-                        innerHTML: quickSummary
+                        innerHTML: formatQuickSummaryHTML(quickSummary)
                     });
                     summaryElement.append(contentWrapper);
                     
@@ -8525,7 +8576,12 @@
                         ? (((usageStats.totalUncachedCost - usageStats.totalCost) / usageStats.totalUncachedCost) * 100).toFixed(1)
                         : '0.0';
                     
-                    const {cached: tCached, input: tInput, reasoning: tReasoning, output: tOutput} = usageStats.totalTokens;
+                    const {
+                        cached: tCached,
+                        input: tInput,
+                        reasoning: tReasoning,
+                        output: tOutput
+                    } = usageStats.totalTokens;
                     console.log('[Lesson Stats]', `tokens: (${tCached}/${tInput}/${tReasoning}/${tOutput}), Total Cost: $${usageStats.totalCost.toFixed(6)} (${totalSavedPercent}% saved)`);
                     
                     Object.entries(usageStats)
