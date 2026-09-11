@@ -5,6 +5,9 @@ Customizable layouts, AI-powered chat & TTS, flashcard system, local video playe
 
 <img src="images/main.png" width=800></br>
 
+> 📖 **Looking for in-depth documentation?**  
+> Check out the complete **[Feature Guide](GUIDE.md)** for settings breakdown, local video setup, Supabase cloud sync, and Anki integration.
+
 ## Quick Start
 
 ### Desktop
