@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      15.7.0
+// @version      15.7.1
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @grant       GM_xmlhttpRequest
@@ -8340,7 +8340,7 @@
                         C2: 150
                     };
                     const targetWords = summaryWordsByDifficulty[difficulty] || 150;
-                    const targetParagraphs = targetWords <= 60 ? "1 paragraph" : targetWords <= 100 ? "1–2 paragraphs" : "2–3 paragraphs";
+                    const targetParagraphs = targetWords <= 60 ? "1 paragraph" : targetWords <= 100 ? "1–2 paragraphs" : "2 paragraphs";
                     
                     const summaryPrompt = `
                     # Role
@@ -8350,7 +8350,7 @@
                     - Language: match the content's original language (${lessonLanguage})
                     - Structure: ${targetParagraphs}, separated by a blank line
                     - Format: plain text only; do NOT use HTML tags (no <p>, no <ruby>, no <rt>), no Markdown syntax
-                    - Length: ${targetWords} words as a soft target
+                    - Length: ${targetWords} words as a soft upper limit.
                     - Reading Aids:
                         - If ${lessonLanguage} uses logographic scripts (e.g., Japanese, Chinese):
                             Annotate words containing Kanji/Hanzi with phonetic readings using [Word|reading] format (Example: "[私|わたし]は[日本語|にほんご]を[勉強|べんきょう]しています。").
