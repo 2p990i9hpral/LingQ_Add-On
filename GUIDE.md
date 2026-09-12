@@ -120,7 +120,7 @@ Play your own downloaded movies, anime, or video lessons directly within LingQ, 
   - **Translation Font Color**: Color of sentence translations.
   - **LingQ Background & Border**: Color for status 1, 2, 3, and 4 vocabulary words.
   - **LingQ Border Learned**: Highlight border for learned terms.
-  - **Unknown Background & Border**: Highlight styling for new/unrecognized words.
+  - **Unknown Background & Border**: Highlight styling for new/unknown words.
   - **Playing Underline**: Color of the highlight underline tracking the active playback sentence.
 
 ### 1.8 Video Captions & Player Tweaks

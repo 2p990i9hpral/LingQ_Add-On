@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      15.8.0
+// @version      15.9.0
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @grant       GM_xmlhttpRequest
@@ -8988,12 +8988,28 @@
                 function getInPageSelectedWithContext(targetSideWords = 30, targetSideLength = 200) {
                     const selectedTextElement = document.querySelector(".reference-word");
                     const selectedEl = document.querySelector("span.is-selected, span.selected-text");
-                    const currentSentenceEl = selectedEl?.closest(".sentence");
+                    let currentSentenceEl = selectedEl?.closest(".sentence");
                     
                     const selectedText = selectedTextElement ? extractTextFromDOM(selectedTextElement).trim() : "";
+                    const allSentences = [...document.querySelectorAll(".sentence")];
+                    
+                    if (!currentSentenceEl) {
+                        const selection = window.getSelection();
+                        const rangeNode = selection?.rangeCount > 0 ? selection.getRangeAt(0).commonAncestorContainer : null;
+                        currentSentenceEl = rangeNode?.nodeType === Node.ELEMENT_NODE 
+                            ? rangeNode.closest(".sentence") 
+                            : rangeNode?.parentElement?.closest(".sentence");
+                            
+                        if (!currentSentenceEl && selectedText) {
+                            currentSentenceEl = allSentences.find((el) => {
+                                const elText = extractTextFromDOM(el);
+                                return elText && elText.includes(selectedText);
+                            });
+                        }
+                    }
+                    
                     if (!currentSentenceEl) return {input: selectedText, context: ""};
                     
-                    const allSentences = [...document.querySelectorAll(".sentence")];
                     const currentIndex = allSentences.indexOf(currentSentenceEl);
                     
                     const prefixTexts = [];
@@ -9020,7 +9036,9 @@
                         nextIdx++;
                     }
                     
-                    const currentText = extractTextFromDOM(currentSentenceEl, selectedEl).trim();
+                    const isSentenceMode = typeof isSentence !== "undefined" ? isSentence : !document.querySelector(".section-widget--main");
+                    const targetElForTag = isSentenceMode ? currentSentenceEl : (selectedEl || currentSentenceEl);
+                    const currentText = extractTextFromDOM(currentSentenceEl, targetElForTag).trim();
                     const rawCombined = [...prefixTexts, currentText, ...suffixTexts].filter(Boolean).join(" ");
                     
                     const selectedMatch = rawCombined.match(/<selected>(.*?)<\/selected>/);
@@ -9052,9 +9070,14 @@
                 }
                 
                 function getSelectedWithContext(targetSideWords = 30, targetSideLength = 200) {
+                    const selectedTextElement = document.querySelector(".reference-word");
+                    const rawSelectedText = selectedTextElement ? extractTextFromDOM(selectedTextElement)?.trim() : "";
+                    
                     const inPageData = getInPageSelectedWithContext(targetSideWords, targetSideLength);
-                    if (!settings.usePageMode || !inPageData.context) {
-                        return inPageData;
+                    const effectiveInput = inPageData.input || rawSelectedText;
+                    
+                    if (!settings.usePageMode) {
+                        return inPageData.context ? inPageData : {input: effectiveInput, context: ""};
                     }
                     
                     const lessonLanguage = getLessonLanguage();
@@ -9062,7 +9085,7 @@
                     const cacheKey = `${lessonLanguage}_${lessonId}`;
                     const cachedSentences = lessonSentencesCache.get(cacheKey);
                     if (!cachedSentences || cachedSentences.length === 0) {
-                        return inPageData;
+                        return inPageData.context ? inPageData : {input: effectiveInput, context: ""};
                     }
                     
                     const fullLessonText = cachedSentences
@@ -9070,24 +9093,36 @@
                         .filter(Boolean)
                         .join(" ");
                     
-                    const selectedMatch = inPageData.context.match(/<selected>(.*?)<\/selected>/);
-                    if (!selectedMatch) {
-                        return inPageData;
+                    const escapeRegex = (str) => str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+                    const toFlexiblePattern = (str) => {
+                        if (!str) return "";
+                        return Array.from(str.replace(/\s+/g, ""))
+                            .map((char) => escapeRegex(char))
+                            .join("\\s*");
+                    };
+                    
+                    let targetWord = "";
+                    let anchorPrefix = "";
+                    let anchorSuffix = "";
+                    
+                    const selectedMatch = inPageData.context?.match(/<selected>(.*?)<\/selected>/);
+                    if (selectedMatch) {
+                        targetWord = selectedMatch[1];
+                        const tagStart = selectedMatch.index;
+                        const tagEnd = tagStart + selectedMatch[0].length;
+                        anchorPrefix = inPageData.context.slice(0, tagStart).slice(-25).trim();
+                        anchorSuffix = inPageData.context.slice(tagEnd).slice(0, 25).trim();
+                    } else {
+                        targetWord = effectiveInput;
                     }
                     
-                    const selectedWord = selectedMatch[1];
-                    const tagStart = selectedMatch.index;
-                    const tagEnd = tagStart + selectedMatch[0].length;
+                    if (!targetWord) {
+                        return inPageData.context ? inPageData : {input: effectiveInput, context: ""};
+                    }
                     
-                    const rawPrefix = inPageData.context.slice(0, tagStart);
-                    const rawSuffix = inPageData.context.slice(tagEnd);
-                    const anchorPrefix = rawPrefix.slice(-25).trim();
-                    const anchorSuffix = rawSuffix.slice(0, 25).trim();
-                    
-                    const escapeRegex = (str) => str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-                    const patternPrefix = anchorPrefix ? escapeRegex(anchorPrefix).replace(/\s+/g, "\\s*") : "";
-                    const patternWord = escapeRegex(selectedWord.trim()).replace(/\s+/g, "\\s*");
-                    const patternSuffix = anchorSuffix ? escapeRegex(anchorSuffix).replace(/\s+/g, "\\s*") : "";
+                    const patternWord = toFlexiblePattern(targetWord.trim());
+                    const patternPrefix = anchorPrefix ? toFlexiblePattern(anchorPrefix) : "";
+                    const patternSuffix = anchorSuffix ? toFlexiblePattern(anchorSuffix) : "";
                     
                     let match = null;
                     let matchedWordStart = -1;
@@ -9120,8 +9155,17 @@
                         }
                     }
                     
+                    if (!match && patternWord) {
+                        const regex = new RegExp(patternWord);
+                        match = fullLessonText.match(regex);
+                        if (match) {
+                            matchedWordStart = match.index;
+                            matchedWordEnd = matchedWordStart + match[0].length;
+                        }
+                    }
+                    
                     if (!match || matchedWordStart === -1) {
-                        return inPageData;
+                        return inPageData.context ? inPageData : {input: effectiveInput, context: ""};
                     }
                     
                     const beforeText = fullLessonText.slice(0, matchedWordStart).trimEnd();
@@ -9146,8 +9190,8 @@
                         .join(" ")
                         .trim();
                     
-                    console.log(`Context (API): ${inPageData.input.length} -> ${contextText.length} (Page mode anchored)`);
-                    return {input: inPageData.input, context: contextText};
+                    console.log(`Context (API): ${effectiveInput.length} -> ${contextText.length} (Page mode anchored)`);
+                    return {input: effectiveInput, context: contextText};
                 }
                 
                 let isProgrammaticReferenceWordUpdate = false;
@@ -10075,7 +10119,9 @@
                     
                     if (settings.askSelected && sectionHead.matches(".section-widget--head")) {
                         const selectedData = getSelectedWithContext();
-                        const initialUserMessage = `Input: "${selectedData.input}"` + (!isSentence ? `, Context: "${selectedData.context}"` : "");
+                        const initialUserMessage = isSentence
+                            ? `Input: "${selectedData.context || selectedData.input}"`
+                            : `Input: "${selectedData.input}"` + (selectedData.context ? `, Context: "${selectedData.context}"` : "");
                         
                         if (initialUserMessage.length > 1000) {
                             console.log("The length of the selected text exceeds 1,000.")
@@ -10458,18 +10504,23 @@
         # Sentence Analysis
 
         ## Task: Full Text Parsing
-        Input: 'Input: "Sentences"'.
+        Input: 'Input: "Context... <selected>Target Sentences</selected> ...Context"' or 'Input: "Target Sentences"'.
+
+        0. Context Handling & Scope
+           - If the input contains <selected>...</selected> tags, translate and analyze ONLY the text inside the <selected>...</selected> tags (the target sentence).
+           - Any text OUTSIDE the <selected>...</selected> tags serves purely as surrounding context to clarify speaker intent, tone, references, and discourse flow. DO NOT translate, summarize, or include outside text in the output.
+           - If no tags are present, treat the entire input as the target sentence.
 
         1. Translation Strategy
-           - Translate ALL input sentences into a single flowing block in ${userLanguage}.
+           - Translate the target sentence into a single flowing block in ${userLanguage}, leveraging the surrounding context for natural nuance, pronouns, and cohesion.
            - Wrap the entire translation in <p><b>...</b></p>.
 
         2. Holistic Explanation
-           - Analyze the "Big Picture": Meaning, tone, speaker intent, and nuance.
+           - Analyze the "Big Picture": Meaning, tone, speaker intent, and nuance within the context.
            - Explain beyond the literal translation.
 
         3. Key Element Extraction
-           - Select 2-4 distinct elements (Difficult words, Collocations, Idioms).
+           - Select 2-4 distinct elements from the target sentence (Difficult words, Collocations, Idioms).
            - Criteria: Choose elements where the whole is greater than the sum of parts, or where detailed nuance is needed.
            - Format: [Original Term]: [Concise Definition in ${userLanguage}].
 
