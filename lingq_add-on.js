@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      15.7.1
+// @version      15.7.2
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @grant       GM_xmlhttpRequest
@@ -9064,12 +9064,11 @@
                     const pronunciationElem = botMessageDiv.querySelector("span");
                     
                     if (pronunciationElem) {
-                        if (!e.ctrlKey && !e.metaKey) return;
-                        
                         const cleanText = pronunciationElem.textContent.replace(/[\[\]\/]/g, "").trim();
                         pronunciationElem.textContent = `[${cleanText}]`;
                         
                         pronunciationElem.addEventListener("click", async (e) => {
+                            if (!e.ctrlKey && !e.metaKey) return;
                             if (pronunciationElem.querySelector("input")) return;
                             
                             const currentText = pronunciationElem.textContent.trim();
