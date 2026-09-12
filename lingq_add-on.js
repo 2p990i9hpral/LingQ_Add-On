@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      15.7.4
+// @version      15.8.0
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @grant       GM_xmlhttpRequest
@@ -372,11 +372,19 @@
         });
     }
     
+    const lessonSentencesCache = new Map();
     async function getLessonSentences(lessonLanguage, lessonId) {
+        const cacheKey = `${lessonLanguage}_${lessonId}`;
+        if (lessonSentencesCache.has(cacheKey)) {
+            return lessonSentencesCache.get(cacheKey);
+        }
+        
         const url = `https://www.lingq.com/api/v3/${lessonLanguage}/lessons/${lessonId}/sentences/`;
         
         const response = await fetch(url);
-        return await response.json();
+        const data = await response.json();
+        lessonSentencesCache.set(cacheKey, data);
+        return data;
     }
     
     async function uploadAudioToLesson(lessonLanguage, lessonId, audioData, duration) {
@@ -5103,80 +5111,66 @@
                 exportButton.disabled = true;
                 
                 try {
-                    function formatContext(context, originalWord, padding = 100) {
+                    function formatContext(context, originalWord, paddingWords = 15, paddingLength = 120) {
                         if (!context) return "";
                         
                         const openTag = "<selected>";
                         const closeTag = "</selected>";
                         
+                        let rawBefore = "";
+                        let targetWord = "";
+                        let rawAfter = "";
+                        let isFound = false;
+                        
                         const startTagIdx = context.indexOf(openTag);
                         const endTagIdx = context.indexOf(closeTag);
                         
                         if (startTagIdx !== -1 && endTagIdx !== -1) {
-                            const targetEndIdx = endTagIdx + closeTag.length;
-                            const totalLen = context.length;
-                            
-                            let start = startTagIdx - padding;
-                            let end = targetEndIdx + padding;
-                            
-                            if (start < 0) {
-                                end += Math.abs(start);
-                                start = 0;
-                            }
-                            if (end > totalLen) {
-                                start -= (end - totalLen);
-                                if (start < 0) start = 0;
-                                end = totalLen;
-                            }
-                            
-                            let slicedText = context.substring(start, end);
-                            slicedText = slicedText.replace(openTag, "<b>").replace(closeTag, "</b>");
-                            
-                            const prefix = start > 0 ? "..." : "";
-                            const suffix = end < totalLen ? "..." : "";
-                            
-                            return `${prefix}${slicedText}${suffix}`;
-                        }
-                        
-                        if (originalWord) {
+                            rawBefore = context.substring(0, startTagIdx);
+                            targetWord = context.substring(startTagIdx + openTag.length, endTagIdx);
+                            rawAfter = context.substring(endTagIdx + closeTag.length);
+                            isFound = true;
+                        } else if (originalWord) {
                             const escapedWord = originalWord.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
                             const match = context.match(new RegExp(escapedWord, 'i'));
-                            
                             if (match) {
-                                const foundWord = match[0];
-                                const wordStart = match.index;
-                                const wordEnd = wordStart + foundWord.length;
-                                const totalLen = context.length;
-                                
-                                let start = wordStart - padding;
-                                let end = wordEnd + padding;
-                                
-                                if (start < 0) {
-                                    end += Math.abs(start);
-                                    start = 0;
-                                }
-                                if (end > totalLen) {
-                                    start -= (end - totalLen);
-                                    if (start < 0) start = 0;
-                                    end = totalLen;
-                                }
-                                
-                                const slicedText = context.substring(start, end);
-                                const relativeStart = wordStart - start;
-                                const relativeEnd = relativeStart + foundWord.length;
-                                
-                                const before = slicedText.substring(0, relativeStart);
-                                const target = slicedText.substring(relativeStart, relativeEnd);
-                                const after = slicedText.substring(relativeEnd);
-                                
-                                const prefix = start > 0 ? "..." : "";
-                                const suffix = end < totalLen ? "..." : "";
-                                
-                                return `${prefix}${before}<b>${target}</b>${after}${suffix}`;
+                                rawBefore = context.substring(0, match.index);
+                                targetWord = match[0];
+                                rawAfter = context.substring(match.index + match[0].length);
+                                isFound = true;
                             }
                         }
                         
-                        return context;
+                        if (!isFound) return context;
+                        
+                        const beforeWords = rawBefore.trimEnd() ? rawBefore.trimEnd().split(/\s+/) : [];
+                        const afterWords = rawAfter.trimStart() ? rawAfter.trimStart().split(/\s+/) : [];
+                        
+                        const hasMoreBefore = beforeWords.length > paddingWords;
+                        const hasMoreAfter = afterWords.length > paddingWords;
+                        
+                        let leftSlice = beforeWords.slice(-paddingWords).join(" ");
+                        let rightSlice = afterWords.slice(0, paddingWords).join(" ");
+                        
+                        let isLengthCappedLeft = false;
+                        let isLengthCappedRight = false;
+                        
+                        if (leftSlice.length > paddingLength) {
+                            leftSlice = leftSlice.slice(-paddingLength).trimStart();
+                            isLengthCappedLeft = true;
+                        }
+                        if (rightSlice.length > paddingLength) {
+                            rightSlice = rightSlice.slice(0, paddingLength).trimEnd();
+                            isLengthCappedRight = true;
+                        }
+                        
+                        const prefix = (hasMoreBefore || isLengthCappedLeft) ? "..." : "";
+                        const suffix = (hasMoreAfter || isLengthCappedRight) ? "..." : "";
+                        
+                        const formattedLeft = leftSlice ? `${leftSlice} ` : "";
+                        const formattedRight = rightSlice ? ` ${rightSlice}` : "";
+                        
+                        return `${prefix}${formattedLeft}<b>${targetWord}</b>${formattedRight}${suffix}`.trim();
                     }
                     
                     const allData = await fetchFlashcardsInBatches(targetLanguage, "*", "idx");
@@ -8802,6 +8796,13 @@
                 changeTranslationColor(node);
                 
                 await waitForElement('.sentence-text p', 10000);
+                if (settings.usePageMode) {
+                    const lessonLanguage = getLessonLanguage();
+                    const lessonId = getLessonId();
+                    if (lessonLanguage && lessonId) {
+                        getLessonSentences(lessonLanguage, lessonId).catch(() => {});
+                    }
+                }
                 await generateLessonSummary(node);
                 
                 setupNavClickListeners();
@@ -8984,68 +8985,169 @@
                     return targetSectionHead;
                 }
                 
-                function getSelectedWithContext(targetSideLength = 200) {
+                function getInPageSelectedWithContext(targetSideWords = 30, targetSideLength = 200) {
                     const selectedTextElement = document.querySelector(".reference-word");
                     const selectedEl = document.querySelector("span.is-selected, span.selected-text");
                     const currentSentenceEl = selectedEl?.closest(".sentence");
                     
                     const selectedText = selectedTextElement ? extractTextFromDOM(selectedTextElement).trim() : "";
-                    
                     if (!currentSentenceEl) return {input: selectedText, context: ""};
                     
-                    const sentenceItems = [...currentSentenceEl.querySelectorAll(".sentence-item")];
-                    const selectedIndex = sentenceItems.indexOf(selectedEl);
-                    
-                    const positionRatio = sentenceItems.length > 0 ? Math.max(0, selectedIndex) / sentenceItems.length : 0.5;
-                    
-                    const rawCurrentText = extractTextFromDOM(currentSentenceEl).trim();
                     const allSentences = [...document.querySelectorAll(".sentence")];
                     const currentIndex = allSentences.indexOf(currentSentenceEl);
                     
-                    const leftLen = Math.floor(rawCurrentText.length * positionRatio);
-                    const rightLen = rawCurrentText.length - leftLen;
-                    
-                    let remainingLeft = Math.max(0, targetSideLength - leftLen);
-                    let remainingRight = Math.max(0, targetSideLength - rightLen);
-                    
-                    // Prepend sentences
                     const prefixTexts = [];
                     let prevIdx = currentIndex - 1;
-                    
-                    while (remainingLeft > 0 && prevIdx >= 0) {
+                    let prefixLength = 0;
+                    while (prefixLength < targetSideLength && prevIdx >= 0) {
                         const text = extractTextFromDOM(allSentences[prevIdx])?.trim();
                         if (text) {
-                            const takeLen = Math.min(text.length, remainingLeft);
-                            const chunk = text.slice(-takeLen);
-                            prefixTexts.unshift(chunk);
-                            remainingLeft -= takeLen;
+                            prefixTexts.unshift(text);
+                            prefixLength += text.length;
                         }
                         prevIdx--;
                     }
                     
-                    // Append sentences
                     const suffixTexts = [];
                     let nextIdx = currentIndex + 1;
-                    
-                    while (remainingRight > 0 && nextIdx < allSentences.length) {
+                    let suffixLength = 0;
+                    while (suffixLength < targetSideLength && nextIdx < allSentences.length) {
                         const text = extractTextFromDOM(allSentences[nextIdx])?.trim();
                         if (text) {
-                            const takeLen = Math.min(text.length, remainingRight);
-                            const chunk = text.slice(0, takeLen);
-                            suffixTexts.push(chunk);
-                            remainingRight -= takeLen;
+                            suffixTexts.push(text);
+                            suffixLength += text.length;
                         }
                         nextIdx++;
                     }
                     
                     const currentText = extractTextFromDOM(currentSentenceEl, selectedEl).trim();
-                    const contextText = [...prefixTexts, currentText, ...suffixTexts].filter((text) => text).join(" ");
+                    const rawCombined = [...prefixTexts, currentText, ...suffixTexts].filter(Boolean).join(" ");
                     
-                    const prefixLog = prefixTexts.length > 0 ? '+'.repeat(prefixTexts.length) : '';
-                    const suffixLog = suffixTexts.length > 0 ? '+'.repeat(suffixTexts.length) : '';
-                    console.log(`Context: ${rawCurrentText.length} -> ${contextText.length} (${prefixLog}Selected${suffixLog})`);
+                    const selectedMatch = rawCombined.match(/<selected>(.*?)<\/selected>/);
+                    let contextText = rawCombined;
+                    if (selectedMatch) {
+                        const tagStart = selectedMatch.index;
+                        const tagEnd = tagStart + selectedMatch[0].length;
+                        const rawBefore = rawCombined.slice(0, tagStart).trimEnd();
+                        const rawTag = selectedMatch[0];
+                        const rawAfter = rawCombined.slice(tagEnd).trimStart();
+                        
+                        const beforeWords = rawBefore ? rawBefore.split(/\s+/) : [];
+                        const afterWords = rawAfter ? rawAfter.split(/\s+/) : [];
+                        
+                        let leftPart = beforeWords.slice(-targetSideWords).join(" ");
+                        let rightPart = afterWords.slice(0, targetSideWords).join(" ");
+                        
+                        if (leftPart.length > targetSideLength) {
+                            leftPart = leftPart.slice(-targetSideLength).trimStart();
+                        }
+                        if (rightPart.length > targetSideLength) {
+                            rightPart = rightPart.slice(0, targetSideLength).trimEnd();
+                        }
+                        
+                        contextText = [leftPart, rawTag, rightPart].filter(Boolean).join(" ").trim();
+                    }
                     
                     return {input: selectedText, context: contextText};
+                }
+                
+                function getSelectedWithContext(targetSideWords = 30, targetSideLength = 200) {
+                    const inPageData = getInPageSelectedWithContext(targetSideWords, targetSideLength);
+                    if (!settings.usePageMode || !inPageData.context) {
+                        return inPageData;
+                    }
+                    
+                    const lessonLanguage = getLessonLanguage();
+                    const lessonId = getLessonId();
+                    const cacheKey = `${lessonLanguage}_${lessonId}`;
+                    const cachedSentences = lessonSentencesCache.get(cacheKey);
+                    if (!cachedSentences || cachedSentences.length === 0) {
+                        return inPageData;
+                    }
+                    
+                    const fullLessonText = cachedSentences
+                        .map((item) => (item.text || item.cleanText || "").trim())
+                        .filter(Boolean)
+                        .join(" ");
+                    
+                    const selectedMatch = inPageData.context.match(/<selected>(.*?)<\/selected>/);
+                    if (!selectedMatch) {
+                        return inPageData;
+                    }
+                    
+                    const selectedWord = selectedMatch[1];
+                    const tagStart = selectedMatch.index;
+                    const tagEnd = tagStart + selectedMatch[0].length;
+                    
+                    const rawPrefix = inPageData.context.slice(0, tagStart);
+                    const rawSuffix = inPageData.context.slice(tagEnd);
+                    const anchorPrefix = rawPrefix.slice(-25).trim();
+                    const anchorSuffix = rawSuffix.slice(0, 25).trim();
+                    
+                    const escapeRegex = (str) => str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+                    const patternPrefix = anchorPrefix ? escapeRegex(anchorPrefix).replace(/\s+/g, "\\s*") : "";
+                    const patternWord = escapeRegex(selectedWord.trim()).replace(/\s+/g, "\\s*");
+                    const patternSuffix = anchorSuffix ? escapeRegex(anchorSuffix).replace(/\s+/g, "\\s*") : "";
+                    
+                    let match = null;
+                    let matchedWordStart = -1;
+                    let matchedWordEnd = -1;
+                    
+                    if (patternPrefix && patternSuffix) {
+                        const regex = new RegExp(`(${patternPrefix})\\s*(${patternWord})\\s*(${patternSuffix})`);
+                        match = fullLessonText.match(regex);
+                        if (match) {
+                            matchedWordStart = match.index + match[1].length + match[0].slice(match[1].length).indexOf(match[2]);
+                            matchedWordEnd = matchedWordStart + match[2].length;
+                        }
+                    }
+                    
+                    if (!match && patternPrefix) {
+                        const regex = new RegExp(`(${patternPrefix})\\s*(${patternWord})`);
+                        match = fullLessonText.match(regex);
+                        if (match) {
+                            matchedWordStart = match.index + match[1].length + match[0].slice(match[1].length).indexOf(match[2]);
+                            matchedWordEnd = matchedWordStart + match[2].length;
+                        }
+                    }
+                    
+                    if (!match && patternSuffix) {
+                        const regex = new RegExp(`(${patternWord})\\s*(${patternSuffix})`);
+                        match = fullLessonText.match(regex);
+                        if (match) {
+                            matchedWordStart = match.index;
+                            matchedWordEnd = matchedWordStart + match[1].length;
+                        }
+                    }
+                    
+                    if (!match || matchedWordStart === -1) {
+                        return inPageData;
+                    }
+                    
+                    const beforeText = fullLessonText.slice(0, matchedWordStart).trimEnd();
+                    const exactWord = fullLessonText.slice(matchedWordStart, matchedWordEnd);
+                    const afterText = fullLessonText.slice(matchedWordEnd).trimStart();
+                    
+                    const beforeWords = beforeText ? beforeText.split(/\s+/) : [];
+                    const afterWords = afterText ? afterText.split(/\s+/) : [];
+                    
+                    let leftContext = beforeWords.slice(-targetSideWords).join(" ");
+                    let rightContext = afterWords.slice(0, targetSideWords).join(" ");
+                    
+                    if (leftContext.length > targetSideLength) {
+                        leftContext = leftContext.slice(-targetSideLength).trimStart();
+                    }
+                    if (rightContext.length > targetSideLength) {
+                        rightContext = rightContext.slice(0, targetSideLength).trimEnd();
+                    }
+                    
+                    const contextText = [leftContext, `<selected>${exactWord}</selected>`, rightContext]
+                        .filter(Boolean)
+                        .join(" ")
+                        .trim();
+                    
+                    console.log(`Context (API): ${inPageData.input.length} -> ${contextText.length} (Page mode anchored)`);
+                    return {input: inPageData.input, context: contextText};
                 }
                 
                 let isProgrammaticReferenceWordUpdate = false;
@@ -9755,12 +9857,28 @@
                             
                             const messageButtonContainer = createElement("div", {className: 'message-button-container'});
                             
+                            function extractCleanMessageText(messageElement) {
+                                const messageClone = messageElement.cloneNode(true);
+                                messageClone.querySelectorAll('.thought-process, details, .message-button-container').forEach((element) => element.remove());
+                                messageClone.querySelectorAll('br').forEach((br) => br.replaceWith('\n'));
+
+                                const rawText = typeof messageClone.innerText === 'string' && messageClone.innerText.trim()
+                                    ? messageClone.innerText
+                                    : (messageClone.textContent || '');
+
+                                return rawText
+                                    .replace(/\r\n/g, '\n')
+                                    .replace(/[ \t]+$/gm, '')
+                                    .replace(/\n{3,}/g, '\n\n')
+                                    .trim();
+                            }
+
                             const copyButton = createElement("button", {
                                 className: "message-button copy-button",
                                 innerHTML: `<svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="transparent" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-copy"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"></rect><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"></path></svg>`,
                             });
                             copyButton.addEventListener('click', async () => {
-                                const textToCopy = botMessageDiv.textContent.trim();
+                                const textToCopy = extractCleanMessageText(botMessageDiv);
                                 navigator.clipboard.writeText(textToCopy)
                                     .then(() => showToast("Message Copied!", true))
                                     .catch(() => showToast("Failed to copy message.", false));
