@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      15.7.2
+// @version      15.7.3
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @grant       GM_xmlhttpRequest
@@ -1963,6 +1963,9 @@
                 }
             };
             
+            let isVideoSeeking = false;
+            let isAudioDrivenSeek = false;
+
             const playerObserver = new MutationObserver(() => {
                 // 1. Sync Play/Pause State
                 const isLingQPlaying = playButtonSvg.classList.contains("svg-icon--pause");
@@ -1974,6 +1977,8 @@
                 }
                 
                 // 2. Sync Precise Timeline
+                if (isVideoSeeking) return;
+
                 const preciseTargetTime = parseFloat(sliderHandle.getAttribute("aria-valuenow")) || 0;
                 const diff = videoElement.currentTime - preciseTargetTime;
                 
@@ -1983,6 +1988,7 @@
                 
                 if (Math.abs(diff) > syncThreshold) {
                     // Hard Seek: Compensate for average seek delay when playing (~0.3s)
+                    isAudioDrivenSeek = true;
                     const seekOffset = (!videoElement.paused) ? 0.3 : 0;
                     videoElement.currentTime = preciseTargetTime + seekOffset;
                     syncStatus = "Hard Seek";
@@ -2031,6 +2037,23 @@
             videoElement.addEventListener("play", syncPlaybackRate);
             videoElement.addEventListener("playing", syncPlaybackRate);
             videoElement.addEventListener("loadedmetadata", syncPlaybackRate);
+            videoElement.addEventListener("seeking", () => {
+                if (isAudioDrivenSeek) {
+                    isAudioDrivenSeek = false;
+                    return;
+                }
+
+                if (typeof mediaInstances === "undefined") return;
+                isVideoSeeking = true;
+                mediaInstances.forEach(media => {
+                    if (media && Math.abs(videoElement.currentTime - media.currentTime) > 0.1) {
+                        media.currentTime = videoElement.currentTime;
+                    }
+                });
+                setTimeout(() => {
+                    isVideoSeeking = false;
+                }, 100);
+            });
             
             const isLingQPlayingInit = playButtonSvg.classList.contains("svg-icon--pause");
             if (isLingQPlayingInit && videoElement.paused) {
