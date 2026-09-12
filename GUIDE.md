@@ -102,7 +102,7 @@ Play your own downloaded movies, anime, or video lessons directly within LingQ, 
 #### Lesson Format Requirements on LingQ
 - When importing the lesson to LingQ, import the video's subtitle file (`.srt`) with audio file (`.mp3`).
 - Since the addon plays the local video's native audio, the lesson's audio file on LingQ only needs to match the total duration and can be completely silent.
-- **TODO**: A simple tool (using ffmpeg) will be provided to easily convert video files to a silent audio file matching the duration.
+- **Silent Audio Generator Tool**: A standalone tool is provided ([`tools/LingQ_Silent_Audio_Generator.exe`](tools/LingQ_Silent_Audio_Generator.exe)). You can drag and drop `.mp4` files onto the executable (or double-click to open the file selector) to automatically generate matching silent `.mp3` audio files in the video's directory without needing to install Python or FFmpeg.
 
 ### 1.6 Typography, Sizing & Memo Widget
 - **Font Size**: Slider for lesson body text.
