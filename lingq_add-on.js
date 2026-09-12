@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      15.7.3
+// @version      15.7.4
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @grant       GM_xmlhttpRequest
@@ -1978,6 +1978,7 @@
                 
                 // 2. Sync Precise Timeline
                 if (isVideoSeeking) return;
+                if (videoElement.readyState < 3) return;
 
                 const preciseTargetTime = parseFloat(sliderHandle.getAttribute("aria-valuenow")) || 0;
                 const diff = videoElement.currentTime - preciseTargetTime;
@@ -2035,7 +2036,20 @@
             
             // Ensure accurate tracking across playback status switches
             videoElement.addEventListener("play", syncPlaybackRate);
-            videoElement.addEventListener("playing", syncPlaybackRate);
+            videoElement.addEventListener("playing", () => {
+                syncPlaybackRate();
+                if (typeof mediaInstances !== "undefined") {
+                    mediaInstances.forEach(media => {
+                        if (media && Math.abs(videoElement.currentTime - media.currentTime) > 0.3) {
+                            isVideoSeeking = true;
+                            media.currentTime = videoElement.currentTime;
+                            setTimeout(() => {
+                                isVideoSeeking = false;
+                            }, 100);
+                        }
+                    });
+                }
+            });
             videoElement.addEventListener("loadedmetadata", syncPlaybackRate);
             videoElement.addEventListener("seeking", () => {
                 if (isAudioDrivenSeek) {
@@ -2318,10 +2332,45 @@
                 videoElement.style.display = "block";
                 progressWrapper.style.display = "block";
                 
+                // Capture existing playback position from LingQ player before loading video
+                let initialTime = 0;
+                const sliderHandle = document.querySelector('.audio-player--progress .rc-slider-handle');
+                if (sliderHandle && sliderHandle.getAttribute("aria-valuenow")) {
+                    initialTime = parseFloat(sliderHandle.getAttribute("aria-valuenow")) || 0;
+                } else if (typeof mediaInstances !== "undefined") {
+                    mediaInstances.forEach(media => {
+                        if (media && media.currentTime > 0) {
+                            initialTime = media.currentTime;
+                        }
+                    });
+                }
+
+                const startPlayback = () => {
+                    videoElement.currentTime = initialTime;
+                    if (typeof mediaInstances !== "undefined") {
+                        mediaInstances.forEach(media => {
+                            if (media) media.currentTime = initialTime;
+                        });
+                    }
+                    
+                    const playButton = document.querySelector(".section--player button.lingq-audio-player");
+                    const playButtonSvg = playButton?.querySelector("svg");
+                    if (playButton && playButtonSvg && playButtonSvg.classList.contains("svg-icon--play")) {
+                        playButton.click();
+                    }
+                };
+
+                // Pause LingQ audio player if it was already playing during video loading
                 const playButton = document.querySelector(".section--player button.lingq-audio-player");
                 const playButtonSvg = playButton?.querySelector("svg");
-                if (playButton && playButtonSvg && playButtonSvg.classList.contains("svg-icon--play")) {
+                if (playButton && playButtonSvg && playButtonSvg.classList.contains("svg-icon--pause")) {
                     playButton.click();
+                }
+
+                if (videoElement.readyState >= 3) {
+                    startPlayback();
+                } else {
+                    videoElement.addEventListener("canplay", startPlayback, { once: true });
                 }
                 
                 bindLingQPlayerControls(videoElement);
