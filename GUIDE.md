@@ -257,13 +257,26 @@ Click the **Usage Log** button to open the token monitoring popup:
 ### Overview & Purpose
 A comprehensive vocabulary hub to review, search, audit, and export your flashcards.
 
+### Prerequisites (Database Connection)
+Before creating or managing flashcards, you must connect a database backend in **Settings** (⚙️):
+- **Built-in Database**: Sign in via email OTP. *(See [Section 4.1 Storage Mode](#41-storage-mode-built-in-vs-custom))*
+- **Custom Supabase Database**: Set up your private Supabase project and save your DB URL and key. *(See [Section 4.1](#41-storage-mode-built-in-vs-custom) and [Section 11. Supabase Cloud Database Setup](#11-supabase-cloud-database-setup))*
+
+### How to Create Flashcards
+
+<img src="images/save flashcard.png" width=350>
+
+Flashcards are created directly within the chat widget during your lessons:
+- **Via AI Dictionary Card**: Select any word or phrase in the text to trigger the AI dictionary card, then click the **Make Flashcard** button. *(See [Section 3.2](#32-in-reader-interactive-dictionary--word-cards))*
+- **Via Keyboard Shortcut**: Pressing `r` (default hotkey) does the same. *(See [Section 2.1](#21-configuration--hotkeys-table))*
+
 ### Features
 1. **Interactive Table & Filtering**:
   - Filter cards by target language using the language dropdown.
   - Search instantly by idx, word, meaning.
 2. **Export as CSV**:
   - Generates a cleanly structured CSV file formatted specifically for Anki import with HTML context highlights.
-  - *(See [Section 11. Anki Integration Guide](#11-anki-integration-guide) for complete importing instructions, deck templates, and field mappings)*.
+  - *(See [Section 12. Anki Integration Guide](#12-anki-integration-guide) for complete importing instructions, deck templates, and field mappings)*.
 3. **Visual Learning Trends**:
   - Interactive bar chart displaying flashcard creation volume over time.
   - Switchable time horizons: **Week**, **Month**, **Year**, and **All**.
