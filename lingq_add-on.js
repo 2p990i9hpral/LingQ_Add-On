@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      15.9.0
+// @version      15.9.1
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @grant       GM_xmlhttpRequest
@@ -9729,7 +9729,11 @@
                     
                     const isWordRequest = chatHistory.some(m => m.role === "system-word");
                     if (isWordRequest && (llmProvider === "google" || llmProvider === "vertex") && !currentGeminiCacheName) {
-                        await refreshGeminiCache();
+                        try {
+                            await refreshGeminiCache();
+                        } catch (e) {
+                            console.error("Gemini cache initialization failed:", e);
+                        }
                     }
                     const cacheToUse = (isWordRequest && (llmProvider === "google" || llmProvider === "vertex")) ? currentGeminiCacheName : null;
                     
@@ -9962,6 +9966,9 @@
                                 innerHTML: `<svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="transparent" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-rotate-ccw" aria-hidden="true"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path><path d="M3 3v5h5"></path></svg>`,
                             });
                             regenerateButton.addEventListener("click", async () => {
+                                const sendButton = document.getElementById("send-button");
+                                if (sendButton?.disabled) return;
+                                
                                 if (botMessageDiv.relatedPrefaceNode) botMessageDiv.relatedPrefaceNode.remove();
                                 botMessageDiv.remove();
                                 chatHistory = chatHistory.slice(0, chatHistory.findLastIndex((item) => item.role === "assistant"));
@@ -9994,6 +10001,7 @@
                                 chatRafId = null;
                             }
                             botMessageDiv.innerHTML = `⚠️ Error: ${error.message}`;
+                            if (sendButton) sendButton.disabled = false;
                         },
                         cacheToUse,
                         refreshGeminiCache,
@@ -10004,11 +10012,16 @@
                 }
                 
                 async function handleSendMessage() {
+                    const sendButton = document.getElementById("send-button");
+                    if (sendButton?.disabled) return;
+                    
                     const userInput = document.getElementById("user-input");
                     const chatContainer = document.getElementById("chat-container");
                     
                     const userMessage = userInput.value.trim();
                     if (!userMessage) return;
+                    
+                    if (sendButton) sendButton.disabled = true;
                     userInput.value = '';
                     
                     // if (chatHistory.findIndex(item => item.role === "system-plain") !== -1) chatHistory = chatHistory.filter(item => (item.role !== "system-word" && item.role !== "system-sentence"));
@@ -10103,8 +10116,10 @@
                     
                     changeScrollAmount("#chat-container", 0.2)
                     userInput.addEventListener('keydown', (event) => {
+                        if (event.isComposing || event.keyCode === 229) return;
                         if (event.key === 'Enter' && !event.shiftKey) {
                             event.preventDefault();
+                            if (sendButton?.disabled) return;
                             handleSendMessage();
                         } else if (event.key === 'Escape') {
                             event.preventDefault();
