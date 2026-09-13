@@ -13,7 +13,7 @@ This guide is structured around the **Settings Popup** (where the majority of fe
     - [1.1 Paging Mode & Reader Flow](#11-paging-mode--reader-flow)
     - [1.2 Layout Styles](#12-layout-styles)
     - [1.3 Video Orientation & Dimensions](#13-video-orientation--dimensions)
-    - [1.4 Media Controller Volume Control](#14-media-controller-volume-control)
+    - [1.4 Media Controller: Volume Control & Playback Skip Duration](#14-media-controller-volume-control--playback-skip-duration)
     - [1.5 Local Video Player Setup & Lesson Requirements](#15-local-video-player-setup--lesson-requirements)
     - [1.6 Typography, Sizing & Memo Widget](#16-typography-sizing--memo-widget)
     - [1.7 Color Themes & Palette](#17-color-themes--palette)
@@ -46,7 +46,7 @@ This guide is structured around the **Settings Popup** (where the majority of fe
 
 # Part I: Settings & Reader Experience
 
-<img src="images/settings.png" width=700></br>
+<img src="images/settings.png" width=500></br>
 
 ---
 
@@ -76,13 +76,16 @@ Customize the reader layout based on the media format of your lesson:
 - **Sentence View Video Height**: Slider for video sizing while in LingQ's Sentence Mode.
 - **Autoplay in Sentence View**: Checkbox to toggle automatic playback when stepping through sentences in Sentence Mode.
 
-### 1.4 Media Controller Volume Control
+### 1.4 Media Controller: Volume Control & Playback Skip Duration
 
 <img src="images/volume control.png" width=400></br>
 
-The addon enhances LingQ's native audio media controller with a dedicated volume controller button:
-- **Click to Cycle Levels**: Click the volume button to cycle through preset volume levels: `0%`(Mute) → `25%` → `50%` → `75%` → `100%`.
-- **Mouse Wheel Fine Adjustment**: Hover over the volume button and scroll the mouse wheel up or down to adjust volume in smooth `10%` increments.
+The addon enhances LingQ's media controller with volume controls and customizable playback skip duration across audio, local video, and YouTube lessons:
+- **Volume Controller Button**:
+  - **Click to Cycle Levels**: Click the volume button to cycle through preset volume levels: `0%`(Mute) → `25%` → `50%` → `75%` → `100%`.
+  - **Mouse Wheel Fine Adjustment**: Hover over the button and scroll the mouse wheel up or down to adjust volume in `5%` increments.
+- **Customizable Skip Duration**:
+  - **Configurable Interval**: Set the skip duration from `1` to `30` seconds using the **Skip Duration** slider in Settings (default: `5s`).
 
 ### 1.5 Local Video Player Setup & Lesson Requirements
 
@@ -139,12 +142,13 @@ Play your own downloaded movies, anime, or video lessons directly within LingQ, 
 
 ### 2.1 Configuration & Hotkeys Table
 Check **Enable the Keyboard Shortcuts** to activate single-key navigation without touching the mouse. Each shortcut can be customized to any single character.
+- **Skip Duration**: Slider to adjust the playback jump interval (`1` to `30` seconds, default `5s`) for both hotkeys and media controller buttons.
 
 | Setting Name | Default Key | Action Description |
 | :--- | :---: | :--- |
 | **Video Fullscreen Toggle** | `p` | Toggles fullscreen on the active video player. |
-| **5 Sec Backward** | `a` | Jumps playback backward by 5 seconds. |
-| **5 Sec Forward** | `s` | Jumps playback forward by 5 seconds. |
+| **Rewind (Skip Backward)** | `a` | Jumps playback backward by the configured skip duration. |
+| **Fast Forward (Skip Forward)** | `s` | Jumps playback forward by the configured skip duration. |
 | **Play TTS Audio** | `w` | Triggers AI TTS narration for the selected word or active sentence. |
 | **Open Translator** | `e` | Opens LingQ's default external translation popup. |
 | **Make Word Known** | `d` | Instantly advances the selected word to "Known" status. |

@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      15.9.1
+// @version      16.0.0
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @grant       GM_xmlhttpRequest
@@ -68,6 +68,7 @@
         showMemoWidget: false,
         
         keyboardShortcut: false,
+        skipDuration: 5,
         shortcutVideoFullscreen: 'p',
         shortcutBackward5s: 'a',
         shortcutForward5s: 's',
@@ -2436,9 +2437,96 @@
     
     function setLingqVolume(vol) {
         settings.lingqVolume = Math.min(Math.max(vol, 0), 1);
-        mediaInstances.forEach(media => {
-            if (media) media.volume = 1.0;
-        });
+        
+        const controllers = document.querySelector('.audio-player--controllers');
+        const isYoutube = controllers?.querySelector('.controller-item--speed') || document.querySelector('iframe[src*="youtube"]');
+        
+        if (isYoutube) {
+            const youtubeIframe = document.querySelector('.modal-container iframe, #sentence-video-player-portal iframe, iframe[src*="youtube"]');
+            if (youtubeIframe && youtubeIframe.contentWindow) {
+                const volumePercent = Math.round(settings.lingqVolume * 100);
+                youtubeIframe.contentWindow.postMessage(JSON.stringify({
+                    event: "command",
+                    func: "setVolume",
+                    args: [volumePercent]
+                }), "*");
+                youtubeIframe.contentWindow.postMessage(JSON.stringify({
+                    event: "command",
+                    func: volumePercent === 0 ? "mute" : "unMute"
+                }), "*");
+            }
+        } else {
+            mediaInstances.forEach(media => {
+                if (media) media.volume = 1.0;
+            });
+        }
+    }
+    
+    function skipPlayback(deltaSeconds) {
+        const sliderHandle = document.querySelector('.audio-player--progress .rc-slider-handle');
+        const currentTime = sliderHandle ? parseFloat(sliderHandle.getAttribute("aria-valuenow")) : 0;
+        const targetTime = Math.max(0, currentTime + deltaSeconds);
+
+        const controllers = document.querySelector('.audio-player--controllers');
+        const isYoutube = controllers?.querySelector('.controller-item--speed') || document.querySelector('iframe[src*="youtube"]');
+        
+        if (isYoutube) {
+            const youtubeIframe = document.querySelector('.modal-container iframe, #sentence-video-player-portal iframe, iframe[src*="youtube"]');
+            if (youtubeIframe && youtubeIframe.contentWindow) {
+                youtubeIframe.contentWindow.postMessage(JSON.stringify({
+                    event: "command",
+                    func: "seekTo",
+                    args: [targetTime, true]
+                }), "*");
+            }
+            return;
+        }
+
+        if (typeof mediaInstances !== "undefined" && mediaInstances.size > 0) {
+            mediaInstances.forEach((media) => {
+                if (media && !isNaN(media.duration)) {
+                    media.currentTime = Math.min(media.duration, targetTime);
+                }
+            });
+        } else {
+            const audio = document.querySelector('audio');
+            if (audio) audio.currentTime = targetTime;
+        }
+    }
+    
+    function updateSkipButtonsUI() {
+        const controllers = document.querySelector('.audio-player--controllers');
+        if (!controllers) return;
+
+        const duration = settings.skipDuration || 5;
+
+        const backwardBtn = controllers.querySelector('.controller-item--backward') || controllers.querySelector('.svg-icon--backward')?.closest('a');
+        if (backwardBtn) {
+            const backwardContainer = backwardBtn.parentElement;
+            if (backwardContainer) {
+                backwardContainer.setAttribute('data-original-title', `Rewind ${duration} seconds`);
+            }
+            const backwardText = backwardBtn.querySelector('text.is-text') || backwardBtn.querySelector('text');
+            if (backwardText) {
+                backwardText.textContent = duration;
+                backwardText.setAttribute('text-anchor', 'middle');
+                backwardText.setAttribute('transform', 'matrix(1 0 0 1 16 23.5457)');
+            }
+        }
+
+        const forwardBtn = controllers.querySelector('.controller-item--forward') || controllers.querySelector('.svg-icon--forward')?.closest('a');
+        if (forwardBtn) {
+            const forwardContainer = forwardBtn.parentElement;
+            if (forwardContainer) {
+                forwardContainer.setAttribute('data-original-title', `Fast forward ${duration} seconds`);
+            }
+            const forwardText = forwardBtn.querySelector('text.is-text') || forwardBtn.querySelector('text');
+            if (forwardText) {
+                forwardText.textContent = duration;
+                forwardText.setAttribute('text-anchor', 'middle');
+                forwardText.setAttribute('transform', 'matrix(1 0 0 1 16 23.5457)');
+            }
+        }
     }
     
     function globalSetup() {
@@ -2797,8 +2885,9 @@
             });
             
             addShortcutInput(shortcutSection, "shortcutVideoFullscreenInput", "Video Fullscreen Toggle:", settings.shortcutVideoFullscreen);
-            addShortcutInput(shortcutSection, "shortcutBackward5sInput", "5 Sec Backward:", settings.shortcutBackward5s);
-            addShortcutInput(shortcutSection, "shortcutForward5sInput", "5 Sec Forward:", settings.shortcutForward5s);
+            addSlider(shortcutSection, "skipDurationSlider", "Skip Duration", "skipDurationValue", settings.skipDuration, " Seconds", 1, 30, 1);
+            addShortcutInput(shortcutSection, "shortcutBackward5sInput", `Rewind ${settings.skipDuration} Seconds:`, settings.shortcutBackward5s);
+            addShortcutInput(shortcutSection, "shortcutForward5sInput", `Fast Forward ${settings.skipDuration} Seconds:`, settings.shortcutForward5s);
             addShortcutInput(shortcutSection, "shortcutTTSPlayInput", "Play TTS Audio:", settings.shortcutTTSPlay);
             addShortcutInput(shortcutSection, "shortcutTranslatorOpenInput", "Open Translator:", settings.shortcutTranslator);
             addShortcutInput(shortcutSection, "shortcutMakeKnownInput", "Make Word Known:", settings.shortcutMakeKnown);
@@ -3852,6 +3941,23 @@
                 settings.keyboardShortcut = checked;
             });
             
+            const skipDurationSlider = document.getElementById("skipDurationSlider");
+            const skipDurationValue = document.getElementById("skipDurationValue");
+            if (skipDurationSlider) {
+                skipDurationSlider.addEventListener("input", function () {
+                    const val = parseFloat(this.value);
+                    if (skipDurationValue) skipDurationValue.textContent = val;
+                    settings.skipDuration = val;
+                    
+                    const backwardLabel = document.querySelector('label[for="shortcutBackward5sInput"]');
+                    if (backwardLabel) backwardLabel.textContent = `Rewind ${val}s:`;
+                    const forwardLabel = document.querySelector('label[for="shortcutForward5sInput"]');
+                    if (forwardLabel) forwardLabel.textContent = `Fast Forward ${val}s:`;
+                    
+                    updateSkipButtonsUI();
+                });
+            }
+            
             setupShortcutInput("shortcutVideoFullscreenInput", "shortcutVideoFullscreen");
             setupShortcutInput("shortcutBackward5sInput", "shortcutBackward5s");
             setupShortcutInput("shortcutForward5sInput", "shortcutForward5s");
@@ -4164,6 +4270,16 @@
                 
                 document.getElementById("keyboardShortcutCheckbox").value = defaults.keyboardShortcut;
                 document.getElementById("shortcutVideoFullscreenInput").value = defaults.shortcutVideoFullscreen;
+                const skipSlider = document.getElementById("skipDurationSlider");
+                if (skipSlider) {
+                    skipSlider.value = defaults.skipDuration;
+                    const skipVal = document.getElementById("skipDurationValue");
+                    if (skipVal) skipVal.textContent = defaults.skipDuration;
+                    const backwardLabel = document.querySelector('label[for="shortcutBackward5sInput"]');
+                    if (backwardLabel) backwardLabel.textContent = `Rewind ${defaults.skipDuration}s:`;
+                    const forwardLabel = document.querySelector('label[for="shortcutForward5sInput"]');
+                    if (forwardLabel) forwardLabel.textContent = `Fast Forward ${defaults.skipDuration}s:`;
+                }
                 document.getElementById("shortcutBackward5sInput").value = defaults.shortcutBackward5s;
                 document.getElementById("shortcutForward5sInput").value = defaults.shortcutForward5s;
                 document.getElementById("shortcutTTSPlayInput").value = defaults.shortcutTTSPlay;
@@ -6562,6 +6678,7 @@
                         
                         if (node.matches('.audio-player--controllers') || node.querySelector('.audio-player--controllers')) {
                             setupVolumeController();
+                            setupCustomSkipController();
                         }
                     }
                 }
@@ -6569,16 +6686,43 @@
             
             audioPlayerObserver.observe(playerContainer, {childList: true, subtree: true});
             setupVolumeController();
+            setupCustomSkipController();
         }
         
         attachAudioPlayerObserver();
         
+        function setupCustomSkipController() {
+            const controllers = document.querySelector('.audio-player--controllers');
+            if (!controllers) return;
+
+            const backwardBtn = controllers.querySelector('.controller-item--backward') || controllers.querySelector('.svg-icon--backward')?.closest('a');
+            if (backwardBtn && !backwardBtn.dataset.addonSkipHooked) {
+                backwardBtn.dataset.addonSkipHooked = "true";
+                backwardBtn.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    e.stopImmediatePropagation();
+                    skipPlayback(-(settings.skipDuration || 5));
+                }, true);
+            }
+
+            const forwardBtn = controllers.querySelector('.controller-item--forward') || controllers.querySelector('.svg-icon--forward')?.closest('a');
+            if (forwardBtn && !forwardBtn.dataset.addonSkipHooked) {
+                forwardBtn.dataset.addonSkipHooked = "true";
+                forwardBtn.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    e.stopImmediatePropagation();
+                    skipPlayback(settings.skipDuration || 5);
+                }, true);
+            }
+
+            updateSkipButtonsUI();
+        }
+        
         function setupVolumeController() {
             const controllers = document.querySelector('.audio-player--controllers');
             if (!controllers || controllers.querySelector('#addon-volume-controller')) return;
-            
-            // Skip if this is the YouTube video controller (distinguished by its specific speed button class)
-            if (controllers.querySelector('.controller-item--speed')) return;
             
             const volumeWrapper = createElement("div", {
                 id: "addon-volume-controller",
@@ -6587,7 +6731,7 @@
             
             const volumeBtn = createElement("a", {
                 className: "controller-item button is-white",
-                style: "cursor: pointer; position: relative; display: inline-flex; align-items: center; justify-content: center; gap: 2px;"
+                style: "cursor: pointer; position: relative; display: inline-flex; align-items: center; justify-content: center; gap: 1px;"
             });
             
             const iconWrapper = createElement("span", {
@@ -6595,9 +6739,9 @@
                 style: "display: flex; align-items: center; justify-content: center;"
             });
             
-            const svgMute = `<svg style="flex-shrink: 0;" width="25" height="25" class="svg-icon is-dark stroke-current fill-current" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><path fill="none" stroke="#050d18" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" class="is-stroke" d="M12 21l-5-5H3V10h4l5-5v16z"></path><line fill="none" stroke="#050d18" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" class="is-stroke" x1="23" y1="9" x2="17" y2="15"></line><line fill="none" stroke="#050d18" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" class="is-stroke" x1="17" y1="9" x2="23" y2="15"></line></svg>`;
-            const svgLow = `<svg style="flex-shrink: 0;" width="25" height="25" class="svg-icon is-dark stroke-current fill-current" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><path fill="none" stroke="#050d18" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" class="is-stroke" d="M14 21l-5-5H5V10h4l5-5v16z"></path><path fill="none" stroke="#050d18" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" class="is-stroke" d="M19 11c1.5 1.5 1.5 3.5 0 5"></path></svg>`;
-            const svgHigh = `<svg style="flex-shrink: 0;" width="25" height="25" class="svg-icon is-dark stroke-current fill-current" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><path fill="none" stroke="#050d18" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" class="is-stroke" d="M12 21l-5-5H3V10h4l5-5v16z"></path><path fill="none" stroke="#050d18" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" class="is-stroke" d="M17 11c1.5 1.5 1.5 3.5 0 5"></path><path fill="none" stroke="#050d18" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" class="is-stroke" d="M21 7c3 3 3 7 0 12"></path></svg>`;
+            const svgMute = `<svg style="flex-shrink: 0;" width="25" height="25" class="svg-icon svg-icon--volume is-dark" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><path fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" stroke-miterlimit="10" class="is-stroke" d="M12 21l-5-5H3V10h4l5-5v16z"></path><line fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" stroke-miterlimit="10" class="is-stroke" x1="22" y1="11" x2="16" y2="17"></line><line fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" stroke-miterlimit="10" class="is-stroke" x1="16" y1="11" x2="22" y2="17"></line></svg>`;
+            const svgLow = `<svg style="flex-shrink: 0;" width="25" height="25" class="svg-icon svg-icon--volume is-dark" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><path fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" stroke-miterlimit="10" class="is-stroke" d="M12 21l-5-5H3V10h4l5-5v16z"></path><path fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" stroke-miterlimit="10" class="is-stroke" d="M17 11c1.5 1.5 1.5 4.5 0 6"></path></svg>`;
+            const svgHigh = `<svg style="flex-shrink: 0;" width="25" height="25" class="svg-icon svg-icon--volume is-dark" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><path fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" stroke-miterlimit="10" class="is-stroke" d="M12 21l-5-5H3V10h4l5-5v16z"></path><path fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" stroke-miterlimit="10" class="is-stroke" d="M17 11c1.5 1.5 1.5 4.5 0 6"></path><path fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" stroke-miterlimit="10" class="is-stroke" d="M21 8c3 2.5 3 7.5 0 10"></path></svg>`;
             
             function updateIcon() {
                 const vol = settings.lingqVolume;
@@ -6608,7 +6752,7 @@
                 else if (vol <= 0.5) svgStr = svgLow;
                 else svgStr = svgHigh;
                 
-                const textHtml = `<span style="font-size: 0.75rem; font-weight: bold; margin-left: 2px; min-width: 22px; text-align: left;">${volPct}</span>`;
+                const textHtml = `<span class="addon-volume-text">${volPct}</span>`;
                 
                 iconWrapper.innerHTML = svgStr + textHtml;
                 volumeBtn.setAttribute("title", `Volume: ${volPct}%`);
@@ -6631,9 +6775,9 @@
                 e.preventDefault();
                 let vol = settings.lingqVolume;
                 if (e.deltaY < 0) {
-                    vol = Math.min(1.0, vol + 0.1);
+                    vol = Math.min(1.0, vol + 0.05);
                 } else {
-                    vol = Math.max(0.0, vol - 0.1);
+                    vol = Math.max(0.0, vol - 0.05);
                 }
                 vol = Math.round(vol * 10) / 10;
                 setLingqVolume(vol);
@@ -7599,8 +7743,33 @@
                 margin: 5px 0;
             }
 
+            .audio-player--controllers svg {
+                width: 20px !important;
+                height: 20px !important;
+            }
+
+            .audio-player--controllers .controller-item--speed svg,
+            .audio-player--controllers .svg-icon--speed2x {
+                width: 17px !important;
+                height: auto !important;
+            }
+
+            #addon-volume-controller svg {
+                width: 23px !important;
+                height: 23px !important;
+            }
+
             .audio-player--controllers span {
                 height: 25px !important;
+            }
+
+            #addon-volume-controller .addon-volume-text {
+                display: inline-flex !important;
+                align-items: center !important;
+                font-size: 0.6rem !important;
+                font-weight: 400 !important;
+                line-height: 1 !important;
+                color: inherit !important;
             }
 
             #lesson-reader > div.h-full > div[dir=ltr] > header {
@@ -8127,8 +8296,8 @@
                     }, // Make a flashcard
                     [settings.shortcutTTSPlay]: () => clickElement(".is-tts"), // Play tts audio
                     [settings.shortcutTranslator]: () => clickElement(".dictionary-resources > a:nth-last-child(1)"), // Open Translator
-                    [settings.shortcutBackward5s]: () => clickElement(".audio-player--controllers > div:nth-child(1) > a"), // 5 sec Backward
-                    [settings.shortcutForward5s]: () => clickElement(".audio-player--controllers > div:nth-child(2) > a"), // 5 sec Forward
+                    [settings.shortcutBackward5s]: () => skipPlayback(-(settings.skipDuration || 5)), // Rewind
+                    [settings.shortcutForward5s]: () => skipPlayback(settings.skipDuration || 5), // Fast Forward
                     [settings.shortcutMakeKnown]: () => document.dispatchEvent(new KeyboardEvent("keydown", {key: "k"})), // Simulate original 'k' for Make Word Known
                     [settings.shortcutDictionary]: () => clickElement(".dictionary-resources > a:nth-child(1)"), // Open Dictionary
                     [settings.shortcutCopySelected]: () => copySelectedText() // Copy selected text
@@ -11261,6 +11430,14 @@
             });
             resizeObserver.observe(player);
         }
+        
+        async function applyInitialVolume() {
+            const video = await waitForElement('video.html5-main-video', 10000);
+            if (video && typeof settings.lingqVolume === "number") {
+                video.volume = settings.lingqVolume;
+            }
+        }
+        applyInitialVolume();
         
         if (settings.relocateCaption !== "default") adjustCaptionPosition();
     }
