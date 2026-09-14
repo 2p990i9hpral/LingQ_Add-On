@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      16.0.0
+// @version      16.0.1
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @grant       GM_xmlhttpRequest
@@ -6739,9 +6739,9 @@
                 style: "display: flex; align-items: center; justify-content: center;"
             });
             
-            const svgMute = `<svg style="flex-shrink: 0;" width="25" height="25" class="svg-icon svg-icon--volume is-dark" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><path fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" stroke-miterlimit="10" class="is-stroke" d="M12 21l-5-5H3V10h4l5-5v16z"></path><line fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" stroke-miterlimit="10" class="is-stroke" x1="22" y1="11" x2="16" y2="17"></line><line fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" stroke-miterlimit="10" class="is-stroke" x1="16" y1="11" x2="22" y2="17"></line></svg>`;
-            const svgLow = `<svg style="flex-shrink: 0;" width="25" height="25" class="svg-icon svg-icon--volume is-dark" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><path fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" stroke-miterlimit="10" class="is-stroke" d="M12 21l-5-5H3V10h4l5-5v16z"></path><path fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" stroke-miterlimit="10" class="is-stroke" d="M17 11c1.5 1.5 1.5 4.5 0 6"></path></svg>`;
-            const svgHigh = `<svg style="flex-shrink: 0;" width="25" height="25" class="svg-icon svg-icon--volume is-dark" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><path fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" stroke-miterlimit="10" class="is-stroke" d="M12 21l-5-5H3V10h4l5-5v16z"></path><path fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" stroke-miterlimit="10" class="is-stroke" d="M17 11c1.5 1.5 1.5 4.5 0 6"></path><path fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" stroke-miterlimit="10" class="is-stroke" d="M21 8c3 2.5 3 7.5 0 10"></path></svg>`;
+            const svgMute = `<svg style="flex-shrink:0" width="25" height="25" class="svg-icon svg-icon--volume is-dark" xmlns="http://www.w3.org/2000/svg" viewBox="-2 -3 32 32"><path fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" stroke-miterlimit="10" class="is-stroke" d="m12 21-5-5H3v-6h4l5-5zm10-10-6 6m0-6 6 6"/></svg>`;
+            const svgLow = `<svg style="flex-shrink:0" width="25" height="25" class="svg-icon svg-icon--volume is-dark" xmlns="http://www.w3.org/2000/svg" viewBox="-2 -3 32 32"><path fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" stroke-miterlimit="10" class="is-stroke" d="m12 21-5-5H3v-6h4l5-5zm5-10c1.5 1.5 1.5 4.5 0 6"/></svg>`;
+            const svgHigh = `<svg style="flex-shrink:0" width="25" height="25" class="svg-icon svg-icon--volume is-dark" xmlns="http://www.w3.org/2000/svg" viewBox="-2 -3 32 32"><path fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" stroke-miterlimit="10" class="is-stroke" d="m12 21-5-5H3v-6h4l5-5zm5-10c1.5 1.5 1.5 4.5 0 6m4-9c3 2.5 3 7.5 0 10"/></svg>`;
             
             function updateIcon() {
                 const vol = settings.lingqVolume;
@@ -6779,7 +6779,7 @@
                 } else {
                     vol = Math.max(0.0, vol - 0.05);
                 }
-                vol = Math.round(vol * 10) / 10;
+                vol = Math.round(vol * 20) / 20;
                 setLingqVolume(vol);
                 updateIcon();
             });
@@ -7710,7 +7710,15 @@
             }
 
             .lingq-audio-player {
-                margin-left: 10px;
+                margin-left: 5px;
+                width: 30px;
+                height: 30px;
+                padding: 0 !important;
+            }
+            
+            .lingq-audio-player svg {
+                width: 19px !important;
+                height: 19px !important;
             }
 
             .section--player.is-expanded {
@@ -7729,7 +7737,7 @@
             }
 
             .audio-player {
-                padding: 0 0.5rem !important;
+                padding: 0 5px !important;
                 grid-template-rows: 16px 16px auto !important;
             }
 
@@ -7748,8 +7756,7 @@
                 height: 20px !important;
             }
 
-            .audio-player--controllers .controller-item--speed svg,
-            .audio-player--controllers .svg-icon--speed2x {
+            .audio-player--controllers .controller-item--speed svg {
                 width: 17px !important;
                 height: auto !important;
             }
