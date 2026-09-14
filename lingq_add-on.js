@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      16.0.1
+// @version      16.0.2
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @grant       GM_xmlhttpRequest
@@ -8551,7 +8551,8 @@
                 function formatQuickSummaryHTML(text) {
                     if (!text || !text.trim()) return "";
                     
-                    let formatted = text.replace(/\[([^\]|]+)\|([^\]]+)\]/g, "<ruby>$1<rt>$2</rt></ruby>");
+                    let formatted = text.replace(/\|+\s*\]/g, "]");
+                    formatted = formatted.replace(/\[([^\]|]+)\|([^\]|]+)\]/g, "<ruby>$1<rt>$2</rt></ruby>");
                     formatted = formatted.replace(/\[([^\]|]+)\]/g, "$1");
                     formatted = formatted.replace(/\[([^\]|]+)(?:\|[^\]]*)?$/, "$1");
                     
@@ -8752,7 +8753,27 @@
                 });
                 observer.observe(readerContainer, {childList: true, subtree: true});
                 
-                const lessonContent = extractTextFromDOM(readerContainer).trim();
+                let lessonContent = "";
+                const lessonLanguage = getLessonLanguage();
+                const lessonId = getLessonId();
+                
+                if (lessonLanguage && lessonId) {
+                    try {
+                        const sentences = await getLessonSentences(lessonLanguage, lessonId);
+                        if (sentences && sentences.length > 0) {
+                            lessonContent = sentences
+                                .map((item) => item.text?.trim())
+                                .filter(Boolean)
+                                .join('\n');
+                        }
+                    } catch (error) {
+                        console.error("Failed to fetch lesson sentences via API, falling back to DOM:", error);
+                    }
+                }
+                
+                if (!lessonContent) {
+                    lessonContent = extractTextFromDOM(readerContainer)?.trim() || "";
+                }
                 
                 llmProvider = settings.llmProvider;
                 llmModel = settings.llmModel;
