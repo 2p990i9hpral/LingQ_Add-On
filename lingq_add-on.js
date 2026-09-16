@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      16.3.1
+// @version      16.3.2
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @grant       GM_xmlhttpRequest
@@ -88,6 +88,7 @@
         llmModel: "gpt-5.4-mini",
         llmApiKeys: {},
         llmModels: {},
+        vertexCredential: {},
         llmResponseLanguage: "auto",
         askSelected: false,
         prependSummary: {},
@@ -198,9 +199,24 @@
     
     const settings = new Proxy({}, {
         get: (target, key) => {
-            if (key in target) return target[key];
+            const rawValue = key in target ? target[key] : storage.get(key, defaults[key]);
             
-            return storage.get(key, defaults[key]);
+            if (key in languageScopedDefaults) {
+                const defaultValue = languageScopedDefaults[key];
+                const scopedMap = (typeof rawValue === "object" && rawValue !== null) ? rawValue : {};
+                
+                return new Proxy(scopedMap, {
+                    get(mapTarget, lang) {
+                        if (typeof lang !== "string") return mapTarget[lang];
+                        if (!lang || !(lang in mapTarget) || mapTarget[lang] === undefined || mapTarget[lang] === null) {
+                            return defaultValue;
+                        }
+                        return mapTarget[lang];
+                    }
+                });
+            }
+            
+            return rawValue;
         },
         set: (target, key, value) => {
             storage.set(key, value);
@@ -697,7 +713,7 @@
     
     function focusReaderElement(targetElement, scrollHorizontal = false) {
         const language = getLessonLanguage();
-        const isPageMode = language ? settings.usePageMode?.[language] : false;
+        const isPageMode = settings.usePageMode[language];
         const wrapper = document.querySelector(".reader-container-wrapper");
         const container = document.querySelector(".reader-container");
         
@@ -1629,7 +1645,7 @@
             return settings.vertexAccessToken;
         }
         
-        const credentials = settings.vertexCredential || {};
+        const credentials = settings.vertexCredential;
         if (!credentials.clientEmail || !credentials.privateKey || !credentials.projectId) {
             throw new Error("Vertex credentials are not set.");
         }
@@ -1669,7 +1685,7 @@
                 break;
             case "vertex": {
                 const token = await getValidVertexToken();
-                const projectId = (settings.vertexCredential || {}).projectId;
+                const projectId = settings.vertexCredential.projectId;
                 const region = "global";
                 api_url = `https://aiplatform.googleapis.com/v1beta1/projects/${projectId}/locations/${region}/endpoints/openapi/chat/completions`;
                 headers['Authorization'] = `Bearer ${token}`;
@@ -2523,7 +2539,7 @@
         const controllers = document.querySelector('.audio-player--controllers');
         if (!controllers) return;
 
-        const duration = settings.skipDuration || 5;
+        const duration = settings.skipDuration;
 
         const backwardBtn = controllers.querySelector('.controller-item--backward') || controllers.querySelector('.svg-icon--backward')?.closest('a');
         if (backwardBtn) {
@@ -2790,8 +2806,8 @@
             
             const container1 = createElement("div", {style: "padding: 5px; width: 350px;"});
             
-            const baseType = settings.styleType[language] || "video";
-            const position = settings.videoPosition[language] || "Right";
+            const baseType = settings.styleType[language];
+            const position = settings.videoPosition[language];
             
             addCheckbox(container1, "usePageModeCheckbox", "Use Paging Mode", settings.usePageMode[language]);
             
@@ -2935,7 +2951,7 @@
             
             addSelect(chatWidgetSection, "llmResponseLanguageSelector", "Response Language:",
                 [{value: "auto", text: "Auto"}],
-                settings.llmResponseLanguage || "auto"
+                settings.llmResponseLanguage
             );
             
             addSlider(chatWidgetSection, "chatWidgetHeightSlider", "Chat Widget Height", "chatWidgetHeightValue", settings.chatWidgetHeight, "", 150, 700, 10);
@@ -2961,7 +2977,7 @@
                 textContent: "Chat API Key:"
             }));
             
-            const savedKeys = settings.llmApiKeys || {};
+            const savedKeys = settings.llmApiKeys;
             
             const apiKeyFlexContainer = createElement("div", {style: "display: flex; align-items: center; width: 65%;"});
             const apiKeyInput = createElement("input", {
@@ -2974,7 +2990,7 @@
             apiKeyContainer.appendChild(apiKeyFlexContainer);
             chatWidgetSection.appendChild(apiKeyContainer);
             
-            const vertexCreds = settings.vertexCredential || {};
+            const vertexCreds = settings.vertexCredential;
             const vertexCredentialsContainer = createElement("div", {id: "vertexCredentialsContainer"});
             vertexCredentialsContainer.style.display = settings.llmProvider === "vertex" ? "block" : "none";
             apiKeyContainer.style.display = settings.llmProvider === "vertex" ? "none" : "flex";
@@ -3050,9 +3066,7 @@
                 {value: "C1", text: "C1"},
                 {value: "C2", text: "C2"}
             ];
-            const currentDifficulty = (typeof settings.summaryDifficulty === "object" && settings.summaryDifficulty !== null)
-                ? (settings.summaryDifficulty[language] || "unset")
-                : (settings.summaryDifficulty || "unset");
+            const currentDifficulty = settings.summaryDifficulty[language];
             const difficultyContainer = addSelect(chatWidgetSection, "summaryDifficultySelector", "Summary Difficulty (CEFR):", difficultyOptions, currentDifficulty);
             difficultyContainer.id = "summaryDifficultySection";
             difficultyContainer.style.display = settings.prependSummary[language] ? "block" : "none";
@@ -4027,13 +4041,13 @@
                     }));
                 });
                 
-                const savedModels = settings.llmModels || {};
+                const savedModels = settings.llmModels;
                 const targetModel = savedModels[provider] || (models[0]?.value || "");
                 
                 settings.llmModel = targetModel;
                 llmModelSelector.value = targetModel;
                 
-                const savedKeys = settings.llmApiKeys || {};
+                const savedKeys = settings.llmApiKeys;
                 llmApiKeyInput.value = savedKeys[provider] || "";
                 
                 const isVertex = provider === "vertex";
@@ -4053,7 +4067,7 @@
                 const provider = settings.llmProvider;
                 
                 settings.llmModels = {
-                    ...(settings.llmModels || {}),
+                    ...settings.llmModels,
                     [provider]: model
                 };
             });
@@ -4062,7 +4076,7 @@
                 const provider = settings.llmProvider;
                 
                 settings.llmApiKeys = {
-                    ...(settings.llmApiKeys || {}),
+                    ...settings.llmApiKeys,
                     [provider]: event.target.value
                 };
             });
@@ -4071,7 +4085,7 @@
             if (llmResponseLanguageSelector) {
                 getDictionaryLocalePairs().then((localePairs) => {
                     if (!localePairs) return;
-                    const currentLang = settings.llmResponseLanguage || "auto";
+                    const currentLang = settings.llmResponseLanguage;
                     const languageNames = Object.values(localePairs).sort((a, b) => a.localeCompare(b));
                     
                     llmResponseLanguageSelector.innerHTML = "";
@@ -4111,10 +4125,7 @@
             const summaryDifficultySelector = document.getElementById("summaryDifficultySelector");
             if (summaryDifficultySelector) {
                 summaryDifficultySelector.addEventListener('change', (event) => {
-                    const currentMap = (typeof settings.summaryDifficulty === "object" && settings.summaryDifficulty !== null)
-                        ? settings.summaryDifficulty
-                        : {};
-                    settings.summaryDifficulty = {...currentMap, [language]: event.target.value};
+                    settings.summaryDifficulty = {...settings.summaryDifficulty, [language]: event.target.value};
                 });
             }
             
@@ -6734,7 +6745,7 @@
                     e.preventDefault();
                     e.stopPropagation();
                     e.stopImmediatePropagation();
-                    skipPlayback(-(settings.skipDuration || 5));
+                    skipPlayback(-settings.skipDuration);
                 }, true);
             }
 
@@ -6745,7 +6756,7 @@
                     e.preventDefault();
                     e.stopPropagation();
                     e.stopImmediatePropagation();
-                    skipPlayback(settings.skipDuration || 5);
+                    skipPlayback(settings.skipDuration);
                 }, true);
             }
 
@@ -8352,8 +8363,8 @@
                     }, // Make a flashcard
                     [settings.shortcutTTSPlay]: () => clickElement(".is-tts"), // Play tts audio
                     [settings.shortcutTranslator]: () => clickElement(".dictionary-resources > a:nth-last-child(1)"), // Open Translator
-                    [settings.shortcutBackward5s]: () => skipPlayback(-(settings.skipDuration || 5)), // Rewind
-                    [settings.shortcutForward5s]: () => skipPlayback(settings.skipDuration || 5), // Fast Forward
+                    [settings.shortcutBackward5s]: () => skipPlayback(-settings.skipDuration), // Rewind
+                    [settings.shortcutForward5s]: () => skipPlayback(settings.skipDuration), // Fast Forward
                     [settings.shortcutMakeKnown]: () => document.dispatchEvent(new KeyboardEvent("keydown", {key: "k"})), // Simulate original 'k' for Make Word Known
                     [settings.shortcutDictionary]: () => clickElement(".dictionary-resources > a:nth-child(1)"), // Open Dictionary
                     [settings.shortcutCopySelected]: () => copySelectedText() // Copy selected text
@@ -8466,7 +8477,7 @@
         async function setupReaderContainer() {
             let llmProvider = settings.llmProvider;
             let llmModel = settings.llmModel;
-            let savedKeys = settings.llmApiKeys || {};
+            let savedKeys = settings.llmApiKeys;
             let llmApiKey = savedKeys[llmProvider] || "";
             
             function setupSentenceFocus(readerContainer) {
@@ -8612,10 +8623,7 @@
                 async function getQuickSummary(provider, apikey, model, content) {
                     const DictionaryLocalePairs = await getDictionaryLocalePairs()
                     const lessonLanguage = DictionaryLocalePairs[language];
-                    const rawDifficulty = typeof settings.summaryDifficulty === "object" && settings.summaryDifficulty !== null
-                        ? settings.summaryDifficulty[language]
-                        : settings.summaryDifficulty;
-                    const difficulty = rawDifficulty || "unset";
+                    const difficulty = settings.summaryDifficulty[language];
                     const difficultyPrompt = difficulty && difficulty !== "unset"
                         ? `- Target level: CEFR ${difficulty}. Simplify vocabulary and grammar toward this level, without exceeding the complexity already present in the source content — never introduce harder words or structures than the original, even if ${difficulty} is high.${["A1", "A2", "B1"].includes(difficulty) ? " Keep sentences short and straightforward to minimize cognitive load." : ""}`
                         : "";
@@ -8823,7 +8831,7 @@
                 
                 llmProvider = settings.llmProvider;
                 llmModel = settings.llmModel;
-                const savedKeys = settings.llmApiKeys || {};
+                const savedKeys = settings.llmApiKeys;
                 llmApiKey = savedKeys[llmProvider] || "";
                 
                 if (settings.prependSummary[language]) {
@@ -9233,7 +9241,7 @@
             let isPriority = false;
             
             if (provider === "vertex") {
-                const projectId = (settings.vertexCredential || {}).projectId;
+                const projectId = settings.vertexCredential.projectId;
                 const region = "global";
                 const cleanModel = model.replace(/^models\//, '').replace(/^google\//, '');
                 formattedModel = `projects/${projectId}/locations/${region}/publishers/google/models/${cleanModel}`;
@@ -9296,7 +9304,7 @@
                     return null;
                 }
             } else {
-                apiKey = (settings.llmApiKeys || {})["google"];
+                apiKey = settings.llmApiKeys["google"];
             }
             
             if (!apiKey || !lessonSummary) return null;
@@ -9308,7 +9316,7 @@
         async function setupLLMs() {
             let llmProvider = settings.llmProvider;
             let llmModel = settings.llmModel;
-            let savedKeys = settings.llmApiKeys || {};
+            let savedKeys = settings.llmApiKeys;
             let llmApiKey = savedKeys[llmProvider] || "";
             
             async function updateTTS(click = true) {
@@ -10109,7 +10117,7 @@
                     
                     llmProvider = settings.llmProvider;
                     llmModel = settings.llmModel;
-                    const savedKeys = settings.llmApiKeys || {};
+                    const savedKeys = settings.llmApiKeys;
                     llmApiKey = savedKeys[llmProvider] || "";
                     
                     const isWordRequest = chatHistory.some(m => m.role === "system-word");
