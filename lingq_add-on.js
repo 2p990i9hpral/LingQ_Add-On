@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      16.3.0
+// @version      16.3.1
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @grant       GM_xmlhttpRequest
@@ -274,24 +274,24 @@
     /* Get LingQ Data */
     
     function getLessonId(url) {
-        const urlToGet = url ? url : document.URL
-        const regex = /(http|https):\/\/www\.lingq\.com\/\w+\/learn\/\w+\/\w+\/\w+\/(\d+)/;
+        const urlToGet = url ? url : document.URL;
+        const regex = /(http|https):\/\/www\.lingq\.com\/[\w-]+\/learn\/[\w-]+\/\w+\/\w+\/(\d+)/;
         const match = urlToGet.match(regex);
         
-        return match[2];
+        return match?.[2];
     }
     
     function getCollectionId(url) {
-        const urlToGet = url ? url : document.URL
-        const regex = /(http|https):\/\/www\.lingq\.com\/\w+\/learn\/\w+\/web\/library\/course\/(\d+)/;
+        const urlToGet = url ? url : document.URL;
+        const regex = /(http|https):\/\/www\.lingq\.com\/[\w-]+\/learn\/[\w-]+\/web\/library\/course\/(\d+)/;
         const match = urlToGet.match(regex);
         
-        return match[2];
+        return match?.[2];
     }
     
     function getLessonLanguage(url) {
-        const urlToGet = url ? url : document.URL
-        const regex = /(http|https)*:\/\/www\.lingq\.com\/\w+\/learn\/(\w+)\/\w+\/\w+\/\d+/;
+        const urlToGet = url ? url : document.URL;
+        const regex = /(http|https)*:\/\/www\.lingq\.com\/[\w-]+\/learn\/([\w-]+)\/\w+\/\w+\/\d+/;
         const match = urlToGet.match(regex);
         
         return match?.[2];
@@ -696,7 +696,7 @@
     }
     
     function focusReaderElement(targetElement, scrollHorizontal = false) {
-        const language = typeof getLessonLanguage === "function" ? getLessonLanguage() : null;
+        const language = getLessonLanguage();
         const isPageMode = language ? settings.usePageMode?.[language] : false;
         const wrapper = document.querySelector(".reader-container-wrapper");
         const container = document.querySelector(".reader-container");
@@ -1458,7 +1458,7 @@
     }
     
     async function saveLLMUsageToStorage(usageDetail) {
-        const currentLang = usageDetail.language || (typeof getLessonLanguage === "function" ? getLessonLanguage() : null);
+        const currentLang = usageDetail.language || getLessonLanguage();
         const resolvedProvider = usageDetail.provider || settings.llmProvider;
         const tokens = usageDetail.tokens || {cached: 0, input: 0, reasoning: 0, output: 0};
         const isPriority = Boolean(usageDetail.isPriority);
@@ -1536,7 +1536,7 @@
         console.log('[LLM usage]', `[${contextType}]`, `${model}${priorityStr}, tokens: (${cachedTokens}/${inputTokens}/${reasoningTokens}/${outputTokens}), ${logMessage}`);
         
         const resolvedProvider = provider || settings.llmProvider;
-        const currentLang = typeof getLessonLanguage === 'function' ? getLessonLanguage() : null;
+        const currentLang = getLessonLanguage();
         
         document.dispatchEvent(new CustomEvent("addon:llmUsage", {
             detail: {
@@ -2436,7 +2436,7 @@
                     return originalVolumeSetter.call(this, val);
                 }
                 
-                const lessonLang = typeof getLessonLanguage === 'function' ? getLessonLanguage() : null;
+                const lessonLang = getLessonLanguage();
                 if (lessonLang && settings.styleType[lessonLang] === "localVideo" && this.id !== "addonLocalVideo") {
                     return originalVolumeSetter.call(this, 0);
                 }
