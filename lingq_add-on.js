@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      16.1.0
+// @version      16.2.0
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @grant       GM_xmlhttpRequest
@@ -7040,6 +7040,21 @@
                     scrollbar-width: none !important;
                 }
 
+                .ask-selected-button {
+                    width: 100%;
+                    margin: 5px 0;
+                    padding: 5px 10px;
+                    font-size: 0.85rem;
+                    border: 1px solid rgb(125 125 125 / 35%);
+                    border-radius: 4px;
+                    background: rgba(125, 125, 125, 0.1);
+                    cursor: pointer;
+                }
+
+                .ask-selected-button:hover {
+                    background: rgba(125, 125, 125, 0.25);
+                }
+
                 .input-container {
                     display: flex;
                     margin-bottom: 10px;
@@ -10362,6 +10377,9 @@
                     const userMessage = userInput.value.trim();
                     if (!userMessage) return;
                     
+                    const askSelectedButton = chatContainer?.querySelector(".ask-selected-button");
+                    if (askSelectedButton) askSelectedButton.remove();
+                    
                     if (sendButton) sendButton.disabled = true;
                     userInput.value = '';
                     
@@ -10473,7 +10491,7 @@
                     chatHistory = updateChatHistoryState(chatHistory, `<summary>${lessonSummary}</summary>`, "user");
                     chatHistory = updateChatHistoryState(chatHistory, removeIndent(systemPrompt), "system-main");
                     
-                    if (settings.askSelected && sectionHead.matches(".section-widget--head")) {
+                    async function askSelectedText() {
                         const selectedData = getSelectedWithContext();
                         const initialUserMessage = isSentence
                             ? `Input: "${selectedData.context || selectedData.input}"`
@@ -10500,6 +10518,24 @@
                         );
                         
                         chatHistory = updateChatHistoryState(chatHistory, removeIndent(plainTextPrompt), "system-plain");
+                    }
+                    
+                    if (settings.askSelected && sectionHead.matches(".section-widget--head")) {
+                        await askSelectedText();
+                    } else if (sectionHead.matches(".section-widget--head")) {
+                        chatHistory = updateChatHistoryState(chatHistory, removeIndent(plainTextPrompt), "system-plain");
+                        
+                        const askButton = createElement("button", {
+                            className: "ask-selected-button",
+                            textContent: isSentence ? "Ask with sentence" : "Ask with word"
+                        });
+                        chatContainer.appendChild(askButton);
+                        
+                        askButton.addEventListener("click", async () => {
+                            askButton.remove();
+                            chatHistory = chatHistory.filter((item) => item.role !== "system-plain");
+                            await askSelectedText();
+                        });
                     } else {
                         chatHistory = updateChatHistoryState(chatHistory, removeIndent(plainTextPrompt), "system-plain");
                     }
