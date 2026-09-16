@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      16.0.2
+// @version      16.1.0
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @grant       GM_xmlhttpRequest
@@ -7296,7 +7296,7 @@
                     font-size: var(--font-size);
                     line-height: var(--line-height);
                     margin-bottom: 20px;
-                    max-height: calc(var(--article-height) * 0.5);
+                    max-height: min(calc(var(--article-height) * 0.5), 500px);
                     overflow-y: scroll;
                     resize: vertical;
                     flex-direction: column;
@@ -7482,6 +7482,7 @@
                 height: 100% !important;
                 overflow-y: ${isPageMode ? "auto" : "visible"} !important;
                 outline: none !important;
+                overflow-anchor: none !important;
             }
 
             .widget-area {
@@ -7647,6 +7648,7 @@
                 overflow-y: ${isPageMode ? "visible" : "scroll"} !important;
                 height: ${isPageMode ? "1780px" : "100%"} !important;
                 outline: none !important;
+                overflow-anchor: none !important;
             }
 
             .reader-container .sentence-item--transliteration:not(.has-furigana) {
@@ -8782,6 +8784,9 @@
                 
                 if (settings.prependSummary[language]) {
                     await getQuickSummary(llmProvider, llmApiKey, llmModel, lessonContent);
+                    requestAnimationFrame(() => {
+                        checkAndAdjustReaderColumnOverflow();
+                    });
                 }
                 
                 getLessonSummary(llmProvider, llmApiKey, llmModel, lessonContent)
@@ -8881,7 +8886,130 @@
                 });
             }
             
+            let hiddenReaderElements = [];
+            let isCheckingReaderOverflow = false;
+            let readerScrollRafId = null;
+
+            function restoreHiddenReaderElements(reason = "") {
+                if (hiddenReaderElements.length === 0) return;
+                const count = hiddenReaderElements.length;
+                const elementNames = hiddenReaderElements.map(({element}) => element.tagName.toLowerCase() + (element.className ? `.${element.className.replace(/\s+/g, '.')}` : "")).join(", ");
+                console.log('[ReaderOverflow]', `Restored ${count} hidden element(s) [${elementNames}]${reason ? ` (Trigger: ${reason})` : ""}.`);
+                isCheckingReaderOverflow = true;
+                try {
+                    hiddenReaderElements.forEach(({element, previousDisplay}) => {
+                        if (previousDisplay) {
+                            element.style.display = previousDisplay;
+                        } else {
+                            element.style.removeProperty("display");
+                        }
+                    });
+                } finally {
+                    hiddenReaderElements = [];
+                    requestAnimationFrame(() => {
+                        isCheckingReaderOverflow = false;
+                    });
+                }
+            }
+
+            function isReaderMultiColumn(container, wrapper) {
+                const thresholdWidth = wrapper.clientWidth * 1.1;
+                const containerWidth = Math.max(container.scrollWidth, container.offsetWidth);
+                const sentences = container.querySelectorAll(".sentence, .sentence-item");
+                const lastSentence = sentences[sentences.length - 1];
+                const isLastSentenceInCol2 = lastSentence ? (lastSentence.offsetLeft > wrapper.clientWidth * 0.8) : false;
+                return (containerWidth > thresholdWidth) || isLastSentenceInCol2;
+            }
+
+            function checkAndAdjustReaderColumnOverflow() {
+                if (isCheckingReaderOverflow) return;
+
+                const isPageMode = settings.usePageMode[language];
+                if (!isPageMode) {
+                    restoreHiddenReaderElements("Page mode disabled");
+                    return;
+                }
+
+                const wrapper = document.querySelector(".reader-container-wrapper");
+                const container = document.querySelector(".reader-container");
+                if (!wrapper || !container) return;
+
+                const maxScroll = wrapper.scrollHeight - wrapper.clientHeight;
+                if (maxScroll <= 50) {
+                    if (hiddenReaderElements.length > 0) {
+                        restoreHiddenReaderElements("No vertical scroll available");
+                    }
+                    return;
+                }
+
+                const scrollTop = wrapper.scrollTop;
+                const scrollRatio = maxScroll > 0 ? scrollTop / maxScroll : 0;
+                const distFromBottom = maxScroll - scrollTop;
+
+                if (scrollRatio <= 0.10 || scrollTop <= 50) {
+                    if (hiddenReaderElements.length > 0) {
+                        restoreHiddenReaderElements(`Scrolled to top (ratio: ${(scrollRatio * 100).toFixed(1)}% <= 10%)`);
+                    }
+                    return;
+                }
+
+                const isNearBottom = scrollRatio >= 0.90 || distFromBottom <= 50;
+                if (isNearBottom) {
+                    const MAX_HIDDEN = 3;
+                    if (hiddenReaderElements.length >= MAX_HIDDEN) return;
+
+                    isCheckingReaderOverflow = true;
+                    const savedScrollTop = wrapper.scrollTop;
+
+                    try {
+                        if (!isReaderMultiColumn(container, wrapper)) return;
+
+                        const children = Array.from(container.children);
+                        for (const child of children) {
+                            if (hiddenReaderElements.length >= MAX_HIDDEN) {
+                                console.warn('[ReaderOverflow]', `Reached maximum hidden elements limit (${MAX_HIDDEN}).`);
+                                break;
+                            }
+                            if (child.style.display === "none" || window.getComputedStyle(child).display === "none") continue;
+
+                            hiddenReaderElements.push({
+                                element: child,
+                                previousDisplay: child.style.display
+                            });
+                            child.style.display = "none";
+
+                            if (!isReaderMultiColumn(container, wrapper)) {
+                                break;
+                            }
+                        }
+
+                        if (hiddenReaderElements.length > 0) {
+                            const elementNames = hiddenReaderElements.map(({element}) => element.tagName.toLowerCase() + (element.className ? `.${element.className.replace(/\s+/g, '.')}` : "")).join(", ");
+                            console.log('[ReaderOverflow]', `Hidden ${hiddenReaderElements.length} element(s) [${elementNames}] to resolve multi-column layout.`);
+                        }
+
+                        const newMaxScroll = wrapper.scrollHeight - wrapper.clientHeight;
+                        if (newMaxScroll > 0) {
+                            wrapper.scrollTop = Math.min(savedScrollTop, newMaxScroll);
+                        }
+                    } finally {
+                        requestAnimationFrame(() => {
+                            isCheckingReaderOverflow = false;
+                        });
+                    }
+                }
+            }
+
+            function handleReaderWrapperScroll() {
+                if (readerScrollRafId) return;
+                readerScrollRafId = requestAnimationFrame(() => {
+                    readerScrollRafId = null;
+                    checkAndAdjustReaderColumnOverflow();
+                });
+            }
+
             function resetScroll() {
+                restoreHiddenReaderElements("resetScroll");
                 const performReset = () => {
                     const wrapper = document.querySelector(".reader-container-wrapper");
                     const container = document.querySelector(".reader-container");
@@ -8912,6 +9040,7 @@
                 navSelectors.forEach((selector) => {
                     waitForElement(selector, 5000).then((button) => {
                         if (!button) return;
+                        button.addEventListener("click", () => restoreHiddenReaderElements("Nav button clicked"), true);
                         button.addEventListener("click", removeSummary, true);
                         button.addEventListener("click", handleLessonCompletion, true);
                     });
@@ -8927,11 +9056,13 @@
                     const prevBtn = document.querySelector("#lesson-reader > div.h-full > div > header > div:nth-child(1) > button");
                     
                     if (event.key === "ArrowRight" && nextBtn) {
+                        restoreHiddenReaderElements("Page shortcut key (Right)");
                         event.stopImmediatePropagation();
                         event.preventDefault();
                         nextBtn.click();
                         handleLessonCompletion();
                     } else if (event.key === "ArrowLeft" && prevBtn) {
+                        restoreHiddenReaderElements("Page shortcut key (Left)");
                         event.stopImmediatePropagation();
                         event.preventDefault();
                         prevBtn.click();
@@ -8959,6 +9090,7 @@
             }
             
             async function handleLoadedContent(node) {
+                restoreHiddenReaderElements("handleLoadedContent");
                 resetScroll();
                 
                 currentGeminiCacheName = null;
@@ -8980,6 +9112,12 @@
                             event.stopPropagation();
                         }
                     }, {passive: false});
+
+                    const wrapper = readerContainer?.closest(".reader-container-wrapper") || document.querySelector(".reader-container-wrapper");
+                    if (wrapper && !wrapper.hasReaderScrollListener) {
+                        wrapper.hasReaderScrollListener = true;
+                        wrapper.addEventListener("scroll", handleReaderWrapperScroll, {passive: true});
+                    }
                 }
                 
                 preventHorizontalScroll();
@@ -9006,6 +9144,11 @@
             }
             
             setupKeyboardListeners();
+
+            if (!window.hasReaderResizeListener) {
+                window.hasReaderResizeListener = true;
+                window.addEventListener("resize", handleReaderWrapperScroll, {passive: true});
+            }
             
             const observer = new MutationObserver(function (mutations) {
                 mutations.forEach((mutation) => {
@@ -9022,6 +9165,7 @@
                         const newPage = newClass.match(/\bis-page-(\d+)\b/)?.[1];
                         
                         if (newPage && oldPage !== newPage) {
+                            restoreHiddenReaderElements(`Page change: ${oldPage} -> ${newPage}`);
                             resetScroll();
                         }
                     }
