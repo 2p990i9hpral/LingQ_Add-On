@@ -54,7 +54,8 @@ This guide is structured around the **Settings Popup** (where the majority of fe
 
 ### 1.1 Paging Mode & Reader Flow
 - **Use Paging Mode**: Replaces vertical page scrolling with discrete, book-like page flipping.
-- **Focus on Playing Sentence**: Automatically scrolls to and centers the actively playing sentence in the reader during audio/video playback.
+- **Focus on Playing Sentence**: Automatically scrolls to the actively playing sentence in the reader during audio/video playback.
+- **Focus on Selected Text**: Automatically scrolls to the newly selected element in the reader.
 - **Skip End Page**: Automatically skips LingQ's lesson completion summary screen and hide clutters.
 - **Finish Lesson Automatically**: Marks the lesson as complete as soon as the YouTube video track reaches the end.
 - **Show Translation Automatically**: Automatically turns on the translations.
@@ -168,7 +169,8 @@ Check **Enable the Keyboard Shortcuts** to activate single-key navigation withou
 - **Enable the Chat Widget**: Toggles the interactive AI sidebar on or off.
 - **Response Language**: Choose `Auto` or specify a target language for AI responses.
 - **Chat Widget Height**: Slider to adjust docked AI chat widget height.
-- **Enable asking with selected text**: When enabled, selecting text in the lesson automatically shows an AI dictionary.
+- **Enable asking with selected text**: When enabled, selecting text in the lesson automatically queries the AI dictionary.
+  - **Manual Query Button**: When this option is disabled, a `Show AI Dictionary for the Selected Word` / `Translate Selected Sentence` button appears inside the chat container upon selecting text.
 
 ### 3.2 In-Reader Interactive Dictionary & Word Cards
 
