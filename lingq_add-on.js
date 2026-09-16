@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      16.2.0
+// @version      16.3.0
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @grant       GM_xmlhttpRequest
@@ -60,6 +60,7 @@
         librarySortOption: 0,
         autoFinishing: false,
         focusPlayingSentence: false,
+        focusSelectedText: false,
         showTranslation: false,
         usePageMode: {},
         skipEndPage: false,
@@ -692,6 +693,30 @@
         }
         
         requestAnimationFrame(animateScroll);
+    }
+    
+    function focusReaderElement(targetElement, scrollHorizontal = false) {
+        const language = typeof getLessonLanguage === "function" ? getLessonLanguage() : null;
+        const isPageMode = language ? settings.usePageMode?.[language] : false;
+        const wrapper = document.querySelector(".reader-container-wrapper");
+        const container = document.querySelector(".reader-container");
+        
+        const scrollTarget = isPageMode ? wrapper : container;
+        if (!scrollTarget || !container || !targetElement) return;
+        if (!targetElement.isConnected || targetElement.getClientRects().length === 0) return;
+        
+        const targetRect = targetElement.getBoundingClientRect();
+        const containerRect = scrollTarget.getBoundingClientRect();
+        
+        const relativeTop = targetRect.top - containerRect.top + scrollTarget.scrollTop;
+        const containerHalfHeight = Math.floor(scrollTarget.offsetHeight / 2);
+        const targetScrollTop = relativeTop + Math.floor(targetElement.offsetHeight / 2) - containerHalfHeight;
+        smoothScrollTo(scrollTarget, targetScrollTop, 300);
+        
+        if (isPageMode && scrollHorizontal) {
+            const offsetLeft = targetElement.offsetLeft;
+            smoothScrollTo(scrollTarget, offsetLeft, 300, true);
+        }
     }
     
     function getRandomElement(arr) {
@@ -2867,6 +2892,7 @@
             container1.appendChild(videoCaptionSection);
             
             addCheckbox(container1, "focusPlayingSentenceCheckbox", "Focus on Playing Sentence", settings.focusPlayingSentence);
+            addCheckbox(container1, "focusSelectedTextCheckbox", "Focus on Selected Text", settings.focusSelectedText);
             addCheckbox(container1, "showMemoWidgetCheckbox", "Show Memo Widget", settings.showMemoWidget);
             addCheckbox(container1, "skipEndPageCheckbox", "Skip End Page", settings.skipEndPage);
             addCheckbox(container1, "autoFinishingCheckbox", "Finish Lesson Automatically", settings.autoFinishing);
@@ -3883,6 +3909,11 @@
                 settings.focusPlayingSentence = event.target.checked
             });
             
+            const focusSelectedTextCheckbox = document.getElementById("focusSelectedTextCheckbox");
+            focusSelectedTextCheckbox.addEventListener('change', (event) => {
+                settings.focusSelectedText = event.target.checked
+            });
+            
             const showTranslationCheckbox = document.getElementById("showTranslationCheckbox");
             showTranslationCheckbox.addEventListener('change', (event) => {
                 settings.showTranslation = event.target.checked
@@ -4260,6 +4291,7 @@
                 
                 document.getElementById("autoFinishingCheckbox").checked = defaults.autoFinishing;
                 document.getElementById("focusPlayingSentenceCheckbox").checked = defaults.focusPlayingSentence;
+                document.getElementById("focusSelectedTextCheckbox").checked = defaults.focusSelectedText;
                 document.getElementById("showTranslationCheckbox").checked = defaults.showTranslation;
                 document.getElementById("usePageModeCheckbox").checked = languageScopedDefaults.usePageMode;
                 document.getElementById("skipEndPageCheckbox").checked = defaults.skipEndPage;
@@ -8444,25 +8476,6 @@
                     return svgEl?.classList.contains('svg-icon--pause') ?? false;
                 }
                 
-                function focusPlayingSentence(playingSentence) {
-                    const isPageMode = settings.usePageMode[language];
-                    const wrapper = document.querySelector(".reader-container-wrapper");
-                    const container = document.querySelector(".reader-container");
-                    
-                    const scrollTarget = isPageMode ? wrapper : container;
-                    if (!scrollTarget || !container) return;
-                    
-                    const offsetTop = playingSentence.parentElement.matches(".has-translation")
-                        ? playingSentence.parentElement.offsetTop
-                        : playingSentence.offsetTop;
-                    
-                    const containerHalfHeight = Math.floor(scrollTarget.offsetHeight / 2);
-                    const targetScrollTop = offsetTop + Math.floor(playingSentence.offsetHeight / 2) - containerHalfHeight;
-                    smoothScrollTo(scrollTarget, targetScrollTop, 300);
-                    
-                    if (isPageMode) smoothScrollTo(scrollTarget, playingSentence.offsetLeft, 300, true);
-                }
-                
                 function checkAndAdvancePage(sentence) {
                     const container = document.querySelector(".reader-container");
                     if (!container) return;
@@ -8488,6 +8501,8 @@
                     moveNextPage();
                 }
                 
+                let selectedFocusRafId = null;
+                
                 const observer = new MutationObserver((mutations) => {
                     mutations.forEach((mutation) => {
                         const target = mutation.target;
@@ -8495,12 +8510,26 @@
                         const hasIsPlaying = target.classList.contains('is-playing');
                         
                         if (hasIsPlaying && settings.focusPlayingSentence) {
-                            focusPlayingSentence(target);
+                            focusReaderElement(target, true);
                             return;
                         }
                         
                         if (hadIsPlaying && !hasIsPlaying && settings.usePageMode) {
                             checkAndAdvancePage(target);
+                        }
+
+                        const hadIsSelected = mutation.oldValue?.split(' ').includes('is-selected');
+                        const hasIsSelected = target.classList.contains('is-selected');
+                        
+                        if (hasIsSelected && !hadIsSelected && settings.focusSelectedText) {
+                            if (document.querySelector(".is-playing") || isPlayerPlaying()) return;
+                            
+                            if (selectedFocusRafId) cancelAnimationFrame(selectedFocusRafId);
+                            selectedFocusRafId = requestAnimationFrame(() => {
+                                selectedFocusRafId = null;
+                                if (document.querySelector(".is-playing") || isPlayerPlaying()) return;
+                                focusReaderElement(target, false);
+                            });
                         }
                     });
                 });
@@ -10527,7 +10556,7 @@
                         
                         const askButton = createElement("button", {
                             className: "ask-selected-button",
-                            textContent: isSentence ? "Ask with sentence" : "Ask with word"
+                            textContent: isSentence ? "Translate Selected Sentence" : "Show AI Dictionary for the Selected Word"
                         });
                         chatContainer.appendChild(askButton);
                         
