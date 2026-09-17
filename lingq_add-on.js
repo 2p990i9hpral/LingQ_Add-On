@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      16.3.4
+// @version      16.4.0
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @grant       GM_xmlhttpRequest
@@ -124,45 +124,49 @@
     
     const llmModelsByProvider = {
         "openai": [
-            {value: "gpt-5.6-sol", text: "GPT-5.6 Sol ($5/$30)"},
-            {value: "gpt-5.6-terra", text: "GPT-5.6 Terra ($2/$12)"},
-            {value: "gpt-5.6-luna", text: "GPT-5.6 Luna ($0.2/$1.2)"},
-            {value: "gpt-5.5", text: "GPT-5.5 ($5/$30)"},
-            {value: "gpt-5.4", text: "GPT-5.4 ($2.5/$15)"},
-            {value: "gpt-5.4-mini", text: "GPT-5.4 mini ($0.75/$4.5)"}
+            {value: "gpt-5.6-sol", text: "GPT-5.6 Sol ($5/$30)", inputPrice: 5, outputPrice: 30, cachedPrice: 0.5},
+            {value: "gpt-5.6-terra", text: "GPT-5.6 Terra ($2/$12)", inputPrice: 2, outputPrice: 12, cachedPrice: 0.2},
+            {value: "gpt-5.6-luna", text: "GPT-5.6 Luna ($0.2/$1.2)", inputPrice: 0.2, outputPrice: 1.2, cachedPrice: 0.02},
+            {value: "gpt-5.5", text: "GPT-5.5 ($5/$30)", inputPrice: 5, outputPrice: 30, cachedPrice: 0.5},
+            {value: "gpt-5.4", text: "GPT-5.4 ($2.5/$15)", inputPrice: 2.5, outputPrice: 15, cachedPrice: 0.25},
+            {value: "gpt-5.4-mini", text: "GPT-5.4 mini ($0.75/$4.5)", inputPrice: 0.75, outputPrice: 4.5, cachedPrice: 0.075}
         ],
         "google": [
-            {value: "gemini-3.8-flash", text: "Gemini 3.8 Flash ($0.75/$3.75)"},
-            {value: "gemini-3.7-flash", text: "Gemini 3.7 Flash ($0.75/$3.75)"},
-            {value: "gemini-3.6-flash", text: "Gemini 3.6 Flash ($0.75/$3.75)"},
-            {value: "gemini-3.5-flash", text: "Gemini 3.5 Flash ($1.5/$9)"},
-            {value: "gemini-3-flash-preview", text: "Gemini 3.0 Flash ($0.5/$3)"},
-            {value: "gemini-3.5-flash-lite", text: "Gemini 3.5 Flash-Light ($0.3/$2.5)"},
-            {value: "gemini-3.1-flash-lite", text: "Gemini 3.1 Flash-Light ($0.25/$1.5)"},
-            {value: "gemini-2.5-flash", text: "Gemini 2.5 Flash ($0.3/$2.5)"},
-            {value: "gemini-2.5-flash-lite", text: "Gemini 2.5 Flash-Light ($0.1/$0.4)"}
+            {value: "gemini-3.8-flash", text: "Gemini 3.8 Flash ($0.75/$3.75)", inputPrice: 0.75, outputPrice: 3.75, cachedPrice: 0.075},
+            {value: "gemini-3.7-flash", text: "Gemini 3.7 Flash ($0.75/$3.75)", inputPrice: 0.75, outputPrice: 3.75, cachedPrice: 0.075},
+            {value: "gemini-3.6-flash", text: "Gemini 3.6 Flash ($0.75/$3.75)", inputPrice: 0.75, outputPrice: 3.75, cachedPrice: 0.075},
+            {value: "gemini-3.5-flash", text: "Gemini 3.5 Flash ($1.5/$9)", inputPrice: 1.5, outputPrice: 9, cachedPrice: 0.15},
+            {value: "gemini-3-flash-preview", text: "Gemini 3.0 Flash ($0.5/$3)", inputPrice: 0.5, outputPrice: 3, cachedPrice: 0.05},
+            {value: "gemini-3.5-flash-lite", text: "Gemini 3.5 Flash-Light ($0.3/$2.5)", inputPrice: 0.3, outputPrice: 2.5, cachedPrice: 0.03},
+            {value: "gemini-3.1-flash-lite", text: "Gemini 3.1 Flash-Light ($0.25/$1.5)", inputPrice: 0.25, outputPrice: 1.5, cachedPrice: 0.025},
+            {value: "gemini-2.5-flash", text: "Gemini 2.5 Flash ($0.3/$2.5)", inputPrice: 0.3, outputPrice: 2.5, cachedPrice: 0.03},
+            {value: "gemini-2.5-flash-lite", text: "Gemini 2.5 Flash-Light ($0.1/$0.4)", inputPrice: 0.1, outputPrice: 0.4, cachedPrice: 0.01}
         ],
         "vertex": [
-            {value: "gemini-3.7-flash", text: "Gemini 3.7 Flash ($0.75/$3.75)"},
-            {value: "gemini-3.6-flash", text: "Gemini 3.6 Flash ($0.75/$3.75)"},
-            {value: "gemini-3.5-flash", text: "Gemini 3.5 Flash ($1.5/$9)"},
-            {value: "gemini-3-flash-preview", text: "Gemini 3.0 Flash ($0.5/$3)"},
-            {value: "gemini-3.5-flash-lite", text: "Gemini 3.5 Flash-Light ($0.3/$2.5)"},
-            {value: "gemini-3.1-flash-lite", text: "Gemini 3.1 Flash-Light ($0.25/$1.5)"},
-            {value: "gemini-2.5-flash", text: "Gemini 2.5 Flash ($0.3/$2.5)"},
-            {value: "gemini-2.5-flash-lite", text: "Gemini 2.5 Flash-Light ($0.1/$0.4)"}
+            {value: "gemini-3.8-flash", text: "Gemini 3.8 Flash ($0.75/$3.75)", inputPrice: 0.75, outputPrice: 3.75, cachedPrice: 0.075},
+            {value: "gemini-3.7-flash", text: "Gemini 3.7 Flash ($0.75/$3.75)", inputPrice: 0.75, outputPrice: 3.75, cachedPrice: 0.075},
+            {value: "gemini-3.6-flash", text: "Gemini 3.6 Flash ($0.75/$3.75)", inputPrice: 0.75, outputPrice: 3.75, cachedPrice: 0.075},
+            {value: "gemini-3.5-flash", text: "Gemini 3.5 Flash ($1.5/$9)", inputPrice: 1.5, outputPrice: 9, cachedPrice: 0.15},
+            {value: "gemini-3-flash-preview", text: "Gemini 3.0 Flash ($0.5/$3)", inputPrice: 0.5, outputPrice: 3, cachedPrice: 0.05},
+            {value: "gemini-3.5-flash-lite", text: "Gemini 3.5 Flash-Light ($0.3/$2.5)", inputPrice: 0.3, outputPrice: 2.5, cachedPrice: 0.03},
+            {value: "gemini-3.1-flash-lite", text: "Gemini 3.1 Flash-Light ($0.25/$1.5)", inputPrice: 0.25, outputPrice: 1.5, cachedPrice: 0.025},
+            {value: "gemini-2.5-flash", text: "Gemini 2.5 Flash ($0.3/$2.5)", inputPrice: 0.3, outputPrice: 2.5, cachedPrice: 0.03},
+            {value: "gemini-2.5-flash-lite", text: "Gemini 2.5 Flash-Light ($0.1/$0.4)", inputPrice: 0.1, outputPrice: 0.4, cachedPrice: 0.01}
         ],
         "anthropic": [
-            {value: "claude-sonnet-5", text: "Sonnet 5 ($2/$10)"},
-            {value: "claude-sonnet-4-6", text: "Sonnet 4.6 ($3.0/$15)"},
-            {value: "claude-haiku-4-5", text: "Haiku 4.5 ($1/$5)"}
+            {value: "claude-sonnet-5", text: "Sonnet 5 ($2/$10)", inputPrice: 2, outputPrice: 10, cachedPrice: 0.2},
+            {value: "claude-sonnet-4-6", text: "Sonnet 4.6 ($3.0/$15)", inputPrice: 3.0, outputPrice: 15, cachedPrice: 0.3},
+            {value: "claude-haiku-4-5", text: "Haiku 4.5 ($1/$5)", inputPrice: 1, outputPrice: 5, cachedPrice: 0.1}
         ],
         "deepseek": [
-            {value: "deepseek-v4-pro", text: "v4 Pro ($1.74/$3.48)"},
-            {value: "deepseek-flash", text: "v4 Flash ($0.14/$0.28)"}
+            {value: "deepseek-v4-pro", text: "v4 Pro ($0.66/$1.98)", inputPrice: 0.66, outputPrice: 1.98, cachedPrice: 0.022},
+            {value: "deepseek-flash", text: "v4 Flash ($0.15/$0.9)", inputPrice: 0.15, outputPrice: 0.9, cachedPrice: 0.003}
         ],
         "cerebras": [
-            {value: "gemma-4-31b", text: "Gemma 4 31B ($0.99/$1.49)"}
+            {value: "gemma-4-31b", text: "Gemma 4 31B ($0.99/$1.49)", inputPrice: 0.99, outputPrice: 1.49, cachedPrice: 0.099}
+        ],
+        "zai": [
+            {value: "glm-5.3-flash", text: "GLM-5.3 Flash ($0.15/$0.50)", inputPrice: 0.15, outputPrice: 0.50, cachedPrice: 0.03}
         ]
     };
     
@@ -939,9 +943,14 @@
             let isResolved = false;
             let streamStarted = false;
             let isErrorStatus = false;
+            let streamInThought = false;
             
             const finish = () => {
                 if (isResolved) return;
+                if (streamInThought) {
+                    streamInThought = false;
+                    fullContent += '</thought>';
+                }
                 isResolved = true;
                 resolve(fullContent);
             };
@@ -1007,8 +1016,22 @@
                                             const json = JSON.parse(data);
                                             onChunkReceived(json);
                                             
-                                            if (json.choices?.[0]?.delta?.content) {
-                                                fullContent += json.choices[0].delta.content;
+                                            const delta = json.choices?.[0]?.delta;
+                                            if (delta?.reasoning_content) {
+                                                if (!streamInThought) {
+                                                    streamInThought = true;
+                                                    fullContent += `<thought>${delta.reasoning_content}`;
+                                                } else {
+                                                    fullContent += delta.reasoning_content;
+                                                }
+                                            }
+                                            if (delta?.content) {
+                                                if (streamInThought) {
+                                                    streamInThought = false;
+                                                    fullContent += `</thought>${delta.content}`;
+                                                } else {
+                                                    fullContent += delta.content;
+                                                }
                                             }
                                             if (json.type === "content_block_delta" && json.delta?.text) {
                                                 fullContent += json.delta.text;
@@ -1436,9 +1459,13 @@
     function getLLMPricing(model, provider = settings.llmProvider) {
         const models = (provider && llmModelsByProvider[provider]) || Object.values(llmModelsByProvider).flat();
         const modelObj = models.find(m => m.value === model);
-        const match = modelObj?.text.match(/\$(\d+(?:\.\d+)?)\/\$(\d+(?:\.\d+)?)\)/);
+        if (!modelObj) return [0, 0, 0];
         
-        return match ? [parseFloat(match[1]) / 1e6, parseFloat(match[2]) / 1e6] : [0, 0];
+        const inputPrice = modelObj.inputPrice / 1e6;
+        const outputPrice = modelObj.outputPrice / 1e6;
+        const cachedPrice = modelObj.cachedPrice / 1e6;
+        
+        return [inputPrice, outputPrice, cachedPrice];
     }
     
     function extractTokenUsage(usage) {
@@ -1531,12 +1558,14 @@
         const multiplier = isPriority ? 1.8 : 1.0;
         const totalGeneratedTokens = reasoningTokens + outputTokens;
         
+        const resolvedProvider = provider || settings.llmProvider;
+        
         if (overrideCost !== null) {
             approxCost = overrideCost;
             uncachedCost = overrideCost;
         } else {
-            const [inputPrice, outputPrice] = getLLMPricing(model);
-            approxCost = (cachedTokens * (inputPrice / 10) + inputTokens * inputPrice + totalGeneratedTokens * outputPrice) * multiplier;
+            const [inputPrice, outputPrice, cachedPrice] = getLLMPricing(model, resolvedProvider);
+            approxCost = (cachedTokens * cachedPrice + inputTokens * inputPrice + totalGeneratedTokens * outputPrice) * multiplier;
             uncachedCost = ((cachedTokens + inputTokens) * inputPrice + totalGeneratedTokens * outputPrice) * multiplier;
             
             savedPercentStr = uncachedCost > 0
@@ -1551,7 +1580,6 @@
         const priorityStr = isPriority ? " (Priority)" : "";
         console.log('[LLM usage]', `[${contextType}]`, `${model}${priorityStr}, tokens: (${cachedTokens}/${inputTokens}/${reasoningTokens}/${outputTokens}), ${logMessage}`);
         
-        const resolvedProvider = provider || settings.llmProvider;
         const currentLang = getLessonLanguage();
         
         document.dispatchEvent(new CustomEvent("addon:llmUsage", {
@@ -1683,6 +1711,10 @@
                 api_url = "https://api.cerebras.ai/v1/chat/completions";
                 headers['Authorization'] = `Bearer ${apiKey}`;
                 break;
+            case "zai":
+                api_url = "https://api.z.ai/api/paas/v4/chat/completions";
+                headers['Authorization'] = `Bearer ${apiKey}`;
+                break;
             case "vertex": {
                 const token = await getValidVertexToken();
                 const projectId = settings.vertexCredential.projectId;
@@ -1791,6 +1823,11 @@
             body.reasoning_effort = reasoningLevel === "minimal" ? "none" : "low";
         }
         
+        if (provider === "zai") {
+            let effort = "low"
+            body.reasoning_effort = effort;
+        }
+        
         return body;
     }
     
@@ -1853,6 +1890,7 @@
         const body = buildRequestBody(provider, model, history, true, cacheName, includeThoughts, reasoningLevel);
         
         let lastUsage = null;
+        let streamInThought = false;
         
         try {
             const finalContent = await gmStream(api_url, {
@@ -1860,19 +1898,42 @@
                 headers,
                 body: JSON.stringify(body)
             }, (json) => {
-                if ((provider === "google" || provider === "vertex") && json.usage) {
+                if (json.usage) {
                     lastUsage = json.usage;
                 }
                 
                 if (provider === "anthropic") {
                     if (json.type === "content_block_delta" && json.delta?.text) onChunkReceived(json.delta.text);
                 } else {
-                    const content = json.choices?.[0]?.delta?.content || "";
-                    if (content) onChunkReceived(content);
+                    const delta = json.choices?.[0]?.delta;
+                    const reasoning = delta?.reasoning_content;
+                    const content = delta?.content;
+                    
+                    if (reasoning) {
+                        if (!streamInThought) {
+                            streamInThought = true;
+                            onChunkReceived(`<thought>${reasoning}`);
+                        } else {
+                            onChunkReceived(reasoning);
+                        }
+                    }
+                    if (content) {
+                        if (streamInThought) {
+                            streamInThought = false;
+                            onChunkReceived(`</thought>${content}`);
+                        } else {
+                            onChunkReceived(content);
+                        }
+                    }
                 }
             });
             
-            if ((provider === "google" || provider === "vertex") && lastUsage) {
+            if (streamInThought) {
+                streamInThought = false;
+                onChunkReceived('</thought>');
+            }
+            
+            if (lastUsage) {
                 const {cachedTokens, inputTokens, reasoningTokens, outputTokens} = extractTokenUsage(lastUsage);
                 
                 trackLLMUsage("Chat Stream", model, cachedTokens, inputTokens, reasoningTokens, outputTokens, null, isPriority, provider);
@@ -2971,7 +3032,8 @@
                 {value: "vertex", text: "Vertex (GCP)"},
                 {value: "anthropic", text: "Anthropic"},
                 {value: "deepseek", text: "DeepSeek"},
-                {value: "cerebras", text: "Cerebras"}
+                {value: "cerebras", text: "Cerebras"},
+                {value: "zai", text: "Z.AI"}
             ], settings.llmProvider);
             
             const activeProviderModels = llmModelsByProvider[settings.llmProvider] || [];
@@ -5672,11 +5734,11 @@
                         .map(({type, value}) => ({key: `${model} - ${type}`, value}));
                 }
                 
-                const [inputPrice, outputPrice] = getLLMPricing(model, provider);
+                const [inputPrice, outputPrice, cachedPrice] = getLLMPricing(model, provider);
                 const multiplier = isPriority ? 1.8 : 1.0;
                 
                 const costTypes = [
-                    {type: "cached", value: (tokens.cached || 0) * (inputPrice / 10) * multiplier},
+                    {type: "cached", value: (tokens.cached || 0) * cachedPrice * multiplier},
                     {type: "input", value: (tokens.input || 0) * inputPrice * multiplier},
                     {type: "reasoning", value: (tokens.reasoning || 0) * outputPrice * multiplier},
                     {type: "output", value: (tokens.output || 0) * outputPrice * multiplier}
@@ -8621,7 +8683,10 @@
                 function formatQuickSummaryHTML(text) {
                     if (!text || !text.trim()) return "";
                     
-                    let formatted = text.replace(/\|+\s*\]/g, "]");
+                    const cleaned = text.replace(/<thought>[\s\S]*?<\/thought>/gi, '').replace(/<thought>[\s\S]*$/gi, '').trim();
+                    if (!cleaned) return "";
+                    
+                    let formatted = cleaned.replace(/\|+\s*\]/g, "]");
                     formatted = formatted.replace(/\[([^\]|]+)\|([^\]|]+)\]/g, "<ruby>$1<rt>$2</rt></ruby>");
                     formatted = formatted.replace(/\[([^\]|]+)\]/g, "$1");
                     formatted = formatted.replace(/\[([^\]|]+)(?:\|[^\]]*)?$/, "$1");
