@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      16.3.3
+// @version      16.3.4
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @grant       GM_xmlhttpRequest
@@ -159,7 +159,7 @@
         ],
         "deepseek": [
             {value: "deepseek-v4-pro", text: "v4 Pro ($1.74/$3.48)"},
-            {value: "deepseek-v4-flash", text: "v4 Flash ($0.14/$0.28)"}
+            {value: "deepseek-flash", text: "v4 Flash ($0.14/$0.28)"}
         ],
         "cerebras": [
             {value: "gemma-4-31b", text: "Gemma 4 31B ($0.99/$1.49)"}
