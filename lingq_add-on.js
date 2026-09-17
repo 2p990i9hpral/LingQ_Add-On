@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      16.3.2
+// @version      16.3.3
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @grant       GM_xmlhttpRequest
@@ -2017,9 +2017,11 @@
             let isAudioDrivenSeek = false;
 
             const playerObserver = new MutationObserver(() => {
+                const isVideoAtEnd = videoElement.ended || (videoElement.duration && videoElement.currentTime >= videoElement.duration - 0.1);
+
                 // 1. Sync Play/Pause State
                 const isLingQPlaying = playButtonSvg.classList.contains("svg-icon--pause");
-                if (isLingQPlaying && videoElement.paused) {
+                if (isLingQPlaying && videoElement.paused && !isVideoAtEnd) {
                     videoElement.play().catch(() => {
                     });
                 } else if (!isLingQPlaying && !videoElement.paused) {
@@ -2029,6 +2031,7 @@
                 // 2. Sync Precise Timeline
                 if (isVideoSeeking) return;
                 if (videoElement.readyState < 3) return;
+                if (isVideoAtEnd) return;
 
                 const preciseTargetTime = parseFloat(sliderHandle.getAttribute("aria-valuenow")) || 0;
                 const diff = videoElement.currentTime - preciseTargetTime;
@@ -2117,6 +2120,12 @@
                 setTimeout(() => {
                     isVideoSeeking = false;
                 }, 100);
+            });
+            videoElement.addEventListener("ended", () => {
+                const currentPlayButtonSvg = playButton.querySelector("svg");
+                if (currentPlayButtonSvg?.classList.contains("svg-icon--pause")) {
+                    playButton.click();
+                }
             });
             
             const isLingQPlayingInit = playButtonSvg.classList.contains("svg-icon--pause");
@@ -5507,10 +5516,14 @@
                     ${wordsCSV}`;
                     
                     let rafId = null;
+                    let llmProvider = settings.llmProvider;
+                    let llmModel = settings.llmModel;
+                    let savedKeys = settings.llmApiKeys;
+                    let llmApiKey = savedKeys[llmProvider];
                     await streamOpenAIResponse(
-                        settings.llmProvider,
-                        settings.llmApiKey,
-                        settings.llmModel,
+                        llmProvider,
+                        llmApiKey,
+                        llmModel,
                         [{role: "user", content: removeIndent(aiReportPrompt)}],
                         (chunk) => {
                             const content = typeof chunk === "string" ? chunk : chunk.choices?.[0]?.delta?.content;
@@ -8478,7 +8491,7 @@
             let llmProvider = settings.llmProvider;
             let llmModel = settings.llmModel;
             let savedKeys = settings.llmApiKeys;
-            let llmApiKey = savedKeys[llmProvider] || "";
+            let llmApiKey = savedKeys[llmProvider];
             
             function setupSentenceFocus(readerContainer) {
                 function isPlayerPlaying() {
