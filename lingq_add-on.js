@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      16.7.0
+// @version      16.8.0
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @grant       GM_xmlhttpRequest
@@ -1815,11 +1815,91 @@
         if (stream) body.stream = true;
         
         if (provider === "openai") {
-            body.input = mappedHistory;
             if (reasoningLevel === "minimal") {
                 body.reasoning = {effort: "none"};
             } else {
                 body.reasoning = {effort: "low", summary: "auto"};
+            }
+            
+            const isGpt56OrLater = model.includes("gpt-5.6") || model.includes("gpt-6");
+            const isWordRequest = history.some(m => m.role === "system-word");
+            
+            if (isGpt56OrLater) {
+                const systemBlocks = [];
+                const nonSystem = [];
+                
+                mappedHistory.forEach(m => {
+                    if (m.role === "system" || m.content.startsWith("<summary>")) {
+                        systemBlocks.push(m.content);
+                    } else {
+                        nonSystem.push({role: m.role, content: m.content});
+                    }
+                });
+                
+                const mergedMessages = [];
+                nonSystem.forEach(msg => {
+                    const lastMsg = mergedMessages[mergedMessages.length - 1];
+                    if (lastMsg && lastMsg.role === msg.role) {
+                        lastMsg.content += `\n\n${msg.content}`;
+                    } else {
+                        mergedMessages.push({role: msg.role, content: msg.content});
+                    }
+                });
+                
+                const inputMessages = [];
+                let hasExplicitBreakpoint = false;
+                
+                if (systemBlocks.length > 0) {
+                    const combinedSystemText = systemBlocks.join("\n\n---\n\n");
+                    if (isWordRequest) {
+                        inputMessages.push({
+                            role: "developer",
+                            content: [
+                                {
+                                    type: "input_text",
+                                    text: combinedSystemText,
+                                    prompt_cache_breakpoint: {mode: "explicit"}
+                                }
+                            ]
+                        });
+                        hasExplicitBreakpoint = true;
+                    } else {
+                        inputMessages.push({
+                            role: "developer",
+                            content: combinedSystemText
+                        });
+                    }
+                }
+                
+                const lastAssistantIdx = mergedMessages.map(m => m.role).lastIndexOf("assistant");
+                mergedMessages.forEach((msg, idx) => {
+                    if (idx === lastAssistantIdx) {
+                        inputMessages.push({
+                            role: msg.role,
+                            content: [
+                                {
+                                    type: "input_text",
+                                    text: msg.content,
+                                    prompt_cache_breakpoint: {mode: "explicit"}
+                                }
+                            ]
+                        });
+                        hasExplicitBreakpoint = true;
+                    } else {
+                        inputMessages.push(msg);
+                    }
+                });
+                
+                if (hasExplicitBreakpoint) {
+                    body.prompt_cache_options = {mode: "explicit"};
+                }
+                
+                body.input = inputMessages;
+            } else {
+                const lessonId = (typeof getLessonId === "function" ? getLessonId() : null) || "default";
+                body.prompt_cache_key = `lingq-lesson-${lessonId}`;
+                body.prompt_cache_retention = "24h";
+                body.input = mappedHistory;
             }
         } else {
             body.messages = mappedHistory;
