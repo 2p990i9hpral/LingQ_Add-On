@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      16.5.0
+// @version      16.6.0
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @grant       GM_xmlhttpRequest
@@ -1033,8 +1033,29 @@
                                                     fullContent += delta.content;
                                                 }
                                             }
-                                            if (json.type === "content_block_delta" && json.delta?.text) {
-                                                fullContent += json.delta.text;
+                                            if (json.type === "content_block_delta") {
+                                                const thinking = json.delta?.type === "thinking_delta" ? json.delta?.thinking : null;
+                                                const text = json.delta?.text;
+                                                if (thinking) {
+                                                    if (!streamInThought) {
+                                                        streamInThought = true;
+                                                        fullContent += `<thought>${thinking}`;
+                                                    } else {
+                                                        fullContent += thinking;
+                                                    }
+                                                }
+                                                if (text) {
+                                                    if (streamInThought) {
+                                                        streamInThought = false;
+                                                        fullContent += `</thought>${text}`;
+                                                    } else {
+                                                        fullContent += text;
+                                                    }
+                                                }
+                                            }
+                                            if (json.type === "content_block_stop" && streamInThought) {
+                                                streamInThought = false;
+                                                fullContent += '</thought>';
                                             }
                                             if (json.type === "response.reasoning_summary_text.delta" || json.type === "response.reasoning_text.delta") {
                                                 if (json.delta) {
@@ -1494,7 +1515,7 @@
         const inputTokens = Math.max(0, rawInputTokens - cachedTokens);
         
         const rawOutputTokens = usage.completion_tokens || usage.output_tokens || 0;
-        let reasoningTokens = usage.output_tokens_details?.reasoning_tokens || usage.completion_tokens_details?.reasoning_tokens || 0;
+        let reasoningTokens = usage.output_tokens_details?.reasoning_tokens || usage.completion_tokens_details?.reasoning_tokens || usage.output_tokens_details?.thinking_tokens || 0;
         const totalTokens = usage.total_tokens || 0;
         
         let outputTokens = rawOutputTokens;
@@ -1513,6 +1534,8 @@
                 reasoningTokens = totalGeneratedTokens - rawOutputTokens;
                 outputTokens = rawOutputTokens;
             }
+        } else if (reasoningTokens > 0) {
+            outputTokens = Math.max(0, rawOutputTokens - reasoningTokens);
         }
         
         return {cachedTokens, inputTokens, reasoningTokens, outputTokens};
@@ -1767,7 +1790,12 @@
                 role = "user";
             }
             
-            return {role, content: m.content};
+            const cleanContent = m.content
+                .replace(/<details class="thought-process[\s\S]*?<\/details>/gi, '')
+                .replace(/<thought>[\s\S]*?<\/thought>/gi, '')
+                .trim();
+            
+            return {role, content: cleanContent};
         });
         
         if (provider === "anthropic") {
@@ -1829,7 +1857,11 @@
                 body.thinking = {type: "disabled"};
             } else {
                 body.max_tokens = 8192;
-                body.thinking = {type: "adaptive", display: "summarized"};
+                if (model.includes("haiku")) {
+                    body.thinking = {type: "enabled", budget_tokens: 1024, display: "summarized"};
+                } else {
+                    body.thinking = {type: "adaptive", display: "summarized"};
+                }
             }
             
             const systemMessages = mappedHistory.filter(m => m.role === "system");
@@ -1897,7 +1929,8 @@
             const data = await response.json();
             let content;
             if (provider === "anthropic") {
-                content = data.content[0]?.text;
+                const textBlock = data.content?.find(b => b.type === "text");
+                content = textBlock?.text || data.content?.[0]?.text;
             } else if (provider === "openai") {
                 const messageItem = data.output?.find(item => item.type === "message");
                 content = messageItem?.content?.find(c => c.type === "output_text")?.text || data.output_text || data.choices?.[0]?.message?.content;
@@ -1931,13 +1964,38 @@
                 body: JSON.stringify(body)
             }, (json) => {
                 if (json.usage) {
-                    lastUsage = json.usage;
+                    lastUsage = Object.assign(lastUsage || {}, json.usage);
+                } else if (json.message?.usage) {
+                    lastUsage = Object.assign(lastUsage || {}, json.message.usage);
                 } else if (json.type === "response.completed" && json.response?.usage) {
                     lastUsage = json.response.usage;
                 }
                 
                 if (provider === "anthropic") {
-                    if (json.type === "content_block_delta" && json.delta?.text) onChunkReceived(json.delta.text);
+                    if (json.type === "content_block_delta") {
+                        const thinking = json.delta?.type === "thinking_delta" ? json.delta?.thinking : null;
+                        const text = json.delta?.text;
+                        
+                        if (thinking) {
+                            if (!streamInThought) {
+                                streamInThought = true;
+                                onChunkReceived(`<thought>${thinking}`);
+                            } else {
+                                onChunkReceived(thinking);
+                            }
+                        }
+                        if (text) {
+                            if (streamInThought) {
+                                streamInThought = false;
+                                onChunkReceived(`</thought>${text}`);
+                            } else {
+                                onChunkReceived(text);
+                            }
+                        }
+                    } else if (json.type === "content_block_stop" && streamInThought) {
+                        streamInThought = false;
+                        onChunkReceived('</thought>');
+                    }
                 } else if (provider === "openai") {
                     const reasoning = (json.type === "response.reasoning_summary_text.delta" || json.type === "response.reasoning_text.delta") ? json.delta : null;
                     const content = json.type === "response.output_text.delta" ? json.delta : null;
@@ -10410,10 +10468,10 @@
                                     <div class="thought-content" style="${shouldConvertToHTML(thoughtTextFinal) ? "" : "white-space: pre-wrap;"}">${cleanedThought}</div>
                                 </details>
                                 `;
-                                cleanedContent = thoughtHtml + cleanedContent;
+                                botMessageDiv.innerHTML = thoughtHtml + cleanedContent;
+                            } else {
+                                botMessageDiv.innerHTML = cleanedContent;
                             }
-                            
-                            botMessageDiv.innerHTML = cleanedContent;
                             
                             if (wasOpen) {
                                 const details = botMessageDiv.querySelector('.thought-process');
