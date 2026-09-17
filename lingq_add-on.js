@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      16.4.0
+// @version      16.5.0
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @grant       GM_xmlhttpRequest
@@ -1036,7 +1036,25 @@
                                             if (json.type === "content_block_delta" && json.delta?.text) {
                                                 fullContent += json.delta.text;
                                             }
-                                            if (json.type === "message_stop") {
+                                            if (json.type === "response.reasoning_summary_text.delta" || json.type === "response.reasoning_text.delta") {
+                                                if (json.delta) {
+                                                    if (!streamInThought) {
+                                                        streamInThought = true;
+                                                        fullContent += `<thought>${json.delta}`;
+                                                    } else {
+                                                        fullContent += json.delta;
+                                                    }
+                                                }
+                                            }
+                                            if (json.type === "response.output_text.delta" && json.delta) {
+                                                if (streamInThought) {
+                                                    streamInThought = false;
+                                                    fullContent += `</thought>${json.delta}`;
+                                                } else {
+                                                    fullContent += json.delta;
+                                                }
+                                            }
+                                            if (json.type === "message_stop" || json.type === "response.completed") {
                                                 stopParsing = true;
                                             }
                                         } catch (e) {
@@ -1471,12 +1489,12 @@
     function extractTokenUsage(usage) {
         if (!usage) return {cachedTokens: 0, inputTokens: 0, reasoningTokens: 0, outputTokens: 0};
         
-        const cachedTokens = usage.prompt_tokens_details?.cached_tokens || usage.prompt_cache_hit_tokens || usage.cache_read_input_tokens || 0;
+        const cachedTokens = usage.input_tokens_details?.cached_tokens || usage.prompt_tokens_details?.cached_tokens || usage.prompt_cache_hit_tokens || usage.cache_read_input_tokens || 0;
         const rawInputTokens = usage.prompt_tokens || usage.input_tokens || 0;
         const inputTokens = Math.max(0, rawInputTokens - cachedTokens);
         
         const rawOutputTokens = usage.completion_tokens || usage.output_tokens || 0;
-        let reasoningTokens = usage.completion_tokens_details?.reasoning_tokens || 0;
+        let reasoningTokens = usage.output_tokens_details?.reasoning_tokens || usage.completion_tokens_details?.reasoning_tokens || 0;
         const totalTokens = usage.total_tokens || 0;
         
         let outputTokens = rawOutputTokens;
@@ -1691,7 +1709,7 @@
         
         switch (provider) {
             case "openai":
-                api_url = "https://api.openai.com/v1/chat/completions";
+                api_url = "https://api.openai.com/v1/responses";
                 headers['Authorization'] = `Bearer ${apiKey}`;
                 break;
             case "google":
@@ -1770,11 +1788,18 @@
             reqModel = model.startsWith("google/") ? model : `google/${model}`;
         }
         
-        const body = {model: reqModel, messages: mappedHistory};
+        const body = {model: reqModel};
         if (stream) body.stream = true;
         
-        if (provider === "openai" && model.includes("gpt-5")) {
-            body.reasoning_effort = reasoningLevel === "minimal" ? "none" : "low";
+        if (provider === "openai") {
+            body.input = mappedHistory;
+            if (reasoningLevel === "minimal") {
+                body.reasoning = {effort: "none"};
+            } else {
+                body.reasoning = {effort: "low", summary: "auto"};
+            }
+        } else {
+            body.messages = mappedHistory;
         }
         
         if (provider === "google" || provider === "vertex") {
@@ -1816,7 +1841,7 @@
         }
         
         if (provider === "deepseek") {
-            body.thinking = {type: "disabled"};
+            body.reasoning_effort = "none";
         }
         
         if (provider === "cerebras") {
@@ -1824,8 +1849,7 @@
         }
         
         if (provider === "zai") {
-            let effort = "low"
-            body.reasoning_effort = effort;
+            body.reasoning_effort = "low";
         }
         
         return body;
@@ -1871,7 +1895,15 @@
             }
             
             const data = await response.json();
-            const content = provider === "anthropic" ? data.content[0]?.text : data.choices[0]?.message?.content;
+            let content;
+            if (provider === "anthropic") {
+                content = data.content[0]?.text;
+            } else if (provider === "openai") {
+                const messageItem = data.output?.find(item => item.type === "message");
+                content = messageItem?.content?.find(c => c.type === "output_text")?.text || data.output_text || data.choices?.[0]?.message?.content;
+            } else {
+                content = data.choices[0]?.message?.content;
+            }
             const {cachedTokens, inputTokens, reasoningTokens, outputTokens} = extractTokenUsage(data.usage);
             
             trackLLMUsage("Chat Batch", model, cachedTokens, inputTokens, reasoningTokens, outputTokens, null, isPriority, provider);
@@ -1900,10 +1932,32 @@
             }, (json) => {
                 if (json.usage) {
                     lastUsage = json.usage;
+                } else if (json.type === "response.completed" && json.response?.usage) {
+                    lastUsage = json.response.usage;
                 }
                 
                 if (provider === "anthropic") {
                     if (json.type === "content_block_delta" && json.delta?.text) onChunkReceived(json.delta.text);
+                } else if (provider === "openai") {
+                    const reasoning = (json.type === "response.reasoning_summary_text.delta" || json.type === "response.reasoning_text.delta") ? json.delta : null;
+                    const content = json.type === "response.output_text.delta" ? json.delta : null;
+                    
+                    if (reasoning) {
+                        if (!streamInThought) {
+                            streamInThought = true;
+                            onChunkReceived(`<thought>${reasoning}`);
+                        } else {
+                            onChunkReceived(reasoning);
+                        }
+                    }
+                    if (content) {
+                        if (streamInThought) {
+                            streamInThought = false;
+                            onChunkReceived(`</thought>${content}`);
+                        } else {
+                            onChunkReceived(content);
+                        }
+                    }
                 } else {
                     const delta = json.choices?.[0]?.delta;
                     const reasoning = delta?.reasoning_content;
