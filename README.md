@@ -78,6 +78,7 @@ To use AI features, create an API key from any supported provider and enter it i
 | Google Vertex | — |
 | Anthropic     | — |
 | DeepSeek      | [Tutorial](https://www.youtube.com/watch?v=CpZFf6JkHgY) |
+| Z.ai (GLM)    | — |
 | Cerebras      | — |
 
 Recommendation: Google - Gemini 3.1 Flash-Light

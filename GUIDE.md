@@ -198,6 +198,7 @@ Enter your API key corresponding to your selected Chat Provider: (`gemini-3.1-fl
 | **OpenAI** | `gpt-5.6-sol`, `gpt-5.6-terra`, `gpt-5.6-luna`, `gpt-5.5`, `gpt-5.4`, `gpt-5.4-mini` | |
 | **Anthropic** | `claude-sonnet-5`, `claude-sonnet-4-6`, `claude-haiku-4-5` | |
 | **DeepSeek** | `deepseek-v4-pro`, `deepseek-v4-flash` | Highly cost-effective alternative models.<br> If you live in China, use this. |
+| **Z.ai** | `glm-5.3-flash` | Cost-effective GLM models from Z.ai (Zhipu AI).<br> If you live in China, you can use this as well. |
 | **Cerebras** | `gemma-4-31b` | Ultra-fast inference engine. |
 
 ### 3.4 Google Vertex (GCP) Credentials
