@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      16.6.0
+// @version      16.7.0
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @grant       GM_xmlhttpRequest
@@ -1510,9 +1510,16 @@
     function extractTokenUsage(usage) {
         if (!usage) return {cachedTokens: 0, inputTokens: 0, reasoningTokens: 0, outputTokens: 0};
         
-        const cachedTokens = usage.input_tokens_details?.cached_tokens || usage.prompt_tokens_details?.cached_tokens || usage.prompt_cache_hit_tokens || usage.cache_read_input_tokens || 0;
+        let cachedTokens = usage.input_tokens_details?.cached_tokens || usage.prompt_tokens_details?.cached_tokens || usage.prompt_cache_hit_tokens || 0;
         const rawInputTokens = usage.prompt_tokens || usage.input_tokens || 0;
-        const inputTokens = Math.max(0, rawInputTokens - cachedTokens);
+        let inputTokens = rawInputTokens;
+        
+        if (usage.cache_read_input_tokens !== undefined || usage.cache_creation_input_tokens !== undefined) {
+            cachedTokens = usage.cache_read_input_tokens || 0;
+            inputTokens = (usage.input_tokens || 0) + (usage.cache_creation_input_tokens || 0);
+        } else if (cachedTokens > 0) {
+            inputTokens = Math.max(0, rawInputTokens - cachedTokens);
+        }
         
         const rawOutputTokens = usage.completion_tokens || usage.output_tokens || 0;
         let reasoningTokens = usage.output_tokens_details?.reasoning_tokens || usage.completion_tokens_details?.reasoning_tokens || usage.output_tokens_details?.thinking_tokens || 0;
@@ -1798,18 +1805,6 @@
             return {role, content: cleanContent};
         });
         
-        if (provider === "anthropic") {
-            const mergedHistory = [];
-            mappedHistory.forEach(msg => {
-                const lastMsg = mergedHistory[mergedHistory.length - 1];
-                if (lastMsg && lastMsg.role === msg.role) {
-                    lastMsg.content += `\n\n${msg.content}`;
-                } else {
-                    mergedHistory.push({role: msg.role, content: msg.content});
-                }
-            });
-            mappedHistory = mergedHistory;
-        }
         
         let reqModel = model;
         if (provider === "vertex") {
@@ -1852,24 +1847,66 @@
         }
         
         if (provider === "anthropic") {
-            if (reasoningLevel === "minimal") {
+            if (model.includes("haiku") || reasoningLevel === "minimal") {
                 body.max_tokens = 4096;
                 body.thinking = {type: "disabled"};
             } else {
                 body.max_tokens = 8192;
-                if (model.includes("haiku")) {
-                    body.thinking = {type: "enabled", budget_tokens: 1024, display: "summarized"};
+                body.thinking = {type: "adaptive", display: "summarized"};
+            }
+            
+            const isWordRequest = history.some(m => m.role === "system-word");
+            const systemBlocks = [];
+            const nonSystem = [];
+            
+            mappedHistory.forEach(m => {
+                if (m.role === "system" || m.content.startsWith("<summary>")) {
+                    systemBlocks.push(m.content);
                 } else {
-                    body.thinking = {type: "adaptive", display: "summarized"};
+                    nonSystem.push({role: m.role, content: m.content});
+                }
+            });
+            
+            const mergedMessages = [];
+            nonSystem.forEach(msg => {
+                const lastMsg = mergedMessages[mergedMessages.length - 1];
+                if (lastMsg && lastMsg.role === msg.role) {
+                    lastMsg.content += `\n\n${msg.content}`;
+                } else {
+                    mergedMessages.push({role: msg.role, content: msg.content});
+                }
+            });
+            
+            if (systemBlocks.length > 0) {
+                const combinedSystemText = systemBlocks.join("\n\n---\n\n");
+                if (isWordRequest) {
+                    body.system = [
+                        {
+                            type: "text",
+                            text: combinedSystemText,
+                            cache_control: {type: "ephemeral", ttl: "1h"}
+                        }
+                    ];
+                } else {
+                    body.system = combinedSystemText;
                 }
             }
             
-            const systemMessages = mappedHistory.filter(m => m.role === "system");
-            if (systemMessages.length > 0) {
-                body.system = systemMessages.map(m => m.content).join("\n\n---\n\n");
+            const lastAssistantIdx = mergedMessages.map(m => m.role).lastIndexOf("assistant");
+            if (lastAssistantIdx !== -1) {
+                const targetMsg = mergedMessages[lastAssistantIdx];
+                if (typeof targetMsg.content === "string") {
+                    targetMsg.content = [
+                        {
+                            type: "text",
+                            text: targetMsg.content,
+                            cache_control: {type: "ephemeral"}
+                        }
+                    ];
+                }
             }
             
-            body.messages = mappedHistory.filter(m => m.role !== "system");
+            body.messages = mergedMessages;
         }
         
         if (provider === "deepseek") {
