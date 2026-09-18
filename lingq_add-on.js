@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      16.8.0
+// @version      16.8.1
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @grant       GM_xmlhttpRequest
@@ -5822,8 +5822,15 @@
                                 reportContent += content;
                                 if (!rafId) {
                                     rafId = requestAnimationFrame(() => {
-                                        if (reportBody) reportBody.innerHTML = reportContent;
-                                        reportContainer.scrollTop = reportContainer.scrollHeight;
+                                        const displayContent = reportContent
+                                            .replace(/<thought>[\s\S]*?<\/thought>/gi, '')
+                                            .replace(/<thought>[\s\S]*$/gi, '')
+                                            .replace(/^\s*```(html)?\n?/i, '')
+                                            .trim();
+                                        if (displayContent && reportBody) {
+                                            reportBody.innerHTML = displayContent;
+                                            reportContainer.scrollTop = reportContainer.scrollHeight;
+                                        }
                                         rafId = null;
                                     });
                                 }
@@ -5834,8 +5841,18 @@
                                 cancelAnimationFrame(rafId);
                                 rafId = null;
                             }
-                            const stripped = finalContent.replace(/^\s*```(html)?\n?/i, '').replace(/```\s*$/, '');
-                            if (reportBody) reportBody.innerHTML = stripped;
+                            const cleaned = finalContent
+                                .replace(/<thought>[\s\S]*?<\/thought>/gi, '')
+                                .replace(/<thought>[\s\S]*$/gi, '')
+                                .trim();
+                            const stripped = cleaned.replace(/^\s*```(html)?\n?/i, '').replace(/```\s*$/, '');
+                            if (reportBody) {
+                                if (stripped) {
+                                    reportBody.innerHTML = stripped;
+                                } else {
+                                    reportBody.innerHTML = "<em>Failed to generate report content.</em>";
+                                }
+                            }
                         },
                         (err) => {
                             console.error("Report generation error", err);
