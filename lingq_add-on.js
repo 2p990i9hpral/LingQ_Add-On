@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      16.8.1
+// @version      16.8.2
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @grant       GM_xmlhttpRequest
@@ -7620,7 +7620,7 @@
                 }
 
                 .pronunciation-edit-input {
-                    width: 120px;
+                    box-sizing: border-box;
                     border: none;
                     outline: none;
                     padding: 0 3px;
@@ -7630,8 +7630,29 @@
                     font-family: inherit;
                 }
 
+                .card-edit-textarea {
+                    width: 100%;
+                    box-sizing: border-box;
+                    border: none;
+                    outline: none;
+                    background: transparent;
+                    color: inherit;
+                    font-family: inherit;
+                    font-size: inherit;
+                    line-height: inherit;
+                    resize: none;
+                    padding: 0;
+                    margin: 0;
+                    display: block;
+                    overflow-y: auto;
+                }
+
                 #chat-container li {
                     list-style: inside !important;
+                }
+
+                #chat-container li:has(.card-edit-textarea) {
+                    list-style: none !important;
                 }
 
                 #chat-container ul {
@@ -9953,6 +9974,76 @@
                     badge.dataset.display = count > 9 ? "9+" : String(count);
                 }
                 
+                function setupBlockEditableField(element, fieldName, fieldLabel, botMessageDiv) {
+                    if (!element) return;
+                    
+                    element.addEventListener("click", async (e) => {
+                        if (!e.ctrlKey && !e.metaKey) return;
+                        e.stopPropagation();
+                        if (element.querySelector("textarea, input")) return;
+                        
+                        const currentText = element.textContent.trim();
+                        const currentHeight = Math.max(element.offsetHeight, 24);
+                        
+                        const textarea = createElement("textarea", {
+                            className: "card-edit-textarea",
+                            value: currentText,
+                            style: {
+                                height: `${currentHeight}px`
+                            }
+                        });
+                        
+                        element.textContent = "";
+                        element.appendChild(textarea);
+                        textarea.focus();
+                        
+                        textarea.addEventListener("click", (event) => {
+                            event.stopPropagation();
+                        });
+                        
+                        let isFinished = false;
+                        const finishEdit = async () => {
+                            if (isFinished) return;
+                            isFinished = true;
+                            
+                            const newValue = textarea.value.trim();
+                            element.textContent = newValue;
+                            
+                            if (newValue === currentText) return;
+                            
+                            const storedIdx = botMessageDiv.dataset.wordIdx;
+                            if (!storedIdx) return;
+                            
+                            const {error: updateError} = await getDbClient()
+                                .from(getTableName())
+                                .update({[fieldName]: newValue})
+                                .eq("idx", storedIdx);
+                            
+                            if (updateError) {
+                                console.error(`${fieldLabel} update error:`, updateError);
+                                showToast(`Failed to update ${fieldLabel.toLowerCase()}.`, false);
+                            } else {
+                                showToast(`${fieldLabel} updated!`, true);
+                            }
+                        };
+                        
+                        textarea.addEventListener("keydown", (event) => {
+                            if (event.isComposing || event.keyCode === 229) return;
+                            if (event.key === "Enter") {
+                                event.preventDefault();
+                                textarea.blur();
+                            } else if (event.key === "Escape") {
+                                isFinished = true;
+                                element.textContent = currentText;
+                            }
+                        });
+                        
+                        textarea.addEventListener("blur", async () => {
+                            await finishEdit();
+                        });
+                    });
+                }
+                
                 function enhanceWordMessage(botMessageDiv, selectedData) {
                     const wordCardWrappers = Array.from(botMessageDiv.querySelectorAll('.word-card'));
                     const buttonContainer = botMessageDiv.querySelector('.message-button-container');
@@ -10007,11 +10098,15 @@
                             if (pronunciationElem.querySelector("input")) return;
                             
                             const currentText = pronunciationElem.textContent.trim();
+                            const currentWidth = Math.max(60, Math.ceil(pronunciationElem.offsetWidth));
                             
                             const input = createElement("input", {
                                 type: "text",
                                 value: currentText,
                                 className: "pronunciation-edit-input",
+                                style: {
+                                    width: `${currentWidth}px`
+                                }
                             });
                             
                             pronunciationElem.textContent = "";
@@ -10154,8 +10249,13 @@
                         });
                     }
                     
+                    setupBlockEditableField(explanationElem, "explanation", "Explanation", botMessageDiv);
+                    setupBlockEditableField(exampleSentenceElem, "example_sentence", "Example sentence", botMessageDiv);
+                    setupBlockEditableField(exampleTranslationElem, "example_translation", "Example translation", botMessageDiv);
+                    
                     if (exampleListElem) {
-                        exampleListElem.addEventListener("click", async () => {
+                        exampleListElem.addEventListener("click", async (e) => {
+                            if (e.ctrlKey || e.metaKey || e.target.closest("textarea, input")) return;
                             const textToCopy = Array
                                 .from(exampleListElem.querySelectorAll("li"))
                                 .map(li => li.textContent)
@@ -10294,6 +10394,9 @@
                                 try {
                                     const currentMeaning = meaningElem?.textContent?.trim() || "";
                                     const currentPronunciation = pronunciationElem?.textContent?.trim() || "";
+                                    const currentExplanation = explanationElem?.textContent?.trim() || "";
+                                    const currentExampleSentence = exampleSentenceElem?.textContent?.trim() || "";
+                                    const currentExampleTranslation = exampleTranslationElem?.textContent?.trim() || "";
                                     
                                     const lingqMeaningElement = document.querySelector(".reference-input-text");
                                     if (lingqMeaningElement && currentMeaning) {
@@ -10324,7 +10427,10 @@
                                         .insert([{
                                             ...newItem,
                                             meaning: currentMeaning,
-                                            pronunciation: currentPronunciation
+                                            pronunciation: currentPronunciation,
+                                            explanation: currentExplanation,
+                                            example_sentence: currentExampleSentence,
+                                            example_translation: currentExampleTranslation
                                         }])
                                         .select("idx");
                                     

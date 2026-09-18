@@ -175,8 +175,8 @@ Check **Enable the Keyboard Shortcuts** to activate single-key navigation withou
 ### 3.2 In-Reader Interactive Dictionary & Word Cards
 
 #### In-Place Editing (Ctrl + Click)
-- Hold `Ctrl` (or `Cmd` on macOS) and click on the **Pronunciation** or **Meaning** fields in an AI dictionary card.
-- Edit the text inline and press `Enter` (or click away) to save.
+- Hold `Ctrl` (or `Cmd` on macOS) and click on the **Pronunciation**, **Meaning**, **Explanation**, **Example Sentence**, or **Example Translation** fields in an AI dictionary card.
+- Edit the text inline and press `Enter` (or click away / focus out) to save, or `Escape` to cancel.
 
 #### Flashcard Count Badge & History Popup
 - **Count Badge**: Next to the word heading in any AI dictionary card, a badge displays the count of existing flashcards currently stored in your database for that word (e.g., `1`, `2`, ..., `9+`).
