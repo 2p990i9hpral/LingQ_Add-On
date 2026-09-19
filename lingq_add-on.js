@@ -4,7 +4,8 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      16.8.3
+// @version      16.8.4
+// @license      GPL-3.0-or-later
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @grant       GM_xmlhttpRequest
@@ -970,9 +971,45 @@
                     
                     if (res.status >= 400) {
                         isErrorStatus = true;
-                        isResolved = true;
-                        reject(new Error(`HTTP ${res.status}: Request failed`));
-                        if (req && typeof req.abort === 'function') req.abort();
+                        (async () => {
+                            let errorData = null;
+                            try {
+                                let errorText = '';
+                                if (res.response && typeof res.response.getReader === 'function') {
+                                    const reader = res.response.getReader();
+                                    const decoder = new TextDecoder('utf-8');
+                                    const readStream = async () => {
+                                        while (true) {
+                                            const {done, value} = await reader.read();
+                                            if (value) errorText += decoder.decode(value, {stream: !done});
+                                            if (done) break;
+                                        }
+                                        return errorText;
+                                    };
+                                    const timeout = new Promise((_, rejectTimeout) => setTimeout(() => rejectTimeout(new Error('Timeout')), 3000));
+                                    await Promise.race([readStream(), timeout]);
+                                } else if (res.responseText) {
+                                    errorText = res.responseText;
+                                }
+
+                                if (errorText) {
+                                    try {
+                                        errorData = JSON.parse(errorText);
+                                    } catch {
+                                        errorData = errorText;
+                                    }
+                                }
+                            } catch {
+                            }
+
+                            if (!isResolved) {
+                                isResolved = true;
+                                const error = new Error(`HTTP ${res.status}: Request failed`);
+                                error.status = res.status;
+                                if (errorData) error.errorData = errorData;
+                                reject(error);
+                            }
+                        })();
                         return;
                     }
                     
@@ -2170,7 +2207,7 @@
             
             onStreamEnd(finalContent);
         } catch (error) {
-            console.error("Stream API Error:", error.message);
+            console.error("Stream API Error:", error.message, error.errorData || error);
             if (cacheName && (provider === "google" || provider === "vertex") && (error.message.includes("403") || error.message.includes("404") || (provider === "vertex" && error.message.includes("400"))) && retryCount === 0 && onCacheExpired) {
                 console.warn("Gemini cache expired or not found. Recreating and retrying...");
                 const newCacheName = await onCacheExpired();
@@ -10105,7 +10142,7 @@
                                 value: currentText,
                                 className: "pronunciation-edit-input",
                                 style: {
-                                    width: `${currentWidth}px`
+                                    width: `${currentWidth + 5}px`
                                 }
                             });
                             

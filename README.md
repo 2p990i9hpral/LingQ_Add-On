@@ -85,4 +85,4 @@ Recommendation: Google - Gemini 3.1 Flash-Light
 
 ## License
 
-[MIT License](LICENSE)
+[GNU General Public License v3.0 (GPL-3.0)](LICENSE)
