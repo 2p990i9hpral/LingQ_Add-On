@@ -64,7 +64,13 @@ This guide is structured around the **Settings Popup** (where the majority of fe
 ### 1.2 Layout Styles
 Customize the reader layout based on the media format of your lesson:
 - **Audio Only**: Maximizes text space while keeping audio playback controls easily reachable.
+
+  <img src="images/layout-audio.png" width=600>
+
 - **YouTube Video**: Integrates an embedded YouTube player into the reader grid.
+
+  <img src="images/layout-video-right.png" width=600>
+
 - **Local Video**: Replaces web players with the addon's local media player for your local video/subtitle files.
 - **Layout Off**: Preserves LingQ's native reader structure while keeping the addon's fonts, colors, and side tools active.
 
@@ -73,6 +79,9 @@ Customize the reader layout based on the media format of your lesson:
 ### 1.3 Video Orientation & Dimensions
 *(Active when Layout Style is set to YouTube Video or Local Video)*
 - **Video Position**: `Right` | `Left` | `Top` | `Bottom`
+
+  <img src="images/layout-video-top.png" width=600>
+
 - **Video Height**: Slider to adjust player height when `Top` or `Bottom` position is chosen.
 - **Sentence View Video Height**: Slider for video sizing while in LingQ's Sentence Mode.
 - **Autoplay in Sentence View**: Checkbox to toggle automatic playback when stepping through sentences in Sentence Mode.
