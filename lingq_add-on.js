@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      16.8.2
+// @version      16.8.3
 // @grant       GM_setValue
 // @grant       GM_getValue
 // @grant       GM_xmlhttpRequest
@@ -8976,8 +8976,8 @@
                     const summaryWordsByDifficulty = {
                         A1: 40,
                         A2: 60,
-                        B1: 100,
-                        B2: 150,
+                        B1: 80,
+                        B2: 120,
                         C1: 150,
                         C2: 150
                     };
