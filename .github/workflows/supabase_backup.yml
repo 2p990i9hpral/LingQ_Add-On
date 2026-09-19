@@ -1,0 +1,56 @@
+name: Supabase Database Backup to Google Drive
+
+on:
+  workflow_dispatch: # Allows manual trigger from the GitHub Actions tab
+  schedule:
+    - cron: '0 18 * * *' # Runs daily at 18:00 UTC (03:00 KST)
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y postgresql-common
+          sudo /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh -y
+          sudo apt-get install -y postgresql-client-16 rclone
+
+      - name: Dump Supabase Database
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: |
+          BACKUP_DATE=$(date +'%Y-%m-%d_%H%M%S')
+          BACKUP_FILENAME="supabase_backup_${BACKUP_DATE}.sql.gz"
+          echo "BACKUP_FILENAME=${BACKUP_FILENAME}" >> $GITHUB_ENV
+
+          echo "Starting database dump..."
+          pg_dump "${DATABASE_URL}" --no-owner --no-acl | gzip > "${BACKUP_FILENAME}"
+
+          FILE_SIZE=$(ls -lh "${BACKUP_FILENAME}" | awk '{print $5}')
+          echo "Backup completed. File: ${BACKUP_FILENAME} (${FILE_SIZE})"
+
+      - name: Upload to Google Drive
+        env:
+          GDRIVE_SA_KEY: ${{ secrets.GDRIVE_SA_KEY }}
+          GDRIVE_FOLDER_ID: ${{ secrets.GDRIVE_FOLDER_ID }}
+        run: |
+          echo "Configuring rclone..."
+          echo "${GDRIVE_SA_KEY}" > sa.json
+
+          mkdir -p ~/.config/rclone
+          cat << EOF > ~/.config/rclone/rclone.conf
+          [gdrive]
+          type = drive
+          scope = drive
+          service_account_file = $(pwd)/sa.json
+          root_folder_id = ${GDRIVE_FOLDER_ID}
+          EOF
+
+          echo "Uploading ${BACKUP_FILENAME} to Google Drive..."
+          rclone copy "${BACKUP_FILENAME}" gdrive:
+
+          echo "Upload completed! Verifying files in Google Drive folder:"
+          rclone ls gdrive:
+
+          rm -f sa.json "${BACKUP_FILENAME}"
