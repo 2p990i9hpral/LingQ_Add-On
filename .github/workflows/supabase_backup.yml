@@ -1,7 +1,7 @@
-name: Supabase Database Backup to Google Drive
+name: Supabase Central Tables Backup to Cloudflare R2
 
 on:
-  workflow_dispatch: # Allows manual trigger from the GitHub Actions tab
+  workflow_dispatch: # Allows manual trigger from GitHub Actions tab
   schedule:
     - cron: '0 18 * * *' # Runs daily at 18:00 UTC (03:00 KST)
 
@@ -9,48 +9,57 @@ jobs:
   backup:
     runs-on: ubuntu-latest
     steps:
-      - name: Install dependencies
+      - name: Install PostgreSQL Client
         run: |
           sudo apt-get update
           sudo apt-get install -y postgresql-common
           sudo /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh -y
-          sudo apt-get install -y postgresql-client-16 rclone
+          sudo apt-get install -y postgresql-client-16
 
-      - name: Dump Supabase Database
+      - name: Dump Central Tables from Supabase
         env:
-          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL || vars.DATABASE_URL }}
         run: |
+          set -e
           BACKUP_DATE=$(date +'%Y-%m-%d_%H%M%S')
-          BACKUP_FILENAME="supabase_backup_${BACKUP_DATE}.sql.gz"
+          BACKUP_FILENAME="supabase_central_${BACKUP_DATE}.sql.gz"
           echo "BACKUP_FILENAME=${BACKUP_FILENAME}" >> $GITHUB_ENV
 
-          echo "Starting database dump..."
-          pg_dump "${DATABASE_URL}" --no-owner --no-acl | gzip > "${BACKUP_FILENAME}"
+          echo "Starting dump for word_data_central and llm_usage_logs_central..."
+          pg_dump "${DATABASE_URL}" \
+            --no-owner \
+            --no-acl \
+            -t public.word_data_central \
+            -t public.llm_usage_logs_central \
+            | gzip > "${BACKUP_FILENAME}"
 
           FILE_SIZE=$(ls -lh "${BACKUP_FILENAME}" | awk '{print $5}')
-          echo "Backup completed. File: ${BACKUP_FILENAME} (${FILE_SIZE})"
+          echo "Backup completed successfully. File: ${BACKUP_FILENAME} (${FILE_SIZE})"
 
-      - name: Upload to Google Drive
+          # Verify dump is not empty
+          RAW_SIZE=$(wc -c < "${BACKUP_FILENAME}")
+          if [ "$RAW_SIZE" -le 100 ]; then
+            echo "Error: Database dump file is too small (${RAW_SIZE} bytes). Dump likely failed."
+            exit 1
+          fi
+
+      - name: Upload to Cloudflare R2
         env:
-          GDRIVE_SA_KEY: ${{ secrets.GDRIVE_SA_KEY }}
-          GDRIVE_FOLDER_ID: ${{ secrets.GDRIVE_FOLDER_ID }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID || vars.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY || vars.R2_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: auto
+          R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID || vars.R2_ACCOUNT_ID }}
+          R2_BUCKET_NAME: ${{ secrets.R2_BUCKET_NAME || vars.R2_BUCKET_NAME }}
         run: |
-          echo "Configuring rclone..."
-          echo "${GDRIVE_SA_KEY}" > sa.json
+          set -e
+          ENDPOINT_URL="https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com"
 
-          mkdir -p ~/.config/rclone
-          cat << EOF > ~/.config/rclone/rclone.conf
-          [gdrive]
-          type = drive
-          scope = drive
-          service_account_file = $(pwd)/sa.json
-          root_folder_id = ${GDRIVE_FOLDER_ID}
-          EOF
+          echo "Uploading ${BACKUP_FILENAME} to Cloudflare R2 (${R2_BUCKET_NAME})..."
+          aws s3 cp "${BACKUP_FILENAME}" "s3://${R2_BUCKET_NAME}/${BACKUP_FILENAME}" \
+            --endpoint-url "${ENDPOINT_URL}"
 
-          echo "Uploading ${BACKUP_FILENAME} to Google Drive..."
-          rclone copy "${BACKUP_FILENAME}" gdrive:
+          echo "Upload complete! Verifying bucket contents:"
+          aws s3 ls "s3://${R2_BUCKET_NAME}/" \
+            --endpoint-url "${ENDPOINT_URL}"
 
-          echo "Upload completed! Verifying files in Google Drive folder:"
-          rclone ls gdrive:
-
-          rm -f sa.json "${BACKUP_FILENAME}"
+          rm -f "${BACKUP_FILENAME}"
