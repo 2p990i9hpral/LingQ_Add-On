@@ -469,7 +469,9 @@ In the addon's **Flashcard Manager**, click **Export as CSV**.
 
 ## 13. HyperTTS Audio Setup & Batch Generation Guide (Additional Tip)
 
-You can add TTS to Anki vocabulary cards.
+<img src="images/hypertts_output.png" width=400>
+
+You can add TTS audio to Anki vocabulary cards.
 
 *(Note: If you are using the distributed `.apkg` deck, note types and `Audio_Front`/`Audio_Back` template fields are already configured.)*
 
