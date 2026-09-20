@@ -41,6 +41,7 @@ This guide is structured around the **Settings Popup** (where the majority of fe
 - [Part III: Setup & Integrations](#part-iii-setup--integrations)
   - [11. Supabase Cloud Database Setup](#11-supabase-cloud-database-setup)
   - [12. Anki Integration Guide](#12-anki-integration-guide)
+  - [13. HyperTTS Audio Setup & Batch Generation Guide (Additional Tip)](#13-hypertts-audio-setup--batch-generation-guide-additional-tip)
 
 ---
 
@@ -201,14 +202,14 @@ Check **Enable the Keyboard Shortcuts** to activate single-key navigation withou
 ### 3.3 Providers & Model Selection
 Enter your API key corresponding to your selected Chat Provider: (`gemini-3.1-flash-lite` is recommended for its low cost and nice response quality and speed.)
 
-| Provider | Supported Models | Description |
-| :--- | :--- | :--- |
-| **Google** | `gemini-3.8-flash`, `gemini-3.7-flash`, `gemini-3.6-flash`, `gemini-3.5-flash`, `gemini-3.5-flash-lite`, `gemini-3.1-flash-lite`, ... | Recommended for speed and low cost. Includes explicit context caching. |
-| **OpenAI** | `gpt-5.6-sol`, `gpt-5.6-terra`, `gpt-5.6-luna`, `gpt-5.5`, `gpt-5.4`, `gpt-5.4-mini` | |
-| **Anthropic** | `claude-sonnet-5`, `claude-sonnet-4-6`, `claude-haiku-4-5` | |
-| **DeepSeek** | `deepseek-v4-pro`, `deepseek-v4-flash` | Highly cost-effective alternative models.<br> If you live in China, use this. |
-| **Z.ai** | `glm-5.3-flash` | Cost-effective GLM models from Z.ai (Zhipu AI).<br> If you live in China, you can use this as well. |
-| **Cerebras** | `gemma-4-31b` | Ultra-fast inference engine. |
+| Provider | API Key Guide | Supported Models | Description |
+| :--- | :--- | :--- | :--- |
+| **Google** | [Tutorial](https://youtu.be/8g3OXzM5UHQ) | `gemini-3.8-flash`, `gemini-3.7-flash`, `gemini-3.6-flash`, `gemini-3.5-flash`, `gemini-3.5-flash-lite`, `gemini-3.1-flash-lite`, ... | Recommended for speed and low cost. Includes explicit context caching. |
+| **OpenAI** | [Tutorial](https://youtu.be/SzPE_AE0eEo) | `gpt-5.6-sol`, `gpt-5.6-terra`, `gpt-5.6-luna`, `gpt-5.5`, `gpt-5.4`, `gpt-5.4-mini` | |
+| **Anthropic** | [Tutorial](https://youtu.be/vgncj7MJbVU) | `claude-sonnet-5`, `claude-sonnet-4-6`, `claude-haiku-4-5` | |
+| **DeepSeek** | [Tutorial](https://www.youtube.com/watch?v=CpZFf6JkHgY) | `deepseek-v4-pro`, `deepseek-v4-flash` | Highly cost-effective alternative models.<br> If you live in China, use this. |
+| **Z.ai** | [Website](https://z.ai/manage-apikey/apikey-list) | `glm-5.3-flash` | Cost-effective GLM models from Z.ai (Zhipu AI).<br> If you live in China, you can use this as well. |
+| **Cerebras** | — | `gemma-4-31b` | Ultra-fast inference engine. |
 
 ### 3.4 Google Vertex (GCP) Credentials
 When **Vertex (GCP)** is selected as the provider:
@@ -459,3 +460,80 @@ In the addon's **Flashcard Manager**, click **Export as CSV**.
      - `created_at`
      - `formatted_context`
 3. Click **Import**.
+
+---
+
+## 13. HyperTTS Audio Setup & Batch Generation Guide (Additional Tip)
+
+You can add TTS to Anki vocabulary cards.
+
+*(Note: If you are using the distributed `.apkg` deck, note types and `Audio_Front`/`Audio_Back` template fields are already configured.)*
+
+### Prerequisite: Configure Fields & Templates (For Custom Decks)
+If you are using your own note type rather than the provided `.apkg`, add audio fields and configure card templates first:
+
+1. **Add Fields**:
+   - In Anki, go to **Tools > Manage Note Types**, select your note type, and click **Fields...**.
+   - Click **Add** to create two fields: `Audio_Front` and `Audio_Back`.
+   - Click **Save**.
+
+   <img src="images/hypertts_field.png" width=500>
+
+2. **Update Card Templates**:
+   - In the note types list, click **Cards...**.
+   - **Front Template**: Add `{{Audio_Front}}` at the bottom.
+
+     <img src="images/hypertts_card_front.png" width=500>
+
+   - **Back Template**: Add `{{Audio_Front}}` and `{{Audio_Back}}` at the bottom.
+
+     <img src="images/hypertts_card_back.png" width=500>
+
+### Step 1: Get Google Cloud TTS API Key
+Refer to the [Video Tutorial](https://youtu.be/Sl87i9JdfPo) for a step-by-step walkthrough.
+1. Go to [Google Cloud Console](https://console.cloud.google.com/) and create a project (e.g., `anki-tts`).
+2. Link a billing account under **Billing** *(free tier provides up to 1M–4M characters/month without charges)*.
+3. Search for **Cloud Text-to-Speech API** and click **Enable**.
+4. Go to **APIs & Services > Credentials**, click **+ Create Credentials > API Key**, and copy the generated key (`AIza...`).
+
+### Step 2: Install HyperTTS & Register API Key
+HyperTTS is available on [AnkiWeb](https://ankiweb.net/shared/info/111623432) (Add-on Code: `111623432`).
+1. In Anki, go to **Tools > Add-ons**, click **Get Add-ons...**, enter code **`111623432`**, and restart Anki.
+2. Go to **Tools > HyperTTS: Services Configuration** and open the **Services** tab.
+
+   <img src="images/hypertts_services.png" width=500>
+
+3. Check **Google (paid TTS)** and click **Configure**.
+4. Paste your GCP API key into the `api_key` field and click **OK** and **Save** button.
+
+### Step 3: Configure Audio Presets (One-Time Setup)
+Open **Browse** (`B`), select any card, and go to **HyperTTS > Add Audio (Collection)...**.
+
+<img src="images/hypertts_presets.png" width=500>
+
+1. **Front Audio Preset (`Audio_Front`)**:
+  - **Source tab**: Mode: `simple` / Source Field: `word`
+  - **Target tab**: Field: `Audio_Front` / Text and Sound Tag Handling: `Sound Tag only` / Existing: `Remove other sound tags`
+  - **Voice Selection tab**: Language: `Card's Language` / Service: `Google` / Select voice(s) and set Mode to `Random`.
+    <img src="images/hypertts_voice.png" width=400>
+  - Click **Rename**, enter `Audio_Front`, and click **Save**.
+2. **Back Audio Preset (`Audio_Back`)**:
+  - **Source tab**: Source Field: `example_sentence`
+  - **Target tab**: Target Field: `Audio_Back`
+  - Click **Rename**, enter `Audio_Back`, and click **Save**.
+
+### Step 4: Batch Generate for New Cards (Routine Workflow)
+When new cards are added or imported, search for unvoiced cards in the Anki **Browser** to avoid redundant API calls:
+
+<img src="images/hypertts_browser_batch.png" width=600>
+
+1. **Front Vocabulary**:
+  - Select a deck. In the search bar, enter: `Audio_Front:` *(or `deck:"CurrentDeck" Audio_Front:`)*
+  - Press `Ctrl + A` (Select All).
+  - Click **HyperTTS > Add Audio (Collection): Audio_Front**.
+  - Click **Apply To Notes**.
+2. **Back Sentences**:
+  - In the search bar, enter: `Audio_Back:` *(or `deck:"CurrentDeck" Audio_Back:`)*
+  - Press `Ctrl + A` (Select All).
+  - Click **HyperTTS > Add Audio (Collection): Audio_Back**.
+  - Click **Apply To Notes**.

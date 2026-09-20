@@ -71,15 +71,14 @@ Customizable layouts, AI-powered chat & TTS, flashcard system, local video playe
 
 To use AI features, create an API key from any supported provider and enter it in ⚙️ **Settings**.
 
-| Provider      | API Key Guide |
-|---------------|---|
-| OpenAI (GPT)  | [Tutorial](https://youtu.be/SzPE_AE0eEo) |
-| Google Gemini | [Tutorial](https://youtu.be/6BRyynZkvf0) |
-| Google Vertex | — |
-| Anthropic     | — |
-| DeepSeek      | [Tutorial](https://www.youtube.com/watch?v=CpZFf6JkHgY) |
-| Z.ai (GLM)    | — |
-| Cerebras      | — |
+| Provider      | API Key Guide                                             |
+|---------------|-----------------------------------------------------------|
+| OpenAI (GPT)  | [Tutorial](https://youtu.be/SzPE_AE0eEo)                  |
+| Google Gemini | [Tutorial](https://youtu.be/8g3OXzM5UHQ)                  |
+| Anthropic     | [Tutorial](https://youtu.be/vgncj7MJbVU)                  |
+| DeepSeek      | [Tutorial](https://www.youtube.com/watch?v=CpZFf6JkHgY)   |
+| Z.ai (GLM)    | [Website](https://z.ai/manage-apikey/apikey-list) |
+| Cerebras      | —                                                         |
 
 Recommendation: Google - Gemini 3.1 Flash-Light
 
