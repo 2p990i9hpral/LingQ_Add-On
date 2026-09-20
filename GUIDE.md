@@ -1,6 +1,6 @@
 # LingQ Addon — Feature & Configuration Wiki
 
-A comprehensive wiki and reference manual for the **LingQ Addon** userscript.
+A comprehensive wiki and reference manual for the [**LingQ Addon** userscript](https://greasyfork.org/en/scripts/533096-lingq-addon).
 
 This guide is structured around the **Settings Popup** (where the majority of features and options are configured), followed by dedicated documentation for **Standalone Tools & Popups**, and complete **External Integration Guides** (Supabase DB and Anki).
 
