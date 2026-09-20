@@ -461,6 +461,10 @@ In the addon's **Flashcard Manager**, click **Export as CSV**.
      - `formatted_context`
 3. Click **Import**.
 
+> [!TIP]
+> **Want to add audio pronunciation to your imported cards?**  
+> See [13. HyperTTS Audio Setup & Batch Generation Guide](#13-hypertts-audio-setup--batch-generation-guide-additional-tip) to automatically generate audio using free Google Cloud TTS.
+
 ---
 
 ## 13. HyperTTS Audio Setup & Batch Generation Guide (Additional Tip)
