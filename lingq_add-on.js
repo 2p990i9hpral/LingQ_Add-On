@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      16.8.5
+// @version      16.8.6
 // @license      GPL-3.0-or-later
 // @grant       GM_setValue
 // @grant       GM_getValue
@@ -9528,6 +9528,7 @@
                 resetScroll();
                 
                 currentGeminiCacheName = null;
+                geminiCachePromise = null;
                 lessonUsageHistory = [];
                 console.log('[Lesson Stats]', 'Lesson started. Usage history reset.');
                 
@@ -9677,6 +9678,8 @@
         
         async function refreshGeminiCache() {
             if (settings.llmProvider !== "google" && settings.llmProvider !== "vertex") return null;
+            if (geminiCachePromise) return await geminiCachePromise;
+            
             let apiKey;
             if (settings.llmProvider === "vertex") {
                 try {
@@ -9691,8 +9694,16 @@
             
             if (!apiKey || !lessonSummary) return null;
             
-            currentGeminiCacheName = await createGeminiCache(settings.llmProvider, apiKey, settings.llmModel, lessonSummary, systemPrompt, wordPhrasePrompt);
-            return currentGeminiCacheName;
+            geminiCachePromise = (async () => {
+                try {
+                    currentGeminiCacheName = await createGeminiCache(settings.llmProvider, apiKey, settings.llmModel, lessonSummary, systemPrompt, wordPhrasePrompt);
+                    return currentGeminiCacheName;
+                } finally {
+                    geminiCachePromise = null;
+                }
+            })();
+            
+            return await geminiCachePromise;
         }
         
         async function setupLLMs() {
@@ -11133,6 +11144,7 @@
         let lessonSummary = "";
         let quickSummary = "";
         let currentGeminiCacheName = null;
+        let geminiCachePromise = null;
         let lessonUsageHistory = [];
         
         document.addEventListener("addon:llmUsage", (event) => {
