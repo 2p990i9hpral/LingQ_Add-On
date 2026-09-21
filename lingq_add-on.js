@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      16.8.4
+// @version      16.8.5
 // @license      GPL-3.0-or-later
 // @grant       GM_setValue
 // @grant       GM_getValue
@@ -8960,11 +8960,11 @@
                     # Content Rules
                     - Objective and factual; base ONLY on the given content
                     - Preserve ALL key details, named entities, terminology, and plot/argument structure
-                    - When an English term risks losing nuance (e.g., proper nouns, culturally specific concepts), append the original-language term in parentheses — e.g., "tact (눈치)"
+                    - When an English term risks losing nuance (e.g., proper nouns, culturally specific concepts), append the original-language term in parentheses in its original native script — e.g., "tact (눈치)", "Ferris wheel (観覧車)". Do not transliterate or romanize it into the Latin alphabet (e.g., write "(観覧車)", NOT "(kanransha)")
                     - No preface or closing remarks
                 
                     # Output Format
-                    - Language: English throughout, following the parenthetical convention above for nuance-sensitive terms
+                    - Language: English throughout, except for the parenthetical original terms, which must be in their authentic native script (no romanization)
                     - Format: plain text, full grammatical sentences and paragraphs; no Markdown syntax (no #, **, -, etc.)
                     - Style: dense and information-rich; do not reference the source's medium, structure, or presenter (e.g., "lesson," "video," "speaker," "list," "section," "discussed above")
                         — state every fact as free-standing information. When the source voices a personal opinion or preference, attribute it with neutral phrasing (e.g., "X is often favored for...") instead of naming the speaker
