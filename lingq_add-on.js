@@ -3952,6 +3952,7 @@
                 ),
                 createElement("div", {style: "padding: 0 15px; width: 800px;"},
                     statsContainer,
+                    createElement("div", {id: "llmUsageRecentLogsContainer"}),
                     createElement("div", {
                             className: "popup-row",
                             style: "display: flex; justify-content: space-between; align-items: center; margin: 15px 0 10px;"
@@ -6450,6 +6451,126 @@
                     drawLLMUsageStatsChart(labels, barDatasets, cumulativeDataset, period, periodicLabel, mode, requestCounts);
                 }
                 
+                function renderRecentLLMUsageLogs() {
+                    const recentLogsContainer = document.getElementById("llmUsageRecentLogsContainer");
+                    if (!recentLogsContainer) return;
+                    
+                    const RECENT_LOGS_LIMIT = 100;
+                    recentLogsContainer.innerHTML = "";
+                    const filtered = getFilteredHistory();
+                    const recentLogs = filtered.slice(-RECENT_LOGS_LIMIT).reverse();
+                    
+                    if (recentLogs.length === 0) {
+                        const emptyMessage = createElement("div", {className: "llm-usage-log-empty"}, "No usage logs recorded.");
+                        recentLogsContainer.appendChild(emptyMessage);
+                        return;
+                    }
+                    
+                    const headerEl = createElement("div", {className: "llm-usage-log-header"},
+                        createElement("span", {className: "llm-log-col-btn"}),
+                        createElement("span", {className: "llm-log-col-time"}, "Time"),
+                        createElement("span", {className: "llm-log-col-provider"}, "Provider"),
+                        createElement("span", {className: "llm-log-col-model"}, "Model"),
+                        createElement("span", {className: "llm-log-col-lang"}, "Lang"),
+                        createElement("span", {className: "llm-log-col-num"}, "Cached"),
+                        createElement("span", {className: "llm-log-col-num"}, "Input"),
+                        createElement("span", {className: "llm-log-col-num"}, "Reasoning"),
+                        createElement("span", {className: "llm-log-col-num"}, "Output"),
+                        createElement("span", {className: "llm-log-col-cost"}, "Cost")
+                    );
+                    recentLogsContainer.appendChild(headerEl);
+                    
+                    const formatTime = (ts) => {
+                        const d = new Date(ts);
+                        const pad = (n) => String(n).padStart(2, "0");
+                        return `${pad(d.getMonth() + 1)}/${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+                    };
+                    
+                    recentLogs.forEach((entry) => {
+                        const deleteBtn = createElement("button", {
+                            className: "delete-row-btn",
+                            title: "Delete this log",
+                            innerHTML: `<svg viewBox="6 6 12 12" width="10" height="10" xmlns="http://www.w3.org/2000/svg" stroke="currentColor"><path d="M17 17L7 7.00002M17 7L7.00001 17" stroke-width="2" stroke-linecap="round"/></svg>`
+                        });
+                        
+                        const tokens = entry.tokens || {};
+                        const cachedVal = tokens.cached || 0;
+                        const inputVal = tokens.input || 0;
+                        const reasoningVal = tokens.reasoning || 0;
+                        const outputVal = tokens.output || 0;
+                        
+                        const costItems = calculateEntryMetrics(entry, "cost");
+                        const totalCost = costItems.reduce((sum, item) => sum + item.value, 0);
+                        const costStr = totalCost < 0.01 ? `$${totalCost.toFixed(5)}` : `$${totalCost.toFixed(4)}`;
+                        
+                        const rowEl = createElement("div", {className: "llm-usage-log-row"},
+                            createElement("span", {className: "llm-log-col-btn"}, deleteBtn),
+                            createElement("span", {className: "llm-log-col-time"}, formatTime(entry.timestamp)),
+                            createElement("span", {className: "llm-log-col-provider"}, entry.provider || "-"),
+                            createElement("span", {className: "llm-log-col-model", title: entry.model}, entry.model),
+                            createElement("span", {className: "llm-log-col-lang"}, entry.language || "-"),
+                            createElement("span", {className: "llm-log-col-num"}, cachedVal ? cachedVal.toLocaleString() : "-"),
+                            createElement("span", {className: "llm-log-col-num"}, inputVal ? inputVal.toLocaleString() : "-"),
+                            createElement("span", {className: "llm-log-col-num"}, reasoningVal ? reasoningVal.toLocaleString() : "-"),
+                            createElement("span", {className: "llm-log-col-num"}, outputVal ? outputVal.toLocaleString() : "-"),
+                            createElement("span", {className: "llm-log-col-cost"}, costStr)
+                        );
+                        
+                        deleteBtn.addEventListener("click", async (ev) => {
+                            ev.stopPropagation();
+                            deleteBtn.disabled = true;
+                            
+                            if (isDbReady() && entry.idx != null) {
+                                try {
+                                    let query = getDbClient().from(getLLMUsageTableName()).delete().eq("idx", entry.idx);
+                                    if (settings.useCentralDb) {
+                                        query = query.eq("user_id", centralUserId);
+                                    }
+                                    const {error} = await query;
+                                    if (error) {
+                                        console.error("Failed to delete log from DB:", error);
+                                        deleteBtn.disabled = false;
+                                        return;
+                                    }
+                                } catch (err) {
+                                    console.error("Delete DB log exception:", err);
+                                    deleteBtn.disabled = false;
+                                    return;
+                                }
+                            }
+                            
+                            try {
+                                const storageKey = "lingq_llm_usage_history";
+                                const rawData = localStorage.getItem(storageKey);
+                                if (rawData) {
+                                    const stored = JSON.parse(rawData);
+                                    const filteredStored = stored.filter((item) => {
+                                        if (entry.idx != null && item.idx != null) return item.idx !== entry.idx;
+                                        return item.timestamp !== entry.timestamp;
+                                    });
+                                    localStorage.setItem(storageKey, JSON.stringify(filteredStored));
+                                }
+                            } catch (err) {
+                                console.error("Failed to update localStorage after log deletion:", err);
+                            }
+                            
+                            currentLLMUsageHistory = currentLLMUsageHistory.filter((item) => item !== entry);
+                            
+                            const activePeriod = container.querySelector(".llm-usage-period-tabs .btn-ghost.active")?.dataset.period || "week";
+                            const activeMode = container.querySelector(".llm-usage-mode-tabs .btn-ghost.active")?.dataset.mode || "cost";
+                            updateSummaryAndChart(activePeriod, activeMode);
+                            
+                            rowEl.remove();
+                            if (recentLogsContainer.querySelectorAll(".llm-usage-log-row").length === 0) {
+                                recentLogsContainer.innerHTML = "";
+                                recentLogsContainer.appendChild(createElement("div", {className: "llm-usage-log-empty"}, "No usage logs recorded."));
+                            }
+                        });
+                        
+                        recentLogsContainer.appendChild(rowEl);
+                    });
+                }
+                
                 const container = document.getElementById("llmUsageStatsContainer");
                 if (!container) return;
                 const periodTabs = container.querySelectorAll(".llm-usage-period-tabs .btn-ghost");
@@ -6479,6 +6600,7 @@
                             const activePeriod = container.querySelector(".llm-usage-period-tabs .btn-ghost.active")?.dataset.period || "week";
                             const activeMode = container.querySelector(".llm-usage-mode-tabs .btn-ghost.active")?.dataset.mode || "cost";
                             updateSummaryAndChart(activePeriod, activeMode);
+                            renderRecentLLMUsageLogs();
                         });
                     }
                     
@@ -6488,6 +6610,7 @@
                 const activePeriod = container.querySelector(".llm-usage-period-tabs .btn-ghost.active")?.dataset.period || "week";
                 const activeMode = container.querySelector(".llm-usage-mode-tabs .btn-ghost.active")?.dataset.mode || "cost";
                 updateSummaryAndChart(activePeriod, activeMode);
+                renderRecentLLMUsageLogs();
             }
             
             const usageButtons = [
@@ -6495,6 +6618,8 @@
                 document.getElementById("llmUsageLogBtn")
             ].filter(Boolean);
             const usagePopup = document.getElementById("llmUsagePopup");
+            
+            changeScrollAmount("#llmUsageRecentLogsContainer", 0.1);
             
             usageButtons.forEach(btn => {
                 btn.addEventListener("click", () => {
@@ -6822,7 +6947,7 @@
 
                 #flashcardTable th:nth-child(2),
                 #flashcardTable td:nth-child(2) {
-                    width: 50px;
+                    width: 55px;
                 }
 
                 #flashcardTable th:nth-child(3),
@@ -6989,6 +7114,101 @@
                     display: inline-block;
                     width: 15px;
                     text-align: left;
+                }
+
+                #llmUsageRecentLogsContainer {
+                    height: 150px;
+                    overflow-y: auto;
+                    border: 1px solid rgb(125 125 125 / 50%);
+                    border-radius: 5px;
+                    font-size: 0.8em;
+                }
+
+                .llm-usage-log-header {
+                    display: flex;
+                    align-items: center;
+                    gap: 6px;
+                    padding: 3px 6px;
+                    background: var(--background-color);
+                    border-bottom: 1px solid var(--border);
+                    font-weight: bold;
+                    position: sticky;
+                    top: 0;
+                    z-index: 1;
+                    user-select: none;
+                }
+
+                .llm-usage-log-row {
+                    display: flex;
+                    align-items: center;
+                    gap: 6px;
+                    padding: 3px 6px;
+                    border-bottom: 1px solid rgba(128, 128, 128, 0.15);
+                }
+
+                .llm-usage-log-row:hover {
+                    background: rgba(125, 125, 125, 0.1);
+                }
+
+                .llm-usage-log-empty {
+                    text-align: center;
+                    opacity: 0.5;
+                    font-size: 0.85em;
+                    padding: 15px 4px;
+                }
+
+                .llm-log-col-btn {
+                    width: 18px;
+                    flex-shrink: 0;
+                }
+
+                .llm-log-col-btn .delete-row-btn {
+                    width: 14px;
+                    height: 14px;
+                    cursor: pointer;
+                    opacity: 0.6;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                }
+
+                .llm-log-col-btn .delete-row-btn:hover {
+                    opacity: 1;
+                }
+
+                .llm-log-col-time {
+                    width: 115px;
+                    flex-shrink: 0;
+                }
+
+                .llm-log-col-provider {
+                    width: 60px;
+                    flex-shrink: 0;
+                    opacity: 0.85;
+                }
+
+                .llm-log-col-model {
+                    flex: 1;
+                    min-width: 130px;
+                }
+
+                .llm-log-col-lang {
+                    width: 35px;
+                    flex-shrink: 0;
+                    text-align: center;
+                }
+
+                .llm-log-col-num {
+                    width: 55px;
+                    flex-shrink: 0;
+                    text-align: right;
+                    opacity: 0.85;
+                }
+
+                .llm-log-col-cost {
+                    width: 65px;
+                    flex-shrink: 0;
+                    text-align: right;
                 }
             `;
         }
@@ -8182,6 +8402,10 @@
 
             .audio-player--controllers {
                 grid-gap: unset !important;
+            }
+            
+            .audio-player--controllers > div.dropdown button {
+                height: 30px;
             }
 
             .audio-player--controllers a {
