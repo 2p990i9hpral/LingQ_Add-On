@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      16.10.0
+// @version      16.10.1
 // @license      GPL-3.0-or-later
 // @grant       GM_setValue
 // @grant       GM_getValue
@@ -1910,20 +1910,17 @@
                     }
                 }
                 
-                const lastAssistantIdx = mergedMessages.map(m => m.role).lastIndexOf("assistant");
-                mergedMessages.forEach((msg, idx) => {
-                    if (idx === lastAssistantIdx) {
+                mergedMessages.forEach(msg => {
+                    if (msg.role === "assistant") {
                         inputMessages.push({
-                            role: msg.role,
+                            role: "assistant",
                             content: [
                                 {
-                                    type: "input_text",
-                                    text: msg.content,
-                                    prompt_cache_breakpoint: {mode: "explicit"}
+                                    type: "output_text",
+                                    text: msg.content
                                 }
                             ]
                         });
-                        hasExplicitBreakpoint = true;
                     } else {
                         inputMessages.push(msg);
                     }
@@ -2344,6 +2341,7 @@
             
             let isVideoSeeking = false;
             let isAudioDrivenSeek = false;
+            let isVideoEnded = false;
 
             const playerObserver = new MutationObserver(() => {
                 const duration = videoElement.duration || 0;
@@ -2351,10 +2349,16 @@
                 const preciseTargetTime = parseFloat(sliderHandle.getAttribute("aria-valuenow")) || 0;
                 const isTargetNearEnd = duration > 0 && preciseTargetTime >= duration - 0.5;
 
+                if (!isTargetNearEnd && isVideoEnded) {
+                    isVideoEnded = false;
+                }
+
                 // 1. Sync Play/Pause State
                 const isLingQPlaying = playButtonSvg.classList.contains("svg-icon--pause");
                 if (isLingQPlaying && videoElement.paused) {
+                    isVideoEnded = false;
                     if (isVideoAtEnd) {
+                        isAudioDrivenSeek = true;
                         videoElement.currentTime = isTargetNearEnd ? 0 : preciseTargetTime;
                     }
                     videoElement.play().catch(() => {});
@@ -2421,8 +2425,22 @@
             }
             
             // Ensure accurate tracking across playback status switches
-            videoElement.addEventListener("play", syncPlaybackRate);
+            videoElement.addEventListener("play", () => {
+                const isLingQPlaying = playButtonSvg.classList.contains("svg-icon--pause");
+                if (!isLingQPlaying) {
+                    videoElement.pause();
+                    return;
+                }
+                isVideoEnded = false;
+                syncPlaybackRate();
+            });
             videoElement.addEventListener("playing", () => {
+                const isLingQPlaying = playButtonSvg.classList.contains("svg-icon--pause");
+                if (!isLingQPlaying) {
+                    videoElement.pause();
+                    return;
+                }
+                isVideoEnded = false;
                 syncPlaybackRate();
                 if (typeof mediaInstances !== "undefined") {
                     mediaInstances.forEach(media => {
@@ -2443,6 +2461,20 @@
                     return;
                 }
 
+                const duration = videoElement.duration || 0;
+                const isLingQPlaying = playButtonSvg.classList.contains("svg-icon--pause");
+                const preciseTargetTime = parseFloat(sliderHandle.getAttribute("aria-valuenow")) || 0;
+                const isTargetNearEnd = duration > 1.0 && preciseTargetTime >= duration - 0.5;
+
+                if ((isVideoEnded || isTargetNearEnd) && !isLingQPlaying && videoElement.currentTime < 1.0) {
+                    videoElement.pause();
+                    if (duration > 0) {
+                        isAudioDrivenSeek = true;
+                        videoElement.currentTime = duration;
+                    }
+                    return;
+                }
+
                 if (typeof mediaInstances === "undefined") return;
                 isVideoSeeking = true;
                 mediaInstances.forEach(media => {
@@ -2455,6 +2487,8 @@
                 }, 100);
             });
             videoElement.addEventListener("ended", () => {
+                isVideoEnded = true;
+                videoElement.pause();
                 const currentPlayButtonSvg = playButton.querySelector("svg");
                 if (currentPlayButtonSvg?.classList.contains("svg-icon--pause")) {
                     playButton.click();
