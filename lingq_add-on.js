@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      16.9.0
+// @version      16.9.1
 // @license      GPL-3.0-or-later
 // @grant       GM_setValue
 // @grant       GM_getValue
@@ -2344,13 +2344,18 @@
             let isAudioDrivenSeek = false;
 
             const playerObserver = new MutationObserver(() => {
-                const isVideoAtEnd = videoElement.ended || (videoElement.duration && videoElement.currentTime >= videoElement.duration - 0.1);
+                const duration = videoElement.duration || 0;
+                const isVideoAtEnd = videoElement.ended || (duration > 0 && videoElement.currentTime >= duration - 0.2);
+                const preciseTargetTime = parseFloat(sliderHandle.getAttribute("aria-valuenow")) || 0;
+                const isTargetNearEnd = duration > 0 && preciseTargetTime >= duration - 0.5;
 
                 // 1. Sync Play/Pause State
                 const isLingQPlaying = playButtonSvg.classList.contains("svg-icon--pause");
-                if (isLingQPlaying && videoElement.paused && !isVideoAtEnd) {
-                    videoElement.play().catch(() => {
-                    });
+                if (isLingQPlaying && videoElement.paused) {
+                    if (isVideoAtEnd) {
+                        videoElement.currentTime = isTargetNearEnd ? 0 : preciseTargetTime;
+                    }
+                    videoElement.play().catch(() => {});
                 } else if (!isLingQPlaying && !videoElement.paused) {
                     videoElement.pause();
                 }
@@ -2358,9 +2363,8 @@
                 // 2. Sync Precise Timeline
                 if (isVideoSeeking) return;
                 if (videoElement.readyState < 3) return;
-                if (isVideoAtEnd) return;
+                if (isVideoAtEnd && isTargetNearEnd) return;
 
-                const preciseTargetTime = parseFloat(sliderHandle.getAttribute("aria-valuenow")) || 0;
                 const diff = videoElement.currentTime - preciseTargetTime;
                 
                 // Adjust threshold based on paused state (no seek delay when paused)
@@ -2721,12 +2725,21 @@
                 // Capture existing playback position from LingQ player before loading video
                 let initialTime = 0;
                 const sliderHandle = document.querySelector('.audio-player--progress .rc-slider-handle');
-                if (sliderHandle && sliderHandle.getAttribute("aria-valuenow")) {
-                    initialTime = parseFloat(sliderHandle.getAttribute("aria-valuenow")) || 0;
+                if (sliderHandle) {
+                    const currentProgress = parseFloat(sliderHandle.getAttribute("aria-valuenow")) || 0;
+                    const maxProgress = parseFloat(sliderHandle.getAttribute("aria-valuemax")) || 0;
+                    const isCompleted = maxProgress > 0 && currentProgress >= maxProgress - 0.5;
+
+                    if (!isCompleted && currentProgress > 0) {
+                        initialTime = currentProgress;
+                    }
                 } else if (typeof mediaInstances !== "undefined") {
-                    mediaInstances.forEach(media => {
-                        if (media && media.currentTime > 0) {
-                            initialTime = media.currentTime;
+                    mediaInstances.forEach((media) => {
+                        if (media && document.body.contains(media) && media.currentTime > 0) {
+                            const isCompleted = media.duration > 0 && media.currentTime >= media.duration - 0.5;
+                            if (!isCompleted) {
+                                initialTime = media.currentTime;
+                            }
                         }
                     });
                 }
@@ -7435,6 +7448,9 @@
                     track.src = "";
                 }
                 container.remove();
+            }
+            if (typeof mediaInstances !== "undefined") {
+                mediaInstances.clear();
             }
         }
         
