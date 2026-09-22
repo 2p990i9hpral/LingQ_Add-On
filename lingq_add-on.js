@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      16.10.1
+// @version      16.10.2
 // @license      GPL-3.0-or-later
 // @grant       GM_setValue
 // @grant       GM_getValue
@@ -2313,7 +2313,28 @@
     }
     
     let cachedLocalVideoFiles, attemptAutoMatch;
-    
+    const mediaInstances = new Set();
+    let isVideoEnded = false;
+
+    function markVideoEnded() {
+        if (isVideoEnded) return;
+        isVideoEnded = true;
+        const video = document.getElementById("addonLocalVideo");
+        if (video && !video.paused) {
+            video.pause();
+        }
+        mediaInstances.forEach(media => {
+            if (media && !media.paused) {
+                media.pause();
+            }
+        });
+    }
+
+    function unlockVideoEnded() {
+        if (!isVideoEnded) return;
+        isVideoEnded = false;
+    }
+
     function handleLocalVideoContainerVisibility() {
         async function bindLingQPlayerControls(videoElement) {
             const sliderHandle = await waitForElement('.audio-player--progress .rc-slider-handle', 10000);
@@ -2326,8 +2347,10 @@
                 return;
             }
             
-            const playButtonSvg = playButton.querySelector("svg");
-            if (!playButtonSvg) return;
+            const isLingQPlaying = () => {
+                const svg = playButton.querySelector("svg");
+                return Boolean(svg && svg.classList.contains("svg-icon--pause"));
+            };
             
             const getLingQSpeed = () => parseFloat(speedLabel?.textContent ?? 1.0);
             
@@ -2341,28 +2364,78 @@
             
             let isVideoSeeking = false;
             let isAudioDrivenSeek = false;
-            let isVideoEnded = false;
+
+            // User interaction hooks to unlock playback when user intends to play/seek
+            playButton.addEventListener("click", () => {
+                const duration = videoElement.duration || 0;
+                if (isVideoEnded && duration > 0 && videoElement.currentTime >= duration - 0.1) {
+                    isAudioDrivenSeek = true;
+                    videoElement.currentTime = 0;
+                    mediaInstances.forEach(media => {
+                        if (media) media.currentTime = 0;
+                    });
+                }
+                unlockVideoEnded();
+            }, true);
+
+            videoElement.addEventListener("click", () => {
+                unlockVideoEnded();
+            });
+
+            const handleUserKeydown = (event) => {
+                if (event.code === "Space" && !event.target.closest("input, textarea, [contenteditable='true']")) {
+                    const duration = videoElement.duration || 0;
+                    if (isVideoEnded && duration > 0 && videoElement.currentTime >= duration - 0.1) {
+                        isAudioDrivenSeek = true;
+                        videoElement.currentTime = 0;
+                        mediaInstances.forEach(media => {
+                            if (media) media.currentTime = 0;
+                        });
+                    }
+                    unlockVideoEnded();
+                }
+            };
+            window.addEventListener("keydown", handleUserKeydown, true);
+
+            const progressContainer = document.querySelector(".audio-player--progress") || sliderHandle.parentElement;
+            if (progressContainer) {
+                progressContainer.addEventListener("pointerdown", () => unlockVideoEnded(), true);
+                progressContainer.addEventListener("mousedown", () => unlockVideoEnded(), true);
+            }
+
+            const lessonReader = document.querySelector(".lesson-reader") || document.body;
+            lessonReader.addEventListener("click", (event) => {
+                if (event.target.closest(".sentence, .reader-sentence, .sentence-text")) {
+                    unlockVideoEnded();
+                }
+            }, true);
 
             const playerObserver = new MutationObserver(() => {
                 const duration = videoElement.duration || 0;
-                const isVideoAtEnd = videoElement.ended || (duration > 0 && videoElement.currentTime >= duration - 0.2);
                 const preciseTargetTime = parseFloat(sliderHandle.getAttribute("aria-valuenow")) || 0;
-                const isTargetNearEnd = duration > 0 && preciseTargetTime >= duration - 0.5;
+                const isVideoAtEnd = videoElement.ended || (duration > 0 && videoElement.currentTime >= duration - 0.1);
+                const isTargetNearEnd = duration > 0 && preciseTargetTime >= duration - 0.1;
+                const isPlaying = isLingQPlaying();
 
-                if (!isTargetNearEnd && isVideoEnded) {
-                    isVideoEnded = false;
+                if (duration > 0 && (isVideoAtEnd || isTargetNearEnd)) {
+                    markVideoEnded();
+                }
+
+                if (isVideoEnded) {
+                    if (!videoElement.paused) {
+                        videoElement.pause();
+                    }
+                    return;
                 }
 
                 // 1. Sync Play/Pause State
-                const isLingQPlaying = playButtonSvg.classList.contains("svg-icon--pause");
-                if (isLingQPlaying && videoElement.paused) {
-                    isVideoEnded = false;
+                if (isPlaying && videoElement.paused) {
                     if (isVideoAtEnd) {
                         isAudioDrivenSeek = true;
                         videoElement.currentTime = isTargetNearEnd ? 0 : preciseTargetTime;
                     }
                     videoElement.play().catch(() => {});
-                } else if (!isLingQPlaying && !videoElement.paused) {
+                } else if (!isPlaying && !videoElement.paused) {
                     videoElement.pause();
                 }
                 
@@ -2418,7 +2491,7 @@
             });
             
             playerObserver.observe(sliderHandle, {attributes: true, attributeFilter: ["aria-valuenow", "style"]});
-            playerObserver.observe(playButtonSvg, {attributes: true, attributeFilter: ["class"]});
+            playerObserver.observe(playButton, {childList: true, subtree: true, attributes: true, attributeFilter: ["class"]});
             
             if (speedLabel) {
                 speedObserver.observe(speedLabel, {childList: true, characterData: true, subtree: true});
@@ -2426,47 +2499,40 @@
             
             // Ensure accurate tracking across playback status switches
             videoElement.addEventListener("play", () => {
-                const isLingQPlaying = playButtonSvg.classList.contains("svg-icon--pause");
-                if (!isLingQPlaying) {
+                if (isVideoEnded || !isLingQPlaying()) {
                     videoElement.pause();
                     return;
                 }
-                isVideoEnded = false;
                 syncPlaybackRate();
             });
             videoElement.addEventListener("playing", () => {
-                const isLingQPlaying = playButtonSvg.classList.contains("svg-icon--pause");
-                if (!isLingQPlaying) {
+                if (isVideoEnded || !isLingQPlaying()) {
                     videoElement.pause();
                     return;
                 }
-                isVideoEnded = false;
                 syncPlaybackRate();
-                if (typeof mediaInstances !== "undefined") {
-                    mediaInstances.forEach(media => {
-                        if (media && Math.abs(videoElement.currentTime - media.currentTime) > 0.3) {
-                            isVideoSeeking = true;
-                            media.currentTime = videoElement.currentTime;
-                            setTimeout(() => {
-                                isVideoSeeking = false;
-                            }, 100);
-                        }
-                    });
-                }
+                mediaInstances.forEach(media => {
+                    if (media && Math.abs(videoElement.currentTime - media.currentTime) > 0.3) {
+                        isVideoSeeking = true;
+                        media.currentTime = videoElement.currentTime;
+                        setTimeout(() => {
+                            isVideoSeeking = false;
+                        }, 100);
+                    }
+                });
             });
             videoElement.addEventListener("loadedmetadata", syncPlaybackRate);
             videoElement.addEventListener("seeking", () => {
+                const duration = videoElement.duration || 0;
+                if (duration > 0 && videoElement.currentTime >= duration - 0.1) {
+                    markVideoEnded();
+                }
                 if (isAudioDrivenSeek) {
                     isAudioDrivenSeek = false;
                     return;
                 }
 
-                const duration = videoElement.duration || 0;
-                const isLingQPlaying = playButtonSvg.classList.contains("svg-icon--pause");
-                const preciseTargetTime = parseFloat(sliderHandle.getAttribute("aria-valuenow")) || 0;
-                const isTargetNearEnd = duration > 1.0 && preciseTargetTime >= duration - 0.5;
-
-                if ((isVideoEnded || isTargetNearEnd) && !isLingQPlaying && videoElement.currentTime < 1.0) {
+                if (isVideoEnded && videoElement.currentTime < 1.0) {
                     videoElement.pause();
                     if (duration > 0) {
                         isAudioDrivenSeek = true;
@@ -2475,7 +2541,6 @@
                     return;
                 }
 
-                if (typeof mediaInstances === "undefined") return;
                 isVideoSeeking = true;
                 mediaInstances.forEach(media => {
                     if (media && Math.abs(videoElement.currentTime - media.currentTime) > 0.1) {
@@ -2487,15 +2552,20 @@
                 }, 100);
             });
             videoElement.addEventListener("ended", () => {
-                isVideoEnded = true;
-                videoElement.pause();
-                const currentPlayButtonSvg = playButton.querySelector("svg");
-                if (currentPlayButtonSvg?.classList.contains("svg-icon--pause")) {
+                markVideoEnded();
+                if (isLingQPlaying()) {
                     playButton.click();
                 }
             });
+
+            videoElement.addEventListener("timeupdate", () => {
+                const duration = videoElement.duration || 0;
+                if (duration > 0 && videoElement.currentTime >= duration - 0.1) {
+                    markVideoEnded();
+                }
+            });
             
-            const isLingQPlayingInit = playButtonSvg.classList.contains("svg-icon--pause");
+            const isLingQPlayingInit = isLingQPlaying();
             if (isLingQPlayingInit && videoElement.paused) {
                 videoElement.play().catch(() => {
                 });
@@ -2819,7 +2889,6 @@
     /* Features */
     
     // Volume Control & Local Video Audio Mute Hook
-    const mediaInstances = new Set();
     const PageMediaElement = window.HTMLMediaElement;
     if (PageMediaElement) {
         const volumeDescriptor = Object.getOwnPropertyDescriptor(PageMediaElement.prototype, 'volume');
@@ -2850,6 +2919,14 @@
         
         const originalPlay = PageMediaElement.prototype.play;
         PageMediaElement.prototype.play = function () {
+            const lessonLang = getLessonLanguage();
+            const isLocalVideoActive = lessonLang && settings.styleType[lessonLang] === "localVideo";
+
+            if (isLocalVideoActive && isVideoEnded) {
+                this.pause();
+                return Promise.resolve();
+            }
+
             const src = this.src || '';
             if (!src.startsWith('data:') && !src.includes('/tts/')) {
                 if (!mediaInstances.has(this)) {
@@ -2889,6 +2966,7 @@
     }
     
     function skipPlayback(deltaSeconds) {
+        unlockVideoEnded();
         const localVideo = document.getElementById("addonLocalVideo");
         const isLocalVideoActive = localVideo && localVideo.style.display !== "none" && !isNaN(localVideo.currentTime);
         const sliderHandle = document.querySelector('.audio-player--progress .rc-slider-handle');
@@ -7477,6 +7555,7 @@
         }
         
         function resetLocalVideo() {
+            isVideoEnded = false;
             const container = document.getElementById("local-video-container");
             if (container) {
                 const video = container.querySelector("#addonLocalVideo");
