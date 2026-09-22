@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      16.9.1
+// @version      16.10.0
 // @license      GPL-3.0-or-later
 // @grant       GM_setValue
 // @grant       GM_getValue
@@ -125,6 +125,8 @@
     
     const llmModelsByProvider = {
         "openai": [
+            {value: "gpt-6-sol", text: "GPT-6 Sol ($2/$10)", inputPrice: 2, outputPrice: 10, cachedPrice: 0.2},
+            {value: "gpt-6-luna", text: "GPT-6 Luna ($0.1/$0.5)", inputPrice: 0.1, outputPrice: 0.5, cachedPrice: 0.01},
             {value: "gpt-5.6-sol", text: "GPT-5.6 Sol ($5/$30)", inputPrice: 5, outputPrice: 30, cachedPrice: 0.5},
             {value: "gpt-5.6-terra", text: "GPT-5.6 Terra ($2/$12)", inputPrice: 2, outputPrice: 12, cachedPrice: 0.2},
             {value: "gpt-5.6-luna", text: "GPT-5.6 Luna ($0.2/$1.2)", inputPrice: 0.2, outputPrice: 1.2, cachedPrice: 0.02},
@@ -2853,8 +2855,12 @@
     }
     
     function skipPlayback(deltaSeconds) {
+        const localVideo = document.getElementById("addonLocalVideo");
+        const isLocalVideoActive = localVideo && localVideo.style.display !== "none" && !isNaN(localVideo.currentTime);
         const sliderHandle = document.querySelector('.audio-player--progress .rc-slider-handle');
-        const currentTime = sliderHandle ? parseFloat(sliderHandle.getAttribute("aria-valuenow")) : 0;
+        const currentTime = isLocalVideoActive
+            ? localVideo.currentTime
+            : (sliderHandle ? (parseFloat(sliderHandle.getAttribute("aria-valuenow")) || 0) : 0);
         const targetTime = Math.max(0, currentTime + deltaSeconds);
 
         const controllers = document.querySelector('.audio-player--controllers');
@@ -2880,7 +2886,10 @@
             });
         } else {
             const audio = document.querySelector('audio');
-            if (audio) audio.currentTime = targetTime;
+            if (audio) {
+                const maxTime = !isNaN(audio.duration) ? audio.duration : targetTime;
+                audio.currentTime = Math.min(maxTime, targetTime);
+            }
         }
     }
     
@@ -8746,6 +8755,11 @@
                 min-width: 0;
                 overflow: hidden;
             }
+            #lesson-reader[data-lesson-completed-visible="true"] #local-video-container,
+            [id$="-content-lessonCompleted"][data-state="active"] ~ * #local-video-container,
+            body:has([id$="-content-lessonCompleted"][data-state="active"]) #local-video-container {
+                display: none !important;
+            }
             .local-video-setup-box {
                 display: flex;
                 flex-direction: column;
@@ -9106,6 +9120,14 @@
                     return svgEl?.classList.contains('svg-icon--pause') ?? false;
                 }
                 
+                function isLastPage() {
+                    const sentenceText = document.querySelector(".sentence-text");
+                    if (!sentenceText) return false;
+                    const curPage = sentenceText.className.match(/\bis-page-(\d+)\b/)?.[1];
+                    const totalPages = sentenceText.className.match(/\bhas-pages-(\d+)\b/)?.[1];
+                    return Boolean(curPage && totalPages && curPage === totalPages);
+                }
+
                 function checkAndAdvancePage(sentence) {
                     const container = document.querySelector(".reader-container");
                     if (!container) return;
@@ -9115,6 +9137,11 @@
                     if (sentence !== lastSentence) return;
                     console.log('[PageAdvance]', 'Last sentence detected.');
                     
+                    if (isLastPage()) {
+                        console.log('[PageAdvance]', 'Last page detected. Skip auto-advance.');
+                        return;
+                    }
+
                     const playing = isPlayerPlaying();
                     if (!playing) {
                         console.log('[PageAdvance]', 'Player is paused — skip.');
@@ -9471,10 +9498,17 @@
                 
             }
             
-            function handleLessonCompletion() {
-                waitForElement('[id$="-content-lessonCompleted"]', 5000).then((completionElement) => {
-                    if (!completionElement) return;
-                    
+            function setupLessonCompletionObserver() {
+                const lessonReader = document.getElementById("lesson-reader");
+                if (!lessonReader || lessonReader.hasLessonCompletionObserver) return;
+                lessonReader.hasLessonCompletionObserver = true;
+
+                let isCompletedHandled = false;
+
+                const onCompletedActive = async () => {
+                    if (isCompletedHandled) return;
+                    isCompletedHandled = true;
+
                     const usageStats = lessonUsageHistory.reduce((acc, usage) => {
                         const category = usage.type.includes("TTS") ? "TTS"
                             : usage.type.includes("Cache") ? "Cache"
@@ -9535,28 +9569,99 @@
                             const {cached, input, reasoning, output} = data.tokens;
                             console.log(`  - ${category}: ${data.calls} calls, tokens: (${cached}/${input}/${reasoning}/${output}), $${data.cost.toFixed(6)} (${savedPercent}% saved)`);
                         });
+
+                    clickElement("div.player-wrapper > div.player-close a");
+                    resetLocalVideo();
                     
-                    setTimeout(async () => {
-                        if (completionElement.getAttribute("data-state") === "active") {
-                            clickElement("div.player-wrapper > div.player-close a");
-                            resetLocalVideo();
-                            document.dispatchEvent(new KeyboardEvent("keydown", {key: "Escape"}));
-                            
-                            const nextButton = document.querySelector("#lesson-reader > div.h-full > div > header > div.col-3 > button");
-                            if (!nextButton) return;
-                            
-                            if (settings.skipEndPage) {
-                                for (let i = 0; i < 2; i++) {
-                                    const currentPanel = document.querySelector('[id$="-content-lessonCompleted"]');
-                                    if (currentPanel?.getAttribute("data-state") === "active") {
-                                        break;
-                                    }
-                                    nextButton.click();
-                                    await sleep(500);
-                                }
+                    const escEvent = new KeyboardEvent("keydown", {
+                        key: "Escape",
+                        code: "Escape",
+                        keyCode: 27,
+                        which: 27,
+                        bubbles: true,
+                        cancelable: true
+                    });
+                    window.dispatchEvent(escEvent);
+                    document.dispatchEvent(escEvent);
+
+                    const nextButton = document.querySelector("#lesson-reader > div.h-full > div > header > div.col-3 > button");
+                    if (!nextButton) return;
+
+                    if (settings.skipEndPage) {
+                        for (let i = 0; i < 2; i++) {
+                            const currentPanel = document.querySelector('[id$="-content-lessonCompleted"]');
+                            if (currentPanel?.getAttribute("data-state") === "active") {
+                                break;
                             }
+                            nextButton.click();
+                            await sleep(500);
                         }
-                    }, 300);
+                    }
+                };
+
+                let tabsObserver = null;
+                const attachTabsObserver = () => {
+                    if (tabsObserver) return;
+                    const tabsContainer = lessonReader.querySelector('[data-slot="tabs"]');
+                    if (!tabsContainer) return;
+                    tabsObserver = new MutationObserver(() => {
+                        checkCompletionState();
+                    });
+                    tabsObserver.observe(tabsContainer, {
+                        attributes: true,
+                        attributeFilter: ["data-state"],
+                        subtree: true
+                    });
+                };
+
+                const detachTabsObserver = () => {
+                    if (tabsObserver) {
+                        tabsObserver.disconnect();
+                        tabsObserver = null;
+                    }
+                };
+
+                const checkCompletionState = () => {
+                    const completionPanel = document.querySelector('[id$="-content-lessonCompleted"]');
+                    const isCompletedActive = completionPanel?.getAttribute("data-state") === "active";
+                    const isReaderCompleted = lessonReader.getAttribute("data-lesson-completed-visible") === "true";
+
+                    if (isCompletedActive || isReaderCompleted) {
+                        attachTabsObserver();
+                        onCompletedActive();
+                    } else if (!isCompletedActive && !isReaderCompleted) {
+                        detachTabsObserver();
+                        isCompletedHandled = false;
+                    }
+                };
+
+                checkCompletionState();
+
+                const completionObserver = new MutationObserver((mutations) => {
+                    const isRelevant = mutations.some((m) => {
+                        if (m.type === "attributes" && m.attributeName === "data-lesson-completed-visible") {
+                            return true;
+                        }
+                        if (m.type === "childList") {
+                            const matchNode = (node) =>
+                                node.nodeType === Node.ELEMENT_NODE && (
+                                    node.classList.contains("bg-editor") ||
+                                    node.querySelector?.('[id$="-content-lessonCompleted"], [data-slot="tabs"]')
+                                );
+                            return Array.from(m.addedNodes).some(matchNode) || Array.from(m.removedNodes).some(matchNode);
+                        }
+                        return false;
+                    });
+
+                    if (!isRelevant) return;
+
+                    checkCompletionState();
+                });
+
+                completionObserver.observe(lessonReader, {
+                    attributes: true,
+                    attributeFilter: ["data-lesson-completed-visible"],
+                    childList: true
                 });
             }
             
@@ -9629,7 +9734,7 @@
 
                 const isNearBottom = scrollRatio >= 0.90 || distFromBottom <= 50;
                 if (isNearBottom) {
-                    const MAX_HIDDEN = 3;
+                    const MAX_HIDDEN = 5;
                     if (hiddenReaderElements.length >= MAX_HIDDEN) return;
 
                     isCheckingReaderOverflow = true;
@@ -9700,50 +9805,6 @@
                 setTimeout(performReset, 50);
                 setTimeout(performReset, 150);
             }
-            
-            function setupNavClickListeners() {
-                const navSelectors = [
-                    ".reader-component .nav--left a",
-                    ".reader-component .nav--right a"
-                ];
-                
-                function removeSummary() {
-                    document.querySelector(".quick-summary")?.remove();
-                }
-                
-                navSelectors.forEach((selector) => {
-                    waitForElement(selector, 5000).then((button) => {
-                        if (!button) return;
-                        button.addEventListener("click", () => restoreHiddenReaderElements("Nav button clicked"), true);
-                        button.addEventListener("click", removeSummary, true);
-                        button.addEventListener("click", handleLessonCompletion, true);
-                    });
-                });
-            }
-            
-            function setupKeyboardListeners() {
-                window.addEventListener("keydown", (event) => {
-                    if (!event.shiftKey) return;
-                    if (!(event.key === "ArrowRight" || event.key === "ArrowLeft")) return;
-                    
-                    const nextBtn = document.querySelector("#lesson-reader > div.h-full > div > header > div.col-3 > button");
-                    const prevBtn = document.querySelector("#lesson-reader > div.h-full > div > header > div:nth-child(1) > button");
-                    
-                    if (event.key === "ArrowRight" && nextBtn) {
-                        restoreHiddenReaderElements("Page shortcut key (Right)");
-                        event.stopImmediatePropagation();
-                        event.preventDefault();
-                        nextBtn.click();
-                        handleLessonCompletion();
-                    } else if (event.key === "ArrowLeft" && prevBtn) {
-                        restoreHiddenReaderElements("Page shortcut key (Left)");
-                        event.stopImmediatePropagation();
-                        event.preventDefault();
-                        prevBtn.click();
-                    }
-                }, true);
-            }
-            
             function preventHorizontalScroll() {
                 if (window.hasPreventHorizontalScrollLinked) return;
                 window.hasPreventHorizontalScrollLinked = true;
@@ -9775,6 +9836,7 @@
                 resetLocalVideo();
                 handleLocalVideoContainerVisibility();
                 attachAudioPlayerObserver();
+                setupLessonCompletionObserver();
                 
                 const isPageMode = settings.usePageMode[language];
                 if (isPageMode) {
@@ -9814,11 +9876,9 @@
                     }
                 }
                 await generateLessonSummary(node);
-                
-                setupNavClickListeners();
             }
             
-            setupKeyboardListeners();
+            setupLessonCompletionObserver();
 
             if (!window.hasReaderResizeListener) {
                 window.hasReaderResizeListener = true;
@@ -9840,6 +9900,7 @@
                         const newPage = newClass.match(/\bis-page-(\d+)\b/)?.[1];
                         
                         if (newPage && oldPage !== newPage) {
+                            document.querySelector(".quick-summary")?.remove();
                             restoreHiddenReaderElements(`Page change: ${oldPage} -> ${newPage}`);
                             resetScroll();
                         }
