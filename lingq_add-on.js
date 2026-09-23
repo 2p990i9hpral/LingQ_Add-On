@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      16.10.2
+// @version      16.10.3
 // @license      GPL-3.0-or-later
 // @grant       GM_setValue
 // @grant       GM_getValue
@@ -6600,27 +6600,13 @@
                         return;
                     }
                     
-                    const headerEl = createElement("div", {className: "llm-usage-log-header"},
-                        createElement("span", {className: "llm-log-col-btn"}),
-                        createElement("span", {className: "llm-log-col-time"}, "Time"),
-                        createElement("span", {className: "llm-log-col-provider"}, "Provider"),
-                        createElement("span", {className: "llm-log-col-model"}, "Model"),
-                        createElement("span", {className: "llm-log-col-lang"}, "Lang"),
-                        createElement("span", {className: "llm-log-col-num"}, "Cached"),
-                        createElement("span", {className: "llm-log-col-num"}, "Input"),
-                        createElement("span", {className: "llm-log-col-num"}, "Reasoning"),
-                        createElement("span", {className: "llm-log-col-num"}, "Output"),
-                        createElement("span", {className: "llm-log-col-cost"}, "Cost")
-                    );
-                    recentLogsContainer.appendChild(headerEl);
-                    
                     const formatTime = (ts) => {
                         const d = new Date(ts);
                         const pad = (n) => String(n).padStart(2, "0");
                         return `${pad(d.getMonth() + 1)}/${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
                     };
                     
-                    recentLogs.forEach((entry) => {
+                    const rows = recentLogs.map((entry) => {
                         const deleteBtn = createElement("button", {
                             className: "delete-row-btn",
                             title: "Delete this log",
@@ -6637,17 +6623,17 @@
                         const totalCost = costItems.reduce((sum, item) => sum + item.value, 0);
                         const costStr = totalCost < 0.01 ? `$${totalCost.toFixed(5)}` : `$${totalCost.toFixed(4)}`;
                         
-                        const rowEl = createElement("div", {className: "llm-usage-log-row"},
-                            createElement("span", {className: "llm-log-col-btn"}, deleteBtn),
-                            createElement("span", {className: "llm-log-col-time"}, formatTime(entry.timestamp)),
-                            createElement("span", {className: "llm-log-col-provider"}, entry.provider || "-"),
-                            createElement("span", {className: "llm-log-col-model", title: entry.model}, entry.model),
-                            createElement("span", {className: "llm-log-col-lang"}, entry.language || "-"),
-                            createElement("span", {className: "llm-log-col-num"}, cachedVal ? cachedVal.toLocaleString() : "-"),
-                            createElement("span", {className: "llm-log-col-num"}, inputVal ? inputVal.toLocaleString() : "-"),
-                            createElement("span", {className: "llm-log-col-num"}, reasoningVal ? reasoningVal.toLocaleString() : "-"),
-                            createElement("span", {className: "llm-log-col-num"}, outputVal ? outputVal.toLocaleString() : "-"),
-                            createElement("span", {className: "llm-log-col-cost"}, costStr)
+                        const rowEl = createElement("tr", {className: "llm-usage-log-row"},
+                            createElement("td", {className: "llm-log-col-btn"}, deleteBtn),
+                            createElement("td", {className: "llm-log-col-time"}, formatTime(entry.timestamp)),
+                            createElement("td", {className: "llm-log-col-provider"}, entry.provider || "-"),
+                            createElement("td", {className: "llm-log-col-model", title: entry.model}, entry.model),
+                            createElement("td", {className: "llm-log-col-lang"}, entry.language || "-"),
+                            createElement("td", {className: "llm-log-col-num"}, cachedVal ? cachedVal.toLocaleString() : "-"),
+                            createElement("td", {className: "llm-log-col-num"}, inputVal ? inputVal.toLocaleString() : "-"),
+                            createElement("td", {className: "llm-log-col-num"}, reasoningVal ? reasoningVal.toLocaleString() : "-"),
+                            createElement("td", {className: "llm-log-col-num"}, outputVal ? outputVal.toLocaleString() : "-"),
+                            createElement("td", {className: "llm-log-col-cost"}, costStr)
                         );
                         
                         deleteBtn.addEventListener("click", async (ev) => {
@@ -6701,8 +6687,28 @@
                             }
                         });
                         
-                        recentLogsContainer.appendChild(rowEl);
+                        return rowEl;
                     });
+                    
+                    const tableEl = createElement("table", {id: "llmUsageRecentLogsTable"},
+                        createElement("thead", {},
+                            createElement("tr", {},
+                                createElement("th", {className: "llm-log-col-btn"}),
+                                createElement("th", {className: "llm-log-col-time"}, "Time"),
+                                createElement("th", {className: "llm-log-col-provider"}, "Provider"),
+                                createElement("th", {className: "llm-log-col-model"}, "Model"),
+                                createElement("th", {className: "llm-log-col-lang"}, "Lang"),
+                                createElement("th", {className: "llm-log-col-num"}, "Cached"),
+                                createElement("th", {className: "llm-log-col-num"}, "Input"),
+                                createElement("th", {className: "llm-log-col-num"}, "Reasoning"),
+                                createElement("th", {className: "llm-log-col-num"}, "Output"),
+                                createElement("th", {className: "llm-log-col-cost"}, "Cost")
+                            )
+                        ),
+                        createElement("tbody", {}, ...rows)
+                    );
+                    
+                    recentLogsContainer.appendChild(tableEl);
                 }
                 
                 const container = document.getElementById("llmUsageStatsContainer");
@@ -7258,29 +7264,34 @@
                     font-size: 0.8em;
                 }
 
-                .llm-usage-log-header {
-                    display: flex;
-                    align-items: center;
-                    gap: 6px;
-                    padding: 3px 6px;
-                    background: var(--background-color);
-                    border-bottom: 1px solid var(--border);
-                    font-weight: bold;
+                #llmUsageRecentLogsTable {
+                    table-layout: fixed;
+                    width: 100%;
+                    border-collapse: separate;
+                    border-spacing: 0;
+                }
+
+                #llmUsageRecentLogsTable th {
                     position: sticky;
                     top: 0;
+                    background: var(--background-color);
                     z-index: 1;
                     user-select: none;
+                    padding: 4px 6px;
+                    border-bottom: 1px solid var(--border);
+                    font-weight: bold;
+                    text-align: left;
                 }
 
-                .llm-usage-log-row {
-                    display: flex;
-                    align-items: center;
-                    gap: 6px;
+                #llmUsageRecentLogsTable td {
                     padding: 3px 6px;
                     border-bottom: 1px solid rgba(128, 128, 128, 0.15);
+                    white-space: nowrap;
+                    overflow: hidden;
+                    text-overflow: ellipsis;
                 }
 
-                .llm-usage-log-row:hover {
+                #llmUsageRecentLogsTable tr:hover {
                     background: rgba(125, 125, 125, 0.1);
                 }
 
@@ -7291,57 +7302,53 @@
                     padding: 15px 4px;
                 }
 
-                .llm-log-col-btn {
-                    width: 18px;
-                    flex-shrink: 0;
+                #llmUsageRecentLogsTable .llm-log-col-btn {
+                    width: 30px;
+                    user-select: none;
+                    text-align: center;
                 }
 
-                .llm-log-col-btn .delete-row-btn {
+                #llmUsageRecentLogsTable .llm-log-col-btn .delete-row-btn {
                     width: 14px;
                     height: 14px;
                     cursor: pointer;
                     opacity: 0.6;
-                    display: flex;
+                    display: inline-flex;
                     align-items: center;
                     justify-content: center;
+                    vertical-align: middle;
                 }
 
-                .llm-log-col-btn .delete-row-btn:hover {
+                #llmUsageRecentLogsTable .llm-log-col-btn .delete-row-btn:hover {
                     opacity: 1;
                 }
 
-                .llm-log-col-time {
+                #llmUsageRecentLogsTable .llm-log-col-time {
                     width: 115px;
-                    flex-shrink: 0;
                 }
 
-                .llm-log-col-provider {
-                    width: 60px;
-                    flex-shrink: 0;
+                #llmUsageRecentLogsTable .llm-log-col-provider {
+                    width: 75px;
                     opacity: 0.85;
                 }
 
-                .llm-log-col-model {
-                    flex: 1;
-                    min-width: 130px;
+                #llmUsageRecentLogsTable .llm-log-col-model {
+                    width: auto;
                 }
 
-                .llm-log-col-lang {
-                    width: 35px;
-                    flex-shrink: 0;
+                #llmUsageRecentLogsTable .llm-log-col-lang {
+                    width: 40px;
                     text-align: center;
                 }
 
-                .llm-log-col-num {
-                    width: 55px;
-                    flex-shrink: 0;
+                #llmUsageRecentLogsTable .llm-log-col-num {
+                    width: 70px;
                     text-align: right;
                     opacity: 0.85;
                 }
 
-                .llm-log-col-cost {
-                    width: 65px;
-                    flex-shrink: 0;
+                #llmUsageRecentLogsTable .llm-log-col-cost {
+                    width: 75px;
                     text-align: right;
                 }
             `;
