@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      16.10.3
+// @version      16.11.0
 // @license      GPL-3.0-or-later
 // @grant       GM_setValue
 // @grant       GM_getValue
@@ -102,6 +102,7 @@
         ttsAutoplay: false,
         ttsApiKey: "",
         ttsProvider: "openai",
+        ttsModel: "gemini-3.8-flash-lite-tts",
         ttsVoice: {},
         ttsWord: false,
         
@@ -170,6 +171,15 @@
         ],
         "zai": [
             {value: "glm-5.3-flash", text: "GLM-5.3 Flash ($0.15/$0.50)", inputPrice: 0.15, outputPrice: 0.50, cachedPrice: 0.03}
+        ]
+    };
+    
+    const ttsModelsByProvider = {
+        "google gemini": [
+            {value: "gemini-3.8-flash-tts", text: "gemini-3.8-flash-tts ($0.5/$9)"},
+            {value: "gemini-3.8-flash-lite-tts", text: "gemini-3.8-flash-lite-tts ($0.5/$6)"},
+            {value: "gemini-3.1-flash-tts-preview", text: "gemini 3.1-flash-tts ($1/$20)"},
+            {value: "gemini-2.5-flash-preview-tts", text: "gemini 2.5-flash-tts ($0.5/$10)"}
         ]
     };
     
@@ -1335,7 +1345,7 @@
         }
     }
     
-    async function geminiTTS(text, API_KEY, voice = "Zephyr", ttsInstructions) {
+    async function geminiTTS(text, API_KEY, voice = "Zephyr", ttsInstructions, modelId = "gemini-3.8-flash-lite-tts") {
         function createWavHeader(dataLength) {
             const sampleRate = 24000;
             const numChannels = 1;
@@ -1372,7 +1382,6 @@
             return view.buffer;
         }
         
-        const modelId = "gemini-3.1-flash-tts-preview";
         const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${modelId}:generateContent?key=${API_KEY}`;
         
         if (!API_KEY) throw new Error("Invalid or missing Google API key. Please set the API_KEY");
@@ -1508,7 +1517,7 @@
         }
     }
     
-    async function getTTSResponse(provider, apiKey, voice, text, ttsInstructions = 'Read the text in a realistic, genuine, neutral, and clear manner. vary your rhythm and pace naturally, like a professional voice actor: ') {
+    async function getTTSResponse(provider, apiKey, voice, text, ttsInstructions = 'Read the text in a realistic, genuine, neutral, and clear manner. vary your rhythm and pace naturally, like a professional voice actor: ', model = settings.ttsModel) {
         const voices = Array.from(document.querySelector("#ttsVoiceSelector").options)
             .map(option => option.value)
             .filter(option => {
@@ -1521,7 +1530,7 @@
             case "openai":
                 return await openAITTS(text, apiKey, voice, ttsInstructions);
             case "google gemini":
-                return await geminiTTS(text, apiKey, voice, ttsInstructions);
+                return await geminiTTS(text, apiKey, voice, ttsInstructions, model);
             case "google cloud":
                 if (voice.startsWith("random-")) {
                     const randomLanguage = voice.replace("random-", "");
@@ -3698,6 +3707,11 @@
                 {value: "google cloud", text: "Google Cloud"}
             ], settings.ttsProvider);
             
+            const activeTtsModels = ttsModelsByProvider[settings.ttsProvider] || [];
+            const ttsModelContainer = addSelect(ttsSection, "ttsModelSelector", "Model: (Price per 1M tokens)", activeTtsModels, settings.ttsModel);
+            ttsModelContainer.id = "ttsModelContainer";
+            ttsModelContainer.style.display = settings.ttsProvider === "google gemini" ? "block" : "none";
+            
             addSelect(ttsSection, "ttsVoiceSelector", "TTS Voice:", voiceOptionsObject[settings.ttsProvider], settings.ttsVoice[language]);
             
             addCheckbox(ttsSection, "ttsWordCheckbox", "Enable AI-TTS for words", settings.ttsWord);
@@ -4717,8 +4731,12 @@
             });
             
             const ttsProviderSelector = document.getElementById("ttsProviderSelector");
+            const ttsModelSelector = document.getElementById("ttsModelSelector");
+            const ttsModelContainer = document.getElementById("ttsModelContainer");
+            
             ttsProviderSelector.addEventListener("change", (event) => {
-                settings.ttsProvider = event.target.value
+                const provider = event.target.value;
+                settings.ttsProvider = provider;
                 ttsVoiceSelector.innerHTML = "";
                 voiceOptionsObject[settings.ttsProvider].forEach(option => {
                     ttsVoiceSelector.appendChild(createElement("option", {
@@ -4726,7 +4744,30 @@
                         textContent: option.text
                     }));
                 });
+                
+                const models = ttsModelsByProvider[provider] || [];
+                if (models.length > 0) {
+                    ttsModelSelector.innerHTML = "";
+                    models.forEach(model => {
+                        ttsModelSelector.appendChild(createElement("option", {
+                            value: model.value,
+                            textContent: model.text
+                        }));
+                    });
+                    const targetModel = models.some(m => m.value === settings.ttsModel) ? settings.ttsModel : (models[0]?.value || "");
+                    settings.ttsModel = targetModel;
+                    ttsModelSelector.value = targetModel;
+                    if (ttsModelContainer) ttsModelContainer.style.display = "block";
+                } else {
+                    if (ttsModelContainer) ttsModelContainer.style.display = "none";
+                }
             });
+            
+            if (ttsModelSelector) {
+                ttsModelSelector.addEventListener("change", (event) => {
+                    settings.ttsModel = event.target.value;
+                });
+            }
             
             const ttsWordCheckbox = document.getElementById("ttsWordCheckbox");
             ttsWordCheckbox.addEventListener('change', (event) => {
@@ -4834,6 +4875,14 @@
                 document.getElementById("ttsAutoplayCheckbox").value = defaults.ttsAutoplay;
                 document.getElementById("ttsApiKeyInput").value = defaults.ttsApiKey;
                 document.getElementById("ttsProviderSelector").value = defaults.ttsProvider;
+                const ttsModelSelector = document.getElementById("ttsModelSelector");
+                if (ttsModelSelector) {
+                    ttsModelSelector.value = defaults.ttsModel;
+                }
+                const ttsModelContainer = document.getElementById("ttsModelContainer");
+                if (ttsModelContainer) {
+                    ttsModelContainer.style.display = defaults.ttsProvider === "google gemini" ? "block" : "none";
+                }
                 document.getElementById("ttsVoiceSelector").value = languageScopedDefaults.ttsVoice;
                 document.getElementById("ttsWordCheckbox").value = defaults.ttsWord;
                 document.getElementById("ttsSentenceCheckbox").value = defaults.ttsSentence;
@@ -11619,7 +11668,7 @@
             - Provide IPA for the Base Form (lemma) enclosed in brackets [].
             - Use a single, consistent transcription system throughout the whole word. Do not mix broad IPA symbols with romanized/orthographic letters (e.g., Pinyin, Revised Romanization) within the same transcription.
             - Prefer broad, phonemic transcription over narrow, allophonic transcription. Eliminate narrow phonetic diacritics (e.g., lowering [̞], voiceless [̥], compressed [ᵝ], or dental [̪] marks), and avoid substituting a distinct narrow-transcription symbol for a gradient, sub-phonemic co-articulatory detail (e.g., minor degrees of palatalization, uvularization, or aspiration) that is not codified in the standard pronunciation convention of the language.
-            - Mark suprasegmental features (vowel/consonant length, stress, tone, pitch accent, gemination, etc.) consistently wherever the target language treats them as phonemically distinctive.
+            - Mark suprasegmental features (e.g., stress [ˈ], tone, vowel length [ː], gemination) consistently where phonemically distinctive. However, Do not mark pitch accent (e.g., Japanese downstep [ꜜ]); transcribe broad segmental phonemes and vowel length only.
             - When in doubt, follow the phonemic transcription convention used by Wiktionary or a major academic reference for that language, rather than an ad hoc or narrow phonetic realization.
             - Ensure the output represents the standard, dictionary-style pronunciation, not a precise phonetic realization of one specific utterance.
             - Negative Examples
@@ -11728,7 +11777,7 @@
         User Input: 'Input: "立ち尽くしていました", Context: "予期せぬニュースを聞いて、彼女はしばらくその場に立ち尽くしていました。"'
         Assistant Output:
         <div class="word-card">
-            <b>立ち尽くす</b> <span>[tat͡ɕit͡sɯꜜkɯsɯ]</span> <i>(동사)</i>
+            <b>立ち尽くす</b> <span>[tat͡ɕit͡sɯkɯsɯ]</span> <i>(동사)</i>
             <p>그 자리에 멈춰 서다</p>
             <hr>
             <p>충격이나 놀라움 등으로 움직이지 못하고 계속 서 있는 상태를 뜻합니다. 문맥에서는 '〜ていました'(계속형+과거)로 쓰여, 예상치 못한 소식을 듣고 한동안 그 자리에서 몸이 굳어 있던 상태가 지속되었음을 나타냅니다.</p>
@@ -11743,7 +11792,7 @@
         User Input: 'Input: "仕方がありません", Context: "雨が降り始めてしまったので、今日の遠足が中止になるのは仕方がありません。"'
         Assistant Output:
         <div class="word-card">
-            <b>仕方がない</b> <span>[ɕikataɡanaꜜi]</span> <i>(관용구)</i>
+            <b>仕方がない</b> <span>[ɕikataɡanai]</span> <i>(관용구)</i>
             <p>어쩔 수 없다</p>
             <hr>
             <p>정해진 상황이나 이미 일어난 일에 대해 다른 방도가 없음을 체념하듯 표현하는 관용구입니다. 여기서는 정중한 형태인 'ありません'으로 변형되어, 비가 와서 소풍이 취소되는 것은 불가피하고 당연한 일이라는 의미를 나타냅니다.</p>
@@ -11758,7 +11807,7 @@
         User Input: 'Input: "カワイイ", Context: "彼女が着ている服は、いつもすごくカワイイですね。"'
         Assistant Output:
         <div class="word-card">
-            <b>かわいい</b> <span>[kawaiꜜː]</span> <i>(형용사)</i>
+            <b>かわいい</b> <span>[kawaiː]</span> <i>(형용사)</i>
             <p>귀엽다</p>
             <hr>
             <p>외모나 행동이 사랑스럽고 호감이 가는 상태를 뜻합니다. 원문에서는 'カワイイ'처럼 카타카나로 표기하여, 단순히 귀엽다는 의미를 넘어 패션이나 시각적인 측면에서 감각적이고 트렌디한 느낌을 한층 강조하고 있습니다.</p>
@@ -11773,7 +11822,7 @@
         User Input: 'Input: "市場", Context: "新鮮な野菜を買うために、朝早く地元の市場に行きました。"'
         Assistant Output:
         <div class="word-card">
-            <b>市場</b> <span>[iꜜt͡ɕiba]</span> <i>(명사)</i>
+            <b>市場</b> <span>[it͡ɕiba]</span> <i>(명사)</i>
             <p>시장</p>
             <hr>
             <p>'市場'은 주식이나 경제 등 추상적인 시장(しじょう)을 뜻하기도 하지만, 이 문맥에서는 사람들이 모여 물건을 직접 사고파는 물리적인 장소인 '재래시장(いちば)'을 가리킵니다. 신선한 채소를 사기 위해 방문한 구체적인 공간의 의미로 사용되었습니다.</p>
