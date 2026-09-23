@@ -64,3 +64,18 @@ jobs:
             --endpoint-url "${ENDPOINT_URL}"
 
           rm -f "${BACKUP_FILENAME}"
+
+          echo "Cleaning up backups older than 30 days..."
+          THRESHOLD_DATE=$(date -d "30 days ago" +'%Y-%m-%d')
+          aws s3 ls "s3://${BUCKET_NAME}/" --endpoint-url "${ENDPOINT_URL}" \
+            | awk '{print $4}' \
+            | while read -r filename; do
+                [ -z "$filename" ] && continue
+                if [[ "$filename" =~ supabase_central_([0-9]{4}-[0-9]{2}-[0-9]{2}) ]]; then
+                  file_date="${BASH_REMATCH[1]}"
+                  if [[ "$file_date" < "$THRESHOLD_DATE" ]]; then
+                    echo "Deleting old backup: $filename"
+                    aws s3 rm "s3://${BUCKET_NAME}/${filename}" --endpoint-url "${ENDPOINT_URL}"
+                  fi
+                fi
+              done
