@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      16.11.0
+// @version      16.12.0
 // @license      GPL-3.0-or-later
 // @grant       GM_setValue
 // @grant       GM_getValue
@@ -176,10 +176,10 @@
     
     const ttsModelsByProvider = {
         "google gemini": [
-            {value: "gemini-3.8-flash-tts", text: "gemini-3.8-flash-tts ($0.5/$9)"},
-            {value: "gemini-3.8-flash-lite-tts", text: "gemini-3.8-flash-lite-tts ($0.5/$6)"},
-            {value: "gemini-3.1-flash-tts-preview", text: "gemini 3.1-flash-tts ($1/$20)"},
-            {value: "gemini-2.5-flash-preview-tts", text: "gemini 2.5-flash-tts ($0.5/$10)"}
+            {value: "gemini-3.8-flash-tts", text: "gemini-3.8-flash-tts ($0.5/$9)", inputPrice: 0.5, outputPrice: 9, cachedPrice: 0},
+            {value: "gemini-3.8-flash-lite-tts", text: "gemini-3.8-flash-lite-tts ($0.5/$6)", inputPrice: 0.5, outputPrice: 6, cachedPrice: 0},
+            {value: "gemini-3.1-flash-tts-preview", text: "gemini 3.1-flash-tts ($1/$20)", inputPrice: 1, outputPrice: 20, cachedPrice: 0},
+            {value: "gemini-2.5-flash-preview-tts", text: "gemini 2.5-flash-tts ($0.5/$10)", inputPrice: 0.5, outputPrice: 10, cachedPrice: 0}
         ]
     };
     
@@ -1425,11 +1425,10 @@
                 const audioDataBase64 = data.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
                 
                 if (audioDataBase64) {
-                    const inputTokens = data.usageMetadata.promptTokenCount;
-                    const outputTokens = data.usageMetadata.candidatesTokenCount;
-                    const approxCost = inputTokens * 0.5 / 1000000 + outputTokens * 10 / 1000000;
+                    const inputTokens = data.usageMetadata?.promptTokenCount || 0;
+                    const outputTokens = data.usageMetadata?.candidatesTokenCount || 0;
                     
-                    trackLLMUsage("TTS", modelId, 0, inputTokens, 0, outputTokens, approxCost, false, "google gemini");
+                    trackLLMUsage("TTS", modelId, 0, inputTokens, 0, outputTokens, null, false, "google gemini");
                     
                     const binaryString = atob(audioDataBase64);
                     const len = binaryString.length;
@@ -1544,13 +1543,14 @@
     }
     
     function getLLMPricing(model, provider = settings.llmProvider) {
-        const models = (provider && llmModelsByProvider[provider]) || Object.values(llmModelsByProvider).flat();
+        const allProviders = {...llmModelsByProvider, ...ttsModelsByProvider};
+        const models = (provider && allProviders[provider]) || Object.values(allProviders).flat();
         const modelObj = models.find(m => m.value === model);
         if (!modelObj) return [0, 0, 0];
         
-        const inputPrice = modelObj.inputPrice / 1e6;
-        const outputPrice = modelObj.outputPrice / 1e6;
-        const cachedPrice = modelObj.cachedPrice / 1e6;
+        const inputPrice = (modelObj.inputPrice || 0) / 1e6;
+        const outputPrice = (modelObj.outputPrice || 0) / 1e6;
+        const cachedPrice = (modelObj.cachedPrice || 0) / 1e6;
         
         return [inputPrice, outputPrice, cachedPrice];
     }
@@ -1676,24 +1676,28 @@
         const priorityStr = isPriority ? " (Priority)" : "";
         console.log('[LLM usage]', `[${contextType}]`, `${model}${priorityStr}, tokens: (${cachedTokens}/${inputTokens}/${reasoningTokens}/${outputTokens}), ${logMessage}`);
         
-        const currentLang = getLessonLanguage();
+        const currentLang = getLessonLanguage() || "";
+        
+        const usageDetail = {
+            type: contextType,
+            language: currentLang,
+            provider: resolvedProvider,
+            model: model,
+            tokens: {
+                cached: cachedTokens,
+                input: inputTokens,
+                reasoning: reasoningTokens,
+                output: outputTokens
+            },
+            cost: approxCost,
+            uncachedCost: uncachedCost,
+            isPriority: isPriority
+        };
+        
+        saveLLMUsageToStorage(usageDetail);
         
         document.dispatchEvent(new CustomEvent("addon:llmUsage", {
-            detail: {
-                type: contextType,
-                language: currentLang,
-                provider: resolvedProvider,
-                model: model,
-                tokens: {
-                    cached: cachedTokens,
-                    input: inputTokens,
-                    reasoning: reasoningTokens,
-                    output: outputTokens
-                },
-                cost: approxCost,
-                uncachedCost: uncachedCost,
-                isPriority: isPriority
-            }
+            detail: usageDetail
         }));
     }
     
@@ -11619,7 +11623,6 @@
         
         document.addEventListener("addon:llmUsage", (event) => {
             lessonUsageHistory.push(event.detail);
-            saveLLMUsageToStorage(event.detail);
         });
         
         const language = getLessonLanguage();
