@@ -1,4 +1,4 @@
-name: Supabase Central Tables Backup to Cloudflare R2
+name: Supabase Central Tables Backup to Supabase Storage
 
 on:
   workflow_dispatch: # Allows manual trigger from GitHub Actions tab
@@ -44,23 +44,23 @@ jobs:
             exit 1
           fi
 
-      - name: Upload to Cloudflare R2
+      - name: Upload to Supabase Storage
         env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID || vars.R2_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY || vars.R2_SECRET_ACCESS_KEY }}
-          AWS_DEFAULT_REGION: auto
-          R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID || vars.R2_ACCOUNT_ID }}
-          R2_BUCKET_NAME: ${{ secrets.R2_BUCKET_NAME || vars.R2_BUCKET_NAME }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.SUPABASE_S3_ACCESS_KEY_ID || vars.SUPABASE_S3_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.SUPABASE_S3_SECRET_ACCESS_KEY || vars.SUPABASE_S3_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: ${{ vars.SUPABASE_REGION || secrets.SUPABASE_REGION || 'ap-northeast-2' }}
+          PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF || vars.SUPABASE_PROJECT_REF }}
+          BUCKET_NAME: ${{ secrets.SUPABASE_BUCKET_NAME || vars.SUPABASE_BUCKET_NAME }}
         run: |
           set -e
-          ENDPOINT_URL="https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com"
+          ENDPOINT_URL="https://${PROJECT_REF}.storage.supabase.co/storage/v1/s3"
 
-          echo "Uploading ${BACKUP_FILENAME} to Cloudflare R2 (${R2_BUCKET_NAME})..."
-          aws s3 cp "${BACKUP_FILENAME}" "s3://${R2_BUCKET_NAME}/${BACKUP_FILENAME}" \
+          echo "Uploading ${BACKUP_FILENAME} to Supabase Storage (${BUCKET_NAME})..."
+          aws s3 cp "${BACKUP_FILENAME}" "s3://${BUCKET_NAME}/${BACKUP_FILENAME}" \
             --endpoint-url "${ENDPOINT_URL}"
 
           echo "Upload complete! Verifying bucket contents:"
-          aws s3 ls "s3://${R2_BUCKET_NAME}/" \
+          aws s3 ls "s3://${BUCKET_NAME}/" \
             --endpoint-url "${ENDPOINT_URL}"
 
           rm -f "${BACKUP_FILENAME}"
