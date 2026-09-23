@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      16.12.0
+// @version      16.12.1
 // @license      GPL-3.0-or-later
 // @grant       GM_setValue
 // @grant       GM_getValue
@@ -1438,6 +1438,14 @@
                         bytes[i] = binaryString.charCodeAt(i);
                     }
                     
+                    const isWav = bytes.length >= 12 &&
+                        bytes[0] === 0x52 && bytes[1] === 0x49 && bytes[2] === 0x46 && bytes[3] === 0x46 &&
+                        bytes[8] === 0x57 && bytes[9] === 0x41 && bytes[10] === 0x56 && bytes[11] === 0x45;
+                    
+                    if (isWav) {
+                        return bytes.buffer;
+                    }
+                    
                     const wavHeader = createWavHeader(bytes.length);
                     
                     const completeBuffer = new Uint8Array(wavHeader.byteLength + bytes.byteLength);
@@ -1516,7 +1524,7 @@
         }
     }
     
-    async function getTTSResponse(provider, apiKey, voice, text, ttsInstructions = 'Read the text in a realistic, genuine, neutral, and clear manner. vary your rhythm and pace naturally, like a professional voice actor: ', model = settings.ttsModel) {
+    async function getTTSResponse(provider, apiKey, voice, text, ttsInstructions = "Speak in a natural, authentic native speaker tone with steady pacing, clear articulation, and an engaging narrative flow: ", model = settings.ttsModel) {
         const voices = Array.from(document.querySelector("#ttsVoiceSelector").options)
             .map(option => option.value)
             .filter(option => {
