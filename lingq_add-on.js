@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      16.12.2
+// @version      16.12.3
 // @license      GPL-3.0-or-later
 // @grant       GM_setValue
 // @grant       GM_getValue
@@ -5901,7 +5901,7 @@
                 exportButton.disabled = true;
                 
                 try {
-                    function formatContext(context, originalWord, paddingWords = 15, paddingLength = 120) {
+                    function formatContext(context, originalWord, paddingWords = 20, paddingLength = 150) {
                         if (!context) return "";
                         
                         const openTag = "<selected>";
@@ -10013,7 +10013,7 @@
 
                 const isNearBottom = scrollRatio >= 0.90 || distFromBottom <= 50;
                 if (isNearBottom) {
-                    const MAX_HIDDEN = 5;
+                    const MAX_HIDDEN = 10;
                     if (hiddenReaderElements.length >= MAX_HIDDEN) return;
 
                     isCheckingReaderOverflow = true;
@@ -10351,7 +10351,7 @@
                     return targetSectionHead;
                 }
                 
-                function getInPageSelectedWithContext(targetSideWords = 30, targetSideLength = 200) {
+                function getInPageSelectedWithContext(targetSideWords = 50, targetSideLength = 350) {
                     const selectedTextElement = document.querySelector(".reference-word");
                     const selectedEl = document.querySelector("span.is-selected, span.selected-text");
                     let currentSentenceEl = selectedEl?.closest(".sentence");
@@ -10435,7 +10435,7 @@
                     return {input: selectedText, context: contextText};
                 }
                 
-                function getSelectedWithContext(targetSideWords = 30, targetSideLength = 200) {
+                function getSelectedWithContext(targetSideWords = 50, targetSideLength = 350) {
                     const selectedTextElement = document.querySelector(".reference-word");
                     const rawSelectedText = selectedTextElement ? extractTextFromDOM(selectedTextElement)?.trim() : "";
                     
