@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      16.12.1
+// @version      16.12.2
 // @license      GPL-3.0-or-later
 // @grant       GM_setValue
 // @grant       GM_getValue
@@ -2379,7 +2379,11 @@
             }
             
             const isLingQPlaying = () => {
-                const svg = playButton.querySelector("svg");
+                for (const media of mediaInstances) {
+                    if (media && media.id !== "addonLocalVideo" && !media.paused && !media.ended) return true;
+                }
+                const currentPlayBtn = document.querySelector(".section--player button.lingq-audio-player") || playButton;
+                const svg = currentPlayBtn?.querySelector("svg");
                 return Boolean(svg && svg.classList.contains("svg-icon--pause"));
             };
             
@@ -2395,9 +2399,22 @@
             
             let isVideoSeeking = false;
             let isAudioDrivenSeek = false;
-            let measuredSeekDelayMs = 300;
-            let seekStartTime = 0;
             let seekingReleaseTimer = null;
+            let pendingVideoSeek = false;
+            let pendingMediaSeekCount = 0;
+            let settleReleaseTimer = null;
+
+            const checkAndReleaseSeekingLock = () => {
+                if (!pendingVideoSeek && pendingMediaSeekCount === 0) {
+                    if (settleReleaseTimer) clearTimeout(settleReleaseTimer);
+                    settleReleaseTimer = setTimeout(() => {
+                        if (isVideoSeeking) {
+                            isVideoSeeking = false;
+                        }
+                        settleReleaseTimer = null;
+                    }, 80);
+                }
+            };
 
             // User interaction hooks to unlock playback when user intends to play/seek
             playButton.addEventListener("click", (event) => {
@@ -2482,49 +2499,54 @@
                 }
                 
                 // 2. Sync Precise Timeline
-                if (isVideoSeeking) {
-                    console.log('[SYNC_DEBUG] [Observer Blocked]', `isVideoSeeking=true. video: ${videoElement.currentTime.toFixed(3)}, slider: ${preciseTargetTime.toFixed(3)}`);
-                    return;
-                }
+                if (isVideoSeeking) return;
                 if (videoElement.readyState < 3) return;
                 if (isVideoAtEnd && isTargetNearEnd) return;
 
                 const diff = videoElement.currentTime - preciseTargetTime;
                 const baseSpeed = getLingQSpeed();
                 
-                // Adjust threshold based on paused state and current playback rate
-                const syncThreshold = videoElement.paused ? 0.1 : Math.max(0.5, 0.5 * baseSpeed);
-                const catchUpThreshold = Math.max(0.15, 0.15 * baseSpeed);
+                // Adjust threshold based on playing state and current playback rate
+                const syncThreshold = !isPlaying ? 0.1 : Math.max(0.5, 0.5 * baseSpeed);
+                const softSyncEnterThreshold = Math.max(0.25, 0.25 * baseSpeed);
+                const softSyncExitThreshold = Math.max(0.10, 0.10 * baseSpeed);
                 let syncStatus = "In Sync";
                 
                 if (Math.abs(diff) > syncThreshold) {
-                    // Hard Seek: Compensate using measured adaptive delay * playback speed
-                    isAudioDrivenSeek = true;
-                    const seekDelaySec = measuredSeekDelayMs / 1000;
-                    const seekOffset = (!videoElement.paused) ? (seekDelaySec * baseSpeed) : 0;
-                    const targetSeekTime = preciseTargetTime + seekOffset;
-                    console.log('[SYNC_DEBUG] [Observer Hard Seek]', `diff: ${diff.toFixed(3)}s (> ${syncThreshold.toFixed(2)}s), slider: ${preciseTargetTime.toFixed(3)}, seekOffset: ${seekOffset.toFixed(3)} (${measuredSeekDelayMs}ms * ${baseSpeed}x), setting video: ${videoElement.currentTime.toFixed(3)} -> ${targetSeekTime.toFixed(3)}`);
-                    videoElement.currentTime = targetSeekTime;
-                    syncStatus = "Hard Seek";
-                } else if (!videoElement.paused) {
-                    // Soft Sync: Adjust playback rate slightly to catch up without stuttering
-                    if (diff < -catchUpThreshold) {
-                        // Video is behind: play 10% faster to catch up
-                        videoElement.playbackRate = baseSpeed * 1.1;
+                    // Check if video is ahead due to Jump Cutter forward skip while media is catching up
+                    let isMediaCatchingUp = false;
+                    if (isPlaying && diff > 0) {
+                        mediaInstances.forEach(media => {
+                            if (media && (Math.abs(videoElement.currentTime - media.currentTime) <= syncThreshold || media.currentTime > preciseTargetTime)) {
+                                isMediaCatchingUp = true;
+                            }
+                        });
+                    }
+
+                    if (!isMediaCatchingUp) {
+                        // Hard Seek: Compensate using fixed delay * playback speed
+                        isAudioDrivenSeek = true;
+                        const seekOffset = isPlaying ? (0.3 * baseSpeed) : 0;
+                        const targetSeekTime = preciseTargetTime + seekOffset;
+                        videoElement.currentTime = targetSeekTime;
+                        syncStatus = "Hard Seek";
+                    }
+                } else if (isPlaying) {
+                    // Soft Sync: Adjust playback rate with hysteresis to prevent chattering
+                    const isAlreadyAdjusted = videoElement.playbackRate !== baseSpeed;
+
+                    if (diff < -softSyncEnterThreshold) {
+                        // Video is behind: play slightly faster to catch up
+                        videoElement.playbackRate = baseSpeed + 0.05;
                         syncStatus = "Soft Sync (Speed Up)";
-                        console.log('[SYNC_DEBUG] [Observer Soft Sync]', `Video behind by ${diff.toFixed(3)}s -> speed: ${videoElement.playbackRate.toFixed(2)}x`);
-                    } else if (diff > catchUpThreshold) {
-                        // Video is ahead: play 10% slower to wait
-                        videoElement.playbackRate = baseSpeed * 0.9;
+                    } else if (diff > softSyncEnterThreshold) {
+                        // Video is ahead: play slightly slower to wait
+                        videoElement.playbackRate = Math.max(0.25, baseSpeed - 0.05);
                         syncStatus = "Soft Sync (Slow Down)";
-                        console.log('[SYNC_DEBUG] [Observer Soft Sync]', `Video ahead by ${diff.toFixed(3)}s -> speed: ${videoElement.playbackRate.toFixed(2)}x`);
-                    } else {
-                        // Within stable range: restore base speed
-                        if (videoElement.playbackRate !== baseSpeed) {
-                            videoElement.playbackRate = baseSpeed;
-                            syncStatus = "Restored Speed";
-                            console.log('[SYNC_DEBUG] [Observer Speed Restored]', `Restored speed to: ${baseSpeed}x`);
-                        }
+                    } else if (isAlreadyAdjusted && Math.abs(diff) <= softSyncExitThreshold) {
+                        // Recover base speed once difference is reduced within exit threshold
+                        videoElement.playbackRate = baseSpeed;
+                        syncStatus = "Restored Speed";
                     }
                 }
                 
@@ -2567,14 +2589,19 @@
                         const mediaDiffThreshold = Math.max(0.3, 0.3 * baseSpeed);
                         const diff = Math.abs(videoElement.currentTime - media.currentTime);
                         if (diff > mediaDiffThreshold) {
-                            console.log('[SYNC_DEBUG] [Video playing -> Media sync]', `video: ${videoElement.currentTime.toFixed(3)}, media: ${media.currentTime.toFixed(3)}, diff: ${diff.toFixed(3)}s (> ${mediaDiffThreshold.toFixed(2)}s)`);
                             isVideoSeeking = true;
+                            pendingMediaSeekCount++;
                             media.currentTime = videoElement.currentTime;
+                            media.addEventListener("seeked", () => {
+                                pendingMediaSeekCount = Math.max(0, pendingMediaSeekCount - 1);
+                                checkAndReleaseSeekingLock();
+                            }, { once: true });
+
                             if (seekingReleaseTimer) clearTimeout(seekingReleaseTimer);
-                            const lockTimeout = Math.max(150, measuredSeekDelayMs);
+                            const lockTimeout = 400;
                             seekingReleaseTimer = setTimeout(() => {
+                                pendingMediaSeekCount = 0;
                                 isVideoSeeking = false;
-                                console.log('[SYNC_DEBUG] [Playing lock released]', `isVideoSeeking=false. video: ${videoElement.currentTime.toFixed(3)}`);
                                 seekingReleaseTimer = null;
                             }, lockTimeout);
                         }
@@ -2583,37 +2610,20 @@
             });
             videoElement.addEventListener("loadedmetadata", syncPlaybackRate);
             videoElement.addEventListener("seeked", () => {
-                if (seekStartTime > 0) {
-                    const delay = performance.now() - seekStartTime;
-                    const clampedDelay = Math.min(Math.max(delay, 80), 1500);
-                    measuredSeekDelayMs = Math.round(measuredSeekDelayMs * 0.4 + clampedDelay * 0.6);
-                    console.log('[SYNC_DEBUG] [Video seeked]', `video.currentTime: ${videoElement.currentTime.toFixed(3)}, delay: ${Math.round(delay)}ms (measured: ${measuredSeekDelayMs}ms)`);
-                    seekStartTime = 0;
-                } else {
-                    console.log('[SYNC_DEBUG] [Video seeked]', `video.currentTime: ${videoElement.currentTime.toFixed(3)}`);
-                }
-
+                pendingVideoSeek = false;
                 if (isVideoSeeking) {
-                    if (seekingReleaseTimer) {
-                        clearTimeout(seekingReleaseTimer);
-                        seekingReleaseTimer = null;
-                    }
-                    isVideoSeeking = false;
-                    console.log('[SYNC_DEBUG] [Seeking lock released on seeked]', `video: ${videoElement.currentTime.toFixed(3)}`);
+                    checkAndReleaseSeekingLock();
                 }
             });
             videoElement.addEventListener("seeking", () => {
-                seekStartTime = performance.now();
                 const duration = videoElement.duration || 0;
                 if (duration > 0 && videoElement.currentTime >= duration - 0.1) {
                     markVideoEnded();
                 }
                 if (isAudioDrivenSeek) {
-                    console.log('[SYNC_DEBUG] [Video seeking (AudioDriven)]', `video: ${videoElement.currentTime.toFixed(3)}`);
                     isAudioDrivenSeek = false;
                     return;
                 }
-                console.log('[SYNC_DEBUG] [Video seeking (External/JumpCutter)]', `video: ${videoElement.currentTime.toFixed(3)}`);
 
                 if (isVideoEnded && videoElement.currentTime < 1.0) {
                     videoElement.pause();
@@ -2625,27 +2635,33 @@
                 }
 
                 isVideoSeeking = true;
+                pendingVideoSeek = true;
+                if (settleReleaseTimer) {
+                    clearTimeout(settleReleaseTimer);
+                    settleReleaseTimer = null;
+                }
+
                 mediaInstances.forEach(media => {
                     if (media) {
                         const mediaDiff = Math.abs(videoElement.currentTime - media.currentTime);
                         if (mediaDiff > 0.1) {
-                            console.log('[SYNC_DEBUG] [Seeking -> Media update]', `media before: ${media.currentTime.toFixed(3)} -> new: ${videoElement.currentTime.toFixed(3)} (diff: ${mediaDiff.toFixed(3)}s)`);
-                            const mediaSeekStartTime = performance.now();
+                            pendingMediaSeekCount++;
                             media.currentTime = videoElement.currentTime;
                             media.addEventListener("seeked", () => {
-                                const elapsed = Math.round(performance.now() - mediaSeekStartTime);
-                                console.log('[SYNC_DEBUG] [Media seeked completed]', `media reached: ${media.currentTime.toFixed(3)} (took ${elapsed}ms)`);
+                                pendingMediaSeekCount = Math.max(0, pendingMediaSeekCount - 1);
+                                checkAndReleaseSeekingLock();
                             }, { once: true });
                         }
                     }
                 });
 
                 if (seekingReleaseTimer) clearTimeout(seekingReleaseTimer);
-                const maxLockTimeout = Math.max(200, measuredSeekDelayMs + 100);
+                const maxLockTimeout = 600;
                 seekingReleaseTimer = setTimeout(() => {
                     if (isVideoSeeking) {
+                        pendingVideoSeek = false;
+                        pendingMediaSeekCount = 0;
                         isVideoSeeking = false;
-                        console.log('[SYNC_DEBUG] [Seeking lock fallback released]', `${maxLockTimeout}ms passed. isVideoSeeking=false. video: ${videoElement.currentTime.toFixed(3)}`);
                     }
                     seekingReleaseTimer = null;
                 }, maxLockTimeout);
@@ -3031,7 +3047,7 @@
             }
 
             const src = this.src || '';
-            if (!src.startsWith('data:') && !src.includes('/tts/')) {
+            if (this.id !== "addonLocalVideo" && !src.startsWith('data:') && !src.includes('/tts/')) {
                 if (!mediaInstances.has(this)) {
                     mediaInstances.add(this);
                 }
