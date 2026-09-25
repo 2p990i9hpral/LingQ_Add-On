@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      16.12.4
+// @version      16.12.5
 // @license      GPL-3.0-or-later
 // @grant       GM_setValue
 // @grant       GM_getValue
@@ -303,6 +303,13 @@
         "google gemini": googleGeminiVoiceOptions,
         "google cloud": googleCloudVoiceOptions
     };
+    
+    function getAvailableVoicesForProvider(provider, language = getLessonLanguage()) {
+        if (provider === "google cloud") {
+            return generateGoogleCloudVoiceOptions(language);
+        }
+        return voiceOptionsObject[provider] || [];
+    }
     
     /* Get LingQ Data */
     
@@ -1530,28 +1537,30 @@
     }
     
     async function getTTSResponse(provider, apiKey, voice, text, ttsInstructions = "Speak in a natural, authentic native speaker tone with steady pacing, clear articulation, and an engaging narrative flow: ", model = settings.ttsModel) {
-        const voices = Array.from(document.querySelector("#ttsVoiceSelector").options)
-            .map(option => option.value)
-            .filter(option => {
-                return !option.startsWith("random")
-            });
+        const availableOptions = getAvailableVoicesForProvider(provider);
+        const validValues = availableOptions.map(option => option.value);
+        const nonRandomVoices = validValues.filter(val => !val.startsWith("random"));
         
-        if (voice === "random") voice = getRandomElement(voices);
+        let resolvedVoice = voice;
+        if (!resolvedVoice || !validValues.includes(resolvedVoice)) {
+            resolvedVoice = "random";
+        }
+        
+        if (resolvedVoice === "random") {
+            resolvedVoice = getRandomElement(nonRandomVoices);
+        } else if (provider === "google cloud" && resolvedVoice.startsWith("random-")) {
+            const randomLanguage = resolvedVoice.replace("random-", "");
+            const filtered = nonRandomVoices.filter(option => option.startsWith(randomLanguage));
+            resolvedVoice = getRandomElement(filtered.length > 0 ? filtered : nonRandomVoices);
+        }
         
         switch (provider) {
             case "openai":
-                return await openAITTS(text, apiKey, voice, ttsInstructions);
+                return await openAITTS(text, apiKey, resolvedVoice, ttsInstructions);
             case "google gemini":
-                return await geminiTTS(text, apiKey, voice, ttsInstructions, model);
+                return await geminiTTS(text, apiKey, resolvedVoice, ttsInstructions, model);
             case "google cloud":
-                if (voice.startsWith("random-")) {
-                    const randomLanguage = voice.replace("random-", "");
-                    voice = getRandomElement(voices.filter(option => {
-                        return option.startsWith(randomLanguage)
-                    }));
-                }
-                
-                return await googleCloudTTS(text, apiKey, voice);
+                return await googleCloudTTS(text, apiKey, resolvedVoice);
         }
     }
     
@@ -3035,8 +3044,9 @@
                     return originalVolumeSetter.call(this, val);
                 }
                 
+                const isReaderPage = document.URL.includes("/reader");
                 const lessonLang = getLessonLanguage();
-                if (lessonLang && settings.styleType[lessonLang] === "localVideo" && this.id !== "addonLocalVideo") {
+                if (isReaderPage && lessonLang && settings.styleType[lessonLang] === "localVideo" && this.id !== "addonLocalVideo") {
                     return originalVolumeSetter.call(this, 0);
                 }
                 
@@ -3048,8 +3058,9 @@
         
         const originalPlay = PageMediaElement.prototype.play;
         PageMediaElement.prototype.play = function () {
+            const isReaderPage = document.URL.includes("/reader");
             const lessonLang = getLessonLanguage();
-            const isLocalVideoActive = lessonLang && settings.styleType[lessonLang] === "localVideo";
+            const isLocalVideoActive = isReaderPage && lessonLang && settings.styleType[lessonLang] === "localVideo";
 
             if (isLocalVideoActive && isVideoEnded) {
                 this.pause();
@@ -3845,7 +3856,13 @@
             ttsModelContainer.id = "ttsModelContainer";
             ttsModelContainer.style.display = settings.ttsProvider === "google gemini" ? "block" : "none";
             
-            addSelect(ttsSection, "ttsVoiceSelector", "TTS Voice:", voiceOptionsObject[settings.ttsProvider], settings.ttsVoice[language]);
+            const currentVoiceOptions = getAvailableVoicesForProvider(settings.ttsProvider, language);
+            const currentVoice = settings.ttsVoice[language];
+            const validVoice = currentVoiceOptions.some(opt => opt.value === currentVoice) ? currentVoice : (currentVoiceOptions[0]?.value || "random");
+            if (validVoice !== currentVoice) {
+                settings.ttsVoice = {...settings.ttsVoice, [language]: validVoice};
+            }
+            addSelect(ttsSection, "ttsVoiceSelector", "TTS Voice:", currentVoiceOptions, validVoice);
             
             addCheckbox(ttsSection, "ttsWordCheckbox", "Enable AI-TTS for words", settings.ttsWord);
             addCheckbox(ttsSection, "ttsSentenceCheckbox", "Enable AI-TTS for sentences", settings.ttsSentence);
@@ -4871,12 +4888,19 @@
                 const provider = event.target.value;
                 settings.ttsProvider = provider;
                 ttsVoiceSelector.innerHTML = "";
-                voiceOptionsObject[settings.ttsProvider].forEach(option => {
+                const newVoiceOptions = getAvailableVoicesForProvider(provider, language);
+                newVoiceOptions.forEach(option => {
                     ttsVoiceSelector.appendChild(createElement("option", {
                         value: option.value,
                         textContent: option.text
                     }));
                 });
+                
+                const currentVoice = settings.ttsVoice[language];
+                const isValidVoice = newVoiceOptions.some(opt => opt.value === currentVoice);
+                const nextVoice = isValidVoice ? currentVoice : (newVoiceOptions[0]?.value || "random");
+                settings.ttsVoice = {...settings.ttsVoice, [language]: nextVoice};
+                ttsVoiceSelector.value = nextVoice;
                 
                 const models = ttsModelsByProvider[provider] || [];
                 if (models.length > 0) {
@@ -12459,136 +12483,244 @@
         }
         
         async function generateLessonAudio() {
-            const ttsProvider = settings.ttsProvider;
-            
-            const lessonId = getLessonId();
-            const lessonLanguage = getLessonLanguage();
-            
-            let data = await getLessonSentences(lessonLanguage, lessonId);
-            
-            const audioContext = new (window.AudioContext || window.webkitAudioContext)();
-            const sentenceTexts = data.map(item => item["text"]);
-            const totalSentences = sentenceTexts.length;
-            let processedSentences = 0;
-            
-            const progressBar = document.getElementById("lessonAudioProgressBar");
-            const progressText = document.getElementById("lessonAudioProgressText");
-            
-            progressBar.style.display = "block";
-            progressBar.max = totalSentences * 2;
-            
-            let RPM_LIMIT = 1;
-            switch (ttsProvider) {
-                case "openai":
-                    RPM_LIMIT = 500;
-                    break;
-                case "google gemini":
-                    RPM_LIMIT = 10;
-                    break;
-                case "google cloud":
-                    RPM_LIMIT = 200;
-                    break;
-            }
-            RPM_LIMIT = RPM_LIMIT * 0.9;
-            const DELAY_BETWEEN_CALLS = (60 * 1000) / RPM_LIMIT;
-            
-            const apiCallPromises = [];
-            const audioDataBuffers = new Array(totalSentences);
-            let nextAvailableCallTime = Date.now();
-            
-            for (let i = 0; i < totalSentences; i++) {
-                const text = sentenceTexts[i];
-                const actualCallTime = Math.max(Date.now(), nextAvailableCallTime);
-                nextAvailableCallTime = actualCallTime + DELAY_BETWEEN_CALLS;
+            try {
+                const ttsProvider = settings.ttsProvider;
                 
-                const p = new Promise(resolve => {
-                    const timeToWait = actualCallTime - Date.now();
-                    
-                    setTimeout(async () => {
-                        updateProgress(progressBar, progressText, `Calling TTS for sentence ${i + 1}/${totalSentences}`, processedSentences, totalSentences * 2);
-                        
-                        const audioArrayBuffer = await getTTSResponse(ttsProvider, settings.ttsApiKey, (settings.ttsVoice[getLessonLanguage()]), text);
-                        audioDataBuffers[i] = await decodeAudioData(audioContext, audioArrayBuffer);
-                        resolve();
-                        processedSentences += 1;
-                    }, Math.max(0, timeToWait));
+                const lessonId = getLessonId();
+                const lessonLanguage = getLessonLanguage();
+                
+                let data = await getLessonSentences(lessonLanguage, lessonId);
+                
+                const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                const sentenceTexts = data.map(item => item["text"]);
+                const totalSentences = sentenceTexts.length;
+                let processedSentences = 0;
+                
+                const progressBar = document.getElementById("lessonAudioProgressBar");
+                const progressText = document.getElementById("lessonAudioProgressText");
+                
+                progressBar.style.display = "block";
+                progressBar.max = totalSentences * 2;
+                
+                let RPM_LIMIT = 1;
+                switch (ttsProvider) {
+                    case "openai":
+                        RPM_LIMIT = 500;
+                        break;
+                    case "google gemini":
+                        RPM_LIMIT = 200;
+                        break;
+                    case "google cloud":
+                        RPM_LIMIT = 200;
+                        break;
+                }
+                RPM_LIMIT = RPM_LIMIT * 0.9;
+                const DELAY_BETWEEN_CALLS = (60 * 1000) / RPM_LIMIT;
+                
+                const audioDataBuffers = new Array(totalSentences);
+                const apiCallPromises = [];
+                const scheduledTimeouts = [];
+                let nextAvailableCallTime = Date.now();
+                const MAX_SENTENCE_RETRIES = 3;
+                let isAborted = false;
+                let abortFailureMessage = "";
+
+                const abortAll = (message) => {
+                    if (isAborted) return;
+                    isAborted = true;
+                    abortFailureMessage = message;
+                    scheduledTimeouts.forEach(timerId => clearTimeout(timerId));
+                };
+
+                for (let i = 0; i < totalSentences; i++) {
+                    const text = sentenceTexts[i];
+                    const actualCallTime = Math.max(Date.now(), nextAvailableCallTime);
+                    nextAvailableCallTime = actualCallTime + DELAY_BETWEEN_CALLS;
+
+                    const promise = new Promise((resolve, reject) => {
+                        const timeToWait = Math.max(0, actualCallTime - Date.now());
+
+                        const timerId = setTimeout(async () => {
+                            if (isAborted) {
+                                resolve();
+                                return;
+                            }
+
+                            let sentenceSuccess = false;
+                            let lastError = null;
+
+                            for (let attempt = 1; attempt <= MAX_SENTENCE_RETRIES; attempt++) {
+                                if (isAborted) {
+                                    resolve();
+                                    return;
+                                }
+
+                                try {
+                                    const statusMessage = attempt > 1
+                                        ? `Calling TTS for sentence ${i + 1}/${totalSentences} (Retry ${attempt}/${MAX_SENTENCE_RETRIES})`
+                                        : `Calling TTS for sentence ${i + 1}/${totalSentences}`;
+                                    updateProgress(progressBar, progressText, statusMessage, processedSentences, totalSentences * 2);
+
+                                    const audioArrayBuffer = await getTTSResponse(ttsProvider, settings.ttsApiKey, (settings.ttsVoice[lessonLanguage]), text);
+                                    if (isAborted) {
+                                        resolve();
+                                        return;
+                                    }
+
+                                    audioDataBuffers[i] = await decodeAudioData(audioContext, audioArrayBuffer);
+                                    processedSentences += 1;
+                                    sentenceSuccess = true;
+                                    resolve();
+                                    break;
+                                } catch (error) {
+                                    lastError = error;
+                                    console.warn(`TTS sentence ${i + 1} attempt ${attempt} failed:`, error);
+                                    if (attempt < MAX_SENTENCE_RETRIES && !isAborted) {
+                                        await new Promise(r => setTimeout(r, 1000 * attempt));
+                                    }
+                                }
+                            }
+
+                            if (!sentenceSuccess && !isAborted) {
+                                const failMessage = `TTS failed at sentence ${i + 1}/${totalSentences} after ${MAX_SENTENCE_RETRIES} attempts: ${lastError?.message || lastError}`;
+                                abortAll(failMessage);
+                                reject(new Error(failMessage));
+                            }
+                        }, timeToWait);
+
+                        scheduledTimeouts.push(timerId);
+                    });
+
+                    apiCallPromises.push(promise);
+                }
+
+                updateProgress(progressBar, progressText, 'All TTS API calls scheduled.', processedSentences, totalSentences * 2);
+
+                try {
+                    await Promise.all(apiCallPromises);
+                } catch (error) {
+                    const message = abortFailureMessage || error.message || "TTS generation failed.";
+                    updateProgress(progressBar, progressText, message, processedSentences, totalSentences * 2);
+                    console.error(message);
+                    const genLessonAudioButton = document.getElementById("genLessonAudio");
+                    if (genLessonAudioButton) {
+                        genLessonAudioButton.disabled = false;
+                        genLessonAudioButton.style.display = "";
+                    }
+                    return;
+                }
+
+                if (isAborted) {
+                    const message = abortFailureMessage || "TTS generation aborted.";
+                    updateProgress(progressBar, progressText, message, processedSentences, totalSentences * 2);
+                    const genLessonAudioButton = document.getElementById("genLessonAudio");
+                    if (genLessonAudioButton) {
+                        genLessonAudioButton.disabled = false;
+                        genLessonAudioButton.style.display = "";
+                    }
+                    return;
+                }
+
+                updateProgress(progressBar, progressText, 'All TTS API calls completed.', processedSentences, totalSentences * 2);
+                
+                updateProgress(progressBar, progressText, 'Concatenating audio buffers.', processedSentences, totalSentences * 2);
+                const {concatenatedBuffer, duration, timestamps} = await concatenateAudioBuffers(
+                    audioContext,
+                    audioDataBuffers
+                );
+                
+                updateProgress(progressBar, progressText, 'Encoding audio.', processedSentences, totalSentences * 2);
+                const encodingProgressCallback = (current, total) => {
+                    const encodingProgressValue = processedSentences + Math.floor((current / total) * totalSentences);
+                    updateProgress(progressBar, progressText, `Encoding audio: ${Math.floor((current / total) * 100)}%`, encodingProgressValue, totalSentences * 2);
+                };
+                const finalMP3AudioData = await encodeAudioBufferToMP3(concatenatedBuffer, encodingProgressCallback);
+                updateProgress(progressBar, progressText, 'Audio encoding completed.', totalSentences * 2, totalSentences * 2);
+                
+                updateProgress(progressBar, progressText, 'Uploading audio to lesson.', totalSentences * 2, totalSentences * 2);
+                await uploadAudioToLesson(lessonLanguage, lessonId, finalMP3AudioData, Math.ceil(duration));
+                
+                const jsonTimestamps = timestamps.map(({start, end}, index) => {
+                    return {index: index + 1, timestamp: [start, end]}
                 });
-                apiCallPromises.push(p);
+                updateProgress(progressBar, progressText, 'Updating timestamps to lesson.', totalSentences * 2, totalSentences * 2);
+                await updataTimestampToLesson(lessonLanguage, lessonId, jsonTimestamps);
+                
+                window.onbeforeunload = null;
+                location.reload();
+            } catch (error) {
+                console.error("Error during lesson audio generation:", error);
+                const progressText = document.getElementById("lessonAudioProgressText");
+                if (progressText) {
+                    progressText.textContent = `Error: ${error?.message || error}`;
+                }
+                const genLessonAudioButton = document.getElementById("genLessonAudio");
+                if (genLessonAudioButton) {
+                    genLessonAudioButton.disabled = false;
+                    genLessonAudioButton.style.display = "";
+                }
             }
-            updateProgress(progressBar, progressText, 'All TTS API calls scheduled.', processedSentences, totalSentences * 2);
-            
-            await Promise.all(apiCallPromises);
-            updateProgress(progressBar, progressText, 'All TTS API calls completed.', processedSentences, totalSentences * 2);
-            
-            updateProgress(progressBar, progressText, 'Concatenating audio buffers.', processedSentences, totalSentences * 2);
-            const {concatenatedBuffer, duration, timestamps} = await concatenateAudioBuffers(
-                audioContext,
-                audioDataBuffers
-            );
-            
-            updateProgress(progressBar, progressText, 'Encoding audio.', processedSentences, totalSentences * 2);
-            const encodingProgressCallback = (current, total) => {
-                const encodingProgressValue = processedSentences + Math.floor((current / total) * totalSentences);
-                updateProgress(progressBar, progressText, `Encoding audio: ${Math.floor((current / total) * 100)}%`, encodingProgressValue, totalSentences * 2);
-            };
-            const finalMP3AudioData = await encodeAudioBufferToMP3(concatenatedBuffer, encodingProgressCallback);
-            updateProgress(progressBar, progressText, 'Audio encoding completed.', totalSentences * 2, totalSentences * 2);
-            
-            updateProgress(progressBar, progressText, 'Uploading audio to lesson.', totalSentences * 2, totalSentences * 2);
-            await uploadAudioToLesson(lessonLanguage, lessonId, finalMP3AudioData, Math.ceil(duration));
-            
-            const jsonTimestamps = timestamps.map(({start, end}, index) => {
-                return {index: index + 1, timestamp: [start, end]}
-            });
-            updateProgress(progressBar, progressText, 'Updating timestamps to lesson.', totalSentences * 2, totalSentences * 2);
-            await updataTimestampToLesson(lessonLanguage, lessonId, jsonTimestamps);
-            
-            window.onbeforeunload = null;
-            location.reload();
+        }
+        
+        function setupEditorStyles() {
+            const editorCSS = `
+                #genLessonAudio {
+                    padding: 8px 9px;
+                    background-color: rgba(125, 125, 125, 0.25);
+                    color: inherit;
+                    border: 1px solid rgba(125, 125, 125, 0.4);
+                    border-radius: 6px;
+                    font-size: 0.875rem;
+                    font-weight: 500;
+                    cursor: pointer;
+                    transition: background-color 0.15s ease, color 0.15s ease;
+                }
+                #genLessonAudio:hover:not(:disabled) {
+                    background-color: rgba(125, 125, 125, 0.35);
+                }
+                #genLessonAudio:disabled {
+                    opacity: 0.5;
+                    cursor: not-allowed;
+                }
+            `;
+            applyCSS(editorCSS);
         }
         
         async function createEditorUI() {
+            setupEditorStyles();
+            
             const genLessonAudioButton = createElement("button", {
                 id: "genLessonAudio",
-                className: "button",
-                tableindex: "0"
+                type: "button",
+                textContent: "Generate Lesson Audio"
             });
             genLessonAudioButton.addEventListener("click", () => {
                 genLessonAudioButton.disabled = true;
+                genLessonAudioButton.style.display = "none";
                 generateLessonAudio();
             });
-            genLessonAudioButton.appendChild(createElement("span", {
-                className: "text-wrapper has-text-overflow",
-                textContent: "Generate Lesson Audio"
-            }));
-            
-            const control = createElement("div", {className: "control"});
-            const field = createElement("span", {className: "text-xs"});
-            const navItem = createElement("div", {className: "flex items-center gap-1 text-xs text-ash"});
             
             const progressBar = createElement("progress", {
                 id: "lessonAudioProgressBar",
                 value: "0",
                 max: "100",
-                style: "width: 100%; display: none;"
+                style: "width: 100%; display: none; margin-top: 8px;"
             });
             
             const progressText = createElement("span", {
                 id: "lessonAudioProgressText",
-                style: "font-size: 0.8em;"
+                style: "font-size: 0.8em; margin-top: 4px; display: block; text-align: center;"
             });
             
-            control.appendChild(genLessonAudioButton);
-            control.appendChild(progressBar);
-            control.appendChild(progressText);
-            field.appendChild(control);
-            navItem.appendChild(field);
-            
-            let mainNav = await waitForElement(`.bg-editor [data-slot="card"] [data-slot="form-item"] [data-slot="form-control"]  div.grid`, 10000);
+            const mainNav = await waitForElement(`.bg-editor [data-slot="card"] [data-slot="form-item"] [data-slot="form-control"]  div.grid`, 10000);
             mainNav.style.height = "auto";
+            mainNav.style.display = "flex";
+            mainNav.style.flexDirection = "column";
             
             mainNav.appendChild(createElement("hr", {className: "divider my-3"}));
-            mainNav.appendChild(navItem);
+            mainNav.appendChild(genLessonAudioButton);
+            mainNav.appendChild(progressBar);
+            mainNav.appendChild(progressText);
         }
         
         await loadScript("https://cdnjs.cloudflare.com/ajax/libs/lamejs/1.2.1/lame.min.js");
