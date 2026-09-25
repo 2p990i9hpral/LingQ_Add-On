@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      16.12.5
+// @version      16.12.6
 // @license      GPL-3.0-or-later
 // @grant       GM_setValue
 // @grant       GM_getValue
@@ -142,9 +142,7 @@
             {value: "gemini-3.5-flash", text: "Gemini 3.5 Flash ($1.5/$9)", inputPrice: 1.5, outputPrice: 9, cachedPrice: 0.15},
             {value: "gemini-3-flash-preview", text: "Gemini 3.0 Flash ($0.5/$3)", inputPrice: 0.5, outputPrice: 3, cachedPrice: 0.05},
             {value: "gemini-3.5-flash-lite", text: "Gemini 3.5 Flash-Light ($0.3/$2.5)", inputPrice: 0.3, outputPrice: 2.5, cachedPrice: 0.03},
-            {value: "gemini-3.1-flash-lite", text: "Gemini 3.1 Flash-Light ($0.25/$1.5)", inputPrice: 0.25, outputPrice: 1.5, cachedPrice: 0.025},
-            {value: "gemini-2.5-flash", text: "Gemini 2.5 Flash ($0.3/$2.5)", inputPrice: 0.3, outputPrice: 2.5, cachedPrice: 0.03},
-            {value: "gemini-2.5-flash-lite", text: "Gemini 2.5 Flash-Light ($0.1/$0.4)", inputPrice: 0.1, outputPrice: 0.4, cachedPrice: 0.01}
+            {value: "gemini-3.1-flash-lite", text: "Gemini 3.1 Flash-Light ($0.25/$1.5)", inputPrice: 0.25, outputPrice: 1.5, cachedPrice: 0.025}
         ],
         "vertex": [
             {value: "gemini-3.8-flash", text: "Gemini 3.8 Flash ($0.75/$3.75)", inputPrice: 0.75, outputPrice: 3.75, cachedPrice: 0.075},
@@ -153,9 +151,7 @@
             {value: "gemini-3.5-flash", text: "Gemini 3.5 Flash ($1.5/$9)", inputPrice: 1.5, outputPrice: 9, cachedPrice: 0.15},
             {value: "gemini-3-flash-preview", text: "Gemini 3.0 Flash ($0.5/$3)", inputPrice: 0.5, outputPrice: 3, cachedPrice: 0.05},
             {value: "gemini-3.5-flash-lite", text: "Gemini 3.5 Flash-Light ($0.3/$2.5)", inputPrice: 0.3, outputPrice: 2.5, cachedPrice: 0.03},
-            {value: "gemini-3.1-flash-lite", text: "Gemini 3.1 Flash-Light ($0.25/$1.5)", inputPrice: 0.25, outputPrice: 1.5, cachedPrice: 0.025},
-            {value: "gemini-2.5-flash", text: "Gemini 2.5 Flash ($0.3/$2.5)", inputPrice: 0.3, outputPrice: 2.5, cachedPrice: 0.03},
-            {value: "gemini-2.5-flash-lite", text: "Gemini 2.5 Flash-Light ($0.1/$0.4)", inputPrice: 0.1, outputPrice: 0.4, cachedPrice: 0.01}
+            {value: "gemini-3.1-flash-lite", text: "Gemini 3.1 Flash-Light ($0.25/$1.5)", inputPrice: 0.25, outputPrice: 1.5, cachedPrice: 0.025}
         ],
         "anthropic": [
             {value: "claude-sonnet-5", text: "Sonnet 5 ($2/$10)", inputPrice: 2, outputPrice: 10, cachedPrice: 0.2},
@@ -170,7 +166,8 @@
             {value: "gemma-4-31b", text: "Gemma 4 31B ($0.99/$1.49)", inputPrice: 0.99, outputPrice: 1.49, cachedPrice: 0.099}
         ],
         "zai": [
-            {value: "glm-5.3-flash", text: "GLM-5.3 Flash ($0.15/$0.50)", inputPrice: 0.15, outputPrice: 0.50, cachedPrice: 0.03}
+            {value: "glm-5.3-flash", text: "GLM-5.3 Flash ($0.15/$0.50)", inputPrice: 0.15, outputPrice: 0.50, cachedPrice: 0.03},
+            {value: "glm-5.3-flashx", text: "GLM-5.3 FlashX ($0.15/$0.50)", inputPrice: 0.37, outputPrice: 1.25, cachedPrice: 0.075}
         ]
     };
     
@@ -1855,7 +1852,7 @@
         return {api_url, headers, isPriority};
     }
     
-    function buildRequestBody(provider, model, history, stream = false, cacheName = null, includeThoughts = false, reasoningLevel = "low") {
+    function buildRequestBody(provider, model, history, stream = false, cacheName = null, includeThoughts = false, enableReasoning = true) {
         const processedHistory = ((provider === "google" || provider === "vertex") && cacheName)
             ? history.filter(m => {
                 if (m.role === "user" && m.content.startsWith("<summary>")) return false;
@@ -1889,10 +1886,10 @@
         if (stream) body.stream = true;
         
         if (provider === "openai") {
-            if (reasoningLevel === "minimal") {
+            if (!enableReasoning) {
                 body.reasoning = {effort: "none"};
             } else {
-                body.reasoning = {effort: "low", summary: "auto"};
+                body.reasoning = {effort: "medium", summary: "auto"};
             }
             
             const isGpt56OrLater = model.includes("gpt-5.6") || model.includes("gpt-6");
@@ -1980,9 +1977,9 @@
             body.extra_body = body.extra_body || {};
             body.extra_body.google = body.extra_body.google || {};
             
-            let level = reasoningLevel === "minimal" ? "minimal" : "low";
-            if (model.includes("gemini-3.7-flash")) {
-                level = "low";
+            let level = enableReasoning ? "medium" : "minimal";
+            if (model.includes("gemini-3.7") || model.includes("gemini-3.8")) {
+                level = enableReasoning ? "medium" : "low";
             }
             
             body.extra_body.google.thinking_config = {
@@ -1998,7 +1995,7 @@
         }
         
         if (provider === "anthropic") {
-            if (model.includes("haiku") || reasoningLevel === "minimal") {
+            if (model.includes("haiku") || !enableReasoning) {
                 body.max_tokens = 4096;
                 body.thinking = {type: "disabled"};
             } else {
@@ -2065,7 +2062,7 @@
         }
         
         if (provider === "cerebras") {
-            body.reasoning_effort = reasoningLevel === "minimal" ? "none" : "low";
+            body.reasoning_effort = enableReasoning ? "low" : "none";
         }
         
         if (provider === "zai") {
@@ -2075,10 +2072,10 @@
         return body;
     }
     
-    async function getOpenAIResponse(provider, apiKey, model, history, cacheName = null, onCacheExpired = null, retryCount = 0, reasoningLevel = "low") {
+    async function getOpenAIResponse(provider, apiKey, model, history, cacheName = null, onCacheExpired = null, retryCount = 0, enableReasoning = true) {
         const forcePriority = (provider === "vertex" && retryCount > 0);
         const {api_url, headers, isPriority} = await buildRequestConfig(provider, apiKey, forcePriority);
-        const body = buildRequestBody(provider, model, history, false, cacheName, false, reasoningLevel);
+        const body = buildRequestBody(provider, model, history, false, cacheName, false, enableReasoning);
         
         try {
             const response = await gmFetch(api_url, {method: 'POST', headers, body: JSON.stringify(body)});
@@ -2093,22 +2090,22 @@
                     const newCacheName = await onCacheExpired();
                     if (newCacheName) {
                         console.log(`Cache recreated successfully. Retrying with new cache: ${newCacheName}`);
-                        return getOpenAIResponse(provider, apiKey, model, history, newCacheName, onCacheExpired, 1, reasoningLevel);
+                        return getOpenAIResponse(provider, apiKey, model, history, newCacheName, onCacheExpired, 1, enableReasoning);
                     }
                     console.warn("Cache recreation failed. Falling back to non-cached request.");
-                    return getOpenAIResponse(provider, apiKey, model, history, null, null, 1, reasoningLevel);
+                    return getOpenAIResponse(provider, apiKey, model, history, null, null, 1, enableReasoning);
                 }
                 
                 if (provider === "vertex" && response.status === 401 && retryCount === 0) {
                     console.warn("Vertex token expired. Regenerating and retrying...");
                     settings.vertexTokenExpiry = 0;
-                    return getOpenAIResponse(provider, apiKey, model, history, cacheName, onCacheExpired, 1, reasoningLevel);
+                    return getOpenAIResponse(provider, apiKey, model, history, cacheName, onCacheExpired, 1, enableReasoning);
                 }
                 
                 if (response.status === 429 && retryCount === 0) {
                     console.warn("429 Resource Exhausted. Retrying once after 2 seconds...");
                     await new Promise(r => setTimeout(r, 1000));
-                    return getOpenAIResponse(provider, apiKey, model, history, cacheName, onCacheExpired, 1, reasoningLevel);
+                    return getOpenAIResponse(provider, apiKey, model, history, cacheName, onCacheExpired, 1, enableReasoning);
                 }
                 
                 return `Error: ${errMsg}`;
@@ -2136,11 +2133,11 @@
         }
     }
     
-    async function streamOpenAIResponse(provider, apiKey, model, history, onChunkReceived, onStreamEnd, onError, cacheName = null, onCacheExpired = null, retryCount = 0, includeThoughts = false, reasoningLevel = "low") {
+    async function streamOpenAIResponse(provider, apiKey, model, history, onChunkReceived, onStreamEnd, onError, cacheName = null, onCacheExpired = null, retryCount = 0, includeThoughts = false, enableReasoning = true) {
         const forcePriority = (provider === "vertex" && retryCount > 0);
         const {api_url, headers, isPriority} = await buildRequestConfig(provider, apiKey, forcePriority);
         if (provider === "anthropic") headers['Accept'] = 'text/event-stream';
-        const body = buildRequestBody(provider, model, history, true, cacheName, includeThoughts, reasoningLevel);
+        const body = buildRequestBody(provider, model, history, true, cacheName, includeThoughts, enableReasoning);
         
         let lastUsage = null;
         let streamInThought = false;
@@ -2247,22 +2244,22 @@
                 const newCacheName = await onCacheExpired();
                 if (newCacheName) {
                     console.log(`Cache recreated successfully. Retrying with new cache: ${newCacheName}`);
-                    return streamOpenAIResponse(provider, apiKey, model, history, onChunkReceived, onStreamEnd, onError, newCacheName, onCacheExpired, 1, includeThoughts, reasoningLevel);
+                    return streamOpenAIResponse(provider, apiKey, model, history, onChunkReceived, onStreamEnd, onError, newCacheName, onCacheExpired, 1, includeThoughts, enableReasoning);
                 }
                 console.warn("Cache recreation failed. Falling back to non-cached request.");
-                return streamOpenAIResponse(provider, apiKey, model, history, onChunkReceived, onStreamEnd, onError, null, null, 1, includeThoughts, reasoningLevel);
+                return streamOpenAIResponse(provider, apiKey, model, history, onChunkReceived, onStreamEnd, onError, null, null, 1, includeThoughts, enableReasoning);
             }
             
             if (provider === "vertex" && error.message.includes("401") && retryCount === 0) {
                 console.warn("Vertex token expired. Regenerating and retrying...");
                 settings.vertexTokenExpiry = 0;
-                return streamOpenAIResponse(provider, apiKey, model, history, onChunkReceived, onStreamEnd, onError, cacheName, onCacheExpired, 1, includeThoughts, reasoningLevel);
+                return streamOpenAIResponse(provider, apiKey, model, history, onChunkReceived, onStreamEnd, onError, cacheName, onCacheExpired, 1, includeThoughts, enableReasoning);
             }
             
             if (error.message.includes("429") && retryCount === 0) {
                 console.warn("429 Resource Exhausted. Retrying once after 2 seconds...");
                 await new Promise(r => setTimeout(r, 1000));
-                return streamOpenAIResponse(provider, apiKey, model, history, onChunkReceived, onStreamEnd, onError, cacheName, onCacheExpired, 1, includeThoughts, reasoningLevel);
+                return streamOpenAIResponse(provider, apiKey, model, history, onChunkReceived, onStreamEnd, onError, cacheName, onCacheExpired, 1, includeThoughts, enableReasoning);
             }
             
             onError(error);
@@ -11267,7 +11264,7 @@
                 }
                 
                 async function callStreamOpenAI(botMessageDiv, chatContainer, focus, onStreamCompleted = () => {
-                }, reasoningLevel = "low") {
+                }, enableReasoning = true) {
                     const userInput = document.getElementById("user-input");
                     const sendButton = document.getElementById("send-button");
                     
@@ -11539,7 +11536,7 @@
                                         const selectedData = getSelectedWithContext();
                                         enhanceWordMessage(newBotMessageDiv, selectedData);
                                     },
-                                    "low"
+                                    true
                                 );
                             });
                             messageButtonContainer.appendChild(regenerateButton);
@@ -11565,7 +11562,7 @@
                         refreshGeminiCache,
                         0,
                         true,
-                        reasoningLevel
+                        enableReasoning
                     );
                 }
                 
@@ -11603,7 +11600,7 @@
                             const selectedData = getSelectedWithContext();
                             enhanceWordMessage(botMessageDiv, selectedData);
                         },
-                        "low"
+                        true
                     );
                 }
                 
@@ -11716,7 +11713,7 @@
                             async (finalContent) => {
                                 enhanceWordMessage(botMessageDiv, selectedData);
                             },
-                            "minimal"
+                            false
                         );
                         
                         chatHistory = updateChatHistoryState(chatHistory, removeIndent(plainTextPrompt), "system-plain");
