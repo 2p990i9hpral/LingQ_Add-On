@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      16.12.3
+// @version      16.12.4
 // @license      GPL-3.0-or-later
 // @grant       GM_setValue
 // @grant       GM_getValue
@@ -2341,6 +2341,12 @@
     let cachedLocalVideoFiles, attemptAutoMatch;
     const mediaInstances = new Set();
     let isVideoEnded = false;
+    let lastSkipTargetTime = null;
+    let lastSkipTimestamp = 0;
+
+    function isSkipActive() {
+        return Date.now() - lastSkipTimestamp < 800;
+    }
 
     function markVideoEnded() {
         if (isVideoEnded) return;
@@ -2499,7 +2505,7 @@
                 }
                 
                 // 2. Sync Precise Timeline
-                if (isVideoSeeking) return;
+                if (isVideoSeeking && !isSkipActive()) return;
                 if (videoElement.readyState < 3) return;
                 if (isVideoAtEnd && isTargetNearEnd) return;
 
@@ -2515,7 +2521,7 @@
                 if (Math.abs(diff) > syncThreshold) {
                     // Check if video is ahead due to Jump Cutter forward skip while media is catching up
                     let isMediaCatchingUp = false;
-                    if (isPlaying && diff > 0) {
+                    if (isPlaying && diff > 0 && !isSkipActive()) {
                         mediaInstances.forEach(media => {
                             if (media && (Math.abs(videoElement.currentTime - media.currentTime) <= syncThreshold || media.currentTime > preciseTargetTime)) {
                                 isMediaCatchingUp = true;
@@ -2583,6 +2589,7 @@
                     return;
                 }
                 syncPlaybackRate();
+                if (isSkipActive()) return;
                 mediaInstances.forEach(media => {
                     if (media) {
                         const baseSpeed = getLingQSpeed();
@@ -2622,6 +2629,9 @@
                 }
                 if (isAudioDrivenSeek) {
                     isAudioDrivenSeek = false;
+                    return;
+                }
+                if (isSkipActive()) {
                     return;
                 }
 
@@ -3089,10 +3099,23 @@
         const localVideo = document.getElementById("addonLocalVideo");
         const isLocalVideoActive = localVideo && localVideo.style.display !== "none" && !isNaN(localVideo.currentTime);
         const sliderHandle = document.querySelector('.audio-player--progress .rc-slider-handle');
-        const currentTime = isLocalVideoActive
-            ? localVideo.currentTime
-            : (sliderHandle ? (parseFloat(sliderHandle.getAttribute("aria-valuenow")) || 0) : 0);
-        const targetTime = Math.max(0, currentTime + deltaSeconds);
+
+        const now = Date.now();
+        let baseTime;
+        if (lastSkipTargetTime !== null && (now - lastSkipTimestamp < 800)) {
+            baseTime = lastSkipTargetTime;
+        } else {
+            baseTime = isLocalVideoActive
+                ? localVideo.currentTime
+                : (sliderHandle ? (parseFloat(sliderHandle.getAttribute("aria-valuenow")) || 0) : 0);
+        }
+        const targetTime = Math.max(0, baseTime + deltaSeconds);
+        lastSkipTargetTime = targetTime;
+        lastSkipTimestamp = now;
+
+        if (isLocalVideoActive && !isNaN(localVideo.duration)) {
+            localVideo.currentTime = Math.min(localVideo.duration, targetTime);
+        }
 
         const controllers = document.querySelector('.audio-player--controllers');
         const isYoutube = controllers?.querySelector('.controller-item--speed') || document.querySelector('iframe[src*="youtube"]');
@@ -9215,6 +9238,18 @@
         }
         
         function setupKeyboardShortcuts() {
+            let lastSkipTime = 0;
+
+            const triggerThrottledSkip = (deltaSeconds) => {
+                const currentTime = Date.now();
+                const TARGET_SEEK_SPEED = 30;
+                const calculatedMs = Math.round((settings.skipDuration / TARGET_SEEK_SPEED) * 1000);
+                const skipThrottleMs = Math.max(80, Math.min(250, calculatedMs));
+                if (currentTime - lastSkipTime < skipThrottleMs) return;
+                lastSkipTime = currentTime;
+                skipPlayback(deltaSeconds);
+            };
+
             document.addEventListener("keydown", function (event) {
                 if (!settings.keyboardShortcut) return;
                 
@@ -9275,8 +9310,8 @@
                     }, // Make a flashcard
                     [settings.shortcutTTSPlay]: () => clickElement(".is-tts"), // Play tts audio
                     [settings.shortcutTranslator]: () => clickElement(".dictionary-resources > a:nth-last-child(1)"), // Open Translator
-                    [settings.shortcutBackward5s]: () => skipPlayback(-settings.skipDuration), // Rewind
-                    [settings.shortcutForward5s]: () => skipPlayback(settings.skipDuration), // Fast Forward
+                    [settings.shortcutBackward5s]: () => triggerThrottledSkip(-settings.skipDuration), // Rewind
+                    [settings.shortcutForward5s]: () => triggerThrottledSkip(settings.skipDuration), // Fast Forward
                     [settings.shortcutMakeKnown]: () => document.dispatchEvent(new KeyboardEvent("keydown", {key: "k"})), // Simulate original 'k' for Make Word Known
                     [settings.shortcutDictionary]: () => clickElement(".dictionary-resources > a:nth-child(1)"), // Open Dictionary
                     [settings.shortcutCopySelected]: () => copySelectedText() // Copy selected text
@@ -9953,6 +9988,29 @@
                 const count = hiddenReaderElements.length;
                 const elementNames = hiddenReaderElements.map(({element}) => element.tagName.toLowerCase() + (element.className ? `.${element.className.replace(/\s+/g, '.')}` : "")).join(", ");
                 console.log('[ReaderOverflow]', `Restored ${count} hidden element(s) [${elementNames}]${reason ? ` (Trigger: ${reason})` : ""}.`);
+
+                const wrapper = document.querySelector(".reader-container-wrapper");
+                const container = document.querySelector(".reader-container");
+                let anchorElement = null;
+                let beforeAnchorTop = null;
+                let savedScrollTop = 0;
+
+                const shouldAnchorScroll = Boolean(wrapper && container && reason.startsWith("Scrolled to top"));
+                if (shouldAnchorScroll) {
+                    savedScrollTop = wrapper.scrollTop;
+                    const wrapperRect = wrapper.getBoundingClientRect();
+                    const visibleChildren = Array.from(container.children).filter(child => {
+                        return child.style.display !== "none" && window.getComputedStyle(child).display !== "none";
+                    });
+                    anchorElement = visibleChildren.find(child => {
+                        const rect = child.getBoundingClientRect();
+                        return rect.bottom > wrapperRect.top && rect.top < wrapperRect.bottom;
+                    }) || visibleChildren[0];
+                    if (anchorElement) {
+                        beforeAnchorTop = anchorElement.getBoundingClientRect().top;
+                    }
+                }
+
                 isCheckingReaderOverflow = true;
                 try {
                     hiddenReaderElements.forEach(({element, previousDisplay}) => {
@@ -9962,6 +10020,18 @@
                             element.style.removeProperty("display");
                         }
                     });
+
+                    if (shouldAnchorScroll && anchorElement && beforeAnchorTop !== null) {
+                        const shiftedAnchorTop = anchorElement.getBoundingClientRect().top;
+                        const deltaY = shiftedAnchorTop - beforeAnchorTop;
+                        const targetScrollTop = Math.max(0, savedScrollTop + deltaY);
+                        const newMaxScroll = wrapper.scrollHeight - wrapper.clientHeight;
+                        if (newMaxScroll > 0) {
+                            wrapper.scrollTop = Math.min(targetScrollTop, newMaxScroll);
+                        } else {
+                            wrapper.scrollTop = targetScrollTop;
+                        }
+                    }
                 } finally {
                     hiddenReaderElements = [];
                     requestAnimationFrame(() => {
@@ -10018,6 +10088,17 @@
 
                     isCheckingReaderOverflow = true;
                     const savedScrollTop = wrapper.scrollTop;
+                    const wrapperRect = wrapper.getBoundingClientRect();
+
+                    // Find a visible element to track visual jump
+                    const candidateChildren = Array.from(container.children).filter(child => {
+                        return child.style.display !== "none" && window.getComputedStyle(child).display !== "none";
+                    });
+                    const anchorElement = candidateChildren.find(child => {
+                        const rect = child.getBoundingClientRect();
+                        return rect.bottom > wrapperRect.top && rect.top < wrapperRect.bottom;
+                    }) || candidateChildren[candidateChildren.length - 1];
+                    const beforeAnchorTop = anchorElement ? anchorElement.getBoundingClientRect().top : null;
 
                     try {
                         if (!isReaderMultiColumn(container, wrapper)) return;
@@ -10046,10 +10127,12 @@
                             console.log('[ReaderOverflow]', `Hidden ${hiddenReaderElements.length} element(s) [${elementNames}] to resolve multi-column layout.`);
                         }
 
+                        const shiftedAnchorTop = anchorElement ? anchorElement.getBoundingClientRect().top : null;
+                        const deltaY = (beforeAnchorTop !== null && shiftedAnchorTop !== null) ? (shiftedAnchorTop - beforeAnchorTop) : 0;
+
+                        const targetScrollTop = Math.max(0, savedScrollTop + deltaY);
                         const newMaxScroll = wrapper.scrollHeight - wrapper.clientHeight;
-                        if (newMaxScroll > 0) {
-                            wrapper.scrollTop = Math.min(savedScrollTop, newMaxScroll);
-                        }
+                        wrapper.scrollTop = newMaxScroll > 0 ? Math.min(targetScrollTop, newMaxScroll) : targetScrollTop;
                     } finally {
                         requestAnimationFrame(() => {
                             isCheckingReaderOverflow = false;
