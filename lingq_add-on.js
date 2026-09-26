@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      16.12.7
+// @version      17.0.0
 // @license      GPL-3.0-or-later
 // @grant       GM_setValue
 // @grant       GM_getValue
@@ -119,7 +119,8 @@
         fontSize: 1.1,
         lineHeight: 1.7,
         usePageMode: true,
-        ttsVoice: "random"
+        ttsVoice: "random",
+        ankiDeck: ""
     };
     
     const useVertexPriorityMode = false;
@@ -1275,6 +1276,424 @@
     
     function sleep(ms) {
         return new Promise(resolve => setTimeout(resolve, ms));
+    }
+    
+    function formatFlashcardContext(context, originalWord, paddingWords = 20, paddingLength = 150) {
+        if (!context) return "";
+        
+        const openTag = "<selected>";
+        const closeTag = "</selected>";
+        
+        let rawBefore = "";
+        let targetWord = "";
+        let rawAfter = "";
+        let isFound = false;
+        
+        const startTagIdx = context.indexOf(openTag);
+        const endTagIdx = context.indexOf(closeTag);
+        
+        if (startTagIdx !== -1 && endTagIdx !== -1) {
+            rawBefore = context.substring(0, startTagIdx);
+            targetWord = context.substring(startTagIdx + openTag.length, endTagIdx);
+            rawAfter = context.substring(endTagIdx + closeTag.length);
+            isFound = true;
+        } else if (originalWord) {
+            const escapedWord = originalWord.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            const match = context.match(new RegExp(escapedWord, 'i'));
+            if (match) {
+                rawBefore = context.substring(0, match.index);
+                targetWord = match[0];
+                rawAfter = context.substring(match.index + match[0].length);
+                isFound = true;
+            }
+        }
+        
+        if (!isFound) return context;
+        
+        const beforeWords = rawBefore.trimEnd() ? rawBefore.trimEnd().split(/\s+/) : [];
+        const afterWords = rawAfter.trimStart() ? rawAfter.trimStart().split(/\s+/) : [];
+        
+        const hasMoreBefore = beforeWords.length > paddingWords;
+        const hasMoreAfter = afterWords.length > paddingWords;
+        
+        let leftSlice = beforeWords.slice(-paddingWords).join(" ");
+        let rightSlice = afterWords.slice(0, paddingWords).join(" ");
+        
+        let isLengthCappedLeft = false;
+        let isLengthCappedRight = false;
+        
+        if (leftSlice.length > paddingLength) {
+            leftSlice = leftSlice.slice(-paddingLength).trimStart();
+            isLengthCappedLeft = true;
+        }
+        if (rightSlice.length > paddingLength) {
+            rightSlice = rightSlice.slice(0, paddingLength).trimEnd();
+            isLengthCappedRight = true;
+        }
+        
+        const prefix = (hasMoreBefore || isLengthCappedLeft) ? "..." : "";
+        const suffix = (hasMoreAfter || isLengthCappedRight) ? "..." : "";
+        
+        const formattedLeft = leftSlice ? `${leftSlice} ` : "";
+        const formattedRight = rightSlice ? ` ${rightSlice}` : "";
+        
+        return `${prefix}${formattedLeft}<b>${targetWord}</b>${formattedRight}${suffix}`.trim();
+    }
+    
+    function invokeAnkiConnect(action, params = {}, version = 6, timeout = 5000) {
+        return new Promise((resolve, reject) => {
+            GM_xmlhttpRequest({
+                method: "POST",
+                url: "http://127.0.0.1:8765",
+                data: JSON.stringify({action, version, params}),
+                headers: {
+                    "Content-Type": "application/json"
+                },
+                timeout,
+                onload: (response) => {
+                    try {
+                        const data = JSON.parse(response.responseText);
+                        if (data.error) {
+                            reject(new Error(data.error));
+                        } else {
+                            resolve(data.result);
+                        }
+                    } catch (e) {
+                        reject(new Error("Failed to parse Anki-Connect response"));
+                    }
+                },
+                onerror: () => reject(new Error("Anki-Connect connection failed. Please ensure Anki desktop is running with Anki-Connect installed.")),
+                ontimeout: () => reject(new Error("Anki-Connect request timed out."))
+            });
+        });
+    }
+    
+    async function fetchAnkiDecks() {
+        return await invokeAnkiConnect("deckNames", {}, 6, 1000);
+    }
+    
+    async function fetchFlashcardsInBatches(language, columns, sortBy) {
+        let allData = [];
+        let from = 0;
+        let batchSize = 10000;
+        let hasMore = true;
+        
+        while (hasMore) {
+            let query = getDbClient()
+                .from(getTableName())
+                .select(columns)
+                .eq("language", language);
+            
+            if (settings.useCentralDb && centralUserId) {
+                query = query.eq("user_id", centralUserId);
+            }
+            
+            const {data, error} = await query
+                .order(sortBy, {ascending: true})
+                .range(from, from + batchSize - 1);
+            
+            if (error) {
+                console.error("Batch fetch error:", error);
+                return allData;
+            }
+            
+            allData = allData.concat(data);
+            
+            if (!data || data.length === 0) {
+                hasMore = false;
+            } else if (data.length < batchSize) {
+                hasMore = false;
+            } else {
+                from += batchSize;
+            }
+        }
+        
+        return allData;
+    }
+    
+    async function getProcessedFlashcards(language) {
+        const allData = await fetchFlashcardsInBatches(language, "*", "idx");
+        if (!allData || !allData.length) return [];
+        
+        return allData.map(row => ({
+            idx: row.idx,
+            user_id: row.user_id,
+            language: row.language,
+            original_word: row.original_word,
+            context: row.context,
+            word: row.word,
+            pronunciation: row.pronunciation,
+            meaning: row.meaning,
+            explanation: row.explanation,
+            example_sentence: row.example_sentence,
+            example_translation: row.example_translation,
+            created_at: row.created_at,
+            formatted_context: formatFlashcardContext(row.context, row.original_word)
+        }));
+    }
+    
+    async function syncFlashcardsToAnki(language, options = {}) {
+        const { allowDelete = false, confirmDelete = null } = options;
+        const deckName = settings.ankiDeck[language];
+        if (!deckName) {
+            throw new Error(`No Anki deck selected for language "${language}". Please select one in Flashcard Manager.`);
+        }
+        
+        const processedData = await getProcessedFlashcards(language);
+        if (!processedData || processedData.length === 0) {
+            return {added: 0, updated: 0, unchanged: 0, total: 0};
+        }
+        
+        const modelName = "LingQ Flashcard";
+        const escapedDeck = deckName.replace(/["\\]/g, '\\$&');
+        const noteIds = await invokeAnkiConnect("findNotes", {query: `deck:"${escapedDeck}"`});
+        
+        let existingNotesInfo = [];
+        if (noteIds && noteIds.length > 0) {
+            for (let i = 0; i < noteIds.length; i += 1000) {
+                const chunk = noteIds.slice(i, i + 1000);
+                const infoChunk = await invokeAnkiConnect("notesInfo", {notes: chunk});
+                if (Array.isArray(infoChunk)) {
+                    existingNotesInfo = existingNotesInfo.concat(infoChunk);
+                }
+            }
+        }
+        
+        const existingMap = new Map();
+        existingNotesInfo.forEach((note) => {
+            const idxVal = note.fields?.idx?.value?.trim();
+            if (idxVal) {
+                existingMap.set(String(idxVal).normalize("NFC"), note);
+            }
+        });
+        
+        const syncFieldNames = [
+            "user_id", "language", "original_word", "context", "word",
+            "pronunciation", "meaning", "explanation", "example_sentence",
+            "example_translation", "created_at", "formatted_context"
+        ];
+        
+        const notesToAdd = [];
+        const notesToUpdate = [];
+        const updateLogs = [];
+        let unchangedCount = 0;
+        
+        processedData.forEach((item) => {
+            const targetFields = {
+                idx: String(item.idx ?? "").normalize("NFC"),
+                user_id: String(item.user_id ?? "").normalize("NFC"),
+                language: String(item.language ?? "").normalize("NFC"),
+                original_word: String(item.original_word ?? "").normalize("NFC"),
+                context: String(item.context ?? "").normalize("NFC"),
+                word: String(item.word ?? "").normalize("NFC"),
+                pronunciation: String(item.pronunciation ?? "").normalize("NFC"),
+                meaning: String(item.meaning ?? "").normalize("NFC"),
+                explanation: String(item.explanation ?? "").normalize("NFC"),
+                example_sentence: String(item.example_sentence ?? "").normalize("NFC"),
+                example_translation: String(item.example_translation ?? "").normalize("NFC"),
+                created_at: String(item.created_at ?? "").normalize("NFC"),
+                formatted_context: String(item.formatted_context ?? "").normalize("NFC")
+            };
+            
+            const itemIdx = String(item.idx ?? "").trim().normalize("NFC");
+            const existingNote = existingMap.get(itemIdx);
+            
+            if (!existingNote) {
+                notesToAdd.push({
+                    deckName,
+                    modelName,
+                    fields: targetFields,
+                    options: {allowDuplicate: false},
+                    tags: []
+                });
+            } else {
+                let hasChanges = false;
+                const updatedFields = {};
+                const diffLog = {};
+                
+                syncFieldNames.forEach((fieldName) => {
+                    if (existingNote.fields && existingNote.fields[fieldName] !== undefined) {
+                        const existingVal = (existingNote.fields[fieldName].value || "").normalize("NFC");
+                        const newVal = targetFields[fieldName] || "";
+                        if (existingVal !== newVal) {
+                            hasChanges = true;
+                            updatedFields[fieldName] = newVal;
+                            diffLog[fieldName] = `${existingVal} ➔ ${newVal}`;
+                        }
+                    }
+                });
+                
+                if (hasChanges) {
+                    notesToUpdate.push({
+                        id: existingNote.noteId,
+                        fields: updatedFields
+                    });
+                    updateLogs.push({
+                        idx: itemIdx,
+                        word: item.word,
+                        updatedFields: Object.keys(updatedFields).join(", "),
+                        changes: diffLog
+                    });
+                } else {
+                    unchangedCount++;
+                }
+            }
+        });
+        
+        const dbIdxSet = new Set(processedData.map(item => String(item.idx ?? "").trim().normalize("NFC")).filter(Boolean));
+        let notesToDelete = [];
+        if (allowDelete) {
+            notesToDelete = existingNotesInfo.filter((note) => {
+                if (note.modelName && note.modelName !== modelName) return false;
+                
+                // Guard: Skip notes that belong to another language
+                const noteLang = note.fields?.language?.value?.trim();
+                if (noteLang && noteLang !== language) return false;
+                
+                const ankiIdx = String(note.fields?.idx?.value ?? "").trim().normalize("NFC");
+                return !ankiIdx || !dbIdxSet.has(ankiIdx);
+            });
+            
+            if (notesToDelete.length > 0 && typeof confirmDelete === "function") {
+                const isConfirmed = confirmDelete(notesToDelete.length, deckName);
+                if (!isConfirmed) {
+                    console.log(`[Anki Sync] Deletion of ${notesToDelete.length} cards was skipped.`);
+                    notesToDelete = [];
+                }
+            }
+        }
+        
+        let addedCount = 0;
+        const chunkSize = 1000;
+        for (let i = 0; i < notesToAdd.length; i += chunkSize) {
+            const chunk = notesToAdd.slice(i, i + chunkSize);
+            const res = await invokeAnkiConnect("addNotes", {notes: chunk});
+            if (Array.isArray(res)) {
+                addedCount += res.filter(id => id !== null).length;
+            }
+        }
+        
+        let updatedCount = 0;
+        for (let i = 0; i < notesToUpdate.length; i += chunkSize) {
+            const chunk = notesToUpdate.slice(i, i + chunkSize);
+            const actions = chunk.map((n) => ({
+                action: "updateNoteFields",
+                params: {note: n}
+            }));
+            await invokeAnkiConnect("multi", {actions});
+            updatedCount += chunk.length;
+        }
+        
+        let deletedCount = 0;
+        if (notesToDelete.length > 0) {
+            const noteIdsToDelete = notesToDelete.map(n => n.noteId);
+            for (let i = 0; i < noteIdsToDelete.length; i += chunkSize) {
+                const chunk = noteIdsToDelete.slice(i, i + chunkSize);
+                await invokeAnkiConnect("deleteNotes", {notes: chunk});
+                deletedCount += chunk.length;
+            }
+        }
+        
+        const todayStr = new Date().toISOString().slice(0, 10);
+        storage.set("ankiLastSyncDate_" + language, todayStr);
+        
+        console.group(`[Anki Sync] ${language} (${deckName}) - Total: ${processedData.length}`);
+        console.log(`Summary: +${addedCount} added, ~${updatedCount} updated, -${deletedCount} deleted, =${unchangedCount} unchanged`);
+        
+        if (addedCount > 0) {
+            console.groupCollapsed(`Added Cards (${addedCount})`);
+            console.table(notesToAdd.map(n => ({
+                idx: n.fields.idx,
+                word: n.fields.word,
+                meaning: n.fields.meaning,
+                created_at: n.fields.created_at
+            })));
+            console.groupEnd();
+        }
+        
+        if (updatedCount > 0) {
+            console.groupCollapsed(`Updated Cards (${updatedCount})`);
+            console.table(updateLogs.map(u => ({
+                idx: u.idx,
+                word: u.word,
+                updatedFields: u.updatedFields
+            })));
+            console.log("Detailed Changes:", updateLogs);
+            console.groupEnd();
+        }
+        
+        if (deletedCount > 0) {
+            console.groupCollapsed(`Deleted Cards (${deletedCount})`);
+            console.table(notesToDelete.map(n => ({
+                noteId: n.noteId,
+                idx: n.fields?.idx?.value || "",
+                word: n.fields?.word?.value || n.fields?.original_word?.value || "",
+                meaning: n.fields?.meaning?.value || ""
+            })));
+            console.groupEnd();
+        }
+        
+        console.groupEnd();
+        
+        return {
+            added: addedCount,
+            updated: updatedCount,
+            deleted: deletedCount,
+            unchanged: unchangedCount,
+            total: processedData.length
+        };
+    }
+    
+    function renderAnkiOfflineStatus(statusEl, hasSavedDeck = false) {
+        if (!statusEl) return;
+        statusEl.innerHTML = "";
+        
+        const guideUrl = "https://github.com/2p990i9hpral/LingQ_Add-On/blob/main/GUIDE.md#12-anki-integration-guide";
+        const link = createElement("a", {
+            href: guideUrl,
+            target: "_blank",
+            rel: "noopener noreferrer",
+            title: "Anki is not connected. Click to open Anki-Connect setup guide (Add-on code: 2055492159).",
+            style: "color: var(--blue-500, #3b82f6); text-decoration: underline; cursor: pointer;"
+        }, "[Guide ↗]");
+        
+        if (hasSavedDeck) {
+            statusEl.appendChild(createElement("span", {style: "color: var(--text-muted, #888);"}, "Offline "));
+        }
+        statusEl.appendChild(link);
+    }
+    
+    async function checkAndTriggerDailyAnkiSync(language) {
+        const deckName = settings.ankiDeck[language];
+        if (!deckName) return;
+        
+        const today = new Date().toISOString().slice(0, 10);
+        const lastSync = storage.get("ankiLastSyncDate_" + language, "");
+        if (lastSync === today) return;
+        
+        const statusEl = document.getElementById("flashcardAnkiStatus");
+        if (statusEl) {
+            statusEl.textContent = "Syncing...";
+            statusEl.title = "Anki auto-syncing in progress";
+            statusEl.style.color = "var(--blue-500, #3b82f6)";
+        }
+        
+        try {
+            const result = await syncFlashcardsToAnki(language, { allowDelete: false });
+            if (statusEl) {
+                const changes = [];
+                if (result.added > 0) changes.push(`+${result.added}`);
+                if (result.updated > 0) changes.push(`~${result.updated}`);
+                if (result.deleted > 0) changes.push(`-${result.deleted}`);
+                const summary = `+${result.added}, ~${result.updated}, -${result.deleted}, =${result.unchanged}`;
+                statusEl.textContent = changes.length > 0 ? `✓ ${changes.join(", ")}` : "✓ Up to date";
+                statusEl.title = `Sync complete (${summary})`;
+                statusEl.style.color = "var(--green-500, #22c55e)";
+            }
+        } catch (err) {
+            console.warn("Anki auto-sync skipped/failed:", err.message);
+            renderAnkiOfflineStatus(statusEl, true);
+        }
     }
     
     /* Modules */
@@ -3880,7 +4299,6 @@
             
             addCheckbox(ttsSection, "ttsWordCheckbox", "Enable AI-TTS for words", settings.ttsWord);
             addCheckbox(ttsSection, "ttsSentenceCheckbox", "Enable AI-TTS for sentences", settings.ttsSentence);
-            
             container2.appendChild(ttsSection);
             
             columns.appendChild(container2);
@@ -4157,50 +4575,79 @@
                     }),
                     createElement("div", {
                             className: "popup-row",
-                            style: "display: flex; justify-content: flex-end; gap: 10px; margin: 10px 0;"
+                            style: "display: flex; justify-content: space-between; align-items: center; gap: 10px; margin: 10px 0;"
                         },
-                        createElement("div", {className: "split-btn-group"},
-                            createElement("button", {
-                                id: "flashcardAiReportBtn",
-                                className: "popup-button split-btn-main"
-                            }, "AI Report"),
-                            createElement("button", {
-                                id: "flashcardAiReportDropdownBtn",
-                                className: "popup-button split-btn-dropdown"
-                            }, "▾"),
-                            createElement("div", {
-                                    id: "flashcardAiReportMenu",
-                                    className: "split-btn-menu",
-                                    style: "display: none;"
-                                },
-                                createElement("div", {
-                                    className: "split-btn-menu-item",
-                                    dataset: {words: 50}
-                                }, "50 words"),
-                                createElement("div", {
-                                    className: "split-btn-menu-item",
-                                    dataset: {words: 100}
-                                }, "100 words"),
-                                createElement("div", {
-                                    className: "split-btn-menu-item",
-                                    dataset: {words: 300}
-                                }, "300 words"),
-                                createElement("div", {
-                                    className: "split-btn-menu-item",
-                                    dataset: {words: 500}
-                                }, "500 words")
-                            )
+                        createElement("div", {
+                            id: "flashcardAnkiDeckContainer",
+                            style: "display: flex; align-items: center; gap: 8px;"
+                        },
+                            createElement("label", {
+                                htmlFor: "flashcardAnkiDeckSelector",
+                                textContent: "Deck:",
+                                style: "font-size: 0.85em; font-weight: 500; white-space: nowrap;"
+                            }),
+                            createElement("select", {
+                                id: "flashcardAnkiDeckSelector",
+                                className: "popup-input",
+                                style: "width: auto; min-width: 110px; max-width: 135px; padding: 2px 6px; font-size: 0.85em; cursor: pointer; margin: 0; text-overflow: ellipsis; overflow: hidden;"
+                            },
+                                createElement("option", {value: "", textContent: "Select Deck"})
+                            ),
+                            createElement("span", {
+                                id: "flashcardAnkiStatus",
+                                style: "font-size: 0.8em; color: var(--text-muted, #888); white-space: nowrap;"
+                            }, "")
                         ),
-                        createElement("button", {
-                            id: "flashcardCsvDownload",
-                            className: "popup-button"
-                        }, "Export as CSV"),
-                        createElement("button", {
-                            id: "flashcardDownloadReportBtn",
-                            className: "popup-button",
-                            style: "display: none;"
-                        }, "Download the Report"),
-                        createElement("button", {id: "closeFlashcardPopupBtn", className: "popup-button"}, "Close")
+                        createElement("div", {
+                            style: "display: flex; align-items: center; gap: 10px; flex-shrink: 0; white-space: nowrap;"
+                        },
+                            createElement("div", {className: "split-btn-group"},
+                                createElement("button", {
+                                    id: "flashcardAiReportBtn",
+                                    className: "popup-button split-btn-main"
+                                }, "AI Report"),
+                                createElement("button", {
+                                    id: "flashcardAiReportDropdownBtn",
+                                    className: "popup-button split-btn-dropdown"
+                                }, "▾"),
+                                createElement("div", {
+                                        id: "flashcardAiReportMenu",
+                                        className: "split-btn-menu",
+                                        style: "display: none;"
+                                    },
+                                    createElement("div", {
+                                        className: "split-btn-menu-item",
+                                        dataset: {words: 50}
+                                    }, "50 words"),
+                                    createElement("div", {
+                                        className: "split-btn-menu-item",
+                                        dataset: {words: 100}
+                                    }, "100 words"),
+                                    createElement("div", {
+                                        className: "split-btn-menu-item",
+                                        dataset: {words: 300}
+                                    }, "300 words"),
+                                    createElement("div", {
+                                        className: "split-btn-menu-item",
+                                        dataset: {words: 500}
+                                    }, "500 words")
+                                )
+                            ),
+                            createElement("button", {
+                                id: "flashcardCsvDownload",
+                                className: "popup-button"
+                            }, "Export as CSV"),
+                            createElement("button", {
+                                id: "flashcardAnkiSyncBtn",
+                                className: "popup-button"
+                            }, "Sync to Anki"),
+                            createElement("button", {
+                                id: "flashcardDownloadReportBtn",
+                                className: "popup-button",
+                                style: "display: none;"
+                            }, "Download the Report"),
+                            createElement("button", {id: "closeFlashcardPopupBtn", className: "popup-button"}, "Close")
+                        )
                     )
                 )
             );
@@ -5413,6 +5860,60 @@
                 languageSelector.value = currentSelected;
             }
             
+            async function populateFlashcardAnkiDecks() {
+                const deckSelector = document.getElementById("flashcardAnkiDeckSelector");
+                if (!deckSelector) return;
+                
+                const currentSavedDeck = settings.ankiDeck[targetLanguage] || "";
+                const statusEl = document.getElementById("flashcardAnkiStatus");
+                try {
+                    const decks = await fetchAnkiDecks();
+                    deckSelector.innerHTML = "";
+                    deckSelector.appendChild(createElement("option", {value: "", textContent: "Select Deck"}));
+                    decks.forEach((deck) => {
+                        deckSelector.appendChild(createElement("option", {
+                            value: deck,
+                            textContent: deck,
+                            selected: deck === currentSavedDeck
+                        }));
+                    });
+                    if (currentSavedDeck && !decks.includes(currentSavedDeck)) {
+                        deckSelector.appendChild(createElement("option", {
+                            value: currentSavedDeck,
+                            textContent: `${currentSavedDeck} (Saved)`,
+                            selected: true
+                        }));
+                    }
+                    if (statusEl && statusEl.textContent.includes("Guide")) {
+                        statusEl.innerHTML = "";
+                        statusEl.title = "";
+                    }
+                } catch (err) {
+                    deckSelector.innerHTML = "";
+                    if (currentSavedDeck) {
+                        deckSelector.appendChild(createElement("option", {
+                            value: currentSavedDeck,
+                            textContent: `${currentSavedDeck} (Saved)`,
+                            selected: true
+                        }));
+                        renderAnkiOfflineStatus(statusEl, true);
+                    } else {
+                        deckSelector.appendChild(createElement("option", {
+                            value: "",
+                            textContent: "Anki Offline"
+                        }));
+                        renderAnkiOfflineStatus(statusEl, false);
+                    }
+                }
+            }
+            
+            const ankiDeckSelectorEl = document.getElementById("flashcardAnkiDeckSelector");
+            if (ankiDeckSelectorEl) {
+                ankiDeckSelectorEl.addEventListener("change", (event) => {
+                    settings.ankiDeck = {...settings.ankiDeck, [targetLanguage]: event.target.value};
+                });
+            }
+            
             if (languageSelector) {
                 languageSelector.addEventListener("change", (event) => {
                     targetLanguage = event.target.value;
@@ -5421,41 +5922,14 @@
                     searchKeyword = "";
                     if (searchInput) searchInput.value = "";
                     loadFlashcardPage(1);
+                    populateFlashcardAnkiDecks();
+                    const statusEl = document.getElementById("flashcardAnkiStatus");
+                    if (statusEl) {
+                        statusEl.textContent = "";
+                        statusEl.title = "";
+                    }
+                    checkAndTriggerDailyAnkiSync(targetLanguage);
                 });
-            }
-            
-            async function fetchFlashcardsInBatches(language, columns, sortBy) {
-                let allData = [];
-                let from = 0;
-                let batchSize = 10000;
-                let hasMore = true;
-                
-                while (hasMore) {
-                    const {data, error} = await getDbClient()
-                        .from(getTableName())
-                        .select(columns)
-                        .eq("language", language)
-                        .order(sortBy, {ascending: true})
-                        .range(from, from + batchSize - 1);
-                    
-                    if (error) {
-                        console.error("Batch fetch error:", error);
-                        return allData;
-                    }
-                    
-                    allData = allData.concat(data);
-                    
-                    if (data.length === 0) {
-                        hasMore = false;
-                    } else if (data.length < batchSize) {
-                        batchSize = data.length;
-                        from += batchSize;
-                    } else {
-                        from += batchSize;
-                    }
-                }
-                
-                return allData;
             }
             
             function drawPagination(page, total) {
@@ -5897,6 +6371,8 @@
                 searchInput?.focus();
                 
                 populateLanguageSelector();
+                populateFlashcardAnkiDecks();
+                checkAndTriggerDailyAnkiSync(targetLanguage);
             });
             
             document.getElementById("closeFlashcardPopupBtn").addEventListener("click", () => {
@@ -5962,75 +6438,8 @@
                 exportButton.disabled = true;
                 
                 try {
-                    function formatContext(context, originalWord, paddingWords = 20, paddingLength = 150) {
-                        if (!context) return "";
-                        
-                        const openTag = "<selected>";
-                        const closeTag = "</selected>";
-                        
-                        let rawBefore = "";
-                        let targetWord = "";
-                        let rawAfter = "";
-                        let isFound = false;
-                        
-                        const startTagIdx = context.indexOf(openTag);
-                        const endTagIdx = context.indexOf(closeTag);
-                        
-                        if (startTagIdx !== -1 && endTagIdx !== -1) {
-                            rawBefore = context.substring(0, startTagIdx);
-                            targetWord = context.substring(startTagIdx + openTag.length, endTagIdx);
-                            rawAfter = context.substring(endTagIdx + closeTag.length);
-                            isFound = true;
-                        } else if (originalWord) {
-                            const escapedWord = originalWord.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-                            const match = context.match(new RegExp(escapedWord, 'i'));
-                            if (match) {
-                                rawBefore = context.substring(0, match.index);
-                                targetWord = match[0];
-                                rawAfter = context.substring(match.index + match[0].length);
-                                isFound = true;
-                            }
-                        }
-                        
-                        if (!isFound) return context;
-                        
-                        const beforeWords = rawBefore.trimEnd() ? rawBefore.trimEnd().split(/\s+/) : [];
-                        const afterWords = rawAfter.trimStart() ? rawAfter.trimStart().split(/\s+/) : [];
-                        
-                        const hasMoreBefore = beforeWords.length > paddingWords;
-                        const hasMoreAfter = afterWords.length > paddingWords;
-                        
-                        let leftSlice = beforeWords.slice(-paddingWords).join(" ");
-                        let rightSlice = afterWords.slice(0, paddingWords).join(" ");
-                        
-                        let isLengthCappedLeft = false;
-                        let isLengthCappedRight = false;
-                        
-                        if (leftSlice.length > paddingLength) {
-                            leftSlice = leftSlice.slice(-paddingLength).trimStart();
-                            isLengthCappedLeft = true;
-                        }
-                        if (rightSlice.length > paddingLength) {
-                            rightSlice = rightSlice.slice(0, paddingLength).trimEnd();
-                            isLengthCappedRight = true;
-                        }
-                        
-                        const prefix = (hasMoreBefore || isLengthCappedLeft) ? "..." : "";
-                        const suffix = (hasMoreAfter || isLengthCappedRight) ? "..." : "";
-                        
-                        const formattedLeft = leftSlice ? `${leftSlice} ` : "";
-                        const formattedRight = rightSlice ? ` ${rightSlice}` : "";
-                        
-                        return `${prefix}${formattedLeft}<b>${targetWord}</b>${formattedRight}${suffix}`.trim();
-                    }
-                    
-                    const allData = await fetchFlashcardsInBatches(targetLanguage, "*", "idx");
-                    if (!allData.length) return;
-                    
-                    const processedData = allData.map(row => ({
-                        ...row,
-                        formatted_context: formatContext(row.context, row.original_word)
-                    }));
+                    const processedData = await getProcessedFlashcards(targetLanguage);
+                    if (!processedData.length) return;
                     
                     const headers = Object.keys(processedData[0] || {});
                     const rows = processedData.map(row =>
@@ -6056,6 +6465,55 @@
                     exportButton.disabled = false;
                 }
             });
+            
+            const ankiSyncBtn = document.getElementById("flashcardAnkiSyncBtn");
+            if (ankiSyncBtn) {
+                ankiSyncBtn.addEventListener("click", async () => {
+                    const deckName = settings.ankiDeck[targetLanguage];
+                    if (!deckName) {
+                        alert(`Please select an Anki deck for language "${targetLanguage}" first.`);
+                        return;
+                    }
+                    
+                    ankiSyncBtn.disabled = true;
+                    const statusEl = document.getElementById("flashcardAnkiStatus");
+                    if (statusEl) {
+                        statusEl.textContent = "Syncing...";
+                        statusEl.title = "Syncing with Anki...";
+                        statusEl.style.color = "var(--blue-500, #3b82f6)";
+                    }
+                    
+                    try {
+                        const result = await syncFlashcardsToAnki(targetLanguage, {
+                            allowDelete: true,
+                            confirmDelete: (deleteCount, targetDeck) => {
+                                if (deleteCount >= 10) {
+                                    alert(`[Anki Sync - Safety Lock]\nDeletion of 10 or more cards (${deleteCount} cards) is blocked to protect your Anki review history from accidental deletion.\n\nAdditions and updates will proceed, but deletions have been skipped.\nTo delete these cards, please remove them directly inside the Anki Browser.`);
+                                    return false;
+                                }
+                                
+                                const confirmMsg = `[Anki Sync]\nFound ${deleteCount} card(s) in Anki deck "${targetDeck}" that no longer exist in your database.\n\nDo you want to delete them from Anki?\n(Warning: Anki review intervals and history will be permanently lost.)`;
+                                return confirm(confirmMsg);
+                            }
+                        });
+                        if (statusEl) {
+                            const changes = [];
+                            if (result.added > 0) changes.push(`+${result.added}`);
+                            if (result.updated > 0) changes.push(`~${result.updated}`);
+                            if (result.deleted > 0) changes.push(`-${result.deleted}`);
+                            const summary = `+${result.added}, ~${result.updated}, -${result.deleted}, =${result.unchanged}`;
+                            statusEl.textContent = changes.length > 0 ? `✓ ${changes.join(", ")}` : "✓ Up to date";
+                            statusEl.title = `Sync complete (${summary})`;
+                            statusEl.style.color = "var(--green-500, #22c55e)";
+                        }
+                    } catch (err) {
+                        console.error("Anki sync error:", err);
+                        renderAnkiOfflineStatus(statusEl, true);
+                    } finally {
+                        ankiSyncBtn.disabled = false;
+                    }
+                });
+            }
             
             const reportMainBtn = document.getElementById("flashcardAiReportBtn");
             const reportDropdownBtn = document.getElementById("flashcardAiReportDropdownBtn");
@@ -10087,7 +10545,7 @@
             }
 
             function isReaderMultiColumn(container, wrapper) {
-                const thresholdWidth = wrapper.clientWidth * 1.1;
+                const thresholdWidth = wrapper.clientWidth * 1.2;
                 const containerWidth = Math.max(container.scrollWidth, container.offsetWidth);
                 const sentences = container.querySelectorAll(".sentence, .sentence-item");
                 const lastSentence = sentences[sentences.length - 1];

@@ -41,6 +41,8 @@ This guide is structured around the **Settings Popup** (where the majority of fe
 - [Part III: Setup & Integrations](#part-iii-setup--integrations)
   - [11. Supabase Cloud Database Setup](#11-supabase-cloud-database-setup)
   - [12. Anki Integration Guide](#12-anki-integration-guide)
+    - [Method 1: Direct Sync via Anki-Connect (Recommended)](#method-1-direct-sync-via-anki-connect-recommended)
+    - [Method 2: Manual Import via CSV (Alternative)](#method-2-manual-import-via-csv-alternative)
   - [13. HyperTTS Audio Setup & Batch Generation Guide (Additional Tip)](#13-hypertts-audio-setup--batch-generation-guide-additional-tip)
 
 ---
@@ -430,13 +432,42 @@ CREATE INDEX idx_llm_usage_logs_created_at ON public.llm_usage_logs (created_at 
 
 <img src="images/anki flashcard format.png" width=600></br>
 
-### Step 1: Install Note Template
+### Prerequisites (One-Time Setup)
+
+#### Step 1: Install Note Template
 Download and open the [LingQ Flashcard Deck.apkg](https://github.com/2p990i9hpral/LingQ_Add-On/raw/refs/heads/main/LingQ%20Flashcard%20Deck.apkg) file. This automatically registers the `LingQ Flashcard` note type in Anki.
 
-### Step 2: Export CSV
+#### Step 2: Create Your Language Deck in Anki
+1. In Anki desktop, click **Create Deck** at the bottom of the main window.
+2. Enter a deck name for your language (e.g., `LingQ English`, `LingQ Japanese`, or whatever structure you prefer).
+
+---
+
+### Method 1: Direct Sync via Anki-Connect (Recommended)
+Sync flashcards directly from the browser into your Anki desktop collection with zero manual CSV exports.
+
+#### Step 1: Install Anki-Connect in Anki Desktop
+1. In Anki desktop, go to **Tools > Add-ons > Get Add-ons...**.
+2. Enter the code `2055492159` [(Anki Connect)](https://ankiweb.net/shared/info/2055492159) and click **OK**.
+3. Restart Anki.
+
+> Anki desktop must be running in the background while syncing.
+
+#### Step 2: Select Deck & Sync in Flashcard Manager
+1. In LingQ, open the **Flashcard Manager** popup.
+2. In the bottom-left footer, select your deck for the selected language from the **Deck:** dropdown.
+   *(The addon automatically retrieves your existing deck names from Anki).*
+3. Click **Sync to Anki** to perform an on-demand sync.
+   - **Daily Auto-Sync**: Once configured, the addon automatically synchronizes cards once per day whenever you open the Flashcard Manager.
+
+---
+
+### Method 2: Manual Import via CSV (Alternative)
+
+#### Step 1: Export CSV
 In the addon's **Flashcard Manager**, click **Export as CSV**.
 
-### Step 3: Import into Anki
+#### Step 2: Import into Anki
 1. In Anki desktop, go to **File -> Import** and choose the downloaded CSV.
 2. In the import settings dialog:
 
