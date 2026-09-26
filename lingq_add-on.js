@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      16.12.6
+// @version      16.12.7
 // @license      GPL-3.0-or-later
 // @grant       GM_setValue
 // @grant       GM_getValue
@@ -702,11 +702,22 @@
         }
     }
     
+    let activeVerticalScrollAnimation = null;
+    
     function smoothScrollTo(element, to, duration, isHorizontal = false) {
         const scrollProp = isHorizontal ? "scrollLeft" : "scrollTop";
+        
+        if (!isHorizontal && activeVerticalScrollAnimation && activeVerticalScrollAnimation.element === element) {
+            activeVerticalScrollAnimation.cancelled = true;
+        }
+        
         const start = element[scrollProp];
-        const change = to - start;
         const startTime = performance.now();
+        
+        const anim = {element, start, to, cancelled: false};
+        if (!isHorizontal) {
+            activeVerticalScrollAnimation = anim;
+        }
         
         function easeInOutCubic(t) {
             t *= 2;
@@ -716,16 +727,22 @@
         }
         
         function animateScroll(currentTime) {
+            if (anim.cancelled) return;
+            
             const elapsedTime = currentTime - startTime;
             const progress = Math.min(elapsedTime / duration, 1);
             const easedProgress = easeInOutCubic(progress);
+            const currentChange = anim.to - anim.start;
             
-            element[scrollProp] = start + change * easedProgress;
+            element[scrollProp] = anim.start + currentChange * easedProgress;
             
             if (elapsedTime < duration) {
                 requestAnimationFrame(animateScroll);
             } else {
-                element[scrollProp] = to;
+                element[scrollProp] = anim.to;
+                if (activeVerticalScrollAnimation === anim) {
+                    activeVerticalScrollAnimation = null;
+                }
             }
         }
         
@@ -10052,6 +10069,14 @@
                         } else {
                             wrapper.scrollTop = targetScrollTop;
                         }
+
+                        if (activeVerticalScrollAnimation && !activeVerticalScrollAnimation.cancelled && activeVerticalScrollAnimation.element === wrapper) {
+                            activeVerticalScrollAnimation.start += deltaY;
+                            activeVerticalScrollAnimation.to += deltaY;
+                            if (newMaxScroll > 0) {
+                                activeVerticalScrollAnimation.to = Math.min(Math.max(0, activeVerticalScrollAnimation.to), newMaxScroll);
+                            }
+                        }
                     }
                 } finally {
                     hiddenReaderElements = [];
@@ -10154,6 +10179,14 @@
                         const targetScrollTop = Math.max(0, savedScrollTop + deltaY);
                         const newMaxScroll = wrapper.scrollHeight - wrapper.clientHeight;
                         wrapper.scrollTop = newMaxScroll > 0 ? Math.min(targetScrollTop, newMaxScroll) : targetScrollTop;
+
+                        if (activeVerticalScrollAnimation && !activeVerticalScrollAnimation.cancelled && activeVerticalScrollAnimation.element === wrapper) {
+                            activeVerticalScrollAnimation.start += deltaY;
+                            activeVerticalScrollAnimation.to += deltaY;
+                            if (newMaxScroll > 0) {
+                                activeVerticalScrollAnimation.to = Math.min(Math.max(0, activeVerticalScrollAnimation.to), newMaxScroll);
+                            }
+                        }
                     } finally {
                         requestAnimationFrame(() => {
                             isCheckingReaderOverflow = false;
