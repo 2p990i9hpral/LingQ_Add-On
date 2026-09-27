@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      17.0.0
+// @version      17.0.1
 // @license      GPL-3.0-or-later
 // @grant       GM_setValue
 // @grant       GM_getValue
@@ -10030,7 +10030,7 @@
             
             async function generateLessonSummary(readerContainer) {
                 async function getLessonSummary(provider, apikey, model, content) {
-                    const summaryPrompt = `
+                    const lessonSummaryPrompt = `
                     # Role
                     Generate a comprehensive English note of the given content, serving as persistent macro-context for downstream tasks (e.g., Q&A, interpretation, translation), and readable by users. This note's core job is the big picture: overall structure, entities, and argument/plot flow.
                 
@@ -10052,7 +10052,7 @@
                     `;
                     
                     const summary_history = [
-                        {role: "system", content: removeIndent(summaryPrompt)},
+                        {role: "system", content: removeIndent(lessonSummaryPrompt)},
                         {role: "user", content: content}
                     ]
                     const summary = await getOpenAIResponse(provider, apikey, model, summary_history);
@@ -10098,7 +10098,7 @@
                     const targetWords = summaryWordsByDifficulty[difficulty] || 150;
                     const targetParagraphs = targetWords <= 60 ? "1 paragraph" : targetWords <= 100 ? "1–2 paragraphs" : "2 paragraphs";
                     
-                    const summaryPrompt = `
+                    const quickSummaryPrompt = `
                     # Role
                     Generate a pre-reading summary of the given content, helping learners grasp the topic and practice reading before engaging with the full material.
                 
@@ -10109,10 +10109,14 @@
                     - Length: ${targetWords} words as a soft upper limit.
                     - Reading Aids:
                         - If ${lessonLanguage} uses logographic scripts (e.g., Japanese, Chinese):
-                            Annotate words containing Kanji/Hanzi with phonetic readings using [Word|reading] format (Example: "[私|わたし]は[日本語|にほんご]を[勉強|べんきょう]しています。").
-                            Do not output brackets without a vertical bar like [word].
+                            - Exhaustive Annotation: Every logographic character (e.g., Kanji, Hanzi) need be annotated without exception with its phonetic reading using [Word|reading] format.
+                            - Format Constraint: Always use [Word|reading] with a vertical bar '|'. Never output plain brackets like [Word] without
+                            - Negative Examples:
+                                - Incorrect: 狐[きつね] (Do not put brackets after the character) / Correct: [狐|きつね]
+                                - Incorrect: [猫] (Missing vertical bar and reading) / Correct: [猫|ねこ]
+                                - Incorrect: Leaving bare logographs unannotated anywhere in the text.
                         - If ${lessonLanguage} uses alphabetic or purely phonetic scripts (e.g., English, Spanish, Korean, German):
-                            Never use phonetic annotations or bracket notation — output regular plain text only.
+                            - Output regular plain text only. Never use phonetic annotations or bracket notation — output regular plain text only.
                 
                     # Content Rules
                     - Objective and factual; base ONLY on the given content
@@ -10120,10 +10124,26 @@
                     - Present information directly as standalone facts; never reference the source itself (avoid phrases like "this lesson," "this lecture," "the text explains," "in this video")
                     - Summary body ONLY: no preface, title restatement, or closing remarks
                     ${difficultyPrompt}
+                    
+                    # Examples
+                    
+                    ## Example 1: Alphabetic / Phonetic Script (Original: English)
+                    User Input:
+                    "Recent advancements in urban agriculture have transformed how cities approach food security and environmental sustainability. Rooftop farms and vertical hydroponic facilities are spreading across major metropolises, allowing local communities to harvest fresh produce year-round while significantly reducing transportation emissions. Furthermore, these green spaces help mitigate the urban heat island effect and improve stormwater management."
+                    Assistant Output:
+                    Urban agriculture is rapidly expanding through rooftop gardens and vertical hydroponic facilities in major cities. These local installations allow communities to harvest fresh produce year-round while reducing transportation emissions.
+                    Beyond food production, these green facilities mitigate the urban heat island effect and strengthen stormwater management.
+
+                    ## Example 2: Logographic Script with Exhaustive Phonetic Readings (Original: Japanese)
+                    User Input:
+                    "ある職人の工房では、伝統的な陶器作りの技術が受け継がれています。弟子たちは毎日早く工房へ行き、粘土をこねて作品の形を整えます。絵付けの工程では、特別な顔料を使い、筆を慎重に動かして美しい模様を描きます。完成した焼き物は箱に10個ずつ丁寧に詰められ、町の人々に届けられます。職人は道具の手入れを怠らず、古い道具を大切に使い続けています。"
+                    Assistant Output:
+                    [工房|こうぼう]では[伝統的|でんとうてき]な[陶器作り|とうきづくり]の[技術|ぎじゅつ]を[受|う]け[継|つ]ぎ、[弟子|でし]たちが[粘土|ねんど]から[作品|さくひん]の[形|かたち]を[整|ととの]えます。[絵付け|えづけ]では[特別|とくべつ]な[顔料|がんりょう]を[使|つか]い、[筆|ふで]で[美|うつく]しい[模様|もよう]を[描|えが]きます。
+                    [完成|かんせい]した[焼き物|やきもの]は[箱|はこ]に[10個|じゅっこ]ずつ[詰|つ]めて[届|とど]けられます。[職人|しょくにん]は[道具|どうぐ]の[手入れ|ていれ]を[怠|おこた]らず、[大切|たいせつ]に[使|つか]い[続|つづ]けています。
                     `;
                     
                     const summary_history = [
-                        {role: "system", content: removeIndent(summaryPrompt)},
+                        {role: "system", content: removeIndent(quickSummaryPrompt)},
                         {role: "user", content: content}
                     ]
                     
@@ -12358,6 +12378,11 @@
         ## Task: Linguistic Analysis
         Analyze the input: 'Input: "Term" Context: "Sentence"'.
 
+        ## STRICT Output Constraint
+        - Output exactly one single '<div class="word-card">' container and stop immediately.
+        - Never output multiple cards, revisions, second thoughts, or alternative drafts.
+        - No text, comments, or system artifacts may appear before or after the '<div>' container.
+
         1. Lemma Extraction (Base Form)
             - Nouns: Singular form.
             - Verbs: Infinitive form.
@@ -12393,8 +12418,12 @@
             - Output must be a definitive, short phrase or single word.
 
         4. Contextual Explanation
-            - This is where you bridge the "Standard Definition" and the "Specific Context".
-            - Structure your explanation into two parts: First, state the inherent nuance or register of the word (e.g., formal, slang, archaic, colloquial). Second, explain how its specific grammatical inflection (e.g., subjunctive mood, causative-passive, perfective aspect) or metaphorical usage colors the provided context.
+            - Bridge the "Standard Definition" and the "Specific Context" with high information density (1–2 concise sentences).
+            - Strict Ban on Filler: Never write empty boilerplate phrases or repeat the base definition. Dive directly into the context.
+            - What to Explain:
+              1. Grammatical Form & Collocation: The exact form in context (e.g., inflection, tense, voice, dependent particles, governing verbs, separable phrasal structures).
+              2. Contextual Nuance: How the word specifically operates in the sentence, speaker intent, or metaphorical imagery.
+              3. Distinctive Register (Only if notable): Mention tone only when it is truly distinctive (e.g., slang, highly formal, archaic, ironic); omit for neutral words.
 
         5. Example Generation
             - Create a new, high-quality penetrating example sentence in ${lessonLanguage} using the Base Form.
@@ -12424,7 +12453,7 @@
             <b>translator</b> <span>[trænsˈleɪtər]</span> <i>(명사)</i>
             <p>번역가</p>
             <hr>
-            <p>한 언어로 된 텍스트나 말을 다른 언어로 바꾸는 사람을 뜻하는 일반적인 단어입니다. 문맥에서는 성경 번역을 담당한 특정 그룹을 지칭하고 있습니다.</p>
+            <p>문맥에서는 복수형 접미사 '-s'가 결합된 주어로 쓰여, 특정 단어를 'servant'로 번역하기로 결정한 성경 번역 위원회 집단을 지칭합니다.</p>
             <hr>
             <ul>
               <li>Many translators work freely.</li>
@@ -12439,7 +12468,7 @@
             <b>lograr</b> <span>[loˈɣɾaɾ]</span> <i>(verb)</i>
             <p>To achieve</p>
             <hr>
-            <p>Refers to the act of reaching a goal or result, typically through effort. The context highlights obtaining specific objectives.</p>
+            <p>Appears in the infinitive governed by the modal auxiliary 'debemos', denoting a collective obligation to attain set objectives.</p>
             <hr>
             <ul>
               <li>Espero lograr todas mis metas.</li>
@@ -12451,10 +12480,10 @@
         User Input: 'Input: "anstellen", Context: "Was hast du mit der Schere angestellt?"'
         Assistant Output:
         <div class="word-card">
-            <b>anstellen</b> <span>[ˈanˌʃtɛlən]</span> <i>(verb)</i>
+            <b>anstellen</b> <span>[ˈanˌʃtɛlən]</span> <i>(verbe)</i>
             <p>Faire</p>
             <hr>
-            <p>Bien que "anstellen" puisse signifier "employer", dans ce contexte, il signifie "commettre" ou "faire" une bêtise. C'est le sens standard utilisé pour des actions négatives ou maladroites.</p>
+            <p>Dans ce contexte familier, il s'emploie au participe passé (angestellt) pour désigner le fait d'avoir commis une bêtise ou une maladresse avec des ciseaux.</p>
             <hr>
             <ul>
               <li>Er hat wieder etwas Dummes angestellt.</li>
@@ -12469,7 +12498,7 @@
             <b>recklessly</b> <span>[ˈrɛklɪsli]</span> <i>(副詞)</i>
             <p>無謀に</p>
             <hr>
-            <p>危険や結果を十分に考えずに行動することを指す定義です。文脈では運転という行為が安全を無視して行われたことを説明しています。</p>
+            <p>過去形動詞「drove」を直接修飾し、雨天という悪条件下で安全を顧みずに車を走らせた極めて危険な運転様態を批判的に強調しています。</p>
             <hr>
             <ul>
               <li>She spent money recklessly.</li>
@@ -12484,7 +12513,7 @@
             <b>立ち尽くす</b> <span>[tat͡ɕit͡sɯkɯsɯ]</span> <i>(동사)</i>
             <p>그 자리에 멈춰 서다</p>
             <hr>
-            <p>충격이나 놀라움 등으로 움직이지 못하고 계속 서 있는 상태를 뜻합니다. 문맥에서는 '〜ていました'(계속형+과거)로 쓰여, 예상치 못한 소식을 듣고 한동안 그 자리에서 몸이 굳어 있던 상태가 지속되었음을 나타냅니다.</p>
+            <p>문맥에서는 보조동사 결합 형태인 '〜ていました'(진행·지속+과거)로 쓰여, 예상치 못한 소식에 큰 충격을 받아 그 자리에서 굳어 있던 상태가 한동안 이어졌음을 나타냅니다.</p>
             <hr>
             <ul>
               <li>あまりの美しさに、彼はその場に立ち尽くした。</li>
@@ -12514,7 +12543,7 @@
             <b>かわいい</b> <span>[kawaiː]</span> <i>(형용사)</i>
             <p>귀엽다</p>
             <hr>
-            <p>외모나 행동이 사랑스럽고 호감이 가는 상태를 뜻합니다. 원문에서는 'カワイイ'처럼 카타카나로 표기하여, 단순히 귀엽다는 의미를 넘어 패션이나 시각적인 측면에서 감각적이고 트렌디한 느낌을 한층 강조하고 있습니다.</p>
+            <p>원문에서는 일반적인 히라가나 대신 카타카나('カワイイ')로 표기하여, 단순한 귀여움을 넘어 패션과 시각적 스타일링의 트렌디하고 감각적인 매력을 강조하고 있습니다.</p>
             <hr>
             <ul>
               <li>公園でかわいい子猫を見つけました。</li>
@@ -12529,7 +12558,7 @@
             <b>市場</b> <span>[it͡ɕiba]</span> <i>(명사)</i>
             <p>시장</p>
             <hr>
-            <p>'市場'은 주식이나 경제 등 추상적인 시장(しじょう)을 뜻하기도 하지만, 이 문맥에서는 사람들이 모여 물건을 직접 사고파는 물리적인 장소인 '재래시장(いちば)'을 가리킵니다. 신선한 채소를 사기 위해 방문한 구체적인 공간의 의미로 사용되었습니다.</p>
+            <p>추상적 경제 시장(しじょう)이 아닌 물리적 '재래시장(いちば)'을 뜻하며, 방향 조사 'に'와 결합해 신선한 채소를 구매하러 가는 목적지를 나타냅니다.</p>
             <hr>
             <ul>
               <li>毎朝、この市場は活気に満ちている。</li>
@@ -12544,7 +12573,7 @@
             <b>poser un lapin</b> <span>[po.ze œ̃ la.pɛ̃]</span> <i>(idiom)</i>
             <p>to stand somebody up</p>
             <hr>
-            <p>Literally meaning "to place a rabbit," this French idiom signifies failing to show up for a scheduled appointment without informing the other person. The base form is extracted collectively as an idiom rather than translating the literal words.</p>
+            <p>Literally meaning "to place a rabbit," this French idiom denotes failing to show up for an appointment without warning. In context, it appears in the passé composé ('a posé') with the object pronoun 'm'', expressing frustration over being stood up at the café.</p>
             <hr>
             <ul>
               <li>Elle m'a posé un lapin à notre premier rendez-vous.</li>
@@ -12559,7 +12588,7 @@
             <b>saudade</b> <span>[sawˈdadʒi]</span> <i>(noun)</i>
             <p>nostalgic longing</p>
             <hr>
-            <p>A deep emotional state of melancholic longing for a person, place, or time that is absent. Because English lacks a single exact lexical equivalent for this culturally specific concept, a descriptive compound phrase separated by a comma is exceptionally permitted here according to the rule.</p>
+            <p>Culturally specific Portuguese noun expressing deep nostalgic yearning. In context, it functions as the direct object of the verb 'sinto' and is intensified by 'muita', emphasizing emotional longing for one's homeland.</p>
             <hr>
             <ul>
               <li>A saudade bateu forte hoje.</li>
@@ -12574,7 +12603,7 @@
             <b>figure out</b> <span>[ˈfɪɡjər aʊt]</span> <i>(短语动词)</i>
             <p>弄明白</p>
             <hr>
-            <p>这是一个英语短语动词，意思是理解或解决某事。在这个语境中，虽然动词“figure”和介词“out”被宾语（“the complicated puzzle”）在物理上隔开了，但助手依然准确地提取了完整的动词原形“figure out”。</p>
+            <p>表示通过思考解决问题的常用短语动词。在语境中呈现为及物可拆分结构（separable phrasal verb），动词与介词被宾语“the complicated puzzle”在物理上隔开，表达历经数小时最终解决难题的结果。</p>
             <hr>
             <ul>
               <li>We need to figure out a better solution.</li>
@@ -12680,12 +12709,19 @@
         ### Condition A: Correction Request
         Trigger: Only when the user explicitly requests a fix of the previously generated word card using direct commands such as "Wrong word", "Fix the base form", "Use X instead of Y", "Correct the IPA".
         Action: Output conversational explanation first (optional), then output the corrected word card wrapped strictly inside <div class="word-card">.
-        Restriction:
-            - Carefully inspect the "Previous Response" and locate the exact slot requested for modification.
-            - Except for the explicitly requested changes, all other content (definitions, contextual explanations, and examples) must be copied verbatim from the "Previous Response".
-            - Keep any explanation about the correction brief and direct. This text must be placed entirely outside and before the '<div class="word-card">' container.
-            - Do not write any text regarding the correction process inside the '<div class="word-card">' (especially not in the contextual explanation '<p>' tag). The inner contents must strictly focus on the word itself.
-
+        
+        Strict Separation of Roles:
+        1. Outside the card (Conversational Commentary):
+            - This is the ONLY place to communicate with the user, acknowledge the fix, or explain why the correction was made (e.g., explaining why B is correct instead of A).
+        2. Inside the card (Permanent Flashcard Object):
+           - Destination: Content inside '<div class="word-card">' is permanently exported as a flashcard. It must be a clean, objective dictionary-like entry.
+           - Purity Rule: Write the inner content as if this card was generated perfectly on the first try with zero errors. The card itself must be completely unaware that any correction ever occurred.
+           - Verbatim Copy Constraint: ONLY update the exact slot requested (e.g., IPA, base form). All other slots (especially the contextual explanation '<p>' and examples) must be copied verbatim from the Previous Response — absolutely do not rewrite or add correction remarks to them.
+        
+        Negative Examples inside <div class="word-card">:
+            - Incorrect in inner <p>: "발음은 [tsɯno]가 아니라 [kado]였습니다. 문맥에서는..." (Conversational or comparative remarks about the correction are strictly forbidden)
+            - Incorrect in inner <p>: "~의 발음은 b로 읽는 것이 이 문맥에서는 적절합니다."
+        
         ### Condition B: General or Referential Query
         Trigger: The user asks a question or makes a general comment.
         Action: Answer in Raw HTML (<p>, <b> <ul>, <li>). Markdown syntax (code blocks, bold, and headers) is forbidden.
