@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      17.0.1
+// @version      17.1.0
 // @license      GPL-3.0-or-later
 // @grant       GM_setValue
 // @grant       GM_getValue
@@ -67,6 +67,7 @@
         skipEndPage: false,
         relocateCaption: 'default',
         captionFontsize: 1.1,
+        widgetVerticalAlign: 'flex-start',
         showMemoWidget: false,
         
         keyboardShortcut: false,
@@ -3963,6 +3964,15 @@
             ], settings.relocateCaption);
             container1.appendChild(videoCaptionSection);
             
+            const widgetSection = createElement("div", {className: "popup-section"});
+            const widgetRadioGroup = addRadioGroup(widgetSection, "widgetVerticalAlign", "Widget:", [
+                {value: "flex-start", text: "Top"},
+                {value: "center", text: "Center"},
+                {value: "flex-end", text: "Bottom"}
+            ], settings.widgetVerticalAlign);
+            widgetRadioGroup.style.whiteSpace = "nowrap";
+            container1.appendChild(widgetSection);
+            
             addCheckbox(container1, "focusPlayingSentenceCheckbox", "Focus on Playing Sentence", settings.focusPlayingSentence);
             addCheckbox(container1, "focusSelectedTextCheckbox", "Focus on Selected Text", settings.focusSelectedText);
             addCheckbox(container1, "showMemoWidgetCheckbox", "Show Memo Widget", settings.showMemoWidget);
@@ -5046,6 +5056,12 @@
                 });
             });
             
+            document.querySelectorAll('input[name="widgetVerticalAlign"]').forEach((radio) => {
+                radio.addEventListener("change", (event) => {
+                    settings.widgetVerticalAlign = event.currentTarget.value;
+                });
+            });
+            
             setupSlider("captionFontsizeSlider", "captionFontsizeValue", "captionFontsize", "px", "--caption-font-size", (val) => `${val}px`);
             
             const showMemoWidgetCheckbox = document.getElementById("showMemoWidgetCheckbox");
@@ -5439,6 +5455,9 @@
                 document.getElementById("skipEndPageCheckbox").checked = defaults.skipEndPage;
                 document.querySelectorAll('input[name="relocateCaption"]').forEach((radio) => {
                     radio.checked = radio.value === defaults.relocateCaption;
+                });
+                document.querySelectorAll('input[name="widgetVerticalAlign"]').forEach((radio) => {
+                    radio.checked = radio.value === defaults.widgetVerticalAlign;
                 });
                 document.getElementById("captionFontsizeSlider").value = defaults.captionFontsize;
                 
@@ -8363,6 +8382,10 @@
             document.querySelectorAll('input[name="colorMode"]').forEach((radio) => {
                 radio.addEventListener("change", applyStyles);
             });
+            
+            document.querySelectorAll('input[name="widgetVerticalAlign"]').forEach((radio) => {
+                radio.addEventListener("change", applyStyles);
+            });
         }
         
         
@@ -8971,6 +8994,7 @@
                 height: 100% !important;
                 display: flex;
                 flex-direction: column;
+                justify-content: ${settings.widgetVerticalAlign || "flex-start"} !important;
             }
 
             .reader-widget {
