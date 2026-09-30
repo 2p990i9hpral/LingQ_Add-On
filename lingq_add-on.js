@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      17.1.0
+// @version      17.1.1
 // @license      GPL-3.0-or-later
 // @grant       GM_setValue
 // @grant       GM_getValue
@@ -1445,7 +1445,6 @@
             return {added: 0, updated: 0, unchanged: 0, total: 0};
         }
         
-        const modelName = "LingQ Flashcard";
         const escapedDeck = deckName.replace(/["\\]/g, '\\$&');
         const noteIds = await invokeAnkiConnect("findNotes", {query: `deck:"${escapedDeck}"`});
         
@@ -1459,6 +1458,20 @@
                 }
             }
         }
+        
+        const modelCounts = existingNotesInfo.reduce((acc, note) => {
+            const model = note.modelName;
+            if (note.fields?.idx && model) {
+                acc[model] = (acc[model] ?? 0) + 1;
+            }
+            return acc;
+        }, {});
+        
+        const dominantModel = Object.keys(modelCounts).reduce((bestModel, currentModel) => {
+            return modelCounts[currentModel] > (modelCounts[bestModel] ?? 0) ? currentModel : bestModel;
+        }, null);
+        
+        const targetModelName = dominantModel ?? "LingQ Flashcard";
         
         const existingMap = new Map();
         existingNotesInfo.forEach((note) => {
@@ -1502,7 +1515,7 @@
             if (!existingNote) {
                 notesToAdd.push({
                     deckName,
-                    modelName,
+                    modelName: targetModelName,
                     fields: targetFields,
                     options: {allowDuplicate: false},
                     tags: []
@@ -1545,7 +1558,7 @@
         let notesToDelete = [];
         if (allowDelete) {
             notesToDelete = existingNotesInfo.filter((note) => {
-                if (note.modelName && note.modelName !== modelName) return false;
+                if (note.modelName && note.modelName !== targetModelName && note.modelName !== "LingQ Flashcard") return false;
                 
                 // Guard: Skip notes that belong to another language
                 const noteLang = note.fields?.language?.value?.trim();
@@ -1598,7 +1611,7 @@
         const todayStr = new Date().toISOString().slice(0, 10);
         storage.set("ankiLastSyncDate_" + language, todayStr);
         
-        console.group(`[Anki Sync] ${language} (${deckName}) - Total: ${processedData.length}`);
+        console.group(`[Anki Sync] ${language} (${deckName}) [Model: ${targetModelName}] - Total: ${processedData.length}`);
         console.log(`Summary: +${addedCount} added, ~${updatedCount} updated, -${deletedCount} deleted, =${unchangedCount} unchanged`);
         
         if (addedCount > 0) {
