@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      17.1.1
+// @version      17.1.2
 // @license      GPL-3.0-or-later
 // @grant       GM_setValue
 // @grant       GM_getValue
@@ -1341,7 +1341,7 @@
         return `${prefix}${formattedLeft}<b>${targetWord}</b>${formattedRight}${suffix}`.trim();
     }
     
-    function invokeAnkiConnect(action, params = {}, version = 6, timeout = 5000) {
+    function invokeAnkiConnect(action, params = {}, version = 6, timeout = 10000) {
         return new Promise((resolve, reject) => {
             GM_xmlhttpRequest({
                 method: "POST",
@@ -10604,10 +10604,7 @@
             function isReaderMultiColumn(container, wrapper) {
                 const thresholdWidth = wrapper.clientWidth * 1.2;
                 const containerWidth = Math.max(container.scrollWidth, container.offsetWidth);
-                const sentences = container.querySelectorAll(".sentence, .sentence-item");
-                const lastSentence = sentences[sentences.length - 1];
-                const isLastSentenceInCol2 = lastSentence ? (lastSentence.offsetLeft > wrapper.clientWidth * 0.8) : false;
-                return (containerWidth > thresholdWidth) || isLastSentenceInCol2;
+                return containerWidth > thresholdWidth;
             }
 
             function checkAndAdjustReaderColumnOverflow() {
