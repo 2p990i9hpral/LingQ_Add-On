@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      17.2.0
+// @version      17.2.1
 // @license      GPL-3.0-or-later
 // @grant       GM_setValue
 // @grant       GM_getValue
@@ -37,7 +37,7 @@
         sentenceAutoplay: false,
         widgetWidth: 400,
         fontSize: {},
-        furiganaScale: {},
+        annotationScale: {},
         lineHeight: {},
         customFont: {},
         
@@ -119,7 +119,7 @@
         prependSummary: false,
         summaryDifficulty: "unset",
         fontSize: 1.1,
-        furiganaScale: 50,
+        annotationScale: 50,
         lineHeight: 1.7,
         usePageMode: true,
         ttsVoice: "random",
@@ -3920,7 +3920,7 @@
             addSlider(container1, "widgetWidthSlider", "Widget Width:", "widgetWidthValue", settings.widgetWidth, "px", 330, 500, 10);
             
             addSlider(container1, "fontSizeSlider", "Font Size:", "fontSizeValue", settings.fontSize[language], "rem", 0.8, 1.8, 0.05);
-            addSlider(container1, "furiganaScaleSlider", "Furigana Size:", "furiganaScaleValue", settings.furiganaScale[language], "%", 40, 80, 5);
+            addSlider(container1, "annotationScaleSlider", "Annotation Size:", "annotationScaleValue", settings.annotationScale[language], "%", 40, 80, 5);
             addSlider(container1, "lineHeightSlider", "Line Height:", "lineHeightValue", settings.lineHeight[language], "", 1.2, 3.0, 0.05);
             
             const customFontContainer = createElement("div", {className: "popup-row"});
@@ -5023,7 +5023,7 @@
             });
             setupSlider("widgetWidthSlider", "widgetWidthValue", "widgetWidth", "px", "--widget-width", (val) => `${val}px`);
             setupSlider("fontSizeSlider", "fontSizeValue", "fontSize", "rem", "--font-size", (val) => `${val}rem`);
-            setupSlider("furiganaScaleSlider", "furiganaScaleValue", "furiganaScale", "%", "--furigana-size", (val) => `${val}%`);
+            setupSlider("annotationScaleSlider", "annotationScaleValue", "annotationScale", "%", "--annotation-size", (val) => `${val}%`);
             setupSlider("lineHeightSlider", "lineHeightValue", "lineHeight", "", "--line-height", (val) => val);
             
             const customFontInput = document.getElementById("customFontInput");
@@ -5445,8 +5445,8 @@
                 document.getElementById("widgetWidthValue").value = defaults.widgetWidth;
                 document.getElementById("fontSizeSlider").value = defaults.fontSize;
                 document.getElementById("fontSizeValue").textContent = defaults.fontSize;
-                document.getElementById("furiganaScaleSlider").value = languageScopedDefaults.furiganaScale;
-                document.getElementById("furiganaScaleValue").textContent = languageScopedDefaults.furiganaScale;
+                document.getElementById("annotationScaleSlider").value = languageScopedDefaults.annotationScale;
+                document.getElementById("annotationScaleValue").textContent = languageScopedDefaults.annotationScale;
                 document.getElementById("lineHeightSlider").value = defaults.lineHeight;
                 document.getElementById("lineHeightValue").textContent = defaults.lineHeight;
                 document.getElementById("customFontInput").value = defaults.customFont;
@@ -5458,7 +5458,7 @@
                 document.getElementById("sentenceVideoSettings").style.display = languageScopedDefaults.styleType === "off" ? "block" : "none";
                 
                 document.documentElement.style.setProperty("--font-size", `${defaults.fontSize}rem`);
-                document.documentElement.style.setProperty("--furigana-size", `${languageScopedDefaults.furiganaScale}%`);
+                document.documentElement.style.setProperty("--annotation-size", `${languageScopedDefaults.annotationScale}%`);
                 document.documentElement.style.setProperty("--line-height", defaults.lineHeight);
                 document.documentElement.style.setProperty("--height-big", `${defaults.heightBig}px`);
                 document.documentElement.style.setProperty("--sentence-height", `${defaults.sentenceHeight}px`);
@@ -8413,7 +8413,7 @@
             return `
                 :root {
                     --font-size: ${settings.fontSize[language]}rem;
-                    --furigana-size: ${settings.furiganaScale[language]}%;
+                    --annotation-size: ${settings.annotationScale[language]}%;
                     --line-height: ${settings.lineHeight[language]};
 
                     --font-color: ${colorSettings.fontColor};
@@ -8445,7 +8445,7 @@
 
                 rt {
                     font-family: var(--custom-font, inherit) !important;
-                    font-size: var(--furigana-size) !important;
+                    font-size: var(--annotation-size) !important;
                     font-weight: 500 !important;
                 }
 
@@ -9196,7 +9196,7 @@
                 overflow-anchor: none !important;
             }
 
-            .reader-container .sentence-item--transliteration:not(.has-furigana) {
+            .reader-container .sentence-item--transliteration:not(.has-annotation) {
                 margin-bottom: 0 !important;
             }
 
