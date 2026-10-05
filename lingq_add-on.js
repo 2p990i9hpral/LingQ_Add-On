@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      17.2.1
+// @version      17.3.0
 // @license      GPL-3.0-or-later
 // @grant       GM_setValue
 // @grant       GM_getValue
@@ -109,6 +109,7 @@
         ttsWord: false,
         
         lingqVolume: 1.0,
+        lingqSpeed: {},
         ttsSentence: false,
     };
     
@@ -123,7 +124,8 @@
         lineHeight: 1.7,
         usePageMode: true,
         ttsVoice: "random",
-        ankiDeck: ""
+        ankiDeck: "",
+        lingqSpeed: 1.0
     };
     
     const useVertexPriorityMode = false;
@@ -753,6 +755,17 @@
         requestAnimationFrame(animateScroll);
     }
     
+    let isReaderMouseDown = false;
+
+    window.addEventListener("mousedown", (event) => {
+        isReaderMouseDown = !!event.target.closest?.(".reader-container");
+    }, true);
+
+    window.addEventListener("mouseup", () => {
+        isReaderMouseDown = false;
+        document.body.style.removeProperty("user-select");
+    }, true);
+
     function focusReaderElement(targetElement, scrollHorizontal = false) {
         const language = getLessonLanguage();
         const isPageMode = settings.usePageMode[language];
@@ -762,6 +775,11 @@
         const scrollTarget = isPageMode ? wrapper : container;
         if (!scrollTarget || !container || !targetElement) return;
         if (!targetElement.isConnected || targetElement.getClientRects().length === 0) return;
+
+        if (isReaderMouseDown) {
+            document.body.style.setProperty("user-select", "none");
+            window.getSelection()?.removeAllRanges();
+        }
         
         const targetRect = targetElement.getBoundingClientRect();
         const containerRect = scrollTarget.getBoundingClientRect();
@@ -2830,6 +2848,40 @@
         isVideoEnded = false;
     }
 
+    function handleYoutubeWireframeVisibility() {
+        const lessonReader = document.getElementById("lesson-reader");
+        if (!lessonReader) return;
+
+        const currentStyle = settings.styleType[getLessonLanguage()];
+        let wireframe = document.getElementById("youtube-wireframe-container");
+
+        if (currentStyle !== "video") {
+            if (wireframe) wireframe.style.display = "none";
+            return;
+        }
+
+        if (!wireframe) {
+            wireframe = createElement("div", {
+                id: "youtube-wireframe-container",
+                title: "Click to play YouTube video"
+            }, createElement("div", {
+                className: "youtube-wireframe-content"
+            }, createElement("div", {
+                innerHTML: '<svg viewBox="0 0 24 24" width="40" height="40" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="6 3 20 12 6 21 6 3"></polygon></svg>'
+            }), createElement("span", {
+                textContent: "Click to play YouTube video"
+            })));
+
+            wireframe.addEventListener("click", () => {
+                clickElement(".section--player button.lingq-audio-player");
+            });
+
+            lessonReader.appendChild(wireframe);
+        }
+
+        wireframe.style.display = "flex";
+    }
+
     function handleLocalVideoContainerVisibility() {
         async function bindLingQPlayerControls(videoElement) {
             const sliderHandle = await waitForElement('.audio-player--progress .rc-slider-handle', 10000);
@@ -2851,7 +2903,9 @@
                 return Boolean(svg && svg.classList.contains("svg-icon--pause"));
             };
             
-            const getLingQSpeed = () => parseFloat(speedLabel?.textContent ?? 1.0);
+            const getLingQSpeed = () => isCustomSpeedActive()
+                ? settings.lingqSpeed[getLessonLanguage()]
+                : parseFloat(speedLabel?.textContent ?? 1.0);
             
             const syncPlaybackRate = () => {
                 const targetSpeed = getLingQSpeed();
@@ -3073,7 +3127,10 @@
                     }
                 });
             });
-            videoElement.addEventListener("loadedmetadata", syncPlaybackRate);
+            videoElement.addEventListener("loadedmetadata", () => {
+                syncPlaybackRate();
+                videoElement.volume = 1.0;
+            });
             videoElement.addEventListener("seeked", () => {
                 pendingVideoSeek = false;
                 if (isVideoSeeking) {
@@ -3522,9 +3579,29 @@
                     mediaInstances.add(this);
                 }
                 this.volume = 1.0;
+                if (isCustomSpeedActive()) this.playbackRate = settings.lingqSpeed[getLessonLanguage()];
             }
             return originalPlay.apply(this, arguments);
         };
+        
+        const playbackRateDescriptor = Object.getOwnPropertyDescriptor(PageMediaElement.prototype, 'playbackRate');
+        const originalPlaybackRateSetter = playbackRateDescriptor.set;
+        
+        Object.defineProperty(PageMediaElement.prototype, 'playbackRate', {
+            get: playbackRateDescriptor.get,
+            set: function (val) {
+                const src = this.src || '';
+                const isLingQAudio = this.id !== "addonLocalVideo" && !src.startsWith('data:') && !src.includes('/tts/');
+                if (isLingQAudio && isCustomSpeedActive()) {
+                    return originalPlaybackRateSetter.call(this, settings.lingqSpeed[getLessonLanguage()]);
+                }
+                return originalPlaybackRateSetter.call(this, val);
+            }
+        });
+    }
+    
+    function isCustomSpeedActive() {
+        return Boolean(document.getElementById('addon-speed-controller'));
     }
     
     function setLingqVolume(vol) {
@@ -3551,7 +3628,27 @@
             mediaInstances.forEach(media => {
                 if (media) media.volume = 1.0;
             });
+            const localVideo = document.getElementById("addonLocalVideo");
+            if (localVideo) localVideo.volume = 1.0;
         }
+    }
+    
+    function setLingqSpeed(speed) {
+        const language = getLessonLanguage();
+        const clampedSpeed = Math.round(Math.min(Math.max(speed, 0.5), 3.0) * 100) / 100;
+        
+        if (language) {
+            settings.lingqSpeed = {
+                ...settings.lingqSpeed,
+                [language]: clampedSpeed
+            };
+        }
+        
+        mediaInstances.forEach(media => {
+            if (media) media.playbackRate = clampedSpeed;
+        });
+        const localVideo = document.getElementById("addonLocalVideo");
+        if (localVideo) localVideo.playbackRate = clampedSpeed;
     }
     
     function skipPlayback(deltaSeconds) {
@@ -8157,6 +8254,7 @@
                         
                         if (node.matches('.audio-player--controllers') || node.querySelector('.audio-player--controllers')) {
                             setupVolumeController();
+                            setupSpeedController();
                             setupCustomSkipController();
                         }
                     }
@@ -8165,6 +8263,7 @@
             
             audioPlayerObserver.observe(playerContainer, {childList: true, subtree: true});
             setupVolumeController();
+            setupSpeedController();
             setupCustomSkipController();
         }
         
@@ -8278,6 +8377,79 @@
             }
         }
         
+        function setupSpeedController() {
+            const controllers = document.querySelector('.audio-player--controllers');
+            if (!controllers || controllers.querySelector('.controller-item--speed')) return;
+            
+            const speedDropdown = controllers.querySelector('span.leading-none.text-xl')?.closest('div.dropdown') || controllers.querySelector('div.dropdown');
+            if (speedDropdown) {
+                speedDropdown.style.setProperty("display", "none", "important");
+            }
+            
+            const currentSpeed = () => settings.lingqSpeed[getLessonLanguage()];
+            const existingController = controllers.querySelector('#addon-speed-controller');
+            if (existingController) {
+                const existingText = existingController.querySelector('.addon-speed-text');
+                const existingBtn = existingController.querySelector('a.controller-item');
+                const speed = currentSpeed();
+                const label = `${parseFloat(speed.toFixed(2))}x`;
+                if (existingText) existingText.textContent = label;
+                if (existingBtn) existingBtn.setAttribute("title", `Speed: ${label}`);
+                setLingqSpeed(speed);
+                return;
+            }
+            if (!speedDropdown) return;
+            
+            const minSpeed = 0.5;
+            const maxSpeed = 3.0;
+            const clickStep = 0.25;
+            const wheelStep = 0.05;
+            
+            const speedWrapper = createElement("div", {
+                id: "addon-speed-controller",
+                style: "display: inline;"
+            });
+            
+            const speedText = createElement("span", {className: "addon-speed-text"});
+            
+            const speedBtn = createElement("a", {
+                className: "controller-item button is-white",
+                style: "cursor: pointer; position: relative; display: inline-flex; align-items: center; justify-content: center;"
+            }, createElement("span", {
+                className: "icon-wrapper icon t-btn-text-player hover:t-btn-text-hover-player",
+                style: "display: flex; align-items: center; justify-content: center;"
+            }, speedText));
+            
+            function updateLabel() {
+                const speed = currentSpeed();
+                const label = `${parseFloat(speed.toFixed(2))}x`;
+                speedText.textContent = label;
+                speedBtn.setAttribute("title", `Speed: ${label}`);
+            }
+            
+            speedBtn.addEventListener('click', () => {
+                const speed = currentSpeed();
+                const snapped = Math.round(speed / clickStep) * clickStep;
+                const next = snapped + clickStep > maxSpeed + 1e-9 ? minSpeed : snapped + clickStep;
+                setLingqSpeed(next);
+                updateLabel();
+            });
+            
+            speedBtn.addEventListener('wheel', (e) => {
+                e.preventDefault();
+                const speed = currentSpeed();
+                const delta = e.deltaY < 0 ? wheelStep : -wheelStep;
+                setLingqSpeed(Math.round((speed + delta) / wheelStep) * wheelStep);
+                updateLabel();
+            });
+            
+            speedWrapper.appendChild(speedBtn);
+            (speedDropdown.parentElement || controllers).insertBefore(speedWrapper, speedDropdown);
+            
+            setLingqSpeed(currentSpeed());
+            updateLabel();
+        }
+        
         function resetLocalVideo() {
             isVideoEnded = false;
             const container = document.getElementById("local-video-container");
@@ -8349,6 +8521,7 @@
             }
             
             handleLocalVideoContainerVisibility();
+            handleYoutubeWireframeVisibility();
             
             baseCSS += layoutCSS;
             baseCSS += specificCSS;
@@ -8852,6 +9025,10 @@
                     user-select: none;
                     -webkit-user-select: none;
                 }
+                
+                .quick-summary em {
+                    font-size: 0.8em;
+                }
 
                 .quick-summary .lesson-summary-details {
                     margin-bottom: 12px;
@@ -9292,9 +9469,8 @@
                 grid-gap: unset !important;
             }
             
-            .audio-player--controllers > div.dropdown button {
-                height: 30px;
-                padding-bottom: 0;
+            .audio-player--controllers > div.dropdown {
+                display: none !important;
             }
 
             .audio-player--controllers a {
@@ -9331,6 +9507,17 @@
                 color: inherit !important;
             }
 
+            #addon-speed-controller .addon-speed-text {
+                display: inline-flex !important;
+                align-items: center !important;
+                min-width: 3em;
+                justify-content: center;
+                font-size: 0.9rem !important;
+                font-weight: 500 !important;
+                line-height: 1 !important;
+                color: inherit !important;
+            }
+
             #lesson-reader > div.h-full > div[dir=ltr] > header {
                 margin-top: 60px;
             }
@@ -9338,10 +9525,51 @@
         }
         
         function generateVideoCSS(position = "Right") {
-            let layoutCSS = "";
+            let layoutCSS = `
+                #youtube-wireframe-container {
+                    display: flex;
+                    justify-content: center;
+                    align-items: center;
+                    border-radius: 0.75rem;
+                    border: 2px dashed rgb(125 125 125 / 35%);
+                    background-color: rgb(125 125 125 / 6%);
+                    color: var(--font-color);
+                    box-sizing: border-box;
+                    cursor: pointer;
+                    overflow: hidden;
+                    user-select: none;
+                    z-index: 10;
+                    transition: background-color 0.2s, border-color 0.2s;
+                }
+                #youtube-wireframe-container:hover {
+                    background-color: rgb(125 125 125 / 12%);
+                    border-color: rgb(125 125 125 / 55%);
+                }
+                .youtube-wireframe-content {
+                    display: flex;
+                    flex-direction: column;
+                    align-items: center;
+                    gap: 12px;
+                    opacity: 0.6;
+                    pointer-events: none;
+                }
+                .youtube-wireframe-content svg {
+                    width: 48px;
+                    height: 48px;
+                }
+                .youtube-wireframe-content span {
+                    font-size: 0.9em;
+                    font-weight: 500;
+                }
+                #lesson-reader[data-lesson-completed-visible="true"] #youtube-wireframe-container,
+                [id$="-content-lessonCompleted"][data-state="active"] ~ * #youtube-wireframe-container,
+                body:has([id$="-content-lessonCompleted"][data-state="active"]) #youtube-wireframe-container {
+                    display: none !important;
+                }
+            `;
             
             if (position === "Right") {
-                layoutCSS = `
+                layoutCSS += `
                     :root {
                         --width-big: calc(50vw - calc(var(--widget-width) / 2) - 10px);
                         --height-big: calc(100vh - 65px);
@@ -9360,7 +9588,12 @@
                         justify-content: flex-end !important;
                     }
                     .video-player:not(.is-minimized) > .modal-content {
-                        margin: 0 0 10px 10px !important;
+                        margin: 0 10px 10px 10px !important;
+                    }
+                    #youtube-wireframe-container {
+                        grid-area: 1 / 3 / 3 / 4 !important;
+                        margin: var(--header-height) 10px 10px 10px;
+                        height: calc(100% - var(--header-height) - 10px);
                     }
                     .widget-area {
                         grid-area: 1 / 2 / 2 / 3 !important;
@@ -9373,7 +9606,7 @@
                     }
                 `;
             } else if (position === "Left") {
-                layoutCSS = `
+                layoutCSS += `
                     :root {
                         --width-big: calc(50vw - calc(var(--widget-width) / 2) - 10px);
                         --height-big: calc(100vh - 65px);
@@ -9392,7 +9625,12 @@
                         justify-content: flex-start !important;
                     }
                     .video-player:not(.is-minimized) > .modal-content {
-                        margin: 0 10px 10px 0 !important;
+                        margin: 0 10px 10px 10px !important;
+                    }
+                    #youtube-wireframe-container {
+                        grid-area: 1 / 1 / 3 / 2 !important;
+                        margin: var(--header-height) 10px 10px 10px;
+                        height: calc(100% - var(--header-height) - 10px);
                     }
                     .widget-area {
                         grid-area: 1 / 2 / 2 / 3 !important;
@@ -9405,7 +9643,7 @@
                     }
                 `;
             } else if (position === "Bottom") {
-                layoutCSS = `
+                layoutCSS += `
                 :root {
                     --width-big: calc(100vw - var(--widget-width) - 10px);
                     --height-big: ${settings.heightBig}px;
@@ -9426,9 +9664,14 @@
                 .video-player:not(.is-minimized) {
                     align-items: flex-start !important;
                 }
+                #youtube-wireframe-container {
+                    grid-area: 2 / 1 / 3 / 2 !important;
+                    margin: 10px 10px 10px 10px;
+                    height: calc(100% - 20px);
+                }
                 `;
             } else if (position === "Top") {
-                layoutCSS = `
+                layoutCSS += `
                 :root {
                     --width-big: calc(100vw - var(--widget-width) - 10px);
                     --height-big: ${settings.heightBig}px;
@@ -9469,6 +9712,11 @@
                 #lesson-reader[data-lesson-completed-visible="true"] .main-content {
                     grid-area: 1 / 1 / 3 / 2 !important;
                 }
+                #youtube-wireframe-container {
+                    grid-area: 1 / 1 / 2 / 2 !important;
+                    margin: calc(var(--header-height) + 10px) 10px 10px 10px;
+                    height: calc(100% - var(--header-height) - 20px);
+                }
                 `;
             }
             
@@ -9502,7 +9750,7 @@
                 }
                 #local-video-container {
                     grid-area: 1 / 3 / 3 / 4 !important;
-                    margin: var(--header-height) 0 10px 10px;
+                    margin: var(--header-height) 10px 10px 10px;
                 }
                 `;
             } else if (position === "Left") {
@@ -9529,7 +9777,7 @@
                 }
                 #local-video-container {
                     grid-area: 1 / 1 / 3 / 2 !important;
-                    margin: var(--header-height) 10px 10px 0;
+                    margin: var(--header-height) 10px 10px 10px;
                 }
                 `;
             } else if (position === "Bottom") {
@@ -10858,6 +11106,7 @@
                 
                 resetLocalVideo();
                 handleLocalVideoContainerVisibility();
+                handleYoutubeWireframeVisibility();
                 attachAudioPlayerObserver();
                 setupLessonCompletionObserver();
                 
@@ -12948,6 +13197,7 @@
         setupLLMs();
         AutoplayInSentenceView();
         handleLocalVideoContainerVisibility();
+        handleYoutubeWireframeVisibility();
     }
     
     async function setupCourse() {
