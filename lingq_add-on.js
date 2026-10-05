@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      17.1.2
+// @version      17.2.0
 // @license      GPL-3.0-or-later
 // @grant       GM_setValue
 // @grant       GM_getValue
@@ -37,6 +37,7 @@
         sentenceAutoplay: false,
         widgetWidth: 400,
         fontSize: {},
+        furiganaScale: {},
         lineHeight: {},
         customFont: {},
         
@@ -118,6 +119,7 @@
         prependSummary: false,
         summaryDifficulty: "unset",
         fontSize: 1.1,
+        furiganaScale: 50,
         lineHeight: 1.7,
         usePageMode: true,
         ttsVoice: "random",
@@ -3918,6 +3920,7 @@
             addSlider(container1, "widgetWidthSlider", "Widget Width:", "widgetWidthValue", settings.widgetWidth, "px", 330, 500, 10);
             
             addSlider(container1, "fontSizeSlider", "Font Size:", "fontSizeValue", settings.fontSize[language], "rem", 0.8, 1.8, 0.05);
+            addSlider(container1, "furiganaScaleSlider", "Furigana Size:", "furiganaScaleValue", settings.furiganaScale[language], "%", 40, 80, 5);
             addSlider(container1, "lineHeightSlider", "Line Height:", "lineHeightValue", settings.lineHeight[language], "", 1.2, 3.0, 0.05);
             
             const customFontContainer = createElement("div", {className: "popup-row"});
@@ -5020,6 +5023,7 @@
             });
             setupSlider("widgetWidthSlider", "widgetWidthValue", "widgetWidth", "px", "--widget-width", (val) => `${val}px`);
             setupSlider("fontSizeSlider", "fontSizeValue", "fontSize", "rem", "--font-size", (val) => `${val}rem`);
+            setupSlider("furiganaScaleSlider", "furiganaScaleValue", "furiganaScale", "%", "--furigana-size", (val) => `${val}%`);
             setupSlider("lineHeightSlider", "lineHeightValue", "lineHeight", "", "--line-height", (val) => val);
             
             const customFontInput = document.getElementById("customFontInput");
@@ -5441,6 +5445,8 @@
                 document.getElementById("widgetWidthValue").value = defaults.widgetWidth;
                 document.getElementById("fontSizeSlider").value = defaults.fontSize;
                 document.getElementById("fontSizeValue").textContent = defaults.fontSize;
+                document.getElementById("furiganaScaleSlider").value = languageScopedDefaults.furiganaScale;
+                document.getElementById("furiganaScaleValue").textContent = languageScopedDefaults.furiganaScale;
                 document.getElementById("lineHeightSlider").value = defaults.lineHeight;
                 document.getElementById("lineHeightValue").textContent = defaults.lineHeight;
                 document.getElementById("customFontInput").value = defaults.customFont;
@@ -5452,6 +5458,7 @@
                 document.getElementById("sentenceVideoSettings").style.display = languageScopedDefaults.styleType === "off" ? "block" : "none";
                 
                 document.documentElement.style.setProperty("--font-size", `${defaults.fontSize}rem`);
+                document.documentElement.style.setProperty("--furigana-size", `${languageScopedDefaults.furiganaScale}%`);
                 document.documentElement.style.setProperty("--line-height", defaults.lineHeight);
                 document.documentElement.style.setProperty("--height-big", `${defaults.heightBig}px`);
                 document.documentElement.style.setProperty("--sentence-height", `${defaults.sentenceHeight}px`);
@@ -8406,6 +8413,7 @@
             return `
                 :root {
                     --font-size: ${settings.fontSize[language]}rem;
+                    --furigana-size: ${settings.furiganaScale[language]}%;
                     --line-height: ${settings.lineHeight[language]};
 
                     --font-color: ${colorSettings.fontColor};
@@ -8419,7 +8427,27 @@
                     --background-color: ${settings.colorMode === "dark" ? "#2a2c2e" : "#ffffff"}
                 }
 
+                @keyframes dots-animation {
+                    0% { content: ""; }
+                    25% { content: "."; }
+                    50% { content: ".."; }
+                    75% { content: "..."; }
+                }
+                .loading-text::after {
+                    content: ".";
+                    animation: dots-animation 1.5s infinite steps(1);
+                    display: inline-block;
+                    width: 15px;
+                    text-align: left;
+                }
+
                 /*font settings*/
+
+                rt {
+                    font-family: var(--custom-font, inherit) !important;
+                    font-size: var(--furigana-size) !important;
+                    font-weight: 500 !important;
+                }
 
                 .reader-container p span.sentence-item,
                 .reader-container p .sentence {
@@ -8809,8 +8837,9 @@
                 .quick-summary {
                     display: flex;
                     color: var(--font-color);
-                    font-size: var(--font-size);
-                    line-height: var(--line-height);
+                    font-family: var(--custom-font, inherit) !important;
+                    font-size: var(--font-size) !important;
+                    line-height: var(--line-height) !important;
                     margin-bottom: 20px;
                     max-height: min(calc(var(--article-height) * 0.5), 500px);
                     overflow-y: scroll;
@@ -8822,7 +8851,6 @@
                 .quick-summary rt {
                     user-select: none;
                     -webkit-user-select: none;
-                    font-size: 0.7em;
                 }
 
                 .quick-summary .lesson-summary-details {
@@ -9266,11 +9294,12 @@
             
             .audio-player--controllers > div.dropdown button {
                 height: 30px;
+                padding-bottom: 0;
             }
 
             .audio-player--controllers a {
                 height: 25px !important;
-                padding: 0 1em !important;
+                padding: 0 0.5em !important;
                 margin: 5px 0;
             }
 
@@ -10191,8 +10220,13 @@
                             quickSummary += chunk;
                             if (!summaryRafId) {
                                 summaryRafId = requestAnimationFrame(() => {
-                                    const summaryContent = document.querySelector(".quick-summary .summary-content");
-                                    if (summaryContent) summaryContent.innerHTML = formatQuickSummaryHTML(quickSummary);
+                                    const formatted = formatQuickSummaryHTML(quickSummary);
+                                    if (formatted) {
+                                        const summaryContent = document.querySelector(".quick-summary .summary-content");
+                                        if (summaryContent) summaryContent.innerHTML = formatted;
+                                        const closeBtn = document.querySelector(".quick-summary .close-summary-btn");
+                                        if (closeBtn) closeBtn.style.display = "";
+                                    }
                                     summaryRafId = null;
                                 });
                             }
@@ -10200,11 +10234,24 @@
                         (finalContent) => {
                             quickSummary = finalContent;
                             console.log('[Quick summary]\n', finalContent);
-                            const summaryContent = document.querySelector(".quick-summary .summary-content");
-                            if (summaryContent) summaryContent.innerHTML = formatQuickSummaryHTML(quickSummary);
+                            const formatted = formatQuickSummaryHTML(quickSummary);
+                            if (formatted) {
+                                const summaryContent = document.querySelector(".quick-summary .summary-content");
+                                if (summaryContent) summaryContent.innerHTML = formatted;
+                                const closeBtn = document.querySelector(".quick-summary .close-summary-btn");
+                                if (closeBtn) closeBtn.style.display = "";
+                                const ttsBtn = document.querySelector(".quick-summary .tts-summary-btn");
+                                if (ttsBtn) ttsBtn.style.display = "flex";
+                            }
                         },
                         (error) => {
                             console.error("Failed to fetch summary:", error);
+                            const summaryContent = document.querySelector(".quick-summary .summary-content");
+                            if (summaryContent && !formatQuickSummaryHTML(quickSummary)) {
+                                summaryContent.innerHTML = "<em>Failed to generate summary.</em>";
+                            }
+                            const closeBtn = document.querySelector(".quick-summary .close-summary-btn");
+                            if (closeBtn) closeBtn.style.display = "";
                         }
                     );
                 }
@@ -10250,9 +10297,12 @@
                         renderLessonSummaryDetails(summaryElement);
                     }
                     
+                    const formattedSummary = formatQuickSummaryHTML(quickSummary);
+                    const hasSummary = Boolean(formattedSummary);
+
                     const contentWrapper = createElement("div", {
                         className: "summary-content",
-                        innerHTML: formatQuickSummaryHTML(quickSummary)
+                        innerHTML: hasSummary ? formattedSummary : '<em style="font-size: 0.8em;">Generating Quick Summary<span class="loading-text"></span></em>'
                     });
                     summaryElement.append(contentWrapper);
                     
@@ -10265,7 +10315,7 @@
                         className: "tts-summary-btn",
                         title: "Read Quick Summary",
                         innerHTML: `<svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="transparent" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-play" aria-hidden="true"><polygon points="6 3 20 12 6 21 6 3"></polygon></svg>`,
-                        style: "padding: 10px 10px; border: 1px solid rgb(125, 125, 125, 50%); border-radius: 5px; cursor: pointer; display: flex; opacity: 1;"
+                        style: `padding: 10px 10px; border: 1px solid rgb(125, 125, 125, 50%); border-radius: 5px; cursor: pointer; display: ${hasSummary ? "flex" : "none"}; opacity: 1;`
                     });
                     
                     let audioData = null;
@@ -10285,7 +10335,7 @@
                     
                     const closeButton = createElement("button", {
                         className: "close-summary-btn",
-                        style: "margin: 0;"
+                        style: `margin: 0; display: ${hasSummary ? "" : "none"};`
                     }, ["close"]);
                     closeButton.addEventListener("click", () => summaryElement.remove());
                     
@@ -10733,6 +10783,29 @@
                 setTimeout(performReset, 50);
                 setTimeout(performReset, 150);
             }
+            function getFinishPageButton(action) {
+                if (action === "back") {
+                    return document.querySelector('#lesson-reader button[data-variant="link"]') ||
+                        document.querySelector('#lesson-reader button:has(svg.lucide-chevron-left)') ||
+                        document.querySelector('#lesson-reader button svg.lucide-chevron-left')?.closest('button');
+                }
+                
+                if (action === "next") {
+                    const completionPanel = document.querySelector('[id$="-content-lessonCompleted"]');
+                    return completionPanel?.querySelector('button[data-variant="primary"]');
+                }
+                
+                return null;
+            }
+
+            function isFinishPageActive() {
+                const completionPanel = document.querySelector('[id$="-content-lessonCompleted"]');
+                if (!completionPanel) return false;
+                const isCompletedActive = completionPanel.getAttribute("data-state") === "active";
+                const isReaderCompleted = document.getElementById("lesson-reader")?.getAttribute("data-lesson-completed-visible") === "true";
+                return isCompletedActive || isReaderCompleted;
+            }
+
             function preventHorizontalScroll() {
                 if (window.hasPreventHorizontalScrollLinked) return;
                 window.hasPreventHorizontalScrollLinked = true;
@@ -10745,7 +10818,29 @@
                             target.localName === "input" ||
                             target.isContentEditable;
                         
-                        if (!isTextInput && !event.shiftKey) {
+                        if (isTextInput) return;
+
+                        if (event.shiftKey && isFinishPageActive()) {
+                            if (event.key === "ArrowLeft") {
+                                const backBtn = getFinishPageButton("back");
+                                if (backBtn) {
+                                    event.preventDefault();
+                                    event.stopImmediatePropagation();
+                                    backBtn.click();
+                                    return;
+                                }
+                            } else if (event.key === "ArrowRight") {
+                                const nextBtn = getFinishPageButton("next");
+                                if (nextBtn) {
+                                    event.preventDefault();
+                                    event.stopImmediatePropagation();
+                                    nextBtn.click();
+                                    return;
+                                }
+                            }
+                        }
+
+                        if (!event.shiftKey) {
                             event.preventDefault();
                         }
                     }
