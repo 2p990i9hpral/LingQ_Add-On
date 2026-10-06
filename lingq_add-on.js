@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      17.3.1
+// @version      17.3.2
 // @license      GPL-3.0-or-later
 // @grant       GM_setValue
 // @grant       GM_getValue
@@ -6803,6 +6803,7 @@
                     
                     Global Core Directives (apply across all sections):
                     - Evidence Integration: Treat every word strictly as inline supporting evidence within flowing prose. Never format words as standalone lists, tables, or itemized inventories.
+                        Whenever citing a target-language word from the dataset, Append its meaning in ${userNativeLang} in parentheses immediately after the word (e.g., "酪農(낙농)").
                     - Citation Budget: Strictly cite 3 to 5 representative member words inline per paragraph. Do not exceed this limit; prioritize deep domain and linguistic analysis over vocabulary enumeration.
                     - Difficulty Calibration: Ground all difficulty explanations solely in domain-specific knowledge schemas, stylistic formality, or cultural prerequisites. Never compare against ${userNativeLang} cognates or surface-level loanwords.
                     - Consistent Proficiency Nomenclature: Use "difficulty band" (specifying CEFR, HSK, or JLPT benchmarks) as the sole standard term throughout the entire report.
@@ -10530,6 +10531,7 @@
                     - Objective and factual; base ONLY on the given content
                     - Ensure Coverage: When the given content is long, do not omit sections entirely; rather, you can reduce density and trim detail.
                     - Present information directly as standalone facts; never reference the source itself (avoid phrases like "this lesson," "this lecture," "the text explains," "in this video")
+                    - Vocabulary Choice: Prioritize using the original vocabulary, phrases, and terminology directly from the source text rather than paraphrasing with external synonyms. Do not introduce harder or complex vocabulary absent from the original content, ensuring the summary's linguistic difficulty does not exceed that of the source material.
                     - Summary body ONLY: no preface, title restatement, or closing remarks
                     ${difficultyPrompt}
                     
