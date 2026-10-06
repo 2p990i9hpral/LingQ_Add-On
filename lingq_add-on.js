@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      17.3.2
+// @version      17.3.3
 // @license      GPL-3.0-or-later
 // @grant       GM_setValue
 // @grant       GM_getValue
@@ -2867,7 +2867,7 @@
             }, createElement("div", {
                 className: "youtube-wireframe-content"
             }, createElement("div", {
-                innerHTML: '<svg viewBox="0 0 24 24" width="40" height="40" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="6 3 20 12 6 21 6 3"></polygon></svg>'
+                innerHTML: '<svg viewBox="0 0 24 24" style="width: 40px; height: 40px;" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="m6 3 14 9-14 9z"/></svg>'
             }), createElement("span", {
                 textContent: "Click to play YouTube video"
             })));
@@ -6202,7 +6202,7 @@
                 data.forEach(row => {
                     const deleteBtn = createElement("button", {
                         className: "delete-row-btn",
-                        innerHTML: `<svg viewBox="6 6 12 12" xmlns="http://www.w3.org/2000/svg" stroke="currentColor"><path d="M17 17L7 7.00002M17 7L7.00001 17" stroke-width="2" stroke-linecap="round"/></svg>`
+                        innerHTML: `<svg viewBox="6 6 12 12" stroke="currentColor"><path d="M17 17L7 7M17 7L7 17" stroke-width="2" stroke-linecap="round"/></svg>`
                     });
                     const deleteTd = createElement("td", {}, deleteBtn);
                     
@@ -7502,7 +7502,7 @@
                         const deleteBtn = createElement("button", {
                             className: "delete-row-btn",
                             title: "Delete this log",
-                            innerHTML: `<svg viewBox="6 6 12 12" width="10" height="10" xmlns="http://www.w3.org/2000/svg" stroke="currentColor"><path d="M17 17L7 7.00002M17 7L7.00001 17" stroke-width="2" stroke-linecap="round"/></svg>`
+                            innerHTML: `<svg viewBox="6 6 12 12" style="width: 10px; height: 10px;" stroke="currentColor"><path d="M17 17L7 7M17 7L7 17" stroke-width="2" stroke-linecap="round"/></svg>`
                         });
                         
                         const tokens = entry.tokens || {};
@@ -8412,9 +8412,9 @@
                 style: "display: flex; align-items: center; justify-content: center;"
             });
             
-            const svgMute = `<svg style="flex-shrink:0" width="25" height="25" class="svg-icon svg-icon--volume is-dark" xmlns="http://www.w3.org/2000/svg" viewBox="-2 -3 32 32"><path fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" stroke-miterlimit="10" class="is-stroke" d="m12 21-5-5H3v-6h4l5-5zm10-10-6 6m0-6 6 6"/></svg>`;
-            const svgLow = `<svg style="flex-shrink:0" width="25" height="25" class="svg-icon svg-icon--volume is-dark" xmlns="http://www.w3.org/2000/svg" viewBox="-2 -3 32 32"><path fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" stroke-miterlimit="10" class="is-stroke" d="m12 21-5-5H3v-6h4l5-5zm5-10c1.5 1.5 1.5 4.5 0 6"/></svg>`;
-            const svgHigh = `<svg style="flex-shrink:0" width="25" height="25" class="svg-icon svg-icon--volume is-dark" xmlns="http://www.w3.org/2000/svg" viewBox="-2 -3 32 32"><path fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" stroke-miterlimit="10" class="is-stroke" d="m12 21-5-5H3v-6h4l5-5zm5-10c1.5 1.5 1.5 4.5 0 6m4-9c3 2.5 3 7.5 0 10"/></svg>`;
+            const svgMute = `<svg style="width: 25px; height: 25px; flex-shrink: 0;" class="svg-icon svg-icon--volume is-dark" viewBox="-2 -3 32 32"><path fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" class="is-stroke" d="m12 21-5-5H3v-6h4l5-5zm10-10-6 6m0-6 6 6"/></svg>`;
+            const svgLow = `<svg style="width: 25px; height: 25px; flex-shrink: 0;" class="svg-icon svg-icon--volume is-dark" viewBox="-2 -3 32 32"><path fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" class="is-stroke" d="m12 21-5-5H3v-6h4l5-5zm5-10c1.5 1.5 1.5 4.5 0 6"/></svg>`;
+            const svgHigh = `<svg style="width: 25px; height: 25px; flex-shrink: 0;" class="svg-icon svg-icon--volume is-dark" viewBox="-2 -3 32 32"><path fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" class="is-stroke" d="m12 21-5-5H3v-6h4l5-5zm5-10c1.5 1.5 1.5 4.5 0 6m4-9c3 2.5 3 7.5 0 10"/></svg>`;
             
             function updateIcon() {
                 const vol = settings.lingqVolume;
@@ -10614,7 +10614,7 @@
                             style: "font-size: 0.8em;",
                             innerHTML: `
                                 <span class="thought-label">Lesson Summary</span>
-                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="chevron"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="chevron"><path d="m6 9 6 6 6-6"/></svg>
                             `
                         });
                         
@@ -10658,7 +10658,7 @@
                     const ttsButton = createElement("button", {
                         className: "tts-summary-btn",
                         title: "Read Quick Summary",
-                        innerHTML: `<svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="transparent" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-play" aria-hidden="true"><polygon points="6 3 20 12 6 21 6 3"></polygon></svg>`,
+                        innerHTML: `<svg style="width: 15px; height: 15px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-play" aria-hidden="true"><path d="m6 3 14 9-14 9z"/></svg>`,
                         style: `padding: 10px 10px; border: 1px solid rgb(125, 125, 125, 50%); border-radius: 5px; cursor: pointer; display: ${hasSummary ? "flex" : "none"}; opacity: 1;`
                     });
                     
@@ -12017,7 +12017,7 @@
                                     const rowDiv = createElement("div", {className: "flashcard-row"});
                                     const deleteBtn = createElement("button", {
                                         className: "popup-delete-button",
-                                        innerHTML: `<svg viewBox="6 6 12 12" xmlns="http://www.w3.org/2000/svg" stroke="currentColor"><path d="M17 17L7 7.00002M17 7L7.00001 17" stroke-width="2" stroke-linecap="round"/></svg>`
+                                        innerHTML: `<svg viewBox="6 6 12 12" stroke="currentColor"><path d="M17 17L7 7M17 7L7 17" stroke-width="2" stroke-linecap="round"/></svg>`
                                     });
                                     
                                     deleteBtn.addEventListener("click", async (ev) => {
@@ -12098,7 +12098,7 @@
                         if (!saveFlashcardButton) {
                             saveFlashcardButton = createElement("button", {
                                 className: "message-button save-flashcard-button",
-                                innerHTML: `<svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="transparent" stroke="currentColor"><g id="SVGRepo_iconCarrier"> <path d="M16 3.98999H8C6.93913 3.98999 5.92178 4.41135 5.17163 5.1615C4.42149 5.91164 4 6.92912 4 7.98999V17.99C4 19.0509 4.42149 20.0682 5.17163 20.8184C5.92178 21.5685 6.93913 21.99 8 21.99H16C17.0609 21.99 18.0783 21.5685 18.8284 20.8184C19.5786 20.0682 20 19.0509 20 17.99V7.98999C20 6.92912 19.5786 5.91164 18.8284 5.1615C18.0783 4.41135 17.0609 3.98999 16 3.98999Z" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"></path> <path d="M9 2V7" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"></path> <path d="M15 2V7" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"></path> <path d="M8 16H14" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"></path> <path d="M8 12H16" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"></path> </g></svg>`,
+                                innerHTML: `<svg style="width: 15px; height: 15px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M16 3.98999H8C6.93913 3.98999 5.92178 4.41135 5.17163 5.1615C4.42149 5.91164 4 6.92912 4 7.98999V17.99C4 19.0509 4.42149 20.0682 5.17163 20.8184C5.92178 21.5685 6.93913 21.99 8 21.99H16C17.0609 21.99 18.0783 21.5685 18.8284 20.8184C19.5786 20.0682 20 19.0509 20 17.99V7.98999C20 6.92912 19.5786 5.91164 18.8284 5.1615C18.0783 4.41135 17.0609 3.98999 16 3.98999Z"/><path d="M9 2V7"/><path d="M15 2V7"/><path d="M8 16H14"/><path d="M8 12H16"/></svg>`,
                             });
                             
                             saveFlashcardButton.addEventListener("click", async () => {
@@ -12217,7 +12217,7 @@
                 function createDeleteButton(messageDiv, messageId) {
                     const deleteButton = createElement("button", {
                         className: "message-button delete-button",
-                        innerHTML: `<svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="transparent" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-trash-2"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/></svg>`
+                        innerHTML: `<svg style="width: 15px; height: 15px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-trash-2"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/></svg>`
                     });
                     
                     deleteButton.addEventListener("click", () => {
@@ -12317,7 +12317,7 @@
                                 <details class="thought-process">
                                     <summary onclick="setTimeout(() => { const c = document.getElementById('chat-container'); c.scrollTop = c.scrollHeight; }, 10)">
                                         <span class="thinking-text">Thinking<span class="thinking-dots"></span></span>
-                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="chevron"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="chevron"><path d="m6 9 6 6 6-6"/></svg>
                                     </summary>
                                     <div class="thought-content" style="white-space: pre-wrap;"></div>
                                 </details>
@@ -12420,7 +12420,7 @@
                                 <details class="thought-process${extraClass}">
                                     <summary>
                                         <span class="thought-label">Thought</span>
-                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="chevron"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="chevron"><path d="m6 9 6 6 6-6"/></svg>
                                     </summary>
                                     <div class="thought-content" style="${shouldConvertToHTML(thoughtTextFinal) ? "" : "white-space: pre-wrap;"}">${cleanedThought}</div>
                                 </details>
@@ -12463,7 +12463,7 @@
 
                             const copyButton = createElement("button", {
                                 className: "message-button copy-button",
-                                innerHTML: `<svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="transparent" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-copy"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"></rect><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"></path></svg>`,
+                                innerHTML: `<svg style="width: 15px; height: 15px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-copy"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>`,
                             });
                             copyButton.addEventListener('click', async () => {
                                 const textToCopy = extractCleanMessageText(botMessageDiv);
@@ -12475,7 +12475,7 @@
                             
                             const ttsButton = createElement("button", {
                                 className: "message-button tts-button",
-                                innerHTML: `<svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="transparent" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-play" aria-hidden="true"><polygon points="6 3 20 12 6 21 6 3"></polygon></svg>`,
+                                innerHTML: `<svg style="width: 15px; height: 15px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-play" aria-hidden="true"><path d="m6 3 14 9-14 9z"/></svg>`,
                             });
                             ttsButton.addEventListener('click', async function initialTTSHandler() {
                                 let textToTTS = "";
@@ -12503,7 +12503,7 @@
                             
                             const regenerateButton = createElement("button", {
                                 className: "message-button regenerate-button",
-                                innerHTML: `<svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="transparent" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-rotate-ccw" aria-hidden="true"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path><path d="M3 3v5h5"></path></svg>`,
+                                innerHTML: `<svg style="width: 15px; height: 15px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-rotate-ccw" aria-hidden="true"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>`,
                             });
                             regenerateButton.addEventListener("click", async () => {
                                 const sendButton = document.getElementById("send-button");
@@ -12637,7 +12637,7 @@
                     });
                     const sendButton = createElement("button", {
                         id: "send-button",
-                        innerHTML: `<svg width="17" height="17" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" xmlns:xlink="http://www.w3.org/1999/xlink"><path fill="currentColor" d="M481.508,210.336L68.414,38.926c-17.403-7.222-37.064-4.045-51.309,8.287C2.86,59.547-3.098,78.551,1.558,96.808 L38.327,241h180.026c8.284,0,15.001,6.716,15.001,15.001c0,8.284-6.716,15.001-15.001,15.001H38.327L1.558,415.193 c-4.656,18.258,1.301,37.262,15.547,49.595c14.274,12.357,33.937,15.495,51.31,8.287l413.094-171.409 C500.317,293.862,512,276.364,512,256.001C512,235.638,500.317,218.139,481.508,210.336z"></path></svg>`
+                        innerHTML: `<svg style="width: 17px; height: 17px;" viewBox="0 0 512 512"><path fill="currentColor" d="M481.508,210.336L68.414,38.926c-17.403-7.222-37.064-4.045-51.309,8.287C2.86,59.547-3.098,78.551,1.558,96.808 L38.327,241h180.026c8.284,0,15.001,6.716,15.001,15.001c0,8.284-6.716,15.001-15.001,15.001H38.327L1.558,415.193 c-4.656,18.258,1.301,37.262,15.547,49.595c14.274,12.357,33.937,15.495,51.31,8.287l413.094-171.409 C500.317,293.862,512,276.364,512,256.001C512,235.638,500.317,218.139,481.508,210.336z"/></svg>`
                     });
                     const chatWrapper = createElement("div", {id: "chat-widget", style: "margin-top: 5px 0 10px;"},
                         chatContainer,
