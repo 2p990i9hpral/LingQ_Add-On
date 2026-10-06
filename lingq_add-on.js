@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      17.3.0
+// @version      17.3.1
 // @license      GPL-3.0-or-later
 // @grant       GM_setValue
 // @grant       GM_getValue
@@ -4631,7 +4631,7 @@
                     className: "popup-button",
                     disabled: true
                 }, "<"),
-                createElement("span", {id: "flashcardPageInfo", style: "width: 50px; text-align: center;"}, "1/1",),
+                createElement("span", {id: "flashcardPageInfo", style: "width: 100%; margin: 0 10px; text-align: center;"}, "1/1",),
                 createElement("button", {id: "flashcardPaginationNext", className: "popup-button", disabled: true}, ">")
             );
             
@@ -4695,7 +4695,24 @@
                         id: "flashcardReportContainer",
                         className: "popup-row",
                         style: "display: none; flex-direction: column; min-height: 400px; max-height: 600px; overflow-y: auto; margin: 10px 0; padding: 15px; border: 1px solid var(--border-color); border-radius: 5px; background: var(--bg-color); font-size: 14px; line-height: 1.6;"
-                    }),
+                    },
+                        createElement("div", {
+                            id: "flashcardReportHeaderRow",
+                            style: "display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; gap: 10px;"
+                        },
+                            createElement("div", {id: "flashcardReportHeader"}),
+                            createElement("button", {
+                                id: "flashcardDownloadReportBtn",
+                                className: "popup-button",
+                                disabled: true,
+                                style: "display: none;"
+                            }, "Download the Report")
+                        ),
+                        createElement("div", {
+                            id: "flashcardReportBody",
+                            style: "display: flex; flex-direction: column;"
+                        })
+                    ),
                     createElement("div", {
                             className: "popup-row",
                             style: "display: flex; justify-content: space-between; align-items: center; gap: 10px; margin: 10px 0;"
@@ -4764,11 +4781,6 @@
                                 id: "flashcardAnkiSyncBtn",
                                 className: "popup-button"
                             }, "Sync to Anki"),
-                            createElement("button", {
-                                id: "flashcardDownloadReportBtn",
-                                className: "popup-button",
-                                style: "display: none;"
-                            }, "Download the Report"),
                             createElement("button", {id: "closeFlashcardPopupBtn", className: "popup-button"}, "Close")
                         )
                     )
@@ -4874,8 +4886,45 @@
             return popup;
         }
         
+        let highestPopupZIndex = 10000;
+        
+        function bringPopupToFront(element) {
+            if (!element) return;
+            highestPopupZIndex += 1;
+            element.style.zIndex = highestPopupZIndex;
+        }
+        
+        function ensurePopupInViewport(element) {
+            if (!element || element.style.display === "none") return;
+            if (!element.style.left || !element.style.top) return;
+            if (element.style.transform && element.style.transform.includes('translate')) return;
+            
+            const rect = element.getBoundingClientRect();
+            const margin = 10;
+            const maxLeft = Math.max(margin, window.innerWidth - rect.width - margin);
+            const maxTop = Math.max(margin, window.innerHeight - rect.height - margin);
+            
+            let currentLeft = parseFloat(element.style.left);
+            let currentTop = parseFloat(element.style.top);
+            if (isNaN(currentLeft)) currentLeft = rect.left;
+            if (isNaN(currentTop)) currentTop = rect.top;
+            
+            const clampedLeft = Math.min(Math.max(margin, currentLeft), maxLeft);
+            const clampedTop = Math.min(Math.max(margin, currentTop), maxTop);
+            
+            element.style.left = `${clampedLeft}px`;
+            element.style.top = `${clampedTop}px`;
+        }
+        
         function makeDraggable(element, handle) {
             let pos1 = 0, pos2 = 0, pos3 = 0, pos4 = 0;
+            
+            if (!element.dataset.popupFocusBound) {
+                element.addEventListener("mousedown", () => {
+                    bringPopupToFront(element);
+                });
+                element.dataset.popupFocusBound = "true";
+            }
             
             if (handle) {
                 handle.onmousedown = dragMouseDown;
@@ -4887,12 +4936,15 @@
                 e = e || window.event;
                 e.preventDefault();
                 
-                if (element.style.transform && element.style.transform.includes('translate')) {
+                bringPopupToFront(element);
+                
+                const computedTransform = window.getComputedStyle(element).transform;
+                if (element.style.transform?.includes('translate') || (computedTransform && computedTransform !== 'none' && !element.style.left)) {
                     const rect = element.getBoundingClientRect();
                     
                     element.style.transform = 'none';
-                    element.style.top = rect.top + 'px';
-                    element.style.left = rect.left + 'px';
+                    element.style.top = `${rect.top}px`;
+                    element.style.left = `${rect.left}px`;
                 }
                 
                 pos3 = e.clientX;
@@ -4910,13 +4962,20 @@
                 pos3 = e.clientX;
                 pos4 = e.clientY;
                 
-                element.style.top = (element.offsetTop - pos2) + "px";
-                element.style.left = (element.offsetLeft - pos1) + "px";
+                const margin = 10;
+                const maxLeft = Math.max(margin, window.innerWidth - element.offsetWidth - margin);
+                const maxTop = Math.max(margin, window.innerHeight - element.offsetHeight - margin);
+                const targetTop = element.offsetTop - pos2;
+                const targetLeft = element.offsetLeft - pos1;
+                
+                element.style.top = `${Math.min(Math.max(margin, targetTop), maxTop)}px`;
+                element.style.left = `${Math.min(Math.max(margin, targetLeft), maxLeft)}px`;
             }
             
             function closeDragElement() {
                 document.onmouseup = null;
                 document.onmousemove = null;
+                ensurePopupInViewport(element);
             }
         }
         
@@ -5086,6 +5145,8 @@
             const settingsPopup = document.getElementById('lingqAddonSettingsPopup');
             settingsButton.addEventListener("click", () => {
                 settingsPopup.style.display = "block";
+                bringPopupToFront(settingsPopup);
+                ensurePopupInViewport(settingsPopup);
                 initializePickrs();
                 
                 const dragHandle = document.getElementById("lingqAddonSettingsDragHandle");
@@ -5795,6 +5856,8 @@
             
             downloadWordsButton.addEventListener("click", () => {
                 downloadWordsPopup.style.display = "block";
+                bringPopupToFront(downloadWordsPopup);
+                ensurePopupInViewport(downloadWordsPopup);
                 
                 const progressContainer = document.getElementById("downloadProgressContainer");
                 if (progressContainer) progressContainer.style.display = "none";
@@ -5903,6 +5966,8 @@
             
             ttsPlaygroundButton.addEventListener("click", () => {
                 ttsPlaygroundPopup.style.display = "block";
+                bringPopupToFront(ttsPlaygroundPopup);
+                ensurePopupInViewport(ttsPlaygroundPopup);
                 
                 const dragHandle = document.getElementById("ttsPlaygroundDragHandle");
                 if (dragHandle) {
@@ -6484,6 +6549,8 @@
             
             flashcardButton.addEventListener("click", () => {
                 flashcardPopup.style.display = "block";
+                bringPopupToFront(flashcardPopup);
+                ensurePopupInViewport(flashcardPopup);
                 makeDraggable(flashcardPopup, document.getElementById("flashcardDragHandle"));
                 
                 targetLanguage = getLessonLanguage() || targetLanguage;
@@ -6678,16 +6745,15 @@
                 const csvBtn = document.getElementById("flashcardCsvDownload");
                 const downloadReportBtn = document.getElementById("flashcardDownloadReportBtn");
                 if (csvBtn) csvBtn.style.display = "none";
-                if (downloadReportBtn) downloadReportBtn.style.display = "";
+                if (downloadReportBtn) {
+                    downloadReportBtn.style.display = "";
+                    downloadReportBtn.disabled = true;
+                }
                 
-                reportContainer.innerHTML = `
-                    <div id="flashcardReportHeader">
-                        A report based on recent ${limitCount} words
-                    </div>
-                    <div id="flashcardReportBody" style="display: flex; flex-direction: column;">
-                        <em>Generating AI Learning Report<span class="loading-text"></span></em>
-                    </div>
-                `;
+                const reportHeader = document.getElementById("flashcardReportHeader");
+                const reportBody = document.getElementById("flashcardReportBody");
+                if (reportHeader) reportHeader.textContent = `A report based on recent ${limitCount} words`;
+                if (reportBody) reportBody.innerHTML = `<em>Generating AI Learning Report<span class="loading-text"></span></em>`;
                 
                 try {
                     const {data, error} = await getDbClient()
@@ -6704,6 +6770,7 @@
                     
                     if (!data || data.length === 0) {
                         reportBody.innerHTML = "<em>No flashcards found for the current language.</em>";
+                        if (downloadReportBtn) downloadReportBtn.disabled = true;
                         return;
                     }
                     
@@ -6835,18 +6902,22 @@
                             if (reportBody) {
                                 if (stripped) {
                                     reportBody.innerHTML = stripped;
+                                    if (downloadReportBtn) downloadReportBtn.disabled = false;
                                 } else {
                                     reportBody.innerHTML = "<em>Failed to generate report content.</em>";
+                                    if (downloadReportBtn) downloadReportBtn.disabled = true;
                                 }
                             }
                         },
                         (err) => {
                             console.error("Report generation error", err);
+                            if (downloadReportBtn) downloadReportBtn.disabled = true;
                             if (reportBody) reportBody.innerHTML = `<em>Error generating report: ${err.message}</em>`;
                         }
                     );
                 } catch (err) {
                     console.error("Report data fetch error", err);
+                    if (downloadReportBtn) downloadReportBtn.disabled = true;
                     const reportBody = document.getElementById("flashcardReportBody");
                     if (reportBody) {
                         reportBody.innerHTML = `<em>Failed to fetch data: ${err.message}</em>`;
@@ -6868,7 +6939,10 @@
                     const csvBtn = document.getElementById("flashcardCsvDownload");
                     const downloadReportBtn = document.getElementById("flashcardDownloadReportBtn");
                     if (csvBtn) csvBtn.style.display = "";
-                    if (downloadReportBtn) downloadReportBtn.style.display = "none";
+                    if (downloadReportBtn) {
+                        downloadReportBtn.style.display = "none";
+                        downloadReportBtn.disabled = true;
+                    }
                 } else {
                     generateAiReport(100);
                 }
@@ -6905,17 +6979,20 @@
                         const fullHeight = reportContainer.scrollHeight;
                         const fullWidth = reportContainer.offsetWidth;
                         
+                        downloadReportBtn.style.visibility = "hidden";
                         const dataUrl = await htmlToImage.toPng(reportContainer, {
                             backgroundColor: settings.colorMode === "dark" ? "#2a2c2e" : "#ffffff",
                             pixelRatio: 2,
                             width: fullWidth,
                             height: fullHeight,
+                            filter: (node) => node.id !== "flashcardDownloadReportBtn",
                             style: {
                                 maxHeight: "none",
                                 overflowY: "visible",
                                 height: `${fullHeight}px`
                             }
                         });
+                        downloadReportBtn.style.visibility = "";
                         
                         reportContainer.style.maxHeight = prevMaxHeight;
                         reportContainer.style.overflowY = prevOverflowY;
@@ -7578,6 +7655,8 @@
             usageButtons.forEach(btn => {
                 btn.addEventListener("click", () => {
                     usagePopup.style.display = "block";
+                    bringPopupToFront(usagePopup);
+                    ensurePopupInViewport(usagePopup);
                     makeDraggable(usagePopup, document.getElementById("llmUsageDragHandle"));
                     loadLLMUsageStats();
                 });
@@ -7718,7 +7797,7 @@
                 }
 
                 .pcr-app {
-                    z-index: 10001 !important;
+                    z-index: 200000 !important;
                 }
 
                 .pcr-app .pcr-interaction .pcr-result {
@@ -8236,6 +8315,21 @@
         setupTTSPlaygroundEventListeners();
         setupFlashcardPopupEventListeners();
         setupLLMUsageEventListeners();
+        
+        window.addEventListener("resize", () => {
+            document.querySelectorAll(".popup").forEach(popup => {
+                ensurePopupInViewport(popup);
+            });
+        });
+        
+        document.querySelectorAll(".popup").forEach(popup => {
+            if (!popup.dataset.popupFocusBound) {
+                popup.addEventListener("mousedown", () => {
+                    bringPopupToFront(popup);
+                });
+                popup.dataset.popupFocusBound = "true";
+            }
+        });
     }
     
     async function setupReader() {
@@ -8619,7 +8713,7 @@
                 rt {
                     font-family: var(--custom-font, inherit) !important;
                     font-size: var(--annotation-size) !important;
-                    font-weight: 500 !important;
+                    font-weight: bold !important;
                 }
 
                 .reader-container p span.sentence-item,
