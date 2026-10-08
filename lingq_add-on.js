@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      17.4.0
+// @version      17.4.1
 // @license      GPL-3.0-or-later
 // @grant       GM_setValue
 // @grant       GM_getValue
@@ -160,6 +160,7 @@
             {value: "gemini-3.1-flash-lite", text: "Gemini 3.1 Flash-Light ($0.25/$1.5)", inputPrice: 0.25, outputPrice: 1.5, cachedPrice: 0.025}
         ],
         "anthropic": [
+            {value: "claude-sonnet-5-5", text: "Sonnet 5.5. ($2/$10)", inputPrice: 2, outputPrice: 10, cachedPrice: 0.1},
             {value: "claude-sonnet-5", text: "Sonnet 5 ($2/$10)", inputPrice: 2, outputPrice: 10, cachedPrice: 0.2},
             {value: "claude-sonnet-4-6", text: "Sonnet 4.6 ($3.0/$15)", inputPrice: 3.0, outputPrice: 15, cachedPrice: 0.3},
             {value: "claude-haiku-5-5", text: "Haiku 5.5 ($0.1/$0.5)", inputPrice: 0.1, outputPrice: 0.5, cachedPrice: 0.01},
