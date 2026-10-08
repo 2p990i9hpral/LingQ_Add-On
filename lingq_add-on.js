@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      17.3.4
+// @version      17.4.0
 // @license      GPL-3.0-or-later
 // @grant       GM_setValue
 // @grant       GM_getValue
@@ -162,6 +162,7 @@
         "anthropic": [
             {value: "claude-sonnet-5", text: "Sonnet 5 ($2/$10)", inputPrice: 2, outputPrice: 10, cachedPrice: 0.2},
             {value: "claude-sonnet-4-6", text: "Sonnet 4.6 ($3.0/$15)", inputPrice: 3.0, outputPrice: 15, cachedPrice: 0.3},
+            {value: "claude-haiku-5-5", text: "Haiku 5.5 ($0.1/$0.5)", inputPrice: 0.1, outputPrice: 0.5, cachedPrice: 0.01},
             {value: "claude-haiku-4-5", text: "Haiku 4.5 ($1/$5)", inputPrice: 1, outputPrice: 5, cachedPrice: 0.1}
         ],
         "deepseek": [
@@ -2508,7 +2509,7 @@
         }
         
         if (provider === "anthropic") {
-            if (model.includes("haiku") || !enableReasoning) {
+            if (model.includes("haiku-4-5") || !enableReasoning) {
                 body.max_tokens = 4096;
                 body.thinking = {type: "disabled"};
             } else {
@@ -12912,13 +12913,14 @@
 
         2. IPA Pronunciation
             - Provide IPA for the Base Form (lemma) enclosed in brackets [].
+            - Never output language-specific romanization/transliteration systems (e.g., Hepburn Romaji, Pinyin, Revised Romanization, Latin transliteration) enclosed in brackets. IPA is not romanization; you must use actual International Phonetic Alphabet symbols.
             - Use a single, consistent transcription system throughout the whole word. Do not mix broad IPA symbols with romanized/orthographic letters (e.g., Pinyin, Revised Romanization) within the same transcription.
             - Prefer broad, phonemic transcription over narrow, allophonic transcription. Eliminate narrow phonetic diacritics (e.g., lowering [̞], voiceless [̥], compressed [ᵝ], or dental [̪] marks), and avoid substituting a distinct narrow-transcription symbol for a gradient, sub-phonemic co-articulatory detail (e.g., minor degrees of palatalization, uvularization, or aspiration) that is not codified in the standard pronunciation convention of the language.
             - Mark suprasegmental features (e.g., stress [ˈ], tone, vowel length [ː], gemination) consistently where phonemically distinctive. However, Do not mark pitch accent (e.g., Japanese downstep [ꜜ]); transcribe broad segmental phonemes and vowel length only.
             - When in doubt, follow the phonemic transcription convention used by Wiktionary or a major academic reference for that language, rather than an ad hoc or narrow phonetic realization.
             - Ensure the output represents the standard, dictionary-style pronunciation, not a precise phonetic realization of one specific utterance.
             - Negative Examples
-                - Incorrect: 滅ぼす → [ホロボス] / Correct: [horobosɯ]
+                - Incorrect: 振る → [フル] (katakana) or [furu] (Hepburn romaji) / Correct: [ɸɯɾɯ]
                 - Incorrect: 읽고 → [일꼬] (hangul used as a pronunciation guide) / Correct: [ilkʰo]
                 - Incorrect: 我们 → [wǒmen] (pinyin with tone marks) / Correct: [wo˨˩˦mən]
                 - Incorrect: كتاب → [kitab] (Latin transliteration) / Correct: [kitaːb]
