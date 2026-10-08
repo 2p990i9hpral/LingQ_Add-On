@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      17.3.3
+// @version      17.3.4
 // @license      GPL-3.0-or-later
 // @grant       GM_setValue
 // @grant       GM_getValue
@@ -970,6 +970,77 @@
         };
     }
     
+    async function extractResponseErrorData(res) {
+        let errorData = null;
+        let errorText = '';
+        try {
+            if (res?.response && typeof res.response.getReader === 'function') {
+                const reader = res.response.getReader();
+                const decoder = new TextDecoder('utf-8');
+                const readStream = async () => {
+                    while (true) {
+                        const {done, value} = await reader.read();
+                        if (value) errorText += decoder.decode(value, {stream: !done});
+                        if (done) break;
+                    }
+                    return errorText;
+                };
+                const timeout = new Promise((_, rejectTimeout) => setTimeout(() => rejectTimeout(new Error('Timeout')), 3000));
+                await Promise.race([readStream(), timeout]);
+            } else if (res?.responseText) {
+                errorText = res.responseText;
+            }
+
+            if (errorText) {
+                try {
+                    errorData = JSON.parse(errorText);
+                } catch {
+                    errorData = errorText;
+                }
+            }
+        } catch {
+        }
+        return errorData;
+    }
+    
+    async function createGMNetworkError(url, res, prefix = "Network Error") {
+        const errorData = await extractResponseErrorData(res);
+        const serverMsg = errorData?.error?.message || (typeof errorData === 'string' ? errorData : null);
+        const status = res?.status || 0;
+        const statusText = res?.statusText || '';
+        const detail = serverMsg || res?.error || statusText || (status ? `HTTP ${status}` : 'Connection failed or request blocked');
+        
+        const message = status 
+            ? `${prefix} (HTTP ${status}: ${detail})`
+            : `${prefix}: ${detail}`;
+        
+        const error = new Error(message);
+        error.status = status;
+        error.statusText = statusText;
+        error.url = url;
+        error.errorData = errorData || {
+            url,
+            status,
+            statusText,
+            error: res?.error || detail
+        };
+        return error;
+    }
+    
+    function createGMTimeoutError(url, res) {
+        const error = new Error(`Request timed out: ${url}`);
+        error.status = res?.status || 408;
+        error.statusText = res?.statusText || 'Timeout';
+        error.url = url;
+        error.errorData = {
+            url,
+            status: res?.status || 408,
+            statusText: res?.statusText || 'Timeout',
+            error: 'Request timed out'
+        };
+        return error;
+    }
+    
     async function gmFetch(url, options) {
         return new Promise((resolve, reject) => {
             GM_xmlhttpRequest({
@@ -986,9 +1057,8 @@
                         text: () => Promise.resolve(res.responseText)
                     });
                 },
-                onerror: (err) => {
-                    reject(new Error(`GM_xmlhttpRequest failed: ${err.statusText || 'Unknown error'}`));
-                }
+                onerror: async (res) => reject(await createGMNetworkError(url, res, "GM_xmlhttpRequest failed")),
+                ontimeout: (res) => reject(createGMTimeoutError(url, res))
             });
         });
     }
@@ -1027,42 +1097,9 @@
                     if (res.status >= 400) {
                         isErrorStatus = true;
                         (async () => {
-                            let errorData = null;
-                            try {
-                                let errorText = '';
-                                if (res.response && typeof res.response.getReader === 'function') {
-                                    const reader = res.response.getReader();
-                                    const decoder = new TextDecoder('utf-8');
-                                    const readStream = async () => {
-                                        while (true) {
-                                            const {done, value} = await reader.read();
-                                            if (value) errorText += decoder.decode(value, {stream: !done});
-                                            if (done) break;
-                                        }
-                                        return errorText;
-                                    };
-                                    const timeout = new Promise((_, rejectTimeout) => setTimeout(() => rejectTimeout(new Error('Timeout')), 3000));
-                                    await Promise.race([readStream(), timeout]);
-                                } else if (res.responseText) {
-                                    errorText = res.responseText;
-                                }
-
-                                if (errorText) {
-                                    try {
-                                        errorData = JSON.parse(errorText);
-                                    } catch {
-                                        errorData = errorText;
-                                    }
-                                }
-                            } catch {
-                            }
-
                             if (!isResolved) {
                                 isResolved = true;
-                                const error = new Error(`HTTP ${res.status}: Request failed`);
-                                error.status = res.status;
-                                if (errorData) error.errorData = errorData;
-                                reject(error);
+                                reject(await createGMNetworkError(url, res, "Request failed"));
                             }
                         })();
                         return;
@@ -1188,7 +1225,13 @@
                         } catch (e) {
                             if (!isResolved) {
                                 isResolved = true;
-                                reject(new Error("Stream reading error"));
+                                const error = new Error(`Stream reading error: ${e.message}`);
+                                error.url = url;
+                                error.errorData = {
+                                    url,
+                                    error: e.message
+                                };
+                                reject(error);
                             }
                         }
                     })();
@@ -1196,16 +1239,16 @@
                 onload: () => {
                     if (!isErrorStatus && !isResolved) finish();
                 },
-                onerror: () => {
+                onerror: async (res) => {
                     if (!isResolved) {
                         isResolved = true;
-                        reject(new Error("Network Error"));
+                        reject(await createGMNetworkError(url, res, "Network Error"));
                     }
                 },
-                ontimeout: () => {
+                ontimeout: (res) => {
                     if (!isResolved) {
                         isResolved = true;
-                        reject(new Error("Request Timed Out"));
+                        reject(createGMTimeoutError(url, res));
                     }
                 }
             });
@@ -2708,7 +2751,7 @@
             
             onStreamEnd(finalContent);
         } catch (error) {
-            console.error("Stream API Error:", error.message, error.errorData || error);
+            console.error(`Stream API Error [${provider}/${model}]:`, error.message, error.errorData || error);
             if (cacheName && (provider === "google" || provider === "vertex") && (error.message.includes("403") || error.message.includes("404") || (provider === "vertex" && error.message.includes("400"))) && retryCount === 0 && onCacheExpired) {
                 console.warn("Gemini cache expired or not found. Recreating and retrying...");
                 const newCacheName = await onCacheExpired();
