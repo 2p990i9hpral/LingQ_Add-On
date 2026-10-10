@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      17.4.1
+// @version      17.5.0
 // @license      GPL-3.0-or-later
 // @grant       GM_setValue
 // @grant       GM_getValue
@@ -3090,9 +3090,7 @@
                         // Hard Seek: Compensate using fixed delay * playback speed
                         isAudioDrivenSeek = true;
                         const seekOffset = isPlaying ? (0.3 * baseSpeed) : 0;
-                        const targetSeekTime = preciseTargetTime + seekOffset;
-                        videoElement.currentTime = targetSeekTime;
-                        syncStatus = "Hard Seek";
+                        videoElement.currentTime = preciseTargetTime + seekOffset;
                     }
                 } else if (isPlaying) {
                     // Soft Sync: Adjust playback rate with hysteresis to prevent chattering
@@ -3100,16 +3098,13 @@
 
                     if (diff < -softSyncEnterThreshold) {
                         // Video is behind: play slightly faster to catch up
-                        videoElement.playbackRate = baseSpeed + 0.05;
-                        syncStatus = "Soft Sync (Speed Up)";
+                        videoElement.playbackRate = baseSpeed + 0.1;
                     } else if (diff > softSyncEnterThreshold) {
                         // Video is ahead: play slightly slower to wait
-                        videoElement.playbackRate = Math.max(0.25, baseSpeed - 0.05);
-                        syncStatus = "Soft Sync (Slow Down)";
+                        videoElement.playbackRate = Math.max(0.25, baseSpeed - 0.1);
                     } else if (isAlreadyAdjusted && Math.abs(diff) <= softSyncExitThreshold) {
                         // Recover base speed once difference is reduced within exit threshold
                         videoElement.playbackRate = baseSpeed;
-                        syncStatus = "Restored Speed";
                     }
                 }
                 
@@ -3138,14 +3133,12 @@
                     videoElement.pause();
                     return;
                 }
-                syncPlaybackRate();
             });
             videoElement.addEventListener("playing", () => {
                 if (isVideoEnded || !isLingQPlaying()) {
                     videoElement.pause();
                     return;
                 }
-                syncPlaybackRate();
                 if (isSkipActive()) return;
                 mediaInstances.forEach(media => {
                     if (media) {
@@ -3173,7 +3166,6 @@
                 });
             });
             videoElement.addEventListener("loadedmetadata", () => {
-                syncPlaybackRate();
                 videoElement.volume = 1.0;
             });
             videoElement.addEventListener("seeked", () => {
@@ -3389,13 +3381,24 @@
             container.appendChild(setupBox);
             lessonReader.appendChild(container);
             
+            const titleBar = createElement("div", {
+                className: "local-video-title-bar",
+                style: "display: none;"
+            }, createElement("span", {
+                className: "local-video-title-text"
+            }));
+            container.appendChild(titleBar);
+
             const videoElement = createElement("video", {
                 id: "addonLocalVideo",
                 muted: false,
                 style: "width: 100%; height: 100%; flex-grow: 1; object-fit: contain; display: none; cursor: pointer;"
             });
             
-            videoElement.addEventListener("click", () => {
+            container.addEventListener("click", (event) => {
+                if (setupBox.style.display !== "none") return;
+                if (event.target.closest(".local-video-progress-wrapper")) return;
+                unlockVideoEnded();
                 clickElement(".section--player button.lingq-audio-player");
             });
             
@@ -3516,6 +3519,16 @@
                 setupBox.style.display = "none";
                 videoElement.style.display = "block";
                 progressWrapper.style.display = "block";
+                
+                if (selectedVideoFile) {
+                    const videoTitle = selectedVideoFile.name.replace(/\.[^/.]+$/, "");
+                    const titleText = titleBar.querySelector(".local-video-title-text");
+                    if (titleText) {
+                        titleText.textContent = videoTitle;
+                        titleText.title = videoTitle;
+                    }
+                    titleBar.style.display = "flex";
+                }
                 
                 // Capture existing playback position from LingQ player before loading video
                 let initialTime = 0;
@@ -10006,6 +10019,32 @@
                 height: ${position === "Bottom" ? "100%" : "calc(100% - var(--header-height) - 10px)"};
                 min-width: 0;
                 overflow: hidden;
+                cursor: pointer;
+            }
+            .local-video-title-bar {
+                position: absolute;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 60px;
+                padding: 12px 15px;
+                background: linear-gradient(to bottom, rgba(0, 0, 0, 0.8) 0%, rgba(0, 0, 0, 0.4) 50%, transparent 100%);
+                z-index: 10;
+                pointer-events: auto;
+                opacity: 0;
+                transition: opacity 0.25s ease;
+            }
+            .local-video-title-bar:hover {
+                opacity: 1;
+            }
+            .local-video-title-text {
+                color: #ffffff;
+                font-size: 1.15rem;
+                font-weight: bold;
+                text-shadow: 0 1px 4px rgba(0, 0, 0, 0.9);
+                text-overflow: ellipsis;
+                white-space: nowrap;
+                overflow: hidden;
             }
             #lesson-reader[data-lesson-completed-visible="true"] #local-video-container,
             [id$="-content-lessonCompleted"][data-state="active"] ~ * #local-video-container,
@@ -10533,7 +10572,7 @@
                         .join("");
                 }
                 
-                async function getQuickSummary(provider, apikey, model, content) {
+                async function getQuickSummary(provider, apikey, model, content, isRegeneration = false) {
                     const DictionaryLocalePairs = await getDictionaryLocalePairs()
                     const lessonLanguage = DictionaryLocalePairs[language];
                     const difficulty = settings.summaryDifficulty[language];
@@ -10552,9 +10591,13 @@
                     const targetWords = summaryWordsByDifficulty[difficulty] || 150;
                     const targetParagraphs = targetWords <= 60 ? "1 paragraph" : targetWords <= 100 ? "1–2 paragraphs" : "2 paragraphs";
                     
+                    const rolePrompt = isRegeneration
+                        ? "Rewrite and refine the provided summary draft, keeping the core message while strictly adhering to the specified target length and linguistic difficulty."
+                        : "Generate a pre-reading summary of the given content, helping learners grasp the topic and practice reading before engaging with the full material.";
+
                     const quickSummaryPrompt = `
                     # Role
-                    Generate a pre-reading summary of the given content, helping learners grasp the topic and practice reading before engaging with the full material.
+                    ${rolePrompt}
                 
                     # Output Format
                     - Language: match the content's original language (${lessonLanguage})
@@ -10629,6 +10672,8 @@
                                 if (summaryContent) summaryContent.innerHTML = formatted;
                                 const closeBtn = document.querySelector(".quick-summary .close-summary-btn");
                                 if (closeBtn) closeBtn.style.display = "";
+                                const regenerateBtn = document.querySelector(".quick-summary .regenerate-summary-btn");
+                                if (regenerateBtn) regenerateBtn.style.display = "flex";
                                 const ttsBtn = document.querySelector(".quick-summary .tts-summary-btn");
                                 if (ttsBtn) ttsBtn.style.display = "flex";
                             }
@@ -10641,6 +10686,8 @@
                             }
                             const closeBtn = document.querySelector(".quick-summary .close-summary-btn");
                             if (closeBtn) closeBtn.style.display = "";
+                            const regenerateBtn = document.querySelector(".quick-summary .regenerate-summary-btn");
+                            if (regenerateBtn) regenerateBtn.style.display = "flex";
                         }
                     );
                 }
@@ -10700,6 +10747,15 @@
                         }
                     );
                     
+                    let audioData = null;
+
+                    const regenerateButton = createElement("button", {
+                        className: "regenerate-summary-btn",
+                        title: "Regenerate Quick Summary",
+                        innerHTML: `<svg style="width: 15px; height: 15px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-rotate-cw" aria-hidden="true"><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/></svg>`,
+                        style: `padding: 10px 10px; border: 1px solid rgb(125, 125, 125, 50%); border-radius: 5px; cursor: pointer; display: ${hasSummary ? "flex" : "none"}; opacity: 1; align-items: center; justify-content: center;`
+                    });
+
                     const ttsButton = createElement("button", {
                         className: "tts-summary-btn",
                         title: "Read Quick Summary",
@@ -10707,7 +10763,30 @@
                         style: `padding: 10px 10px; border: 1px solid rgb(125, 125, 125, 50%); border-radius: 5px; cursor: pointer; display: ${hasSummary ? "flex" : "none"}; opacity: 1;`
                     });
                     
-                    let audioData = null;
+                    regenerateButton.addEventListener("click", async () => {
+                        if (!quickSummary || regenerateButton.disabled) return;
+                        regenerateButton.disabled = true;
+                        regenerateButton.style.opacity = "0.5";
+                        ttsButton.style.display = "none";
+                        audioData = null;
+                        
+                        const previousSummary = quickSummary;
+                        quickSummary = "";
+                        contentWrapper.innerHTML = '<em style="font-size: 0.8em;">Regenerating Quick Summary<span class="loading-text"></span></em>';
+                        
+                        try {
+                            await getQuickSummary(llmProvider, llmApiKey, llmModel, previousSummary, true);
+                            requestAnimationFrame(() => {
+                                checkAndAdjustReaderColumnOverflow();
+                            });
+                        } catch (err) {
+                            console.error("Regeneration failed:", err);
+                        } finally {
+                            regenerateButton.disabled = false;
+                            regenerateButton.style.opacity = "1";
+                        }
+                    });
+
                     ttsButton.addEventListener("click", async () => {
                         if (!audioData) {
                             ttsButton.style.opacity = "0.5";
@@ -10728,7 +10807,7 @@
                     }, ["close"]);
                     closeButton.addEventListener("click", () => summaryElement.remove());
                     
-                    btnContainer.append(ttsButton, closeButton);
+                    btnContainer.append(regenerateButton, ttsButton, closeButton);
                     summaryElement.append(btnContainer);
                     
                     changeScrollAmount(".quick-summary", 0.2);
@@ -12932,10 +13011,14 @@
             - Select the definition at the correct semantic granularity: broad enough to reflect the word's general dictionary entry, yet specific enough to distinguish it from other listed senses.
             - Prioritize formal equivalence: if the target language has a direct lexical counterpart (e.g., a cognate or loanword), prefer it over a paraphrase or a semantically narrowed synonym.
             - Single lexical item constraint: The definition must be a single word or a single fixed phrase. A comma-separated string and any form of listing multiple candidate translations are prohibited.
-            - Permitted exception: Even if ${userLanguage} has no perfect one-to-one equivalent (typically for abstract or culture-bound concepts), you must still commit to the single closest word or fixed phrase. Any nuance the chosen word fails to capture must be placed in the Contextual Explanation field instead.
-            - Resolution rule: If more than one candidate translation is possible, select the one that best represents the general dictionary sense per the granularity rule above, and place any remaining nuance, tense implication, or context-specific coloring into the Contextual Explanation field instead.
-            - Do not use parentheses for alternative meanings or additional explanation.
+            - Strict Syntax Ban: Commas (,), slashes (/), semicolons (;), colons (:), or parentheses ( () ) are not allowed in this field.
+            - No exact 1-to-1 equivalent or multiple candidates: Even if ${userLanguage} lacks a perfect counterpart or multiple translations exist, commit to the single closest word or fixed phrase. Place all remaining nuances, alternatives, or context-specific coloring into the Contextual Explanation field instead.
             - Output must be a definitive, short phrase or single word.
+            - Negative Examples
+                - Incorrect: 번역가, 통역사 (Comma-separated synonyms) / Correct: 번역가
+                - Incorrect: to achieve (a goal) (Parenthetical disambiguation) / Correct: to achieve
+                - Incorrect: 休む／くつろぐ (Slash-separated alternatives) / Correct: 休む
+                - Incorrect: herstellen, anfertigen (Comma-separated candidates) / Correct: herstellen
 
         4. Contextual Explanation
             - Bridge the "Standard Definition" and the "Specific Context" with high information density (1–2 concise sentences).
