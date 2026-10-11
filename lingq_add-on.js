@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      17.5.1
+// @version      17.5.2
 // @license      GPL-3.0-or-later
 // @grant       GM_setValue
 // @grant       GM_getValue
@@ -3248,6 +3248,11 @@
         }
         
         function getLessonTitle() {
+            const overviewTitle = document.querySelector(".lesson-progress-section .lesson-quick-overview > .lesson-title");
+            if (overviewTitle && overviewTitle.textContent.trim()) {
+                return overviewTitle.textContent.trim();
+            }
+
             const titleWrapper = document.querySelector(".sentence-text-head > .title-wrapper");
             if (!titleWrapper) return "";
             const clone = titleWrapper.cloneNode(true);
@@ -3423,8 +3428,8 @@
             attemptAutoMatch = async function attemptAutoMatch() {
                 if (!cachedLocalVideoFiles) return false;
                 
-                const titleWrapper = await waitForElement(".sentence-text-head > .title-wrapper", 3000);
-                if (!titleWrapper) return false;
+                const titleElement = await waitForElement(".lesson-progress-section .lesson-quick-overview > .lesson-title, .sentence-text-head > .title-wrapper", 3000);
+                if (!titleElement) return false;
                 
                 const title = getLessonTitle();
                 if (!title) return false;
