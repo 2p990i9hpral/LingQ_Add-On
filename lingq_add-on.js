@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      17.5.3
+// @version      17.5.4
 // @license      GPL-3.0-or-later
 // @grant       GM_setValue
 // @grant       GM_getValue
@@ -340,6 +340,20 @@
         const match = urlToGet.match(regex);
         
         return match?.[2];
+    }
+    
+    function getLessonTitle() {
+        const overviewTitle = document.querySelector(".lesson-progress-section .lesson-quick-overview > .lesson-title");
+        if (overviewTitle && overviewTitle.textContent.trim()) {
+            return overviewTitle.textContent.trim();
+        }
+
+        const titleWrapper = document.querySelector(".sentence-text-head > .title-wrapper");
+        if (!titleWrapper) return "";
+        const clone = titleWrapper.cloneNode(true);
+        const collection = clone.querySelector(".collection-title-wrapper");
+        if (collection) collection.remove();
+        return clone.textContent.trim();
     }
     
     async function getUserProfile() {
@@ -3245,20 +3259,6 @@
                 });
             }
             syncPlaybackRate();
-        }
-        
-        function getLessonTitle() {
-            const overviewTitle = document.querySelector(".lesson-progress-section .lesson-quick-overview > .lesson-title");
-            if (overviewTitle && overviewTitle.textContent.trim()) {
-                return overviewTitle.textContent.trim();
-            }
-
-            const titleWrapper = document.querySelector(".sentence-text-head > .title-wrapper");
-            if (!titleWrapper) return "";
-            const clone = titleWrapper.cloneNode(true);
-            const collection = clone.querySelector(".collection-title-wrapper");
-            if (collection) collection.remove();
-            return clone.textContent.trim();
         }
         
         function normalizeTitle(str) {
@@ -10877,14 +10877,19 @@
                 const savedKeys = settings.llmApiKeys;
                 llmApiKey = savedKeys[llmProvider] || "";
                 
+                const lessonTitle = getLessonTitle();
+                const contextualContent = lessonTitle
+                    ? `Title: ${lessonTitle}\n\n${lessonContent}`
+                    : lessonContent;
+
                 if (settings.prependSummary[language]) {
-                    await getQuickSummary(llmProvider, llmApiKey, llmModel, lessonContent);
+                    await getQuickSummary(llmProvider, llmApiKey, llmModel, contextualContent);
                     requestAnimationFrame(() => {
                         checkAndAdjustReaderColumnOverflow();
                     });
                 }
                 
-                getLessonSummary(llmProvider, llmApiKey, llmModel, lessonContent)
+                getLessonSummary(llmProvider, llmApiKey, llmModel, contextualContent)
                     .then(summary => {
                         lessonSummary = convertMarkdownToHTML(summary);
                         renderLessonSummaryDetails();
