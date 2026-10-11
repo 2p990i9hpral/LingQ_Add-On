@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      17.5.0
+// @version      17.5.1
 // @license      GPL-3.0-or-later
 // @grant       GM_setValue
 // @grant       GM_getValue
@@ -143,9 +143,9 @@
         ],
         "google": [
             {value: "gemini-3.8-flash", text: "Gemini 3.8 Flash ($0.75/$3.75)", inputPrice: 0.75, outputPrice: 3.75, cachedPrice: 0.075},
-            {value: "gemini-3.7-flash", text: "Gemini 3.7 Flash ($0.75/$3.75)", inputPrice: 0.75, outputPrice: 3.75, cachedPrice: 0.075},
+            // {value: "gemini-3.7-flash", text: "Gemini 3.7 Flash ($0.75/$3.75)", inputPrice: 0.75, outputPrice: 3.75, cachedPrice: 0.075},
             {value: "gemini-3.6-flash", text: "Gemini 3.6 Flash ($0.75/$3.75)", inputPrice: 0.75, outputPrice: 3.75, cachedPrice: 0.075},
-            {value: "gemini-3.5-flash", text: "Gemini 3.5 Flash ($1.5/$9)", inputPrice: 1.5, outputPrice: 9, cachedPrice: 0.15},
+            // {value: "gemini-3.5-flash", text: "Gemini 3.5 Flash ($1.5/$9)", inputPrice: 1.5, outputPrice: 9, cachedPrice: 0.15},
             {value: "gemini-3-flash-preview", text: "Gemini 3.0 Flash ($0.5/$3)", inputPrice: 0.5, outputPrice: 3, cachedPrice: 0.05},
             {value: "gemini-3.5-flash-lite", text: "Gemini 3.5 Flash-Light ($0.3/$2.5)", inputPrice: 0.3, outputPrice: 2.5, cachedPrice: 0.03},
             {value: "gemini-3.1-flash-lite", text: "Gemini 3.1 Flash-Light ($0.25/$1.5)", inputPrice: 0.25, outputPrice: 1.5, cachedPrice: 0.025}
@@ -3525,7 +3525,6 @@
                     const titleText = titleBar.querySelector(".local-video-title-text");
                     if (titleText) {
                         titleText.textContent = videoTitle;
-                        titleText.title = videoTitle;
                     }
                     titleBar.style.display = "flex";
                 }
@@ -10028,7 +10027,7 @@
                 width: 100%;
                 height: 60px;
                 padding: 12px 15px;
-                background: linear-gradient(to bottom, rgba(0, 0, 0, 0.8) 0%, rgba(0, 0, 0, 0.4) 50%, transparent 100%);
+                background: linear-gradient(to bottom, rgba(0, 0, 0, 0.7) 0%, rgba(0, 0, 0, 0.5) 50%, transparent 100%);
                 z-index: 10;
                 pointer-events: auto;
                 opacity: 0;
@@ -10688,7 +10687,12 @@
                             if (closeBtn) closeBtn.style.display = "";
                             const regenerateBtn = document.querySelector(".quick-summary .regenerate-summary-btn");
                             if (regenerateBtn) regenerateBtn.style.display = "flex";
-                        }
+                        },
+                        null,
+                        null,
+                        0,
+                        false,
+                        !isRegeneration
                     );
                 }
                 
