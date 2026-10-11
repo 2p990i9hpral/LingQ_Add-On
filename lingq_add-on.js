@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      17.5.2
+// @version      17.5.3
 // @license      GPL-3.0-or-later
 // @grant       GM_setValue
 // @grant       GM_getValue
@@ -11965,8 +11965,17 @@
                             
                             const finishEdit = async () => {
                                 const rawValue = input.value.trim();
-                                const cleanText = rawValue.replace(/[\[\]\/]/g, "").trim();
-                                const newValue = cleanText ? `[${cleanText}]` : "";
+                                let newValue = "";
+                                if (rawValue) {
+                                    if (/\[.*\]/.test(rawValue)) {
+                                        newValue = rawValue;
+                                    } else if (/\/.*\//.test(rawValue)) {
+                                        newValue = rawValue.replace(/\/([^\/]+)\//g, "[$1]");
+                                    } else {
+                                        const cleanText = rawValue.replace(/[\[\]\/]/g, "").trim();
+                                        newValue = cleanText ? `[${cleanText}]` : "";
+                                    }
+                                }
                                 pronunciationElem.textContent = newValue;
                                 
                                 if (newValue === currentText) return;
