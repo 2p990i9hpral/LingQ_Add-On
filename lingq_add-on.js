@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      17.5.4
+// @version      17.5.5
 // @license      GPL-3.0-or-later
 // @grant       GM_setValue
 // @grant       GM_getValue
@@ -160,7 +160,7 @@
             {value: "gemini-3.1-flash-lite", text: "Gemini 3.1 Flash-Light ($0.25/$1.5)", inputPrice: 0.25, outputPrice: 1.5, cachedPrice: 0.025}
         ],
         "anthropic": [
-            {value: "claude-sonnet-5-5", text: "Sonnet 5.5. ($2/$10)", inputPrice: 2, outputPrice: 10, cachedPrice: 0.1},
+            {value: "claude-sonnet-5-5", text: "Sonnet 5.5 ($2/$10)", inputPrice: 2, outputPrice: 10, cachedPrice: 0.1},
             {value: "claude-sonnet-5", text: "Sonnet 5 ($2/$10)", inputPrice: 2, outputPrice: 10, cachedPrice: 0.2},
             {value: "claude-sonnet-4-6", text: "Sonnet 4.6 ($3.0/$15)", inputPrice: 3.0, outputPrice: 15, cachedPrice: 0.3},
             {value: "claude-haiku-5-5", text: "Haiku 5.5 ($0.1/$0.5)", inputPrice: 0.1, outputPrice: 0.5, cachedPrice: 0.01},
@@ -2528,7 +2528,7 @@
                 body.max_tokens = 4096;
                 body.thinking = {type: "disabled"};
             } else {
-                body.max_tokens = 8192;
+                body.max_tokens = 16384;
                 body.thinking = {type: "adaptive", display: "summarized"};
             }
             
@@ -10760,7 +10760,7 @@
 
                     const regenerateButton = createElement("button", {
                         className: "regenerate-summary-btn",
-                        title: "Regenerate Quick Summary",
+                        title: "Regenerate Quick Summary\n(Ctrl/Shift+Click to regenerate from full text)",
                         innerHTML: `<svg style="width: 15px; height: 15px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-rotate-cw" aria-hidden="true"><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/></svg>`,
                         style: `padding: 10px 10px; border: 1px solid rgb(125, 125, 125, 50%); border-radius: 5px; cursor: pointer; display: ${hasSummary ? "flex" : "none"}; opacity: 1; align-items: center; justify-content: center;`
                     });
@@ -10772,7 +10772,7 @@
                         style: `padding: 10px 10px; border: 1px solid rgb(125, 125, 125, 50%); border-radius: 5px; cursor: pointer; display: ${hasSummary ? "flex" : "none"}; opacity: 1;`
                     });
                     
-                    regenerateButton.addEventListener("click", async () => {
+                    regenerateButton.addEventListener("click", async (event) => {
                         if (!quickSummary || regenerateButton.disabled) return;
                         regenerateButton.disabled = true;
                         regenerateButton.style.opacity = "0.5";
@@ -10783,8 +10783,12 @@
                         quickSummary = "";
                         contentWrapper.innerHTML = '<em style="font-size: 0.8em;">Regenerating Quick Summary<span class="loading-text"></span></em>';
                         
+                        const isFreshGeneration = Boolean(event.ctrlKey || event.metaKey || event.shiftKey) && Boolean(cachedContextualContent);
+                        const contentToUse = isFreshGeneration ? cachedContextualContent : previousSummary;
+                        const isRegenerationMode = !isFreshGeneration;
+                        
                         try {
-                            await getQuickSummary(llmProvider, llmApiKey, llmModel, previousSummary, true);
+                            await getQuickSummary(llmProvider, llmApiKey, llmModel, contentToUse, isRegenerationMode);
                             requestAnimationFrame(() => {
                                 checkAndAdjustReaderColumnOverflow();
                             });
@@ -10837,6 +10841,7 @@
                 
                 quickSummary = "";
                 lessonSummary = "";
+                let cachedContextualContent = "";
                 const existingSection = readerContainer.querySelector('section');
                 if (existingSection) createAndPrependSummaryElement(existingSection);
                 
@@ -10878,18 +10883,18 @@
                 llmApiKey = savedKeys[llmProvider] || "";
                 
                 const lessonTitle = getLessonTitle();
-                const contextualContent = lessonTitle
+                cachedContextualContent = lessonTitle
                     ? `Title: ${lessonTitle}\n\n${lessonContent}`
                     : lessonContent;
 
                 if (settings.prependSummary[language]) {
-                    await getQuickSummary(llmProvider, llmApiKey, llmModel, contextualContent);
+                    await getQuickSummary(llmProvider, llmApiKey, llmModel, cachedContextualContent);
                     requestAnimationFrame(() => {
                         checkAndAdjustReaderColumnOverflow();
                     });
                 }
                 
-                getLessonSummary(llmProvider, llmApiKey, llmModel, contextualContent)
+                getLessonSummary(llmProvider, llmApiKey, llmModel, cachedContextualContent)
                     .then(summary => {
                         lessonSummary = convertMarkdownToHTML(summary);
                         renderLessonSummaryDetails();
