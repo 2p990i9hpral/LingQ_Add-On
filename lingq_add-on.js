@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      17.5.5
+// @version      17.5.6
 // @license      GPL-3.0-or-later
 // @grant       GM_setValue
 // @grant       GM_getValue
@@ -4697,13 +4697,22 @@
                 createElement("button", {id: "flashcardPaginationNext", className: "popup-button", disabled: true}, ">")
             );
             
+            const flashcardHeaders = [
+                {text: "", className: "fc-col-btn"},
+                {text: "Idx", className: "fc-col-idx"},
+                {text: "Word", className: "fc-col-word"},
+                {text: "Pronunciation", className: "fc-col-pronunciation"},
+                {text: "Meaning", className: "fc-col-meaning"},
+                {text: "Explanation", className: "fc-col-explanation"}
+            ];
+
             const flashcardTableContainer = createElement("div", {id: "flashcardTableContainer"},
                 createElement("table", {id: "flashcardTable"},
                     createElement("thead", {},
                         createElement("tr", {},
-                            ...["", "Idx", "Word", "Meaning", "Explanation"]
-                                .map(headerText => createElement("th", {}, headerText)
-                                )
+                            ...flashcardHeaders.map((header) =>
+                                createElement("th", {className: header.className, textContent: header.text})
+                            )
                         )
                     ),
                     createElement("tbody")
@@ -4736,7 +4745,7 @@
                 createElement("div", {id: "flashcardDragHandle", className: "popup-drag-handle"},
                     createElement("h3", {textContent: "Flashcard Manager"})
                 ),
-                createElement("div", {style: "padding: 0 15px; width: 800px;"},
+                createElement("div", {style: "padding: 0 15px; width: 900px;"},
                     createElement("div", {id: "flashcardListView", style: "display: block;"},
                         createElement("div", {id: "flashcardPopupHeader"},
                             createElement("span", {id: "flashcardCount"}, "Flashcards:"),
@@ -6236,7 +6245,7 @@
                 
                 let queryBase = getDbClient()
                     .from(getTableName())
-                    .select("idx, word, meaning, explanation", {count: "exact"})
+                    .select("idx, word, pronunciation, meaning, explanation", {count: "exact"})
                     .eq("language", targetLanguage);
                 
                 if (searchKeyword) {
@@ -6268,6 +6277,12 @@
                     });
                     const deleteTd = createElement("td", {}, deleteBtn);
                     
+                    const pronunciationTd = createElement("td", {
+                        textContent: row.pronunciation || "",
+                        title: row.pronunciation || "",
+                        style: "cursor: pointer;"
+                    });
+
                     const meaningTd = createElement("td", {
                         textContent: row.meaning || "",
                         title: row.meaning || "",
@@ -6278,6 +6293,7 @@
                         deleteTd,
                         createElement("td", {textContent: row.idx ?? "", title: row.idx ?? ""}),
                         createElement("td", {textContent: row.word || "", title: row.word || ""}),
+                        pronunciationTd,
                         meaningTd,
                         createElement("td", {textContent: row.explanation || "", title: row.explanation || ""})
                     );
@@ -6309,6 +6325,65 @@
                         }
                     });
                     
+                    pronunciationTd.addEventListener("click", () => {
+                        if (pronunciationTd.querySelector("input")) return;
+                        
+                        const currentText = pronunciationTd.textContent;
+                        const input = createElement("input", {
+                            type: "text",
+                            value: currentText,
+                            style: "width: 100%; border: none; outline: none; background: transparent; color: inherit; font: inherit;",
+                        });
+                        
+                        const savePronunciation = async () => {
+                            const rawValue = input.value.trim();
+                            let newValue = "";
+                            if (rawValue) {
+                                if (/\[.*\]/.test(rawValue)) {
+                                    newValue = rawValue;
+                                } else if (/\/.*\//.test(rawValue)) {
+                                    newValue = rawValue.replace(/\/([^\/]+)\//g, "[$1]");
+                                } else {
+                                    const cleanText = rawValue.replace(/[\[\]\/]/g, "").trim();
+                                    newValue = cleanText ? `[${cleanText}]` : "";
+                                }
+                            }
+                            
+                            if (newValue === currentText) {
+                                pronunciationTd.textContent = currentText;
+                                pronunciationTd.title = currentText;
+                                return;
+                            }
+                            
+                            const {error: updateError} = await getDbClient()
+                                .from(getTableName())
+                                .update({pronunciation: newValue})
+                                .eq("idx", row.idx);
+                            
+                            if (updateError) {
+                                console.error("Pronunciation update error:", updateError);
+                                pronunciationTd.textContent = currentText;
+                                pronunciationTd.title = currentText;
+                            } else {
+                                pronunciationTd.textContent = newValue;
+                                pronunciationTd.title = newValue;
+                                row.pronunciation = newValue;
+                            }
+                        };
+                        
+                        pronunciationTd.textContent = "";
+                        pronunciationTd.appendChild(input);
+                        input.focus();
+                        
+                        input.addEventListener("blur", () => savePronunciation());
+                        
+                        input.addEventListener("keydown", (e) => {
+                            if (e.key === "Enter") {
+                                input.blur();
+                            }
+                        });
+                    });
+
                     meaningTd.addEventListener("click", () => {
                         if (meaningTd.querySelector("input")) return;
                         
@@ -6658,6 +6733,7 @@
                     const fieldMap = {
                         Idx: "idx",
                         Word: "word",
+                        Pronunciation: "pronunciation",
                         Meaning: "meaning",
                         Explanation: "explanation"
                     };
@@ -7578,16 +7654,16 @@
                         const costStr = totalCost < 0.01 ? `$${totalCost.toFixed(5)}` : `$${totalCost.toFixed(4)}`;
                         
                         const rowEl = createElement("tr", {className: "llm-usage-log-row"},
-                            createElement("td", {className: "llm-log-col-btn"}, deleteBtn),
-                            createElement("td", {className: "llm-log-col-time"}, formatTime(entry.timestamp)),
-                            createElement("td", {className: "llm-log-col-provider"}, entry.provider || "-"),
-                            createElement("td", {className: "llm-log-col-model", title: entry.model}, entry.model),
-                            createElement("td", {className: "llm-log-col-lang"}, entry.language || "-"),
-                            createElement("td", {className: "llm-log-col-num"}, cachedVal ? cachedVal.toLocaleString() : "-"),
-                            createElement("td", {className: "llm-log-col-num"}, inputVal ? inputVal.toLocaleString() : "-"),
-                            createElement("td", {className: "llm-log-col-num"}, reasoningVal ? reasoningVal.toLocaleString() : "-"),
-                            createElement("td", {className: "llm-log-col-num"}, outputVal ? outputVal.toLocaleString() : "-"),
-                            createElement("td", {className: "llm-log-col-cost"}, costStr)
+                            createElement("td", {}, deleteBtn),
+                            createElement("td", {}, formatTime(entry.timestamp)),
+                            createElement("td", {}, entry.provider || "-"),
+                            createElement("td", {title: entry.model}, entry.model),
+                            createElement("td", {}, entry.language || "-"),
+                            createElement("td", {}, cachedVal ? cachedVal.toLocaleString() : "-"),
+                            createElement("td", {}, inputVal ? inputVal.toLocaleString() : "-"),
+                            createElement("td", {}, reasoningVal ? reasoningVal.toLocaleString() : "-"),
+                            createElement("td", {}, outputVal ? outputVal.toLocaleString() : "-"),
+                            createElement("td", {}, costStr)
                         );
                         
                         deleteBtn.addEventListener("click", async (ev) => {
@@ -8036,29 +8112,28 @@
                     padding-left: 10px;
                 }
 
-                #flashcardTable th:nth-child(1),
-                #flashcardTable td:nth-child(1) {
+                #flashcardTable th.fc-col-btn {
                     width: 20px;
                 }
 
-                #flashcardTable th:nth-child(2),
-                #flashcardTable td:nth-child(2) {
+                #flashcardTable th.fc-col-idx {
                     width: 55px;
                 }
 
-                #flashcardTable th:nth-child(3),
-                #flashcardTable td:nth-child(3) {
-                    width: 20%;
+                #flashcardTable th.fc-col-word {
+                    width: 16%;
                 }
 
-                #flashcardTable th:nth-child(4),
-                #flashcardTable td:nth-child(4) {
-                    width: 20%;
+                #flashcardTable th.fc-col-pronunciation {
+                    width: 16%;
                 }
 
-                #flashcardTable th:nth-child(5),
-                #flashcardTable td:nth-child(5) {
-                    width: 60%;
+                #flashcardTable th.fc-col-meaning {
+                    width: 16%;
+                }
+
+                #flashcardTable th.fc-col-explanation {
+                    width: 52%;
                 }
 
                 #flashcardStatsContainer {
@@ -8258,13 +8333,17 @@
                     padding: 15px 4px;
                 }
 
-                #llmUsageRecentLogsTable .llm-log-col-btn {
+                #llmUsageRecentLogsTable th.llm-log-col-btn {
                     width: 30px;
                     user-select: none;
                     text-align: center;
                 }
 
-                #llmUsageRecentLogsTable .llm-log-col-btn .delete-row-btn {
+                #llmUsageRecentLogsTable td:first-child {
+                    text-align: center;
+                }
+
+                #llmUsageRecentLogsTable .delete-row-btn {
                     width: 14px;
                     height: 14px;
                     cursor: pointer;
@@ -8275,36 +8354,56 @@
                     vertical-align: middle;
                 }
 
-                #llmUsageRecentLogsTable .llm-log-col-btn .delete-row-btn:hover {
+                #llmUsageRecentLogsTable .delete-row-btn:hover {
                     opacity: 1;
                 }
 
-                #llmUsageRecentLogsTable .llm-log-col-time {
+                #llmUsageRecentLogsTable th.llm-log-col-time {
                     width: 115px;
                 }
 
-                #llmUsageRecentLogsTable .llm-log-col-provider {
+                #llmUsageRecentLogsTable th.llm-log-col-provider {
                     width: 75px;
                     opacity: 0.85;
                 }
 
-                #llmUsageRecentLogsTable .llm-log-col-model {
+                #llmUsageRecentLogsTable td:nth-child(3) {
+                    opacity: 0.85;
+                }
+
+                #llmUsageRecentLogsTable th.llm-log-col-model {
                     width: auto;
                 }
 
-                #llmUsageRecentLogsTable .llm-log-col-lang {
+                #llmUsageRecentLogsTable th.llm-log-col-lang {
                     width: 40px;
                     text-align: center;
                 }
 
-                #llmUsageRecentLogsTable .llm-log-col-num {
+                #llmUsageRecentLogsTable td:nth-child(5) {
+                    text-align: center;
+                }
+
+                #llmUsageRecentLogsTable th.llm-log-col-num {
                     width: 70px;
                     text-align: right;
                     opacity: 0.85;
                 }
 
-                #llmUsageRecentLogsTable .llm-log-col-cost {
+                #llmUsageRecentLogsTable td:nth-child(6),
+                #llmUsageRecentLogsTable td:nth-child(7),
+                #llmUsageRecentLogsTable td:nth-child(8),
+                #llmUsageRecentLogsTable td:nth-child(9) {
+                    text-align: right;
+                    opacity: 0.85;
+                }
+
+                #llmUsageRecentLogsTable th.llm-log-col-cost {
                     width: 75px;
+                    text-align: right;
+                }
+
+                #llmUsageRecentLogsTable td:nth-child(10) {
                     text-align: right;
                 }
             `;
