@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      17.5.8
+// @version      17.5.9
 // @license      GPL-3.0-or-later
 // @grant       GM_setValue
 // @grant       GM_getValue
@@ -9307,9 +9307,10 @@
                     display: inline-flex;
                     align-items: center;
                     justify-content: center;
-                    padding: 0px 10px;
+                    padding: 10px 10px;
                     border: 1px solid rgb(125, 125, 125, 50%);
                     border-radius: 5px;
+                    cursor: pointer;
                     margin: 0 10px 0 auto;
                 }
 
@@ -10766,7 +10767,7 @@
                                         const summaryContent = document.querySelector(".quick-summary .summary-content");
                                         if (summaryContent) summaryContent.innerHTML = formatted;
                                         const closeBtn = document.querySelector(".quick-summary .close-summary-btn");
-                                        if (closeBtn) closeBtn.style.display = "";
+                                        if (closeBtn) closeBtn.style.display = "flex";
                                     }
                                     summaryRafId = null;
                                 });
@@ -10780,7 +10781,7 @@
                                 const summaryContent = document.querySelector(".quick-summary .summary-content");
                                 if (summaryContent) summaryContent.innerHTML = formatted;
                                 const closeBtn = document.querySelector(".quick-summary .close-summary-btn");
-                                if (closeBtn) closeBtn.style.display = "";
+                                if (closeBtn) closeBtn.style.display = "flex";
                                 const regenerateBtn = document.querySelector(".quick-summary .regenerate-summary-btn");
                                 if (regenerateBtn) regenerateBtn.style.display = "flex";
                                 const ttsBtn = document.querySelector(".quick-summary .tts-summary-btn");
@@ -10794,7 +10795,7 @@
                                 summaryContent.innerHTML = "<em>Failed to generate summary.</em>";
                             }
                             const closeBtn = document.querySelector(".quick-summary .close-summary-btn");
-                            if (closeBtn) closeBtn.style.display = "";
+                            if (closeBtn) closeBtn.style.display = "flex";
                             const regenerateBtn = document.querySelector(".quick-summary .regenerate-summary-btn");
                             if (regenerateBtn) regenerateBtn.style.display = "flex";
                         },
@@ -10921,8 +10922,10 @@
                     
                     const closeButton = createElement("button", {
                         className: "close-summary-btn",
-                        style: `margin: 0; display: ${hasSummary ? "" : "none"};`
-                    }, ["close"]);
+                        title: "Close Quick Summary",
+                        innerHTML: `<svg style="width: 15px; height: 15px;" viewBox="6 6 12 12" stroke="currentColor"><path d="M17 17L7 7M17 7L7 17" stroke-width="2" stroke-linecap="round"/></svg>`,
+                        style: `padding: 10px 10px; border: 1px solid rgb(125, 125, 125, 50%); border-radius: 5px; cursor: pointer; display: ${hasSummary ? "flex" : "none"}; opacity: 1; align-items: center; justify-content: center;`
+                    });
                     closeButton.addEventListener("click", () => summaryElement.remove());
                     
                     btnContainer.append(regenerateButton, ttsButton, closeButton);
