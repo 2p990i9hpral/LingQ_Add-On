@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      17.5.7
+// @version      17.5.8
 // @license      GPL-3.0-or-later
 // @grant       GM_setValue
 // @grant       GM_getValue
@@ -6251,7 +6251,7 @@
                 
                 if (searchKeyword) {
                     const isNumber = /^\d+$/.test(searchKeyword);
-                    const textColumns = ["word", "pronunciation", "meaning"];
+                    const textColumns = ["word", "meaning"];
                     const searchConditions = [
                         ...textColumns.map((col) => `${col}.ilike.%${searchKeyword}%`),
                         isNumber ? `idx.eq.${searchKeyword}` : null
@@ -6327,6 +6327,7 @@
                     });
                     
                     pronunciationTd.addEventListener("click", () => {
+                        if (window.getSelection()?.toString().length > 0) return;
                         if (pronunciationTd.querySelector("input")) return;
                         
                         const currentText = pronunciationTd.textContent;
@@ -6386,6 +6387,7 @@
                     });
 
                     meaningTd.addEventListener("click", () => {
+                        if (window.getSelection()?.toString().length > 0) return;
                         if (meaningTd.querySelector("input")) return;
                         
                         const currentText = meaningTd.textContent;
@@ -9302,6 +9304,9 @@
                 }
 
                 .close-summary-btn {
+                    display: inline-flex;
+                    align-items: center;
+                    justify-content: center;
                     padding: 0px 10px;
                     border: 1px solid rgb(125, 125, 125, 50%);
                     border-radius: 5px;
