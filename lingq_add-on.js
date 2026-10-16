@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      17.5.6
+// @version      17.5.7
 // @license      GPL-3.0-or-later
 // @grant       GM_setValue
 // @grant       GM_getValue
@@ -142,6 +142,7 @@
             {value: "gpt-5.4-mini", text: "GPT-5.4 mini ($0.75/$4.5)", inputPrice: 0.75, outputPrice: 4.5, cachedPrice: 0.075}
         ],
         "google": [
+            {value: "gemini-4-argon", text: "Gemini 4 Argon ($2/$10)", inputPrice: 2, outputPrice: 10, cachedPrice: 0.1},
             {value: "gemini-3.8-flash", text: "Gemini 3.8 Flash ($0.75/$3.75)", inputPrice: 0.75, outputPrice: 3.75, cachedPrice: 0.075},
             // {value: "gemini-3.7-flash", text: "Gemini 3.7 Flash ($0.75/$3.75)", inputPrice: 0.75, outputPrice: 3.75, cachedPrice: 0.075},
             {value: "gemini-3.6-flash", text: "Gemini 3.6 Flash ($0.75/$3.75)", inputPrice: 0.75, outputPrice: 3.75, cachedPrice: 0.075},
@@ -1420,7 +1421,7 @@
         return `${prefix}${formattedLeft}<b>${targetWord}</b>${formattedRight}${suffix}`.trim();
     }
     
-    function invokeAnkiConnect(action, params = {}, version = 6, timeout = 10000) {
+    function invokeAnkiConnect(action, params = {}, version = 6, timeout = 15000) {
         return new Promise((resolve, reject) => {
             GM_xmlhttpRequest({
                 method: "POST",
@@ -12049,7 +12050,10 @@
                     const pronunciationElem = botMessageDiv.querySelector("span");
                     
                     if (pronunciationElem) {
-                        const cleanText = pronunciationElem.textContent.replace(/[\[\]\/]/g, "").trim();
+                        const cleanText = pronunciationElem.textContent
+                            .replace(/[\u031E\u0325\u1D5D\u032A\uA71C\u0320\u031F\u031A\u034D\u032F\u0303]/g, "")
+                            .replace(/[\[\]\/]/g, "")
+                            .trim();
                         pronunciationElem.textContent = `[${cleanText}]`;
                         
                         pronunciationElem.addEventListener("click", async (e) => {
@@ -12073,7 +12077,9 @@
                             input.focus();
                             
                             const finishEdit = async () => {
-                                const rawValue = input.value.trim();
+                                const rawValue = input.value
+                                    .replace(/[\u031E\u0325\u1D5D\u032A\uA71C\u0320\u031F\u031A\u034D\u032F\u0303]/g, "")
+                                    .trim();
                                 let newValue = "";
                                 if (rawValue) {
                                     if (/\[.*\]/.test(rawValue)) {
@@ -13122,7 +13128,7 @@
             - Provide IPA for the Base Form (lemma) enclosed in brackets [].
             - Never output language-specific romanization/transliteration systems (e.g., Hepburn Romaji, Pinyin, Revised Romanization, Latin transliteration) enclosed in brackets. IPA is not romanization; you must use actual International Phonetic Alphabet symbols.
             - Use a single, consistent transcription system throughout the whole word. Do not mix broad IPA symbols with romanized/orthographic letters (e.g., Pinyin, Revised Romanization) within the same transcription.
-            - Prefer broad, phonemic transcription over narrow, allophonic transcription. Eliminate narrow phonetic diacritics (e.g., lowering [̞], voiceless [̥], compressed [ᵝ], or dental [̪] marks), and avoid substituting a distinct narrow-transcription symbol for a gradient, sub-phonemic co-articulatory detail (e.g., minor degrees of palatalization, uvularization, or aspiration) that is not codified in the standard pronunciation convention of the language.
+            - Prefer broad, phonemic transcription over narrow, allophonic transcription. Eliminate narrow phonetic diacritics (e.g., lowering [̞], voiceless [̥], compressed [ᵝ], dental [̪], retracted [̠], advanced [̟], unreleased [̚], spreading [͍], non-syllabic [̯], or nasalized [̃] marks), and avoid substituting a distinct narrow-transcription symbol for a gradient, sub-phonemic co-articulatory detail (e.g., minor degrees of palatalization, uvularization, or aspiration) that is not codified in the standard pronunciation convention of the language.
             - Mark suprasegmental features (e.g., stress [ˈ], tone, vowel length [ː], gemination) consistently where phonemically distinctive. However, Do not mark pitch accent (e.g., Japanese downstep [ꜜ]); transcribe broad segmental phonemes and vowel length only.
             - When in doubt, follow the phonemic transcription convention used by Wiktionary or a major academic reference for that language, rather than an ad hoc or narrow phonetic realization.
             - Ensure the output represents the standard, dictionary-style pronunciation, not a precise phonetic realization of one specific utterance.
