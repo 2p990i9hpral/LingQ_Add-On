@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      17.6.0
+// @version      17.6.1
 // @license      GPL-3.0-or-later
 // @grant       GM_setValue
 // @grant       GM_getValue
@@ -8251,6 +8251,7 @@
                 #flashcardTable thead th {
                     cursor: pointer;
                     user-select: none;
+                    white-space: nowrap;
                 }
 
                 #flashcardTable td {
@@ -8277,7 +8278,7 @@
                 }
 
                 #flashcardTable th.fc-col-pronunciation {
-                    width: 16%;
+                    width: 18%;
                 }
 
                 #flashcardTable th.fc-col-meaning {
@@ -8285,7 +8286,7 @@
                 }
 
                 #flashcardTable th.fc-col-explanation {
-                    width: 52%;
+                    width: 50%;
                 }
 
                 #flashcardStatsContainer {
@@ -12161,6 +12162,29 @@
                     });
                 }
                 
+                const PRONUNCIATION_REPLACEMENTS = {
+                    ja: {"g": "ɡ", "ʲ": "j", "dʑ": "d͡ʑ", "ʲi": "i", "tɕ": "t͡ɕ", "y": "j", "ɛ": "e", "u": "ɯ", "-": "", "r": "ɾ", "ʃ": "ɕ", "ɪ": "i", "ō": "oː", "ɰ": "w", "ts": "t͡s", "dz": "d͡z", "ʦ": "t͡s", "β": "b", "ẽ": "e", "ū": "ɯː", "ˈ": "", "'": "", "dʒ": "d͡ʑ", "ʧ": "t͡ɕ", "l": "ɾ", "ĩ": "i", "f": "ɸ", "ʊ": "ɯ", "õ": "o", "ã": "a", "ˌ": "", "d͡ʒ": "d͡ʑ", "ʨ": "t͡ɕ"}
+                };
+                
+                function preprocessPronunciation(rawText, lang) {
+                    let cleaned = rawText
+                        .replace(/[\u031E\u0325\u1D5D\u032A\uA71C\u0320\u031F\u031A\u034D\u032F]/g, "")
+                        .replace(/[\[\]\/]/g, "")
+                        .trim();
+                    
+                    const rules = PRONUNCIATION_REPLACEMENTS[lang];
+                    if (rules && cleaned) {
+                        const keys = Object.keys(rules).sort((a, b) => b.length - a.length);
+                        if (keys.length > 0) {
+                            const escapedKeys = keys.map(k => k.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
+                            const pattern = new RegExp(escapedKeys.join("|"), "g");
+                            cleaned = cleaned.replace(pattern, match => rules[match]);
+                        }
+                    }
+                    
+                    return cleaned ? `[${cleaned}]` : "";
+                }
+                
                 function enhanceWordMessage(botMessageDiv, selectedData) {
                     const wordCardWrappers = Array.from(botMessageDiv.querySelectorAll('.word-card'));
                     const buttonContainer = botMessageDiv.querySelector('.message-button-container');
@@ -12207,11 +12231,7 @@
                     const pronunciationElem = botMessageDiv.querySelector("span");
                     
                     if (pronunciationElem) {
-                        const cleanText = pronunciationElem.textContent
-                            .replace(/[\u031E\u0325\u1D5D\u032A\uA71C\u0320\u031F\u031A\u034D\u032F]/g, "")
-                            .replace(/[\[\]\/]/g, "")
-                            .trim();
-                        pronunciationElem.textContent = `[${cleanText}]`;
+                        pronunciationElem.textContent = preprocessPronunciation(pronunciationElem.textContent, getLessonLanguage());
                         
                         pronunciationElem.addEventListener("click", async (e) => {
                             if (!e.ctrlKey && !e.metaKey) return;
