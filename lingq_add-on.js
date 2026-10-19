@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      17.5.9
+// @version      17.5.10
 // @license      GPL-3.0-or-later
 // @grant       GM_setValue
 // @grant       GM_getValue
@@ -7125,6 +7125,7 @@
                         const dataUrl = await htmlToImage.toPng(reportContainer, {
                             backgroundColor: settings.colorMode === "dark" ? "#2a2c2e" : "#ffffff",
                             pixelRatio: 2,
+                            skipFonts: true,
                             width: fullWidth,
                             height: fullHeight,
                             filter: (node) => node.id !== "flashcardDownloadReportBtn",
@@ -10923,7 +10924,7 @@
                     const closeButton = createElement("button", {
                         className: "close-summary-btn",
                         title: "Close Quick Summary",
-                        innerHTML: `<svg style="width: 15px; height: 15px;" viewBox="6 6 12 12" stroke="currentColor"><path d="M17 17L7 7M17 7L7 17" stroke-width="2" stroke-linecap="round"/></svg>`,
+                        innerHTML: `<svg style="width: 15px; height: 15px;" viewBox="6 6 12 12" stroke="currentColor"><path d="M17 17L7 7M17 7L7 17" stroke-width="1" stroke-linecap="round"/></svg>`,
                         style: `padding: 10px 10px; border: 1px solid rgb(125, 125, 125, 50%); border-radius: 5px; cursor: pointer; display: ${hasSummary ? "flex" : "none"}; opacity: 1; align-items: center; justify-content: center;`
                     });
                     closeButton.addEventListener("click", () => summaryElement.remove());
@@ -12059,7 +12060,7 @@
                     
                     if (pronunciationElem) {
                         const cleanText = pronunciationElem.textContent
-                            .replace(/[\u031E\u0325\u1D5D\u032A\uA71C\u0320\u031F\u031A\u034D\u032F\u0303]/g, "")
+                            .replace(/[\u031E\u0325\u1D5D\u032A\uA71C\u0320\u031F\u031A\u034D\u032F]/g, "")
                             .replace(/[\[\]\/]/g, "")
                             .trim();
                         pronunciationElem.textContent = `[${cleanText}]`;
@@ -12086,7 +12087,7 @@
                             
                             const finishEdit = async () => {
                                 const rawValue = input.value
-                                    .replace(/[\u031E\u0325\u1D5D\u032A\uA71C\u0320\u031F\u031A\u034D\u032F\u0303]/g, "")
+                                    .replace(/[\u031E\u0325\u1D5D\u032A\uA71C\u0320\u031F\u031A\u034D\u032F]/g, "")
                                     .trim();
                                 let newValue = "";
                                 if (rawValue) {
@@ -13136,7 +13137,7 @@
             - Provide IPA for the Base Form (lemma) enclosed in brackets [].
             - Never output language-specific romanization/transliteration systems (e.g., Hepburn Romaji, Pinyin, Revised Romanization, Latin transliteration) enclosed in brackets. IPA is not romanization; you must use actual International Phonetic Alphabet symbols.
             - Use a single, consistent transcription system throughout the whole word. Do not mix broad IPA symbols with romanized/orthographic letters (e.g., Pinyin, Revised Romanization) within the same transcription.
-            - Prefer broad, phonemic transcription over narrow, allophonic transcription. Eliminate narrow phonetic diacritics (e.g., lowering [̞], voiceless [̥], compressed [ᵝ], dental [̪], retracted [̠], advanced [̟], unreleased [̚], spreading [͍], non-syllabic [̯], or nasalized [̃] marks), and avoid substituting a distinct narrow-transcription symbol for a gradient, sub-phonemic co-articulatory detail (e.g., minor degrees of palatalization, uvularization, or aspiration) that is not codified in the standard pronunciation convention of the language.
+            - Prefer broad, phonemic transcription over narrow, allophonic transcription. Eliminate narrow phonetic diacritics (e.g., lowering [̞], voiceless [̥], compressed [ᵝ], dental [̪], retracted [̠], advanced [̟], unreleased [̚], spreading [͍], or non-syllabic [̯] marks), and avoid substituting a distinct narrow-transcription symbol for a gradient, sub-phonemic co-articulatory detail (e.g., minor degrees of palatalization, uvularization, or aspiration) that is not codified in the standard pronunciation convention of the language.
             - Mark suprasegmental features (e.g., stress [ˈ], tone, vowel length [ː], gemination) consistently where phonemically distinctive. However, Do not mark pitch accent (e.g., Japanese downstep [ꜜ]); transcribe broad segmental phonemes and vowel length only.
             - When in doubt, follow the phonemic transcription convention used by Wiktionary or a major academic reference for that language, rather than an ad hoc or narrow phonetic realization.
             - Ensure the output represents the standard, dictionary-style pronunciation, not a precise phonetic realization of one specific utterance.
