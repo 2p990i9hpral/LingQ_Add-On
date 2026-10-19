@@ -408,6 +408,71 @@ CREATE TABLE public.llm_usage_logs (
     created_at timestamptz DEFAULT now()
 );
 CREATE INDEX idx_llm_usage_logs_created_at ON public.llm_usage_logs (created_at DESC);
+
+CREATE OR REPLACE FUNCTION public.get_flashcard_languages()
+RETURNS TABLE (language text)
+LANGUAGE sql
+STABLE
+AS $$
+    SELECT DISTINCT language
+    FROM public.word_data
+    WHERE language IS NOT NULL
+    ORDER BY 1 ASC;
+$$;
+
+CREATE OR REPLACE FUNCTION public.get_flashcard_daily_stats(
+    p_language text,
+    p_tz text DEFAULT 'UTC'
+)
+RETURNS TABLE (
+    date text,
+    count bigint
+)
+LANGUAGE sql
+STABLE
+AS $$
+    SELECT
+        to_char(created_at AT TIME ZONE p_tz, 'YYYY-MM-DD') AS date,
+        COUNT(*) AS count
+    FROM public.word_data
+    WHERE language = p_language
+    GROUP BY 1
+    ORDER BY 1 ASC;
+$$;
+
+CREATE OR REPLACE FUNCTION public.get_llm_usage_daily_stats(
+    p_tz text DEFAULT 'UTC'
+)
+RETURNS TABLE (
+    date text,
+    language text,
+    provider text,
+    model text,
+    is_priority boolean,
+    cached_tokens bigint,
+    input_tokens bigint,
+    reasoning_tokens bigint,
+    output_tokens bigint,
+    request_count bigint
+)
+LANGUAGE sql
+STABLE
+AS $$
+    SELECT
+        to_char(created_at AT TIME ZONE p_tz, 'YYYY-MM-DD') AS date,
+        language,
+        provider,
+        model,
+        COALESCE(is_priority, false) AS is_priority,
+        SUM(COALESCE(cached_tokens, 0)) AS cached_tokens,
+        SUM(COALESCE(input_tokens, 0)) AS input_tokens,
+        SUM(COALESCE(reasoning_tokens, 0)) AS reasoning_tokens,
+        SUM(COALESCE(output_tokens, 0)) AS output_tokens,
+        COUNT(*) AS request_count
+    FROM public.llm_usage_logs
+    GROUP BY 1, 2, 3, 4, 5
+    ORDER BY 1 ASC;
+$$;
 ```
 
 ### Step 3: Copy URL and API Key

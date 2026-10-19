@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      17.5.10
+// @version      17.6.0
 // @license      GPL-3.0-or-later
 // @grant       GM_setValue
 // @grant       GM_getValue
@@ -1456,7 +1456,7 @@
     async function fetchFlashcardsInBatches(language, columns, sortBy) {
         let allData = [];
         let from = 0;
-        let batchSize = 10000;
+        const batchSize = 10000;
         let hasMore = true;
         
         while (hasMore) {
@@ -1469,23 +1469,26 @@
                 query = query.eq("user_id", centralUserId);
             }
             
-            const {data, error} = await query
-                .order(sortBy, {ascending: true})
-                .range(from, from + batchSize - 1);
+            query = query.order(sortBy, {ascending: true});
+            if (sortBy !== "idx") {
+                query = query.order("idx", {ascending: true});
+            }
+            
+            const {data, error} = await query.range(from, from + batchSize - 1);
             
             if (error) {
                 console.error("Batch fetch error:", error);
                 return allData;
             }
             
-            allData = allData.concat(data);
-            
             if (!data || data.length === 0) {
                 hasMore = false;
-            } else if (data.length < batchSize) {
-                hasMore = false;
             } else {
-                from += batchSize;
+                allData = allData.concat(data);
+                from += data.length;
+                if (data.length < 1000) {
+                    hasMore = false;
+                }
             }
         }
         
@@ -6089,20 +6092,24 @@
             let searchKeyword = "";
             
             let flashcardStatsChart = null;
-            let flashcardAllDates = [];
+            let flashcardDailyStats = [];
             
             async function fetchUniqueFlashcardLanguages() {
                 if (!isDbReady()) return [getLessonLanguage() || "en"];
                 try {
-                    let query = getDbClient()
-                        .from(getTableName())
-                        .select("language");
+                    const rpcName = settings.useCentralDb ? "get_flashcard_languages_central" : "get_flashcard_languages";
+                    let {data, error} = await getDbClient().rpc(rpcName);
                     
-                    if (settings.useCentralDb && centralUserId) {
-                        query = query.eq("user_id", centralUserId);
+                    if (error) {
+                        let fallbackQuery = getDbClient()
+                            .from(getTableName())
+                            .select("language");
+                        if (settings.useCentralDb && centralUserId) {
+                            fallbackQuery = fallbackQuery.eq("user_id", centralUserId);
+                        }
+                        ({data, error} = await fallbackQuery);
                     }
                     
-                    const {data, error} = await query;
                     if (error) {
                         console.error("Failed to fetch flashcard languages:", error);
                         return [getLessonLanguage() || "en"];
@@ -6249,6 +6256,10 @@
                     .select("idx, word, pronunciation, meaning, explanation", {count: "exact"})
                     .eq("language", targetLanguage);
                 
+                if (settings.useCentralDb && centralUserId) {
+                    queryBase = queryBase.eq("user_id", centralUserId);
+                }
+                
                 if (searchKeyword) {
                     const isNumber = /^\d+$/.test(searchKeyword);
                     const textColumns = ["word", "meaning"];
@@ -6322,6 +6333,7 @@
                                 loadFlashcardPage(currentPage);
                             } else {
                                 drawPagination(currentPage, filteredCount);
+                                loadFlashcardStats();
                             }
                         }
                     });
@@ -6438,14 +6450,17 @@
                 drawPagination(page, filteredCount);
                 
                 if (!totalCount) {
-                    getDbClient()
+                    let countQuery = getDbClient()
                         .from(getTableName())
                         .select("*", {count: "exact", head: true})
-                        .eq("language", targetLanguage)
-                        .then(({count}) => {
-                            totalCount = count || 0;
-                            countLabel.textContent = `Flashcards: ${totalCount}`;
-                        });
+                        .eq("language", targetLanguage);
+                    if (settings.useCentralDb && centralUserId) {
+                        countQuery = countQuery.eq("user_id", centralUserId);
+                    }
+                    countQuery.then(({count}) => {
+                        totalCount = count || 0;
+                        countLabel.textContent = `Flashcards: ${totalCount}`;
+                    });
                 }
                 
                 await loadFlashcardStats();
@@ -6551,6 +6566,34 @@
                 });
             }
             
+            async function fetchFlashcardDailyStats(language) {
+                if (!isDbReady()) return [];
+                const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+                const rpcName = settings.useCentralDb ? "get_flashcard_daily_stats_central" : "get_flashcard_daily_stats";
+                
+                const {data, error} = await getDbClient().rpc(rpcName, {
+                    p_language: language,
+                    p_tz: timeZone
+                });
+                
+                if (!error && data) return data;
+                
+                const rawDates = await fetchFlashcardsInBatches(language, "created_at", "created_at");
+                const countsMap = new Map();
+                rawDates.forEach(({created_at}) => {
+                    const d = new Date(created_at);
+                    const year = d.getFullYear();
+                    const month = String(d.getMonth() + 1).padStart(2, "0");
+                    const day = String(d.getDate()).padStart(2, "0");
+                    const dateKey = `${year}-${month}-${day}`;
+                    countsMap.set(dateKey, (countsMap.get(dateKey) || 0) + 1);
+                });
+                
+                return Array.from(countsMap.entries())
+                    .sort((a, b) => a[0].localeCompare(b[0]))
+                    .map(([date, count]) => ({date, count}));
+            }
+            
             async function loadFlashcardStats() {
                 function getLocalDateKey(date) {
                     const year = date.getFullYear();
@@ -6559,9 +6602,13 @@
                     return `${year}-${month}-${day}`;
                 }
                 
-                function getWeekStartKey(date) {
-                    const d = new Date(date);
-                    d.setHours(0, 0, 0, 0);
+                function parseDateKeyToLocal(dateKey) {
+                    const [y, m, d] = dateKey.split("-").map(Number);
+                    return new Date(y, m - 1, d);
+                }
+                
+                function getWeekStartKey(dateKey) {
+                    const d = parseDateKeyToLocal(dateKey);
                     d.setDate(d.getDate() - d.getDay());
                     return getLocalDateKey(d);
                 }
@@ -6611,14 +6658,13 @@
                             });
                         }
                     } else {
-                        const firstDate = new Date(flashcardAllDates[0]?.created_at || 0);
-                        const lastDate = new Date(flashcardAllDates[flashcardAllDates.length - 1]?.created_at || 0);
+                        const firstDate = flashcardDailyStats.length ? parseDateKeyToLocal(flashcardDailyStats[0].date) : new Date(0);
+                        const lastDate = flashcardDailyStats.length ? parseDateKeyToLocal(flashcardDailyStats[flashcardDailyStats.length - 1].date) : new Date(0);
                         const useMonthly = Math.ceil((lastDate - firstDate) / (7 * 24 * 60 * 60 * 1000)) > 52 * 2;
                         periodicLabel = useMonthly ? "Monthly" : "Weekly";
                         
-                        const distinctKeys = [...new Set(flashcardAllDates.map(e => {
-                            const d = new Date(e.created_at);
-                            return useMonthly ? getLocalDateKey(d).slice(0, 7) : getWeekStartKey(d);
+                        const distinctKeys = [...new Set(flashcardDailyStats.map(e => {
+                            return useMonthly ? e.date.slice(0, 7) : getWeekStartKey(e.date);
                         }))].sort();
                         
                         distinctKeys.forEach(key => buckets.push({
@@ -6630,16 +6676,15 @@
                     
                     const bucketMap = new Map(buckets.map(b => [b.key, b]));
                     
-                    flashcardAllDates.forEach(({created_at}) => {
-                        const d = new Date(created_at);
+                    flashcardDailyStats.forEach(({date, count}) => {
                         const matchKey = (selectedPeriod === "year" || (selectedPeriod === "all" && periodicLabel === "Monthly"))
-                            ? getLocalDateKey(d).slice(0, 7)
+                            ? date.slice(0, 7)
                             : (selectedPeriod === "all" && periodicLabel === "Weekly")
-                                ? getWeekStartKey(d)
-                                : getLocalDateKey(d);
+                                ? getWeekStartKey(date)
+                                : date;
                         
                         const bucket = bucketMap.get(matchKey);
-                        if (bucket) bucket.count++;
+                        if (bucket) bucket.count += count;
                     });
                     
                     const labels = buckets.map(b => b.label);
@@ -6658,8 +6703,8 @@
                     drawFlashcardStatsChart(labels, periodicData, cumulativeData, selectedPeriod, periodicLabel);
                 }
                 
-                flashcardAllDates = await fetchFlashcardsInBatches(targetLanguage, "created_at", "created_at");
-                if (!flashcardAllDates.length) {
+                flashcardDailyStats = await fetchFlashcardDailyStats(targetLanguage);
+                if (!flashcardDailyStats.length) {
                     if (flashcardStatsChart) {
                         flashcardStatsChart.data.labels = [];
                         flashcardStatsChart.data.datasets[0].data = [];
@@ -7208,11 +7253,20 @@
                 return `${year}-${month}-${day}`;
             }
             
-            function getWeekStartKey(date) {
-                const d = new Date(date);
-                d.setHours(0, 0, 0, 0);
+            function parseDateKeyToLocal(dateKey) {
+                const [y, m, d] = dateKey.split("-").map(Number);
+                return new Date(y, m - 1, d);
+            }
+            
+            function getEntryDateKey(entry) {
+                if (entry.date) return entry.date;
+                return getLocalDateKey(new Date(entry.timestamp));
+            }
+            
+            function getWeekStartKeyFromDateKey(dateKey) {
+                const d = parseDateKeyToLocal(dateKey);
                 d.setDate(d.getDate() - d.getDay());
-                return d.toISOString().slice(0, 10);
+                return getLocalDateKey(d);
             }
             
             function buildLLMUsageChartData(history, selectedPeriod, selectedMode = "cost") {
@@ -7263,14 +7317,14 @@
                         });
                     }
                 } else {
-                    const firstDate = new Date(history[0]?.timestamp || 0);
-                    const lastDate = new Date(history[history.length - 1]?.timestamp || 0);
+                    const firstDate = history.length ? parseDateKeyToLocal(getEntryDateKey(history[0])) : new Date(0);
+                    const lastDate = history.length ? parseDateKeyToLocal(getEntryDateKey(history[history.length - 1])) : new Date(0);
                     const useMonthly = Math.ceil((lastDate - firstDate) / (7 * 24 * 60 * 60 * 1000)) > 52 * 2;
                     periodicLabel = useMonthly ? "Monthly" : "Weekly";
                     
                     const distinctKeys = [...new Set(history.map(e => {
-                        const d = new Date(e.timestamp);
-                        return useMonthly ? getLocalDateKey(d).slice(0, 7) : getWeekStartKey(d);
+                        const dateKey = getEntryDateKey(e);
+                        return useMonthly ? dateKey.slice(0, 7) : getWeekStartKeyFromDateKey(dateKey);
                     }))].sort();
                     
                     distinctKeys.forEach(key => buckets.push({
@@ -7285,16 +7339,17 @@
                 const bucketMap = new Map(buckets.map(b => [b.key, b]));
                 
                 history.forEach(entry => {
-                    const entryDate = new Date(entry.timestamp);
+                    const dateKey = getEntryDateKey(entry);
                     const matchKey = (selectedPeriod === "year" || (selectedPeriod === "all" && periodicLabel === "Monthly"))
-                        ? getLocalDateKey(entryDate).slice(0, 7)
+                        ? dateKey.slice(0, 7)
                         : (selectedPeriod === "all" && periodicLabel === "Weekly")
-                            ? getWeekStartKey(entryDate)
-                            : getLocalDateKey(entryDate);
+                            ? getWeekStartKeyFromDateKey(dateKey)
+                            : dateKey;
                     
                     const bucket = bucketMap.get(matchKey);
                     if (bucket) {
-                        bucket.requestCount = (bucket.requestCount || 0) + 1;
+                        const count = entry.requestCount ?? 1;
+                        bucket.requestCount = (bucket.requestCount || 0) + count;
                         const items = calculateEntryMetrics(entry, selectedMode);
                         items.forEach(({key, value}) => {
                             bucket.values[key] = (bucket.values[key] || 0) + value;
@@ -7512,37 +7567,64 @@
                 });
             }
             
+            function mapDbRowToLLMUsageEntry(row) {
+                return {
+                    idx: row.idx,
+                    timestamp: new Date(row.created_at).getTime(),
+                    language: row.language,
+                    provider: row.provider,
+                    model: row.model,
+                    tokens: {
+                        cached: row.cached_tokens || 0,
+                        input: row.input_tokens || 0,
+                        reasoning: row.reasoning_tokens || 0,
+                        output: row.output_tokens || 0
+                    },
+                    isPriority: Boolean(row.is_priority)
+                };
+            }
+            
+            async function fetchLLMUsageLogsInBatches() {
+                let allData = [];
+                let from = 0;
+                const batchSize = 10000;
+                let hasMore = true;
+                
+                while (hasMore) {
+                    let query = getDbClient()
+                        .from(getLLMUsageTableName())
+                        .select("*")
+                        .order("created_at", {ascending: true})
+                        .order("idx", {ascending: true});
+                    
+                    if (settings.useCentralDb) {
+                        query = query.eq("user_id", centralUserId);
+                    }
+                    
+                    const {data, error} = await query.range(from, from + batchSize - 1);
+                    if (error) {
+                        console.error("Failed to fetch LLM usage logs in batches:", error);
+                        break;
+                    }
+                    
+                    if (!data || data.length === 0) {
+                        hasMore = false;
+                    } else {
+                        allData = allData.concat(data);
+                        from += data.length;
+                        if (data.length < 1000) {
+                            hasMore = false;
+                        }
+                    }
+                }
+                
+                return allData.map(mapDbRowToLLMUsageEntry);
+            }
+            
             async function fetchLLMUsageLogs() {
                 if (isDbReady()) {
                     try {
-                        let query = getDbClient()
-                            .from(getLLMUsageTableName())
-                            .select("*")
-                            .order("created_at", {ascending: true});
-                        
-                        if (settings.useCentralDb) {
-                            query = query.eq("user_id", centralUserId);
-                        }
-                        
-                        const {data, error} = await query;
-                        if (error) {
-                            console.error("Failed to fetch LLM usage logs from DB:", error);
-                        } else if (data) {
-                            return data.map(row => ({
-                                idx: row.idx,
-                                timestamp: new Date(row.created_at).getTime(),
-                                language: row.language,
-                                provider: row.provider,
-                                model: row.model,
-                                tokens: {
-                                    cached: row.cached_tokens || 0,
-                                    input: row.input_tokens || 0,
-                                    reasoning: row.reasoning_tokens || 0,
-                                    output: row.output_tokens || 0
-                                },
-                                isPriority: Boolean(row.is_priority)
-                            }));
-                        }
+                        return await fetchLLMUsageLogsInBatches();
                     } catch (err) {
                         console.error("DB query exception:", err);
                     }
@@ -7552,10 +7634,74 @@
                 return rawData ? JSON.parse(rawData) : [];
             }
             
+            async function fetchLLMUsageDailyStats() {
+                if (isDbReady()) {
+                    const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+                    const rpcName = settings.useCentralDb ? "get_llm_usage_daily_stats_central" : "get_llm_usage_daily_stats";
+                    
+                    const {data, error} = await getDbClient().rpc(rpcName, {
+                        p_tz: timeZone
+                    });
+                    
+                    if (!error && data) {
+                        return data.map(row => ({
+                            date: row.date,
+                            language: row.language,
+                            provider: row.provider,
+                            model: row.model,
+                            tokens: {
+                                cached: row.cached_tokens,
+                                input: row.input_tokens,
+                                reasoning: row.reasoning_tokens,
+                                output: row.output_tokens
+                            },
+                            isPriority: row.is_priority,
+                            requestCount: row.request_count
+                        }));
+                    }
+                }
+                
+                return await fetchLLMUsageLogs();
+            }
+            
+            async function fetchRecentLLMUsageLogs(selectedLang = "all", limitCount = 100) {
+                if (isDbReady()) {
+                    try {
+                        let query = getDbClient()
+                            .from(getLLMUsageTableName())
+                            .select("*")
+                            .order("created_at", {ascending: false})
+                            .order("idx", {ascending: false})
+                            .limit(limitCount);
+                        
+                        if (settings.useCentralDb) {
+                            query = query.eq("user_id", centralUserId);
+                        }
+                        if (selectedLang && selectedLang !== "all") {
+                            query = query.eq("language", selectedLang);
+                        }
+                        
+                        const {data, error} = await query;
+                        if (error) {
+                            console.error("Failed to fetch recent LLM usage logs:", error);
+                        } else if (data) {
+                            return data.map(mapDbRowToLLMUsageEntry);
+                        }
+                    } catch (err) {
+                        console.error("Recent LLM logs DB query exception:", err);
+                    }
+                }
+                
+                const rawData = localStorage.getItem("lingq_llm_usage_history");
+                const allLocal = rawData ? JSON.parse(rawData) : [];
+                const filtered = selectedLang === "all" ? allLocal : allLocal.filter(e => e.language === selectedLang);
+                return filtered.slice(-limitCount).reverse();
+            }
+            
             let currentLLMUsageHistory = [];
             
             async function loadLLMUsageStats() {
-                currentLLMUsageHistory = await fetchLLMUsageLogs();
+                currentLLMUsageHistory = await fetchLLMUsageDailyStats();
                 
                 const languageSelector = document.getElementById("llmUsageLanguageSelector");
                 const currentSelectedLang = languageSelector?.value || "all";
@@ -7589,7 +7735,9 @@
                     
                     let totalCost = 0;
                     let totalTokens = 0;
+                    let totalRequests = 0;
                     history.forEach(entry => {
+                        totalRequests += (entry.requestCount ?? 1);
                         const costItems = calculateEntryMetrics(entry, "cost");
                         costItems.forEach(({value}) => {
                             totalCost += value;
@@ -7603,9 +7751,9 @@
                     const summaryEl = document.getElementById("llmUsageTotalSummary");
                     if (summaryEl) {
                         if (mode === "tokens") {
-                            summaryEl.textContent = `Total: ${Math.round(totalTokens).toLocaleString()} tokens (${history.length} requests)`;
+                            summaryEl.textContent = `Total: ${Math.round(totalTokens).toLocaleString()} tokens (${totalRequests.toLocaleString()} requests)`;
                         } else {
-                            summaryEl.textContent = `Total: $${totalCost.toFixed(4)} (${history.length} requests)`;
+                            summaryEl.textContent = `Total: $${totalCost.toFixed(4)} (${totalRequests.toLocaleString()} requests)`;
                         }
                     }
                     
@@ -7619,14 +7767,14 @@
                     drawLLMUsageStatsChart(labels, barDatasets, cumulativeDataset, period, periodicLabel, mode, requestCounts);
                 }
                 
-                function renderRecentLLMUsageLogs() {
+                async function renderRecentLLMUsageLogs() {
                     const recentLogsContainer = document.getElementById("llmUsageRecentLogsContainer");
                     if (!recentLogsContainer) return;
                     
                     const RECENT_LOGS_LIMIT = 100;
+                    const selectedLang = languageSelector?.value || "all";
+                    const recentLogs = await fetchRecentLLMUsageLogs(selectedLang, RECENT_LOGS_LIMIT);
                     recentLogsContainer.innerHTML = "";
-                    const filtered = getFilteredHistory();
-                    const recentLogs = filtered.slice(-RECENT_LOGS_LIMIT).reverse();
                     
                     if (recentLogs.length === 0) {
                         const emptyMessage = createElement("div", {className: "llm-usage-log-empty"}, "No usage logs recorded.");
@@ -7708,7 +7856,7 @@
                                 console.error("Failed to update localStorage after log deletion:", err);
                             }
                             
-                            currentLLMUsageHistory = currentLLMUsageHistory.filter((item) => item !== entry);
+                            currentLLMUsageHistory = await fetchLLMUsageDailyStats();
                             
                             const activePeriod = container.querySelector(".llm-usage-period-tabs .btn-ghost.active")?.dataset.period || "week";
                             const activeMode = container.querySelector(".llm-usage-mode-tabs .btn-ghost.active")?.dataset.mode || "cost";
@@ -7784,7 +7932,7 @@
                 const activePeriod = container.querySelector(".llm-usage-period-tabs .btn-ghost.active")?.dataset.period || "week";
                 const activeMode = container.querySelector(".llm-usage-mode-tabs .btn-ghost.active")?.dataset.mode || "cost";
                 updateSummaryAndChart(activePeriod, activeMode);
-                renderRecentLLMUsageLogs();
+                await renderRecentLLMUsageLogs();
             }
             
             const usageButtons = [
