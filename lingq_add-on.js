@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      17.6.1
+// @version      17.7.0
 // @license      GPL-3.0-or-later
 // @grant       GM_setValue
 // @grant       GM_getValue
@@ -12092,6 +12092,93 @@
                     badge.dataset.display = count > 9 ? "9+" : String(count);
                 }
                 
+                function syncWordCardToChatHistory(botMessageDiv) {
+                    const messageId = botMessageDiv?.dataset?.messageId;
+                    if (!messageId) return;
+                    
+                    const cardClone = botMessageDiv.cloneNode(true);
+                    cardClone.querySelectorAll(".thought-process, details, .message-button-container, .flashcard-count-badge").forEach((el) => el.remove());
+                    const cardHtml = `<div class="word-card">\n${cardClone.innerHTML.trim()}\n</div>`;
+                    
+                    let updatedContent = cardHtml;
+                    if (botMessageDiv.relatedPrefaceNode) {
+                        const prefaceClone = botMessageDiv.relatedPrefaceNode.cloneNode(true);
+                        prefaceClone.querySelectorAll(".thought-process, details").forEach((el) => el.remove());
+                        const prefaceHtml = prefaceClone.innerHTML.trim();
+                        if (prefaceHtml) {
+                            updatedContent = `${prefaceHtml}\n${cardHtml}`;
+                        }
+                    }
+                    
+                    chatHistory = chatHistory.map((item) =>
+                        item.id === messageId ? {...item, content: updatedContent} : item
+                    );
+                }
+                
+                function setupUserMessageEdit(userMessageDiv, userMessageId, userButtonContainer) {
+                    userMessageDiv.addEventListener("click", (e) => {
+                        if (!e.ctrlKey && !e.metaKey) return;
+                        if (e.target.closest(".message-button-container, textarea")) return;
+                        
+                        const historyItem = chatHistory.find((item) => item.id === userMessageId);
+                        const currentText = historyItem ? historyItem.content : userMessageDiv.textContent.trim();
+                        const currentHeight = Math.max(userMessageDiv.offsetHeight, 24);
+                        
+                        const textarea = createElement("textarea", {
+                            className: "card-edit-textarea",
+                            value: currentText,
+                            style: {
+                                height: `${currentHeight}px`
+                            }
+                        });
+                        
+                        userMessageDiv.innerHTML = "";
+                        userMessageDiv.appendChild(textarea);
+                        textarea.focus();
+                        
+                        textarea.addEventListener("click", (event) => {
+                            event.stopPropagation();
+                        });
+                        
+                        let isFinished = false;
+                        const restoreView = (textToRender) => {
+                            userMessageDiv.innerHTML = convertMarkdownToHTML(textToRender);
+                            userMessageDiv.appendChild(userButtonContainer);
+                        };
+                        
+                        const finishEdit = () => {
+                            if (isFinished) return;
+                            isFinished = true;
+                            
+                            const newValue = textarea.value.trim();
+                            if (!newValue || newValue === currentText) {
+                                restoreView(currentText);
+                                return;
+                            }
+                            
+                            restoreView(newValue);
+                            chatHistory = chatHistory.map((item) =>
+                                item.id === userMessageId ? {...item, content: newValue} : item
+                            );
+                        };
+                        
+                        textarea.addEventListener("keydown", (event) => {
+                            if (event.isComposing || event.keyCode === 229) return;
+                            if (event.key === "Enter" && !event.shiftKey) {
+                                event.preventDefault();
+                                textarea.blur();
+                            } else if (event.key === "Escape") {
+                                isFinished = true;
+                                restoreView(currentText);
+                            }
+                        });
+                        
+                        textarea.addEventListener("blur", () => {
+                            finishEdit();
+                        });
+                    });
+                }
+                
                 function setupBlockEditableField(element, fieldName, fieldLabel, botMessageDiv) {
                     if (!element) return;
                     
@@ -12129,6 +12216,8 @@
                             
                             if (newValue === currentText) return;
                             
+                            syncWordCardToChatHistory(botMessageDiv);
+                            
                             const storedIdx = botMessageDiv.dataset.wordIdx;
                             if (!storedIdx) return;
                             
@@ -12163,7 +12252,12 @@
                 }
                 
                 const PRONUNCIATION_REPLACEMENTS = {
-                    ja: {"g": "ɡ", "ʲ": "j", "dʑ": "d͡ʑ", "ʲi": "i", "tɕ": "t͡ɕ", "y": "j", "ɛ": "e", "u": "ɯ", "-": "", "r": "ɾ", "ʃ": "ɕ", "ɪ": "i", "ō": "oː", "ɰ": "w", "ts": "t͡s", "dz": "d͡z", "ʦ": "t͡s", "β": "b", "ẽ": "e", "ū": "ɯː", "ˈ": "", "'": "", "dʒ": "d͡ʑ", "ʧ": "t͡ɕ", "l": "ɾ", "ĩ": "i", "f": "ɸ", "ʊ": "ɯ", "õ": "o", "ã": "a", "ˌ": "", "d͡ʒ": "d͡ʑ", "ʨ": "t͡ɕ"}
+                    ja: {
+                        "u": "ɯ", "ʊ": "ɯ", "ɛ": "e", "ɪ": "i", "ō": "oː", "ū": "ɯː", "ã": "a", "ĩ": "i", "ẽ": "e", "õ": "o",
+                        "ʲi": "i", "ʲ": "j", "tɕ": "t͡ɕ", "ʧ": "t͡ɕ", "ʨ": "t͡ɕ", "dʑ": "d͡ʑ", "d͡ʒ": "d͡ʑ", "dʒ": "d͡ʑ", "ts": "t͡s", "ʦ": "t͡s", "dz": "d͡z", "ʃ": "ɕ",
+                        "g": "ɡ", "r": "ɾ", "l": "ɾ", "y": "j", "f": "ɸ", "β": "b", "ɰ": "w",
+                        "-": "", "ˈ": "", "ˌ": "", "'": ""
+                    }
                 };
                 
                 function preprocessPronunciation(rawText, lang) {
@@ -12272,6 +12366,8 @@
                                 
                                 if (newValue === currentText) return;
                                 
+                                syncWordCardToChatHistory(botMessageDiv);
+                                
                                 const storedIdx = botMessageDiv.dataset.wordIdx;
                                 if (!storedIdx) return;
                                 
@@ -12348,7 +12444,10 @@
                                         .catch(() => showToast("Failed to copy meaning.", false));
                                     
                                     const storedIdx = botMessageDiv.dataset.wordIdx;
-                                    if (!storedIdx) return;
+                                    if (!storedIdx) {
+                                        syncWordCardToChatHistory(botMessageDiv);
+                                        return;
+                                    }
                                     
                                     const {data: existing} = await getDbClient()
                                         .from(getTableName())
@@ -12362,6 +12461,8 @@
                                         showToast("Same Flashcard Already Exists", false);
                                         return;
                                     }
+                                    
+                                    syncWordCardToChatHistory(botMessageDiv);
                                     
                                     const {error: updateError} = await getDbClient()
                                         .from(getTableName())
@@ -12870,6 +12971,7 @@
                             }
                             
                             const botMessageId = generateUniqueId();
+                            botMessageDiv.dataset.messageId = botMessageId;
                             chatHistory = updateChatHistoryState(chatHistory, cleanedContent, "assistant", botMessageId);
                             sendButton.disabled = false;
                             if (focus) userInput.focus();
@@ -13012,6 +13114,7 @@
                     const userButtonContainer = createElement("div", {className: "message-button-container"});
                     userButtonContainer.appendChild(createDeleteButton(userMessageDiv, userMessageId));
                     userMessageDiv.appendChild(userButtonContainer);
+                    setupUserMessageEdit(userMessageDiv, userMessageId, userButtonContainer);
                     
                     const botMessageDiv = addMessageToUI("", "bot-message", chatContainer, false);
                     await callStreamOpenAI(botMessageDiv, chatContainer, true,
