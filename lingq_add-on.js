@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      17.7.1
+// @version      17.8.0
 // @license      GPL-3.0-or-later
 // @grant       GM_setValue
 // @grant       GM_getValue
@@ -63,6 +63,7 @@
         autoFinishing: false,
         focusPlayingSentence: false,
         focusSelectedText: false,
+        showAnnotationOnHover: false,
         showTranslation: false,
         usePageMode: {},
         skipEndPage: false,
@@ -4159,6 +4160,7 @@
             addCheckbox(container1, "showMemoWidgetCheckbox", "Show Memo Widget", settings.showMemoWidget);
             addCheckbox(container1, "skipEndPageCheckbox", "Skip End Page", settings.skipEndPage);
             addCheckbox(container1, "autoFinishingCheckbox", "Finish Lesson Automatically", settings.autoFinishing);
+            addCheckbox(container1, "showAnnotationOnHoverCheckbox", "Show Annotation on Hover Only", settings.showAnnotationOnHover);
             addCheckbox(container1, "showTranslationCheckbox", "Show Translation Automatically", settings.showTranslation);
             
             columns.appendChild(container1);
@@ -5287,6 +5289,11 @@
                 settings.focusSelectedText = event.target.checked
             });
             
+            const showAnnotationOnHoverCheckbox = document.getElementById("showAnnotationOnHoverCheckbox");
+            showAnnotationOnHoverCheckbox.addEventListener('change', (event) => {
+                settings.showAnnotationOnHover = event.target.checked;
+            });
+            
             const showTranslationCheckbox = document.getElementById("showTranslationCheckbox");
             showTranslationCheckbox.addEventListener('change', (event) => {
                 settings.showTranslation = event.target.checked
@@ -5705,6 +5712,7 @@
                 document.getElementById("autoFinishingCheckbox").checked = defaults.autoFinishing;
                 document.getElementById("focusPlayingSentenceCheckbox").checked = defaults.focusPlayingSentence;
                 document.getElementById("focusSelectedTextCheckbox").checked = defaults.focusSelectedText;
+                document.getElementById("showAnnotationOnHoverCheckbox").checked = defaults.showAnnotationOnHover;
                 document.getElementById("showTranslationCheckbox").checked = defaults.showTranslation;
                 document.getElementById("usePageModeCheckbox").checked = languageScopedDefaults.usePageMode;
                 document.getElementById("skipEndPageCheckbox").checked = defaults.skipEndPage;
@@ -9010,6 +9018,13 @@
                 });
             }
             
+            const showAnnotationOnHoverCheckbox = document.getElementById("showAnnotationOnHoverCheckbox");
+            if (showAnnotationOnHoverCheckbox) {
+                showAnnotationOnHoverCheckbox.addEventListener('change', () => {
+                    applyStyles();
+                });
+            }
+            
             document.querySelectorAll('input[name="colorMode"]').forEach((radio) => {
                 radio.addEventListener("change", applyStyles);
             });
@@ -9058,7 +9073,15 @@
                     font-family: var(--custom-font, inherit) !important;
                     font-size: var(--annotation-size) !important;
                     font-weight: bold !important;
+                    ${settings.showAnnotationOnHover ? "visibility: hidden !important;" : ""}
                 }
+
+                ${settings.showAnnotationOnHover ? `
+                ruby:hover rt,
+                .sentence-item:hover rt {
+                    visibility: visible !important;
+                }
+                ` : ""}
 
                 .reader-container p span.sentence-item,
                 .reader-container p .sentence {
