@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      17.8.1
+// @version      17.8.2
 // @license      GPL-3.0-or-later
 // @grant       GM_setValue
 // @grant       GM_getValue
@@ -9081,12 +9081,11 @@
                 }
 
                 ${settings.hoverAnnotation === "reader" ? `
-                .reader-container section rt,
-                .sentence-item rt {
+                .reader-container > p rt {
                     visibility: hidden !important;
                 }
-                .reader-container section ruby:hover rt,
-                .sentence-item:hover rt {
+                .reader-container > p ruby:hover rt,
+                .reader-container > p .sentence-item:hover rt {
                     visibility: visible !important;
                 }
                 ` : settings.hoverAnnotation === "all" ? `
