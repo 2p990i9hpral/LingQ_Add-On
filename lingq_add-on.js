@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      17.8.0
+// @version      17.8.1
 // @license      GPL-3.0-or-later
 // @grant       GM_setValue
 // @grant       GM_getValue
@@ -63,7 +63,7 @@
         autoFinishing: false,
         focusPlayingSentence: false,
         focusSelectedText: false,
-        showAnnotationOnHover: false,
+        hoverAnnotation: "off",
         showTranslation: false,
         usePageMode: {},
         skipEndPage: false,
@@ -4087,6 +4087,11 @@
             
             addSlider(container1, "fontSizeSlider", "Font Size:", "fontSizeValue", settings.fontSize[language], "rem", 0.8, 1.8, 0.05);
             addSlider(container1, "annotationScaleSlider", "Annotation Size:", "annotationScaleValue", settings.annotationScale[language], "%", 40, 80, 5);
+            addRadioGroup(container1, "hoverAnnotation", "Hover Annotation:", [
+                {value: "off", text: "Off"},
+                {value: "reader", text: "Reader"},
+                {value: "all", text: "All"}
+            ], settings.hoverAnnotation);
             addSlider(container1, "lineHeightSlider", "Line Height:", "lineHeightValue", settings.lineHeight[language], "", 1.2, 3.0, 0.05);
             
             const customFontContainer = createElement("div", {className: "popup-row"});
@@ -4160,7 +4165,6 @@
             addCheckbox(container1, "showMemoWidgetCheckbox", "Show Memo Widget", settings.showMemoWidget);
             addCheckbox(container1, "skipEndPageCheckbox", "Skip End Page", settings.skipEndPage);
             addCheckbox(container1, "autoFinishingCheckbox", "Finish Lesson Automatically", settings.autoFinishing);
-            addCheckbox(container1, "showAnnotationOnHoverCheckbox", "Show Annotation on Hover Only", settings.showAnnotationOnHover);
             addCheckbox(container1, "showTranslationCheckbox", "Show Translation Automatically", settings.showTranslation);
             
             columns.appendChild(container1);
@@ -5289,9 +5293,10 @@
                 settings.focusSelectedText = event.target.checked
             });
             
-            const showAnnotationOnHoverCheckbox = document.getElementById("showAnnotationOnHoverCheckbox");
-            showAnnotationOnHoverCheckbox.addEventListener('change', (event) => {
-                settings.showAnnotationOnHover = event.target.checked;
+            document.querySelectorAll('input[name="hoverAnnotation"]').forEach((radio) => {
+                radio.addEventListener("change", (event) => {
+                    settings.hoverAnnotation = event.currentTarget.value;
+                });
             });
             
             const showTranslationCheckbox = document.getElementById("showTranslationCheckbox");
@@ -5712,7 +5717,9 @@
                 document.getElementById("autoFinishingCheckbox").checked = defaults.autoFinishing;
                 document.getElementById("focusPlayingSentenceCheckbox").checked = defaults.focusPlayingSentence;
                 document.getElementById("focusSelectedTextCheckbox").checked = defaults.focusSelectedText;
-                document.getElementById("showAnnotationOnHoverCheckbox").checked = defaults.showAnnotationOnHover;
+                document.querySelectorAll('input[name="hoverAnnotation"]').forEach((radio) => {
+                    radio.checked = radio.value === defaults.hoverAnnotation;
+                });
                 document.getElementById("showTranslationCheckbox").checked = defaults.showTranslation;
                 document.getElementById("usePageModeCheckbox").checked = languageScopedDefaults.usePageMode;
                 document.getElementById("skipEndPageCheckbox").checked = defaults.skipEndPage;
@@ -9018,12 +9025,9 @@
                 });
             }
             
-            const showAnnotationOnHoverCheckbox = document.getElementById("showAnnotationOnHoverCheckbox");
-            if (showAnnotationOnHoverCheckbox) {
-                showAnnotationOnHoverCheckbox.addEventListener('change', () => {
-                    applyStyles();
-                });
-            }
+            document.querySelectorAll('input[name="hoverAnnotation"]').forEach((radio) => {
+                radio.addEventListener("change", applyStyles);
+            });
             
             document.querySelectorAll('input[name="colorMode"]').forEach((radio) => {
                 radio.addEventListener("change", applyStyles);
@@ -9073,10 +9077,19 @@
                     font-family: var(--custom-font, inherit) !important;
                     font-size: var(--annotation-size) !important;
                     font-weight: bold !important;
-                    ${settings.showAnnotationOnHover ? "visibility: hidden !important;" : ""}
+                    ${settings.hoverAnnotation === "all" ? "visibility: hidden !important;" : ""}
                 }
 
-                ${settings.showAnnotationOnHover ? `
+                ${settings.hoverAnnotation === "reader" ? `
+                .reader-container section rt,
+                .sentence-item rt {
+                    visibility: hidden !important;
+                }
+                .reader-container section ruby:hover rt,
+                .sentence-item:hover rt {
+                    visibility: visible !important;
+                }
+                ` : settings.hoverAnnotation === "all" ? `
                 ruby:hover rt,
                 .sentence-item:hover rt {
                     visibility: visible !important;
@@ -12174,18 +12187,20 @@
                         
                         const historyItem = chatHistory.find((item) => item.id === userMessageId);
                         const currentText = historyItem ? historyItem.content : userMessageDiv.textContent.trim();
-                        const currentHeight = userMessageDiv.offsetHeight;
                         
                         const textarea = createElement("textarea", {
                             className: "card-edit-textarea",
                             value: currentText,
+                            rows: 1,
                             style: {
-                                height: `${currentHeight}px`
+                                height: "auto"
                             }
                         });
                         
+                        const editWrapper = createElement("p", {}, textarea);
                         userMessageDiv.innerHTML = "";
-                        userMessageDiv.appendChild(textarea);
+                        userMessageDiv.append(editWrapper, userButtonContainer);
+                        textarea.style.height = `${textarea.scrollHeight}px`;
                         textarea.focus();
                         
                         textarea.addEventListener("click", (event) => {
