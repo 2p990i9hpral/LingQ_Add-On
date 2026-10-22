@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      17.7.0
+// @version      17.7.1
 // @license      GPL-3.0-or-later
 // @grant       GM_setValue
 // @grant       GM_getValue
@@ -981,10 +981,12 @@
     
     function debounce(func, wait = 100) {
         let timeout;
-        return (...args) => {
+        const debounced = (...args) => {
             clearTimeout(timeout);
             timeout = setTimeout(() => func.apply(this, args), wait);
         };
+        debounced.cancel = () => clearTimeout(timeout);
+        return debounced;
     }
     
     async function extractResponseErrorData(res) {
@@ -6202,6 +6204,7 @@
                     searchKeyword = "";
                     if (searchInput) searchInput.value = "";
                     loadFlashcardPage(1);
+                    loadFlashcardStats();
                     populateFlashcardAnkiDecks();
                     const statusEl = document.getElementById("flashcardAnkiStatus");
                     if (statusEl) {
@@ -6333,8 +6336,8 @@
                                 loadFlashcardPage(currentPage);
                             } else {
                                 drawPagination(currentPage, filteredCount);
-                                loadFlashcardStats();
                             }
+                            loadFlashcardStats();
                         }
                     });
                     
@@ -6450,20 +6453,23 @@
                 drawPagination(page, filteredCount);
                 
                 if (!totalCount) {
-                    let countQuery = getDbClient()
-                        .from(getTableName())
-                        .select("*", {count: "exact", head: true})
-                        .eq("language", targetLanguage);
-                    if (settings.useCentralDb && centralUserId) {
-                        countQuery = countQuery.eq("user_id", centralUserId);
-                    }
-                    countQuery.then(({count}) => {
-                        totalCount = count || 0;
+                    if (!searchKeyword) {
+                        totalCount = filteredCount;
                         countLabel.textContent = `Flashcards: ${totalCount}`;
-                    });
+                    } else {
+                        let countQuery = getDbClient()
+                            .from(getTableName())
+                            .select("*", {count: "exact", head: true})
+                            .eq("language", targetLanguage);
+                        if (settings.useCentralDb && centralUserId) {
+                            countQuery = countQuery.eq("user_id", centralUserId);
+                        }
+                        countQuery.then(({count}) => {
+                            totalCount = count || 0;
+                            countLabel.textContent = `Flashcards: ${totalCount}`;
+                        });
+                    }
                 }
-                
-                await loadFlashcardStats();
             }
             
             function drawFlashcardStatsChart(labels, periodicData, cumulativeData, selectedPeriod, periodicLabelOverride) {
@@ -6756,6 +6762,7 @@
                 if (searchInput) searchInput.value = "";
                 
                 loadFlashcardPage(1);
+                loadFlashcardStats();
                 searchInput?.focus();
                 
                 populateLanguageSelector();
@@ -6767,13 +6774,35 @@
                 flashcardPopup.style.display = "none";
             });
             
-            const debouncedSearch = debounce(() => {
+            function executeFlashcardSearch() {
                 currentPage = 1;
                 searchKeyword = searchInput.value.trim();
                 loadFlashcardPage(currentPage);
-            }, 400);
+            }
             
-            searchInput.addEventListener("input", debouncedSearch);
+            const debouncedSearch = debounce(executeFlashcardSearch, 200);
+            
+            let isPastingSearch = false;
+            searchInput.addEventListener("paste", () => {
+                isPastingSearch = true;
+            });
+            
+            searchInput.addEventListener("input", () => {
+                if (isPastingSearch || !searchInput.value.trim()) {
+                    isPastingSearch = false;
+                    debouncedSearch.cancel();
+                    executeFlashcardSearch();
+                    return;
+                }
+                debouncedSearch();
+            });
+            
+            searchInput.addEventListener("keydown", (e) => {
+                if (e.key === "Enter") {
+                    debouncedSearch.cancel();
+                    executeFlashcardSearch();
+                }
+            });
             
             const tableHeaders = document.querySelectorAll("#flashcardTable thead th");
             tableHeaders.forEach((th) => {
@@ -12122,7 +12151,7 @@
                         
                         const historyItem = chatHistory.find((item) => item.id === userMessageId);
                         const currentText = historyItem ? historyItem.content : userMessageDiv.textContent.trim();
-                        const currentHeight = Math.max(userMessageDiv.offsetHeight, 24);
+                        const currentHeight = userMessageDiv.offsetHeight;
                         
                         const textarea = createElement("textarea", {
                             className: "card-edit-textarea",
@@ -12588,6 +12617,7 @@
                                         const searchInput = document.getElementById("flashcardSearchInput");
                                         if (searchInput) {
                                             searchInput.value = word;
+                                            searchInput.dispatchEvent(new Event("paste"));
                                             searchInput.dispatchEvent(new Event("input"));
                                         }
                                         
