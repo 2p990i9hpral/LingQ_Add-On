@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      17.8.3
+// @version      17.8.4
 // @license      GPL-3.0-or-later
 // @grant       GM_setValue
 // @grant       GM_getValue
@@ -516,6 +516,36 @@
             .replace(/&/g, "&amp;")
             .replace(/</g, "&lt;")
             .replace(/>/g, "&gt;");
+    }
+    
+    const PRONUNCIATION_REPLACEMENTS = {
+        ja: {
+            "u": "ɯ", "ʊ": "ɯ", "ɛ": "e", "ɪ": "i", "ã": "a", "ĩ": "i", "ẽ": "e", "õ": "o",
+            "ō": "oː", "ū": "ɯː", ":": "ː",
+            "ʲi": "i", "ʲ": "j", "y": "j", "ɰ": "w",
+            "tɕ": "t͡ɕ", "ʧ": "t͡ɕ", "ʨ": "t͡ɕ", "dʑ": "d͡ʑ", "d͡ʒ": "d͡ʑ", "dʒ": "d͡ʑ", "ts": "t͡s", "ʦ": "t͡s", "dz": "d͡z",
+            "g": "ɡ", "f": "ɸ", "β": "b", "ʃ": "ɕ", "r": "ɾ", "l": "ɾ",
+            "-": "", "ˈ": "", "ˌ": "", "'": ""
+        }
+    };
+    
+    function preprocessPronunciation(rawText, lang) {
+        let cleaned = rawText
+            .replace(/[\u031E\u0325\u1D5D\u032A\uA71C\u0320\u031F\u031A\u034D\u032F]/g, "")
+            .replace(/[\[\]\/]/g, "")
+            .trim();
+        
+        const rules = PRONUNCIATION_REPLACEMENTS[lang];
+        if (rules && cleaned) {
+            const keys = Object.keys(rules).sort((a, b) => b.length - a.length);
+            if (keys.length > 0) {
+                const escapedKeys = keys.map(k => k.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
+                const pattern = new RegExp(escapedKeys.join("|"), "g");
+                cleaned = cleaned.replace(pattern, match => rules[match]);
+            }
+        }
+        
+        return cleaned ? `[${cleaned}]` : "";
     }
     
     function clickElement(selector) {
@@ -6368,18 +6398,7 @@
                         });
                         
                         const savePronunciation = async () => {
-                            const rawValue = input.value.trim();
-                            let newValue = "";
-                            if (rawValue) {
-                                if (/\[.*\]/.test(rawValue)) {
-                                    newValue = rawValue;
-                                } else if (/\/.*\//.test(rawValue)) {
-                                    newValue = rawValue.replace(/\/([^\/]+)\//g, "[$1]");
-                                } else {
-                                    const cleanText = rawValue.replace(/[\[\]\/]/g, "").trim();
-                                    newValue = cleanText ? `[${cleanText}]` : "";
-                                }
-                            }
+                            const newValue = preprocessPronunciation(input.value, targetLanguage);
                             
                             if (newValue === currentText) {
                                 pronunciationTd.textContent = currentText;
@@ -12317,34 +12336,6 @@
                     });
                 }
                 
-                const PRONUNCIATION_REPLACEMENTS = {
-                    ja: {
-                        "u": "ɯ", "ʊ": "ɯ", "ɛ": "e", "ɪ": "i", "ō": "oː", "ū": "ɯː", "ã": "a", "ĩ": "i", "ẽ": "e", "õ": "o",
-                        "ʲi": "i", "ʲ": "j", "tɕ": "t͡ɕ", "ʧ": "t͡ɕ", "ʨ": "t͡ɕ", "dʑ": "d͡ʑ", "d͡ʒ": "d͡ʑ", "dʒ": "d͡ʑ", "ts": "t͡s", "ʦ": "t͡s", "dz": "d͡z", "ʃ": "ɕ",
-                        "g": "ɡ", "r": "ɾ", "l": "ɾ", "y": "j", "f": "ɸ", "β": "b", "ɰ": "w",
-                        "-": "", "ˈ": "", "ˌ": "", "'": ""
-                    }
-                };
-                
-                function preprocessPronunciation(rawText, lang) {
-                    let cleaned = rawText
-                        .replace(/[\u031E\u0325\u1D5D\u032A\uA71C\u0320\u031F\u031A\u034D\u032F]/g, "")
-                        .replace(/[\[\]\/]/g, "")
-                        .trim();
-                    
-                    const rules = PRONUNCIATION_REPLACEMENTS[lang];
-                    if (rules && cleaned) {
-                        const keys = Object.keys(rules).sort((a, b) => b.length - a.length);
-                        if (keys.length > 0) {
-                            const escapedKeys = keys.map(k => k.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
-                            const pattern = new RegExp(escapedKeys.join("|"), "g");
-                            cleaned = cleaned.replace(pattern, match => rules[match]);
-                        }
-                    }
-                    
-                    return cleaned ? `[${cleaned}]` : "";
-                }
-                
                 function enhanceWordMessage(botMessageDiv, selectedData) {
                     const wordCardWrappers = Array.from(botMessageDiv.querySelectorAll('.word-card'));
                     const buttonContainer = botMessageDiv.querySelector('.message-button-container');
@@ -12414,20 +12405,7 @@
                             input.focus();
                             
                             const finishEdit = async () => {
-                                const rawValue = input.value
-                                    .replace(/[\u031E\u0325\u1D5D\u032A\uA71C\u0320\u031F\u031A\u034D\u032F]/g, "")
-                                    .trim();
-                                let newValue = "";
-                                if (rawValue) {
-                                    if (/\[.*\]/.test(rawValue)) {
-                                        newValue = rawValue;
-                                    } else if (/\/.*\//.test(rawValue)) {
-                                        newValue = rawValue.replace(/\/([^\/]+)\//g, "[$1]");
-                                    } else {
-                                        const cleanText = rawValue.replace(/[\[\]\/]/g, "").trim();
-                                        newValue = cleanText ? `[${cleanText}]` : "";
-                                    }
-                                }
+                                const newValue = preprocessPronunciation(input.value, getLessonLanguage());
                                 pronunciationElem.textContent = newValue;
                                 
                                 if (newValue === currentText) return;
