@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      17.8.4
+// @version      17.8.5
 // @license      GPL-3.0-or-later
 // @grant       GM_setValue
 // @grant       GM_getValue
@@ -6992,8 +6992,12 @@
                 reportMainBtn.classList.add("single-btn-mode");
                 
                 const csvBtn = document.getElementById("flashcardCsvDownload");
+                const ankiSyncBtn = document.getElementById("flashcardAnkiSyncBtn");
+                const ankiDeckContainer = document.getElementById("flashcardAnkiDeckContainer");
                 const downloadReportBtn = document.getElementById("flashcardDownloadReportBtn");
                 if (csvBtn) csvBtn.style.display = "none";
+                if (ankiSyncBtn) ankiSyncBtn.style.display = "none";
+                if (ankiDeckContainer) ankiDeckContainer.style.visibility = "hidden";
                 if (downloadReportBtn) {
                     downloadReportBtn.style.display = "";
                     downloadReportBtn.disabled = true;
@@ -7187,8 +7191,12 @@
                     reportMainBtn.classList.remove("single-btn-mode");
                     
                     const csvBtn = document.getElementById("flashcardCsvDownload");
+                    const ankiSyncBtn = document.getElementById("flashcardAnkiSyncBtn");
+                    const ankiDeckContainer = document.getElementById("flashcardAnkiDeckContainer");
                     const downloadReportBtn = document.getElementById("flashcardDownloadReportBtn");
                     if (csvBtn) csvBtn.style.display = "";
+                    if (ankiSyncBtn) ankiSyncBtn.style.display = "";
+                    if (ankiDeckContainer) ankiDeckContainer.style.visibility = "";
                     if (downloadReportBtn) {
                         downloadReportBtn.style.display = "none";
                         downloadReportBtn.disabled = true;
