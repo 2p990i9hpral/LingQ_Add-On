@@ -319,16 +319,20 @@ Flashcards are created directly within the chat widget during your lessons:
 3. **Visual Learning Trends**:
   - Interactive bar chart displaying flashcard creation volume over time.
   - Switchable time horizons: **Week**, **Month**, **Year**, and **All**.
-4. **AI Diagnostic Report (AI Learning Report)**:
+4. **AI Learning Report**:
+   - Click **AI Report** to open the report dashboard.
 
-   <img src="images/ai_learning_report.png" width=600>)]
-  
-  - Click **AI Report** to analyze your recent `100` flashcards, or click the dropdown arrow (`▾`) to choose a sample size (`50`, `100`, `300`, or `500` words).
-  - Generates a structured diagnostic report in your native language across three sections:
-    - **1. Overview**: Summarizes the chronological progression of topics and genres you have studied and estimates the baseline difficulty band (CEFR, JLPT, or HSK).
-    - **2. Content Timeline & Difficulty**: Partitions your recent vocabulary intake into thematic streams, citing saved words and their meanings inline while analyzing domain context, style, and text difficulty.
-    - **3. Notable Patterns**: Highlights corpus-wide vocabulary characteristics such as compound/collocation density, formal vs. conversational register balance, and figurative or technical usage.
-  - Click **Download the Report** to capture and save the entire report as a PNG image (`learning_report_<lang>.png`).
+     <img src="images/learning_report_dashboard.png" width=600>   
+
+   - **Report History**: Review all previously generated reports from the board table at any time, or delete old ones.
+   - **Generate Report**: Click **Generate Report** (or click `▾` to choose `50`, `100`, `300`, or `500` words) to analyze your recent vocabulary intake:
+
+     <img src="images/ai_learning_report.png" width=600>
+
+     - **1. Overview**: Topic progression and estimated baseline difficulty level (CEFR, JLPT, HSK).
+     - **2. Content Timeline & Difficulty**: Thematic breakdown citing saved words in context.
+     - **3. Notable Patterns**: Register balance (formal vs. casual), collocations, and idiomatic expressions.
+   - Click **Download the Report** to save the report as a PNG image (`learning_report_<lang>.png`).
 
 ---
 

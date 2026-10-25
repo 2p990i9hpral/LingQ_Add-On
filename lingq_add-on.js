@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      17.8.5
+// @version      17.9.0
 // @license      GPL-3.0-or-later
 // @grant       GM_setValue
 // @grant       GM_getValue
@@ -4806,25 +4806,99 @@
                     ),
                     createElement("div", {
                         id: "flashcardReportContainer",
-                        className: "popup-row",
-                        style: "display: none; flex-direction: column; min-height: 400px; max-height: 600px; overflow-y: auto; margin: 10px 0; padding: 15px; border: 1px solid var(--border-color); border-radius: 5px; background: var(--bg-color); font-size: 14px; line-height: 1.6;"
+                        style: "display: none; flex-direction: column;"
                     },
                         createElement("div", {
-                            id: "flashcardReportHeaderRow",
-                            style: "display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; gap: 10px;"
+                            id: "flashcardReportBoardView",
+                            style: "display: flex; flex-direction: column; width: 100%;"
                         },
-                            createElement("div", {id: "flashcardReportHeader"}),
-                            createElement("button", {
-                                id: "flashcardDownloadReportBtn",
-                                className: "popup-button",
-                                disabled: true,
-                                style: "display: none;"
-                            }, "Download the Report")
+                            createElement("div", {
+                                id: "flashcardReportBoardHeader"
+                            },
+                                createElement("button", {
+                                    id: "flashcardReportBoardBackBtn",
+                                    className: "popup-button"
+                                }, "← Back"),
+                                createElement("div", {
+                                    style: "display: flex; align-items: center; gap: 8px; margin-left: auto;"
+                                },
+                                    createElement("select", {
+                                        id: "flashcardReportLanguageSelector",
+                                        className: "popup-input",
+                                        style: "width: auto; min-width: 70px; margin: 0; padding: 2px 8px; font-size: 0.85em; cursor: pointer;"
+                                    }),
+                                    createElement("div", {className: "split-btn-group"},
+                                        createElement("button", {
+                                            id: "flashcardAiReportGenerateBtn",
+                                            className: "popup-button split-btn-main"
+                                        }, "Generate Report"),
+                                        createElement("button", {
+                                            id: "flashcardAiReportDropdownBtn",
+                                            className: "popup-button split-btn-dropdown"
+                                        }, "▾"),
+                                        createElement("div", {
+                                                id: "flashcardAiReportMenu",
+                                                className: "split-btn-menu",
+                                                style: "display: none;"
+                                            },
+                                            createElement("div", {
+                                                className: "split-btn-menu-item",
+                                                dataset: {words: 50}
+                                            }, "50 words"),
+                                            createElement("div", {
+                                                className: "split-btn-menu-item",
+                                                dataset: {words: 100}
+                                            }, "100 words"),
+                                            createElement("div", {
+                                                className: "split-btn-menu-item",
+                                                dataset: {words: 300}
+                                            }, "300 words"),
+                                            createElement("div", {
+                                                className: "split-btn-menu-item",
+                                                dataset: {words: 500}
+                                            }, "500 words")
+                                        )
+                                    )
+                                )
+                            ),
+                            createElement("div", {id: "flashcardReportTableContainer"},
+                                createElement("table", {id: "flashcardReportTable"},
+                                    createElement("thead", {},
+                                        createElement("tr", {},
+                                            createElement("th", {className: "fc-rep-col-btn", textContent: ""}),
+                                            createElement("th", {className: "fc-rep-col-no", textContent: "#"}),
+                                            createElement("th", {className: "fc-rep-col-lang", textContent: "Lang"}),
+                                            createElement("th", {className: "fc-rep-col-range", textContent: "Word Range"}),
+                                            createElement("th", {className: "fc-rep-col-words", textContent: "Words"}),
+                                            createElement("th", {className: "fc-rep-col-overview", textContent: "Overview"}),
+                                            createElement("th", {className: "fc-rep-col-date", textContent: "Date"})
+                                        )
+                                    ),
+                                    createElement("tbody", {id: "flashcardReportTableBody"})
+                                )
+                            )
                         ),
                         createElement("div", {
-                            id: "flashcardReportBody",
-                            style: "display: flex; flex-direction: column;"
-                        })
+                            id: "flashcardReportDetailView",
+                            style: "display: none; flex-direction: column; width: 100%;"
+                        },
+                            createElement("div", {
+                                id: "flashcardReportHeaderRow"
+                            },
+                                createElement("button", {
+                                    id: "flashcardReportBackBtn",
+                                    className: "popup-button"
+                                }, "← Back"),
+                                createElement("button", {
+                                    id: "flashcardDownloadReportBtn",
+                                    className: "popup-button",
+                                    disabled: true
+                                }, "Download the Report")
+                            ),
+                            createElement("div", {
+                                id: "flashcardReportBody"
+                            })
+                        )
                     ),
                     createElement("div", {
                             className: "popup-row",
@@ -4854,38 +4928,10 @@
                         createElement("div", {
                             style: "display: flex; align-items: center; gap: 10px; flex-shrink: 0; white-space: nowrap;"
                         },
-                            createElement("div", {className: "split-btn-group"},
-                                createElement("button", {
-                                    id: "flashcardAiReportBtn",
-                                    className: "popup-button split-btn-main"
-                                }, "AI Report"),
-                                createElement("button", {
-                                    id: "flashcardAiReportDropdownBtn",
-                                    className: "popup-button split-btn-dropdown"
-                                }, "▾"),
-                                createElement("div", {
-                                        id: "flashcardAiReportMenu",
-                                        className: "split-btn-menu",
-                                        style: "display: none;"
-                                    },
-                                    createElement("div", {
-                                        className: "split-btn-menu-item",
-                                        dataset: {words: 50}
-                                    }, "50 words"),
-                                    createElement("div", {
-                                        className: "split-btn-menu-item",
-                                        dataset: {words: 100}
-                                    }, "100 words"),
-                                    createElement("div", {
-                                        className: "split-btn-menu-item",
-                                        dataset: {words: 300}
-                                    }, "300 words"),
-                                    createElement("div", {
-                                        className: "split-btn-menu-item",
-                                        dataset: {words: 500}
-                                    }, "500 words")
-                                )
-                            ),
+                            createElement("button", {
+                                id: "flashcardAiReportBtn",
+                                className: "popup-button"
+                            }, "AI Report"),
                             createElement("button", {
                                 id: "flashcardCsvDownload",
                                 className: "popup-button"
@@ -6127,6 +6173,7 @@
             const countLabel = document.getElementById("flashcardCount");
             const searchInput = document.getElementById("flashcardSearchInput");
             const languageSelector = document.getElementById("flashcardLanguageSelector");
+            const reportLanguageSelector = document.getElementById("flashcardReportLanguageSelector");
             
             let currentPage = 1;
             const pageSize = 15;
@@ -6173,18 +6220,20 @@
             }
             
             async function populateLanguageSelector() {
-                if (!languageSelector) return;
                 const languages = await fetchUniqueFlashcardLanguages();
                 const currentSelected = targetLanguage;
-                languageSelector.innerHTML = "";
-                languages.forEach((lang) => {
-                    languageSelector.appendChild(createElement("option", {
-                        value: lang,
-                        textContent: lang,
-                        selected: lang === currentSelected
-                    }));
+                [languageSelector, reportLanguageSelector].forEach((selector) => {
+                    if (!selector) return;
+                    selector.innerHTML = "";
+                    languages.forEach((lang) => {
+                        selector.appendChild(createElement("option", {
+                            value: lang,
+                            textContent: lang,
+                            selected: lang === currentSelected
+                        }));
+                    });
+                    selector.value = currentSelected;
                 });
-                languageSelector.value = currentSelected;
             }
             
             async function populateFlashcardAnkiDecks() {
@@ -6241,23 +6290,30 @@
                 });
             }
             
+            function handleLanguageChange(newLang) {
+                targetLanguage = newLang;
+                if (languageSelector && languageSelector.value !== newLang) languageSelector.value = newLang;
+                if (reportLanguageSelector && reportLanguageSelector.value !== newLang) reportLanguageSelector.value = newLang;
+                currentPage = 1;
+                totalCount = 0;
+                searchKeyword = "";
+                if (searchInput) searchInput.value = "";
+                loadFlashcardPage(1);
+                loadFlashcardStats();
+                populateFlashcardAnkiDecks();
+                const statusEl = document.getElementById("flashcardAnkiStatus");
+                if (statusEl) {
+                    statusEl.textContent = "";
+                    statusEl.title = "";
+                }
+                checkAndTriggerDailyAnkiSync(targetLanguage);
+            }
+            
             if (languageSelector) {
-                languageSelector.addEventListener("change", (event) => {
-                    targetLanguage = event.target.value;
-                    currentPage = 1;
-                    totalCount = 0;
-                    searchKeyword = "";
-                    if (searchInput) searchInput.value = "";
-                    loadFlashcardPage(1);
-                    loadFlashcardStats();
-                    populateFlashcardAnkiDecks();
-                    const statusEl = document.getElementById("flashcardAnkiStatus");
-                    if (statusEl) {
-                        statusEl.textContent = "";
-                        statusEl.title = "";
-                    }
-                    checkAndTriggerDailyAnkiSync(targetLanguage);
-                });
+                languageSelector.addEventListener("change", (event) => handleLanguageChange(event.target.value));
+            }
+            if (reportLanguageSelector) {
+                reportLanguageSelector.addEventListener("change", (event) => handleLanguageChange(event.target.value));
             }
             
             function drawPagination(page, total) {
@@ -6780,15 +6836,18 @@
                 
                 targetLanguage = getLessonLanguage() || targetLanguage;
                 
-                if (languageSelector && !languageSelector.options.length) {
-                    languageSelector.innerHTML = "";
-                    languageSelector.appendChild(createElement("option", {
-                        value: targetLanguage,
-                        textContent: targetLanguage,
-                        selected: true
-                    }));
-                }
-                if (languageSelector) languageSelector.value = targetLanguage;
+                [languageSelector, reportLanguageSelector].forEach((selector) => {
+                    if (!selector) return;
+                    if (!selector.options.length) {
+                        selector.innerHTML = "";
+                        selector.appendChild(createElement("option", {
+                            value: targetLanguage,
+                            textContent: targetLanguage,
+                            selected: true
+                        }));
+                    }
+                    selector.value = targetLanguage;
+                });
                 
                 currentPage = 1;
                 totalCount = 0;
@@ -6967,14 +7026,177 @@
                 });
             }
             
+            const AI_REPORTS_STORAGE_KEY = "lingq_ai_reports";
             const reportMainBtn = document.getElementById("flashcardAiReportBtn");
+            const reportGenerateBtn = document.getElementById("flashcardAiReportGenerateBtn");
             const reportDropdownBtn = document.getElementById("flashcardAiReportDropdownBtn");
             const reportMenu = document.getElementById("flashcardAiReportMenu");
+            const reportBoardBackBtn = document.getElementById("flashcardReportBoardBackBtn");
+            const reportBackBtn = document.getElementById("flashcardReportBackBtn");
             
-            reportDropdownBtn.addEventListener("click", (e) => {
-                e.stopPropagation();
-                reportMenu.style.display = reportMenu.style.display === "none" ? "flex" : "none";
-            });
+            function getSavedAiReports() {
+                try {
+                    const raw = localStorage.getItem(AI_REPORTS_STORAGE_KEY);
+                    const parsed = raw ? JSON.parse(raw) : [];
+                    return Array.isArray(parsed) ? parsed : [];
+                } catch {
+                    return [];
+                }
+            }
+            
+            function saveAiReports(reports) {
+                localStorage.setItem(AI_REPORTS_STORAGE_KEY, JSON.stringify(reports));
+            }
+            
+            function formatReportDate(isoString) {
+                if (!isoString) return "";
+                const d = new Date(isoString);
+                if (isNaN(d.getTime())) return isoString;
+                const yyyy = d.getFullYear();
+                const mm = String(d.getMonth() + 1).padStart(2, "0");
+                const dd = String(d.getDate()).padStart(2, "0");
+                const hh = String(d.getHours()).padStart(2, "0");
+                const min = String(d.getMinutes()).padStart(2, "0");
+                return `${yyyy}-${mm}-${dd} ${hh}:${min}`;
+            }
+            
+            function extractReportPreview(htmlContent) {
+                const tempDiv = createElement("div", {innerHTML: htmlContent});
+                const firstP = tempDiv.querySelector("p");
+                return (firstP ? firstP.textContent : tempDiv.textContent).replace(/\s+/g, " ").trim();
+            }
+            
+            function renderAiReportBoard() {
+                const tbody = document.getElementById("flashcardReportTableBody");
+                if (!tbody) return;
+                
+                const reports = getSavedAiReports();
+                tbody.innerHTML = "";
+                
+                if (reports.length === 0) {
+                    tbody.appendChild(
+                        createElement("tr", {},
+                            createElement("td", {
+                                colSpan: 7,
+                                style: "text-align: center; padding: 30px 0; color: var(--text-muted, #888); cursor: default;",
+                                textContent: "No saved AI reports yet. Click 'Generate Report' to create one."
+                            })
+                        )
+                    );
+                    return;
+                }
+                
+                reports.forEach((report, idx) => {
+                    const rowNumber = reports.length - idx;
+                    const deleteBtn = createElement("button", {
+                        className: "delete-row-btn",
+                        innerHTML: `<svg viewBox="6 6 12 12" stroke="currentColor"><path d="M17 17L7 7M17 7L7 17" stroke-width="2" stroke-linecap="round"/></svg>`
+                    });
+                    deleteBtn.addEventListener("click", (e) => {
+                        e.stopPropagation();
+                        const updated = getSavedAiReports().filter((item) => item.id !== report.id);
+                        saveAiReports(updated);
+                        renderAiReportBoard();
+                    });
+                    
+                    const rangeText = report.startIdx && report.endIdx
+                        ? `${report.startIdx} ~ ${report.endIdx}`
+                        : "-";
+                    const dateText = formatReportDate(report.createdAt);
+                    const previewText = report.preview || "";
+                    
+                    const tr = createElement("tr", {className: "report-board-row"},
+                        createElement("td", {}, deleteBtn),
+                        createElement("td", {textContent: String(rowNumber)}),
+                        createElement("td", {textContent: report.language || ""}),
+                        createElement("td", {textContent: rangeText, title: rangeText}),
+                        createElement("td", {textContent: String(report.wordCount || 0)}),
+                        createElement("td", {textContent: previewText, title: previewText}),
+                        createElement("td", {textContent: dateText, title: dateText})
+                    );
+                    
+                    tr.addEventListener("click", () => {
+                        openSavedAiReport(report);
+                    });
+                    
+                    tbody.appendChild(tr);
+                });
+            }
+            
+            function setReportFooterVisibility(inReportMode) {
+                const listView = document.getElementById("flashcardListView");
+                const reportContainer = document.getElementById("flashcardReportContainer");
+                const csvBtn = document.getElementById("flashcardCsvDownload");
+                const ankiSyncBtn = document.getElementById("flashcardAnkiSyncBtn");
+                const ankiDeckContainer = document.getElementById("flashcardAnkiDeckContainer");
+                
+                if (listView) listView.style.display = inReportMode ? "none" : "block";
+                if (reportContainer) reportContainer.style.display = inReportMode ? "flex" : "none";
+                if (reportMainBtn) reportMainBtn.style.display = inReportMode ? "none" : "";
+                if (csvBtn) csvBtn.style.display = inReportMode ? "none" : "";
+                if (ankiSyncBtn) ankiSyncBtn.style.display = inReportMode ? "none" : "";
+                if (ankiDeckContainer) ankiDeckContainer.style.visibility = inReportMode ? "hidden" : "";
+            }
+            
+            function showAiReportBoardView() {
+                setReportFooterVisibility(true);
+                const boardView = document.getElementById("flashcardReportBoardView");
+                const detailView = document.getElementById("flashcardReportDetailView");
+                if (boardView) boardView.style.display = "flex";
+                if (detailView) detailView.style.display = "none";
+                if (reportLanguageSelector) reportLanguageSelector.value = targetLanguage;
+                renderAiReportBoard();
+            }
+            
+            function showAiReportDetailView() {
+                setReportFooterVisibility(true);
+                const boardView = document.getElementById("flashcardReportBoardView");
+                const detailView = document.getElementById("flashcardReportDetailView");
+                if (boardView) boardView.style.display = "none";
+                if (detailView) detailView.style.display = "flex";
+            }
+            
+            function openSavedAiReport(report) {
+                showAiReportDetailView();
+                const reportContainer = document.getElementById("flashcardReportContainer");
+                const reportBody = document.getElementById("flashcardReportBody");
+                const downloadReportBtn = document.getElementById("flashcardDownloadReportBtn");
+                
+                if (reportBody) {
+                    reportBody.innerHTML = report.content || "";
+                }
+                if (downloadReportBtn) {
+                    downloadReportBtn.disabled = !report.content;
+                }
+                if (reportBody) {
+                    reportBody.scrollTop = 0;
+                }
+            }
+            
+            if (reportGenerateBtn) {
+                reportGenerateBtn.addEventListener("click", () => {
+                    generateAiReport(100);
+                });
+            }
+            
+            if (reportDropdownBtn) {
+                reportDropdownBtn.addEventListener("click", (e) => {
+                    e.stopPropagation();
+                    reportMenu.style.display = reportMenu.style.display === "none" ? "flex" : "none";
+                });
+            }
+            
+            if (reportBoardBackBtn) {
+                reportBoardBackBtn.addEventListener("click", () => {
+                    setReportFooterVisibility(false);
+                });
+            }
+            
+            if (reportBackBtn) {
+                reportBackBtn.addEventListener("click", () => {
+                    showAiReportBoardView();
+                });
+            }
             
             document.addEventListener("click", () => {
                 if (reportMenu) reportMenu.style.display = "none";
@@ -6982,30 +7204,15 @@
             
             async function generateAiReport(limitCount) {
                 limitCount = Number.isInteger(limitCount) && limitCount > 0 ? limitCount : 100;
-                const listView = document.getElementById("flashcardListView");
+                showAiReportDetailView();
+                
                 const reportContainer = document.getElementById("flashcardReportContainer");
-                
-                listView.style.display = "none";
-                reportContainer.style.display = "flex";
-                reportMainBtn.textContent = "Back to List";
-                reportDropdownBtn.style.display = "none";
-                reportMainBtn.classList.add("single-btn-mode");
-                
-                const csvBtn = document.getElementById("flashcardCsvDownload");
-                const ankiSyncBtn = document.getElementById("flashcardAnkiSyncBtn");
-                const ankiDeckContainer = document.getElementById("flashcardAnkiDeckContainer");
                 const downloadReportBtn = document.getElementById("flashcardDownloadReportBtn");
-                if (csvBtn) csvBtn.style.display = "none";
-                if (ankiSyncBtn) ankiSyncBtn.style.display = "none";
-                if (ankiDeckContainer) ankiDeckContainer.style.visibility = "hidden";
                 if (downloadReportBtn) {
-                    downloadReportBtn.style.display = "";
                     downloadReportBtn.disabled = true;
                 }
                 
-                const reportHeader = document.getElementById("flashcardReportHeader");
                 const reportBody = document.getElementById("flashcardReportBody");
-                if (reportHeader) reportHeader.textContent = `A report based on recent ${limitCount} words`;
                 if (reportBody) reportBody.innerHTML = `<em>Generating AI Learning Report<span class="loading-text"></span></em>`;
                 
                 try {
@@ -7018,7 +7225,6 @@
                     
                     if (error) throw error;
                     
-                    const reportHeader = document.getElementById("flashcardReportHeader");
                     const reportBody = document.getElementById("flashcardReportBody");
                     
                     if (!data || data.length === 0) {
@@ -7027,9 +7233,10 @@
                         return;
                     }
                     
-                    if (reportHeader) {
-                        reportHeader.textContent = `A report based on recent ${data.length} words`;
-                    }
+                    const orderedData = data.reverse();
+                    const startIdx = orderedData[0]?.idx ?? 0;
+                    const endIdx = orderedData[orderedData.length - 1]?.idx ?? 0;
+                    const wordCount = orderedData.length;
                     
                     let reportContent = "";
                     
@@ -7038,7 +7245,7 @@
                         ? settings.llmResponseLanguage
                         : localePairs[await getDictionaryLanguage()] || "English";
                     
-                    const wordsCSV = data.reverse().map(item => `${item.word}, ${item.meaning}, ${item.explanation}`).join('\n');
+                    const wordsCSV = orderedData.map(item => `${item.word}, ${item.meaning}, ${item.explanation}`).join('\n');
                     
                     const timelineParagraphRangeByPreset = {
                         50: "2 to 3",
@@ -7157,6 +7364,21 @@
                                 if (stripped) {
                                     reportBody.innerHTML = stripped;
                                     if (downloadReportBtn) downloadReportBtn.disabled = false;
+                                    
+                                    const createdAt = new Date().toISOString();
+                                    const newReport = {
+                                        id: Date.now(),
+                                        language: targetLanguage,
+                                        startIdx,
+                                        endIdx,
+                                        wordCount,
+                                        preview: extractReportPreview(stripped),
+                                        content: stripped,
+                                        createdAt
+                                    };
+                                    const savedReports = getSavedAiReports();
+                                    savedReports.unshift(newReport);
+                                    saveAiReports(savedReports);
                                 } else {
                                     reportBody.innerHTML = "<em>Failed to generate report content.</em>";
                                     if (downloadReportBtn) downloadReportBtn.disabled = true;
@@ -7182,28 +7404,7 @@
             }
             
             reportMainBtn.addEventListener("click", () => {
-                const reportContainer = document.getElementById("flashcardReportContainer");
-                if (reportContainer.style.display === "flex") {
-                    reportContainer.style.display = "none";
-                    document.getElementById("flashcardListView").style.display = "block";
-                    reportMainBtn.textContent = "AI Report";
-                    reportDropdownBtn.style.display = "";
-                    reportMainBtn.classList.remove("single-btn-mode");
-                    
-                    const csvBtn = document.getElementById("flashcardCsvDownload");
-                    const ankiSyncBtn = document.getElementById("flashcardAnkiSyncBtn");
-                    const ankiDeckContainer = document.getElementById("flashcardAnkiDeckContainer");
-                    const downloadReportBtn = document.getElementById("flashcardDownloadReportBtn");
-                    if (csvBtn) csvBtn.style.display = "";
-                    if (ankiSyncBtn) ankiSyncBtn.style.display = "";
-                    if (ankiDeckContainer) ankiDeckContainer.style.visibility = "";
-                    if (downloadReportBtn) {
-                        downloadReportBtn.style.display = "none";
-                        downloadReportBtn.disabled = true;
-                    }
-                } else {
-                    generateAiReport(100);
-                }
+                showAiReportBoardView();
             });
             
             document.querySelectorAll(".split-btn-menu-item").forEach(item => {
@@ -7216,47 +7417,40 @@
             const downloadReportBtn = document.getElementById("flashcardDownloadReportBtn");
             if (downloadReportBtn) {
                 downloadReportBtn.addEventListener("click", async () => {
-                    const reportContainer = document.getElementById("flashcardReportContainer");
-                    if (!reportContainer || reportContainer.style.display === "none") return;
+                    const reportBody = document.getElementById("flashcardReportBody");
+                    if (!reportBody) return;
                     
                     downloadReportBtn.disabled = true;
                     const originalText = downloadReportBtn.textContent;
                     downloadReportBtn.textContent = "Capturing...";
                     
                     try {
-                        const prevMaxHeight = reportContainer.style.maxHeight;
-                        const prevOverflowY = reportContainer.style.overflowY;
-                        const prevHeight = reportContainer.style.height;
-                        const prevScrollTop = reportContainer.scrollTop;
+                        const prevOverflowY = reportBody.style.overflowY;
+                        const prevHeight = reportBody.style.height;
+                        const prevScrollTop = reportBody.scrollTop;
                         
-                        reportContainer.style.maxHeight = "none";
-                        reportContainer.style.overflowY = "visible";
-                        reportContainer.style.height = "auto";
-                        reportContainer.scrollTop = 0;
+                        reportBody.style.overflowY = "visible";
+                        reportBody.style.height = "auto";
+                        reportBody.scrollTop = 0;
                         
-                        const fullHeight = reportContainer.scrollHeight;
-                        const fullWidth = reportContainer.offsetWidth;
+                        const fullHeight = reportBody.scrollHeight + 30;
+                        const fullWidth = reportBody.offsetWidth;
                         
-                        downloadReportBtn.style.visibility = "hidden";
-                        const dataUrl = await htmlToImage.toPng(reportContainer, {
+                        const dataUrl = await htmlToImage.toPng(reportBody, {
                             backgroundColor: settings.colorMode === "dark" ? "#2a2c2e" : "#ffffff",
                             pixelRatio: 2,
                             skipFonts: true,
                             width: fullWidth,
                             height: fullHeight,
-                            filter: (node) => node.id !== "flashcardDownloadReportBtn",
                             style: {
-                                maxHeight: "none",
                                 overflowY: "visible",
                                 height: `${fullHeight}px`
                             }
                         });
-                        downloadReportBtn.style.visibility = "";
                         
-                        reportContainer.style.maxHeight = prevMaxHeight;
-                        reportContainer.style.overflowY = prevOverflowY;
-                        reportContainer.style.height = prevHeight;
-                        reportContainer.scrollTop = prevScrollTop;
+                        reportBody.style.overflowY = prevOverflowY;
+                        reportBody.style.height = prevHeight;
+                        reportBody.scrollTop = prevScrollTop;
                         
                         const link = createElement("a", {
                             href: dataUrl,
@@ -8279,7 +8473,9 @@
                     background: var(--background-color) !important;
                 }
 
-                #flashcardPopupHeader {
+                #flashcardPopupHeader,
+                #flashcardReportBoardHeader,
+                #flashcardReportHeaderRow {
                     display: flex;
                     justify-content: space-between;
                     align-items: center;
@@ -8453,34 +8649,121 @@
                     font-weight: 700 !important;
                 }
 
+                #flashcardReportTableContainer {
+                    height: 635px;
+                    overflow-y: auto;
+                }
+
+                #flashcardReportBody {
+                    height: 635px;
+                    overflow-y: auto;
+                    box-sizing: border-box;
+                    padding-right: 5px;
+                }
+
+                #flashcardReportTable {
+                    table-layout: fixed;
+                    width: 100%;
+                    border-collapse: separate;
+                    border-spacing: 0 5px;
+                    padding: 10px 5px;
+                }
+
+                #flashcardReportTable thead {
+                    position: sticky;
+                    top: 0;
+                    background: var(--background-color);
+                    z-index: 1;
+                }
+
+                #flashcardReportTable thead th {
+                    text-align: left;
+                    white-space: nowrap;
+                    font-size: 0.9em;
+                    border-bottom: 1px solid rgb(125 125 125 / 30%);
+                    padding-bottom: 4px;
+                }
+
+                #flashcardReportTable td {
+                    white-space: nowrap;
+                    overflow: hidden;
+                    text-overflow: ellipsis;
+                    font-size: 0.9em;
+                    padding: 4px 0;
+                }
+
+                #flashcardReportTable td + td,
+                #flashcardReportTable th + th {
+                    padding-left: 10px;
+                }
+
+                #flashcardReportTable tr.report-board-row {
+                    cursor: pointer;
+                }
+
+                #flashcardReportTable tr.report-board-row:hover {
+                    background-color: rgba(125, 125, 125, 0.12);
+                }
+
+                #flashcardReportTable .delete-row-btn {
+                    width: 10px;
+                    height: 10px;
+                }
+
+                #flashcardReportTable th.fc-rep-col-btn {
+                    width: 24px;
+                }
+
+                #flashcardReportTable th.fc-rep-col-no {
+                    width: 40px;
+                }
+
+                #flashcardReportTable th.fc-rep-col-lang {
+                    width: 55px;
+                }
+
+                #flashcardReportTable th.fc-rep-col-range {
+                    width: 130px;
+                }
+
+                #flashcardReportTable th.fc-rep-col-words {
+                    width: 65px;
+                }
+
+                #flashcardReportTable th.fc-rep-col-overview {
+                    width: auto;
+                }
+
+                #flashcardReportTable th.fc-rep-col-date {
+                    width: 135px;
+                }
+
                 .split-btn-group {
                     position: relative;
                     display: inline-flex;
+                    align-items: center;
                 }
                 .split-btn-main {
                     border-top-right-radius: 0 !important;
                     border-bottom-right-radius: 0 !important;
-                    border-right: 1px solid rgba(0, 0, 0, 0.2) !important;
-                }
-                .split-btn-main.single-btn-mode {
-                    border-top-right-radius: 5px !important;
-                    border-bottom-right-radius: 5px !important;
-                    border-right: 1px solid rgb(125 125 125 / 50%) !important;
+                    border-right: none !important;
+                    margin: 0 !important;
                 }
                 .split-btn-dropdown {
                     border-top-left-radius: 0 !important;
                     border-bottom-left-radius: 0 !important;
-                    padding: 0 8px !important;
+                    padding: 5px 8px !important;
+                    margin: 0 !important;
                 }
                 .split-btn-menu {
                     position: absolute;
-                    bottom: 100%;
-                    left: 0;
-                    margin-bottom: 5px;
+                    top: 100%;
+                    right: 0;
+                    margin-top: 5px;
                     background-color: var(--background-color);
                     border: 1px solid rgb(125 125 125 / 30%);
                     border-radius: 4px;
-                    box-shadow: 0 -4px 8px rgba(0, 0, 0, 0.2);
+                    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
                     z-index: 10002;
                     min-width: 110px;
                     display: flex;
