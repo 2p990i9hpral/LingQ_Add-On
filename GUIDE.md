@@ -13,7 +13,7 @@ This guide is structured around the **Settings Popup** (where the majority of fe
     - [1.1 Paging Mode & Reader Flow](#11-paging-mode--reader-flow)
     - [1.2 Layout Styles](#12-layout-styles)
     - [1.3 Video Orientation & Dimensions](#13-video-orientation--dimensions)
-    - [1.4 Media Controller: Volume Control & Playback Skip Duration](#14-media-controller-volume-control--playback-skip-duration)
+    - [1.4 Media Controller: Volume, Playback Speed & Skip Duration](#14-media-controller-volume-playback-speed--skip-duration)
     - [1.5 Local Video Player Setup & Lesson Requirements](#15-local-video-player-setup--lesson-requirements)
     - [1.6 Typography, Sizing & Memo Widget](#16-typography-sizing--memo-widget)
     - [1.7 Color Themes & Palette](#17-color-themes--palette)
@@ -89,14 +89,17 @@ Customize the reader layout based on the media format of your lesson:
 - **Sentence View Video Height**: Slider for video sizing while in LingQ's Sentence Mode.
 - **Autoplay in Sentence View**: Checkbox to toggle automatic playback when stepping through sentences in Sentence Mode.
 
-### 1.4 Media Controller: Volume Control & Playback Skip Duration
+### 1.4 Media Controller: Volume, Playback Speed & Skip Duration
 
 <img src="images/volume control.png" width=400></br>
 
-The addon enhances LingQ's media controller with volume controls and customizable playback skip duration across audio, local video, and YouTube lessons:
+The addon enhances LingQ's media controller with volume, playback speed, and customizable skip duration controls across audio, local video, and YouTube lessons:
 - **Volume Controller Button**:
   - **Click to Cycle Levels**: Click the volume button to cycle through preset volume levels: `0%`(Mute) → `25%` → `50%` → `75%` → `100%`.
   - **Mouse Wheel Fine Adjustment**: Hover over the button and scroll the mouse wheel up or down to adjust volume in `5%` increments.
+- **Playback Speed Controller Button**:
+  - **Click to Cycle Presets**: Click the speed button to cycle through preset playback speeds.
+  - **Mouse Wheel Fine Adjustment**: Hover over the button and scroll the mouse wheel to adjust playback speed from `0.5x` to `3.0x`.
 - **Customizable Skip Duration**:
   - **Configurable Interval**: Set the skip duration from `1` to `30` seconds using the **Skip Duration** slider in Settings (default: `5s`).
 
@@ -122,9 +125,15 @@ Play your own downloaded movies, anime, or video lessons directly within LingQ, 
 
 ### 1.6 Typography, Sizing & Memo Widget
 - **Font Size**: Slider for lesson body text.
+- **Annotation Size**: Slider (`40%`–`80%`) to adjust the size of ruby annotations (e.g., furigana).
+- **Hover Annotation**: Controls when annotations are displayed:
+  - `Off`: Always visible.
+  - `Reader`: Hidden by default in the reader text and revealed on mouse hover.
+  - `All`: Hidden by default in both the reader text and quick summary, revealed on mouse hover.
 - **Line Height**: Slider for line spacing.
 - **Google Web Font Name**: Input the name of any font from [Google Fonts](https://fonts.google.com) (e.g., `Noto Sans JP`, `Roboto Slab`, `Merriweather`). The addon loads and renders the font automatically.
 - **Widget Width**: Slider to adjust the width of side widgets (Chat / Memo).
+- **Widget**: Aligns side widgets vertically (`Top` | `Center` | `Bottom`).
 - **Show Memo Widget**: Enables a persistent notepad docked beside the reader. Notes are preserved in local storage across browser refreshes and lesson transitions.
 
 ### 1.7 Color Themes & Palette
@@ -187,7 +196,7 @@ Check **Enable the Keyboard Shortcuts** to activate single-key navigation withou
 ### 3.2 In-Reader Interactive Dictionary & Word Cards
 
 #### In-Place Editing (Ctrl + Click)
-- Hold `Ctrl` (or `Cmd` on macOS) and click on the **Pronunciation**, **Meaning**, **Explanation**, **Example Sentence**, or **Example Translation** fields in an AI dictionary card.
+- Hold `Ctrl` (or `Cmd` on macOS) and click on the **Pronunciation**, **Meaning**, **Explanation**, **Example Sentence**, or **Example Translation** fields in an AI dictionary card, or on any **User Chat Message**.
 - Edit the text inline and press `Enter` (or click away / focus out) to save, or `Escape` to cancel.
 
 #### Flashcard Count Badge & History Popup
@@ -206,11 +215,11 @@ Enter your API key corresponding to your selected Chat Provider: (`gemini-3.1-fl
 
 | Provider | API Key Guide | Supported Models | Description |
 | :--- | :--- | :--- | :--- |
-| **Google** | [Tutorial](https://youtu.be/8g3OXzM5UHQ) | `gemini-3.8-flash`, `gemini-3.7-flash`, `gemini-3.6-flash`, `gemini-3.5-flash`, `gemini-3.5-flash-lite`, `gemini-3.1-flash-lite`, ... | Recommended for speed and low cost. Includes explicit context caching. |
-| **OpenAI** | [Tutorial](https://youtu.be/SzPE_AE0eEo) | `gpt-5.6-sol`, `gpt-5.6-terra`, `gpt-5.6-luna`, `gpt-5.5`, `gpt-5.4`, `gpt-5.4-mini` | |
-| **Anthropic** | [Tutorial](https://youtu.be/vgncj7MJbVU) | `claude-sonnet-5`, `claude-sonnet-4-6`, `claude-haiku-4-5` | |
+| **Google** | [Tutorial](https://youtu.be/8g3OXzM5UHQ) | `gemini-4-argon`, `gemini-3.8-flash`, `gemini-3.6-flash`, `gemini-3-flash`, `gemini-3.5-flash-lite`, `gemini-3.1-flash-lite`, ... | Recommended for speed and low cost. Includes explicit context caching. |
+| **OpenAI** | [Tutorial](https://youtu.be/SzPE_AE0eEo) | `gpt-6-sol`, `gpt-6-luna`, `gpt-5.6-sol`, `gpt-5.6-terra`, `gpt-5.6-luna`, `gpt-5.5`, `gpt-5.4`, `gpt-5.4-mini` | |
+| **Anthropic** | [Tutorial](https://youtu.be/vgncj7MJbVU) | `claude-sonnet-5-5`, `claude-sonnet-5`, `claude-sonnet-4-6`, `claude-haiku-5-5`, `claude-haiku-4-5` | |
 | **DeepSeek** | [Tutorial](https://www.youtube.com/watch?v=CpZFf6JkHgY) | `deepseek-v4-pro`, `deepseek-v4-flash` | Highly cost-effective alternative models.<br> If you live in China, use this. |
-| **Z.ai** | [Website](https://z.ai/manage-apikey/apikey-list) | `glm-5.3-flash` | Cost-effective GLM models from Z.ai (Zhipu AI).<br> If you live in China, you can use this as well. |
+| **Z.ai** | [Website](https://z.ai/manage-apikey/apikey-list) | `glm-5.3-flash`, `glm-5.3-flashx` | Cost-effective GLM models from Z.ai (Zhipu AI).<br> If you live in China, you can use this as well. |
 | **Cerebras** | — | `gemma-4-31b` | Ultra-fast inference engine. |
 
 ### 3.4 Google Vertex (GCP) Credentials
@@ -226,6 +235,7 @@ Click the **Usage Log** button to open the token monitoring popup:
 
 ### 3.6 Quick Lesson Summary Options
 - **Prepend a quick Summary**: Automatically generates a concise summary at the top of each lesson before reading.
+  - Click the **Regenerate** (`↻`) button to regenerate the summary.
 - **Summary Difficulty (CEFR)**: Calibrate the vocabulary and grammatical complexity of the summary:
   - `Unset`: Standard level. Don't care about the difficulty of the response.
   - `A1` / `A2`: Simplified grammar, accessible vocabulary, short sentences.
@@ -254,10 +264,19 @@ Click the **Usage Log** button to open the token monitoring popup:
 - **Autoplay TTS voice**: Automatically pronounces the target word upon selection.
 - **TTS API Key**: Enter your API key for the chosen voice provider.
 - **TTS Provider**:
-  - `OpenAI`: Expressive voices.
-  - `Google Gemini`: Multimodal audio synthesis.
-  - `Google Cloud`: Diverse international accents and dialect voices.
-- **TTS Voice**: Select voice model or set to `Random`.
+  - `OpenAI` ([API Key Tutorial](https://youtu.be/SzPE_AE0eEo)): Expressive multilingual voices (`Alloy`, `Ash`, `Ballad`, `Coral`, `Echo`, `Fable`, `Nova`, `Onyx`, `Sage`, `Shimmer`, `Verse`).
+  - `Google Gemini` ([API Key Tutorial](https://youtu.be/8g3OXzM5UHQ)): Multimodal audio synthesis across 30 voices (`Zephyr`, `Puck`, `Charon`, `Kore`, `Fenrir`, etc.).
+    - **Model**: Select the synthesis model (`gemini-3.8-flash-tts`, `gemini-3.8-flash-lite-tts`, `gemini-3.1-flash-tts-preview`, `gemini-2.5-flash-preview-tts`).
+  - `Google Cloud` ([Video Tutorial](https://youtu.be/Sl87i9JdfPo) | [Step-by-Step Setup](#step-1-get-google-cloud-tts-api-key)): High-definition `Chirp3-HD` native voices with regional accents.
+- **TTS Voice**: Select a specific voice or set to `Random` (or regional random such as `en-US Random`, `en-GB Random`).
+
+#### Supported Languages by Provider
+
+| Provider | Supported Languages & Regional Accents |
+| :--- | :--- |
+| **OpenAI** | Multilingual (automatically adapts to the input text language) |
+| **Google Gemini** | Multilingual (automatically adapts to the input text language) |
+| **Google Cloud** | Arabic, Bengali, Bulgarian, Chinese *(Mandarin, Cantonese)*, Croatian, Czech, Danish, Dutch *(Belgium, Netherlands)*, English *(Australia, India, UK, US)*, Estonian, Finnish, French *(Canada, France)*, German, Greek, Gujarati, Hebrew, Hindi, Hungarian, Indonesian, Italian, Japanese, Kannada, Korean, Latvian, Lithuanian, Malayalam, Marathi, Norwegian, Polish, Portuguese *(Brazil)*, Punjabi, Romanian, Russian, Serbian, Slovak, Slovenian, Spanish *(Spain, US)*, Swahili, Swedish, Tamil, Telugu, Thai, Turkish, Ukrainian, Urdu, Vietnamese |
 
 ### 5.2 Pronunciation Trigger Scopes
 - **Enable AI-TTS for words**: Replaces LingQ's default TTS with AI voice generation when clicking individual vocabulary words.
@@ -292,17 +311,24 @@ Flashcards are created directly within the chat widget during your lessons:
 ### Features
 1. **Interactive Table & Filtering**:
   - Filter cards by target language using the language dropdown.
-  - Search instantly by idx, word, meaning.
+  - Search instantly by `idx`, `word`, or `meaning`.
+  - Click directly on the **Meaning**, or **Explanation** cell to edit it inline.
 2. **Export as CSV**:
   - Generates a cleanly structured CSV file formatted specifically for Anki import with HTML context highlights.
   - *(See [Section 12. Anki Integration Guide](#12-anki-integration-guide) for complete importing instructions, deck templates, and field mappings)*.
 3. **Visual Learning Trends**:
   - Interactive bar chart displaying flashcard creation volume over time.
   - Switchable time horizons: **Week**, **Month**, **Year**, and **All**.
-4. **AI Diagnostic Report**:
-  - Click **AI Report** and select word sample size (`50`, `100`, `300`, or `500` words).
-  - The AI inspects your flashcard history and produces a diagnostic report highlighting recurring grammatical challenges, common semantic categories.
-  - Click **Download the Report** to save it locally.
+4. **AI Diagnostic Report (AI Learning Report)**:
+
+   <img src="images/ai_learning_report.png" width=600>)]
+  
+  - Click **AI Report** to analyze your recent `100` flashcards, or click the dropdown arrow (`▾`) to choose a sample size (`50`, `100`, `300`, or `500` words).
+  - Generates a structured diagnostic report in your native language across three sections:
+    - **1. Overview**: Summarizes the chronological progression of topics and genres you have studied and estimates the baseline difficulty band (CEFR, JLPT, or HSK).
+    - **2. Content Timeline & Difficulty**: Partitions your recent vocabulary intake into thematic streams, citing saved words and their meanings inline while analyzing domain context, style, and text difficulty.
+    - **3. Notable Patterns**: Highlights corpus-wide vocabulary characteristics such as compound/collocation density, formal vs. conversational register balance, and figurative or technical usage.
+  - Click **Download the Report** to capture and save the entire report as a PNG image (`learning_report_<lang>.png`).
 
 ---
 
