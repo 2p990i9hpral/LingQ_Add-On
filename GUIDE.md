@@ -268,15 +268,20 @@ Click the **Usage Log** button to open the token monitoring popup:
   - `Google Gemini` ([API Key Tutorial](https://youtu.be/8g3OXzM5UHQ)): Multimodal audio synthesis across 30 voices (`Zephyr`, `Puck`, `Charon`, `Kore`, `Fenrir`, etc.).
     - **Model**: Select the synthesis model (`gemini-3.8-flash-tts`, `gemini-3.8-flash-lite-tts`, `gemini-3.1-flash-tts-preview`, `gemini-2.5-flash-preview-tts`).
   - `Google Cloud` ([Video Tutorial](https://youtu.be/Sl87i9JdfPo) | [Step-by-Step Setup](#step-1-get-google-cloud-tts-api-key)): High-definition `Chirp3-HD` native voices with regional accents.
+    - **Free Tier**: Offers a generous permanent free tier of **1 million characters per month** for Chirp3-HD voices.
+  - `ElevenLabs` ([Get API Key](https://try.elevenlabs.io/8rtfehmrtlc2)): Human-like, highly expressive voice synthesis across 21 default voices (`Bella`, `George`, `Sarah`, `Charlie`, `Alice`, `Brian`, etc.).
+    - **Model**: Select the synthesis model (`Eleven v4 Turbo`, `Eleven v4`, `Eleven Flash v2.5`, `Eleven Turbo v2.5`, `Eleven Multilingual v2`, `Eleven v3`).
+    - **Free Tier & Billing**: Offers a free tier with 10,000 credits per month (up to 20,000 characters with Turbo/Flash models). Also supports Pay-as-you-go prepaid balance and monthly subscriptions.
 - **TTS Voice**: Select a specific voice or set to `Random` (or regional random such as `en-US Random`, `en-GB Random`).
 
 #### Supported Languages by Provider
 
 | Provider | Supported Languages & Regional Accents |
 | :--- | :--- |
-| **OpenAI** | Multilingual (automatically adapts to the input text language) |
-| **Google Gemini** | Multilingual (automatically adapts to the input text language) |
-| **Google Cloud** | Arabic, Bengali, Bulgarian, Chinese *(Mandarin, Cantonese)*, Croatian, Czech, Danish, Dutch *(Belgium, Netherlands)*, English *(Australia, India, UK, US)*, Estonian, Finnish, French *(Canada, France)*, German, Greek, Gujarati, Hebrew, Hindi, Hungarian, Indonesian, Italian, Japanese, Kannada, Korean, Latvian, Lithuanian, Malayalam, Marathi, Norwegian, Polish, Portuguese *(Brazil)*, Punjabi, Romanian, Russian, Serbian, Slovak, Slovenian, Spanish *(Spain, US)*, Swahili, Swedish, Tamil, Telugu, Thai, Turkish, Ukrainian, Urdu, Vietnamese |
+| **OpenAI** | **Multilingual (57+ languages)** — Automatically detects text language. Supports English, Japanese, Korean, Chinese, Spanish, French, German, Italian, Russian, Portuguese, etc. |
+| **Google Gemini** | **Multilingual (100 ~ 130+ languages)** — End-to-end multimodal audio synthesis (over 130 languages for Flash TTS, 100+ for Flash-Lite TTS). |
+| **Google Cloud** | **40+ languages (with regional accents)** — Arabic, Bengali, Chinese *(Mandarin, Cantonese)*, Dutch, English *(US, UK, AU, IN)*, French, German, Hindi, Italian, Japanese, Korean, Polish, Portuguese, Russian, Spanish *(ES, US)*, Swedish, Turkish, Ukrainian, Vietnamese, etc. |
+| **ElevenLabs** | **Multilingual (90+ languages with v4/v4 Turbo, 70+ with v3, 32 with v2.5)** — English, Japanese, Korean, Chinese, Spanish, French, German, Italian, Portuguese, Russian, Arabic, Hindi, etc. |
 
 ### 5.2 Pronunciation Trigger Scopes
 - **Enable AI-TTS for words**: Replaces LingQ's default TTS with AI voice generation when clicking individual vocabulary words.
