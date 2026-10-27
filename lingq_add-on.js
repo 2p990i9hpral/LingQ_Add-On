@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      17.9.0
+// @version      18.0.0
 // @license      GPL-3.0-or-later
 // @grant       GM_setValue
 // @grant       GM_getValue
@@ -103,7 +103,7 @@
         
         tts: false,
         ttsAutoplay: false,
-        ttsApiKey: "",
+        ttsApiKeys: {},
         ttsProvider: "openai",
         ttsModel: "gemini-3.8-flash-lite-tts",
         ttsVoice: {},
@@ -187,6 +187,14 @@
             {value: "gemini-3.8-flash-lite-tts", text: "gemini-3.8-flash-lite-tts ($0.5/$6)", inputPrice: 0.5, outputPrice: 6, cachedPrice: 0},
             {value: "gemini-3.1-flash-tts-preview", text: "gemini 3.1-flash-tts ($1/$20)", inputPrice: 1, outputPrice: 20, cachedPrice: 0},
             {value: "gemini-2.5-flash-preview-tts", text: "gemini 2.5-flash-tts ($0.5/$10)", inputPrice: 0.5, outputPrice: 10, cachedPrice: 0}
+        ],
+        "elevenlabs": [
+            {value: "eleven_v4_turbo", text: "Eleven v4 Turbo ($0.04)"},
+            {value: "eleven_v4", text: "Eleven v4 ($0.08)"},
+            {value: "eleven_v3", text: "Eleven v3 ($0.08)"},
+            {value: "eleven_flash_v2_5", text: "Eleven Flash v2.5 ($0.04)"},
+            {value: "eleven_turbo_v2_5", text: "Eleven Turbo v2.5 ($0.04)"},
+            {value: "eleven_multilingual_v2", text: "Eleven Multilingual v2 ($0.08)"}
         ]
     };
     
@@ -304,11 +312,36 @@
         {value: "Sadaltager", text: "Sadaltager (Knowledgeable)"},
         {value: "Sulafat", text: "Sulafat (Warm)"}
     ];
+    const elevenLabsVoiceOptions = [
+        {value: "random", text: "Random"},
+        {value: "hpp4J3VqNfWAUOO0d1Us", text: "Bella (Professional, Bright, Warm)"},
+        {value: "CwhRBWXzGAHq8TQ4Fs17", text: "Roger (Laid-Back, Casual, Resonant)"},
+        {value: "EXAVITQu4vr4xnSDxMaL", text: "Sarah (Mature, Reassuring, Confident)"},
+        {value: "FGY2WhTYpPnrIDTdsKH5", text: "Laura (Enthusiast, Quirky Attitude)"},
+        {value: "IKne3meq5aSn9XLyUdCD", text: "Charlie (Deep, Confident, Energetic)"},
+        {value: "JBFqnCBsd6RMkjVDRZzb", text: "George (Warm, Captivating Storyteller)"},
+        {value: "N2lVS1w4EtoT3dr4eOWO", text: "Callum (Husky Trickster)"},
+        {value: "SAz9YHcvj6GT2YYXdXww", text: "River (Relaxed, Neutral, Informative)"},
+        {value: "SOYHLrjzK2X1ezoPC6cr", text: "Harry (Fierce Warrior)"},
+        {value: "TX3LPaxmHKxFdv7VOQHJ", text: "Liam (Energetic, Social Media Creator)"},
+        {value: "Xb7hH8MSUJpSbSDYk0k2", text: "Alice (Clear, Engaging Educator)"},
+        {value: "XrExE9yKIg1WjnnlVkGX", text: "Matilda (Knowledgable, Professional)"},
+        {value: "bIHbv24MWmeRgasZH58o", text: "Will (Relaxed Optimist)"},
+        {value: "cgSgspJ2msm6clMCkdW9", text: "Jessica (Playful, Bright, Warm)"},
+        {value: "cjVigY5qzO86Huf0OWal", text: "Eric (Smooth, Trustworthy)"},
+        {value: "iP95p4xoKVk53GoZ742B", text: "Chris (Charming, Down-to-Earth)"},
+        {value: "nPczCjzI2devNBz1zQrb", text: "Brian (Deep, Resonant and Comforting)"},
+        {value: "onwK4e9ZLuTAKqWW03F9", text: "Daniel (Steady Broadcaster)"},
+        {value: "pFZP5JQG7iQjIQuC4Bku", text: "Lily (Velvety Actress)"},
+        {value: "pNInz6obpgDQGcFmaJgB", text: "Adam (Dominant, Firm)"},
+        {value: "pqHfZKP75CvOlQylNhV4", text: "Bill (Wise, Mature, Balanced)"}
+    ];
     const googleCloudVoiceOptions = generateGoogleCloudVoiceOptions(getLessonLanguage());
     const voiceOptionsObject = {
         "openai": openaiVoiceOptions,
         "google gemini": googleGeminiVoiceOptions,
-        "google cloud": googleCloudVoiceOptions
+        "google cloud": googleCloudVoiceOptions,
+        "elevenlabs": elevenLabsVoiceOptions
     };
     
     function getAvailableVoicesForProvider(provider, language = getLessonLanguage()) {
@@ -2099,6 +2132,46 @@
         }
     }
     
+    async function elevenLabsTTS(text, API_KEY, voice = "JBFqnCBsd6RMkjVDRZzb", modelId = "eleven_v4_turbo") {
+        const validModels = (ttsModelsByProvider["elevenlabs"] || []).map(m => m.value);
+        const resolvedModelId = validModels.includes(modelId) ? modelId : "eleven_v4_turbo";
+        const apiUrl = `https://api.elevenlabs.io/v1/text-to-speech/${voice}?output_format=mp3_44100_128`;
+        
+        if (!API_KEY) throw new Error("Invalid or missing ElevenLabs API key. Please set the API_KEY");
+        console.log('[TTS]', `${resolvedModelId}, ${voice}`, `"${text}"`);
+        
+        try {
+            const response = await fetch(apiUrl, {
+                method: "POST",
+                headers: {
+                    "Accept": "audio/mpeg",
+                    "Content-Type": "application/json",
+                    "xi-api-key": API_KEY
+                },
+                body: JSON.stringify({
+                    text: text,
+                    model_id: resolvedModelId
+                })
+            });
+            
+            if (!response.ok) {
+                let errorMessage = `HTTP error! Status: ${response.status}`;
+                try {
+                    const errorBody = await response.json();
+                    errorMessage += ` - ElevenLabs Error: ${errorBody?.detail?.message || JSON.stringify(errorBody)}`;
+                } catch (parseError) {
+                    errorMessage += ` - Failed to parse error response.`;
+                }
+                throw new Error(errorMessage);
+            }
+            
+            return await response.arrayBuffer();
+        } catch (error) {
+            console.error("Error during ElevenLabs TTS request:", error);
+            throw error;
+        }
+    }
+    
     async function getTTSResponse(provider, apiKey, voice, text, ttsInstructions = "Speak in a natural, authentic native speaker tone with steady pacing, clear articulation, and an engaging narrative flow: ", model = settings.ttsModel) {
         const availableOptions = getAvailableVoicesForProvider(provider);
         const validValues = availableOptions.map(option => option.value);
@@ -2124,6 +2197,8 @@
                 return await geminiTTS(text, apiKey, resolvedVoice, ttsInstructions, model);
             case "google cloud":
                 return await googleCloudTTS(text, apiKey, resolvedVoice);
+            case "elevenlabs":
+                return await elevenLabsTTS(text, apiKey, resolvedVoice, model);
         }
     }
     
@@ -4494,11 +4569,12 @@
                 textContent: "TTS API Key:"
             }));
             
+            const savedTtsKeys = settings.ttsApiKeys;
             const ttsApiKeyFlexContainer = createElement("div", {style: "display: flex; align-items: center; width: 65%;"});
             const ttsApiKeyInput = createElement("input", {
                 type: "password",
                 id: "ttsApiKeyInput",
-                value: settings.ttsApiKey,
+                value: savedTtsKeys[settings.ttsProvider] || "",
                 className: "popup-input"
             });
             ttsApiKeyFlexContainer.appendChild(ttsApiKeyInput)
@@ -4508,13 +4584,20 @@
             addSelect(ttsSection, "ttsProviderSelector", "TTS Provider:", [
                 {value: "openai", text: "OpenAI"},
                 {value: "google gemini", text: "Google Gemini"},
-                {value: "google cloud", text: "Google Cloud"}
+                {value: "google cloud", text: "Google Cloud"},
+                {value: "elevenlabs", text: "ElevenLabs"}
             ], settings.ttsProvider);
             
             const activeTtsModels = ttsModelsByProvider[settings.ttsProvider] || [];
-            const ttsModelContainer = addSelect(ttsSection, "ttsModelSelector", "Model: (Price per 1M tokens)", activeTtsModels, settings.ttsModel);
+            const activeTtsModel = activeTtsModels.some(m => m.value === settings.ttsModel)
+                ? settings.ttsModel
+                : (activeTtsModels[0]?.value || settings.ttsModel);
+            if (activeTtsModel !== settings.ttsModel && activeTtsModels.length > 0) {
+                settings.ttsModel = activeTtsModel;
+            }
+            const ttsModelContainer = addSelect(ttsSection, "ttsModelSelector", "Model: (Price per 1M tokens)", activeTtsModels, activeTtsModel);
             ttsModelContainer.id = "ttsModelContainer";
-            ttsModelContainer.style.display = settings.ttsProvider === "google gemini" ? "block" : "none";
+            ttsModelContainer.style.display = activeTtsModels.length > 0 ? "block" : "none";
             
             const currentVoiceOptions = getAvailableVoicesForProvider(settings.ttsProvider, language);
             const currentVoice = settings.ttsVoice[language];
@@ -5689,7 +5772,11 @@
             
             const ttsApiKeyInput = document.getElementById("ttsApiKeyInput");
             ttsApiKeyInput.addEventListener("change", (event) => {
-                settings.ttsApiKey = event.target.value
+                const provider = settings.ttsProvider;
+                settings.ttsApiKeys = {
+                    ...settings.ttsApiKeys,
+                    [provider]: event.target.value
+                };
             });
             
             const ttsVoiceSelector = document.getElementById("ttsVoiceSelector");
@@ -5704,6 +5791,10 @@
             ttsProviderSelector.addEventListener("change", (event) => {
                 const provider = event.target.value;
                 settings.ttsProvider = provider;
+                
+                const savedTtsKeys = settings.ttsApiKeys;
+                ttsApiKeyInput.value = savedTtsKeys[provider] || "";
+                
                 ttsVoiceSelector.innerHTML = "";
                 const newVoiceOptions = getAvailableVoicesForProvider(provider, language);
                 newVoiceOptions.forEach(option => {
@@ -5854,9 +5945,10 @@
                 document.getElementById("dbUrlInput").value = "";
                 document.getElementById("llmApiKeyInput").value = "";
                 
+                settings.ttsApiKeys = {};
                 document.getElementById("ttsCheckbox").value = defaults.tts;
                 document.getElementById("ttsAutoplayCheckbox").value = defaults.ttsAutoplay;
-                document.getElementById("ttsApiKeyInput").value = defaults.ttsApiKey;
+                document.getElementById("ttsApiKeyInput").value = "";
                 document.getElementById("ttsProviderSelector").value = defaults.ttsProvider;
                 const ttsModelSelector = document.getElementById("ttsModelSelector");
                 if (ttsModelSelector) {
@@ -5864,7 +5956,7 @@
                 }
                 const ttsModelContainer = document.getElementById("ttsModelContainer");
                 if (ttsModelContainer) {
-                    ttsModelContainer.style.display = defaults.ttsProvider === "google gemini" ? "block" : "none";
+                    ttsModelContainer.style.display = (ttsModelsByProvider[defaults.ttsProvider]?.length > 0) ? "block" : "none";
                 }
                 document.getElementById("ttsVoiceSelector").value = languageScopedDefaults.ttsVoice;
                 document.getElementById("ttsWordCheckbox").value = defaults.ttsWord;
@@ -6151,7 +6243,7 @@
                 
                 ttsPlayer.style.display = "none";
                 ttsGenerationButton.disabled = true;
-                const audioData = await getTTSResponse(settings.ttsProvider, settings.ttsApiKey, (settings.ttsVoice[language]), ttsTextareaText, ttsInstructionsText);
+                const audioData = await getTTSResponse(settings.ttsProvider, settings.ttsApiKeys[settings.ttsProvider] || "", (settings.ttsVoice[language]), ttsTextareaText, ttsInstructionsText);
                 const audioURL = URL.createObjectURL(new Blob([audioData], {type: 'audio/mp3'}))
                 ttsGenerationButton.disabled = false;
                 
@@ -11437,7 +11529,7 @@
                                 .replace(/<rt>[\s\S]*?<\/rt>/gi, "")
                                 .replace(/<[^>]+>/g, "")
                                 .replaceAll("\n", " ");
-                            audioData = await getTTSResponse(settings.ttsProvider, settings.ttsApiKey, (settings.ttsVoice[language]), textToTTS);
+                            audioData = await getTTSResponse(settings.ttsProvider, settings.ttsApiKeys[settings.ttsProvider] || "", (settings.ttsVoice[language]), textToTTS);
                             ttsButton.style.opacity = "1";
                             if (!audioData) return;
                         }
@@ -12168,7 +12260,7 @@
                     }
                     
                     ttsButton.disabled = true;
-                    let audioData = await getTTSResponse(settings.ttsProvider, settings.ttsApiKey, (settings.ttsVoice[language]), selectedText);
+                    let audioData = await getTTSResponse(settings.ttsProvider, settings.ttsApiKeys[settings.ttsProvider] || "", (settings.ttsVoice[language]), selectedText);
                     if (audioData == null) {
                         console.log("audioData can't be got.")
                         return;
@@ -13358,7 +13450,7 @@
                                 }
                                 
                                 ttsButton.disabled = true;
-                                const audioData = await getTTSResponse(settings.ttsProvider, settings.ttsApiKey, (settings.ttsVoice[language]), textToTTS);
+                                const audioData = await getTTSResponse(settings.ttsProvider, settings.ttsApiKeys[settings.ttsProvider] || "", (settings.ttsVoice[language]), textToTTS);
                                 if (audioData == null) {
                                     console.log("audioData can't be got.")
                                     return;
@@ -14390,6 +14482,9 @@
                     case "google cloud":
                         RPM_LIMIT = 200;
                         break;
+                    case "elevenlabs":
+                        RPM_LIMIT = 100;
+                        break;
                 }
                 RPM_LIMIT = RPM_LIMIT * 0.9;
                 const DELAY_BETWEEN_CALLS = (60 * 1000) / RPM_LIMIT;
@@ -14438,7 +14533,7 @@
                                         : `Calling TTS for sentence ${i + 1}/${totalSentences}`;
                                     updateProgress(progressBar, progressText, statusMessage, processedSentences, totalSentences * 2);
 
-                                    const audioArrayBuffer = await getTTSResponse(ttsProvider, settings.ttsApiKey, (settings.ttsVoice[lessonLanguage]), text);
+                                    const audioArrayBuffer = await getTTSResponse(ttsProvider, settings.ttsApiKeys[ttsProvider] || "", (settings.ttsVoice[lessonLanguage]), text);
                                     if (isAborted) {
                                         resolve();
                                         return;
