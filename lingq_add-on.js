@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      18.0.0
+// @version      18.0.1
 // @license      GPL-3.0-or-later
 // @grant       GM_setValue
 // @grant       GM_getValue
@@ -133,6 +133,8 @@
     
     const llmModelsByProvider = {
         "openai": [
+            {value: "gpt-6.1-sol", text: "GPT-6.1 Sol ($2/$10)", inputPrice: 2, outputPrice: 10, cachedPrice: 0.1},
+            {value: "gpt-6.1-terra", text: "GPT-6.1 Terra ($1/$5)", inputPrice: 1, outputPrice: 5, cachedPrice: 0.05},
             {value: "gpt-6-sol", text: "GPT-6 Sol ($2/$10)", inputPrice: 2, outputPrice: 10, cachedPrice: 0.2},
             {value: "gpt-6-luna", text: "GPT-6 Luna ($0.1/$0.5)", inputPrice: 0.1, outputPrice: 0.5, cachedPrice: 0.01},
             {value: "gpt-5.6-sol", text: "GPT-5.6 Sol ($5/$30)", inputPrice: 5, outputPrice: 30, cachedPrice: 0.5},

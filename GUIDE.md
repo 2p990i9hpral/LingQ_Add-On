@@ -216,7 +216,7 @@ Enter your API key corresponding to your selected Chat Provider: (`gemini-3.1-fl
 | Provider | API Key Guide | Supported Models | Description |
 | :--- | :--- | :--- | :--- |
 | **Google** | [Tutorial](https://youtu.be/8g3OXzM5UHQ) | `gemini-4-argon`, `gemini-3.8-flash`, `gemini-3.6-flash`, `gemini-3-flash`, `gemini-3.5-flash-lite`, `gemini-3.1-flash-lite`, ... | Recommended for speed and low cost. Includes explicit context caching. |
-| **OpenAI** | [Tutorial](https://youtu.be/SzPE_AE0eEo) | `gpt-6-sol`, `gpt-6-luna`, `gpt-5.6-sol`, `gpt-5.6-terra`, `gpt-5.6-luna`, `gpt-5.5`, `gpt-5.4`, `gpt-5.4-mini` | |
+| **OpenAI** | [Tutorial](https://youtu.be/SzPE_AE0eEo) | `gpt-6.1-sol`, `gpt-6.1-terra`, `gpt-6-sol`, `gpt-6-luna`, `gpt-5.6-sol`, `gpt-5.6-terra`, `gpt-5.6-luna`, `gpt-5.5`, `gpt-5.4`, `gpt-5.4-mini` | |
 | **Anthropic** | [Tutorial](https://youtu.be/vgncj7MJbVU) | `claude-sonnet-5-5`, `claude-sonnet-5`, `claude-sonnet-4-6`, `claude-haiku-5-5`, `claude-haiku-4-5` | |
 | **DeepSeek** | [Tutorial](https://www.youtube.com/watch?v=CpZFf6JkHgY) | `deepseek-v4-pro`, `deepseek-v4-flash` | Highly cost-effective alternative models.<br> If you live in China, use this. |
 | **Z.ai** | [Website](https://z.ai/manage-apikey/apikey-list) | `glm-5.3-flash`, `glm-5.3-flashx` | Cost-effective GLM models from Z.ai (Zhipu AI).<br> If you live in China, you can use this as well. |
