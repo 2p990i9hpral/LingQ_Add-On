@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      18.0.1
+// @version      18.0.2
 // @license      GPL-3.0-or-later
 // @grant       GM_setValue
 // @grant       GM_getValue
@@ -11042,13 +11042,22 @@
         }
         
         function setupYoutubePlayerCustomization() {
-            async function changeVideoPlayerSettings() {
-                const iframe = await waitForElement('.modal-container iframe', 5000);
+            async function changeVideoPlayerSettings(container = document) {
+                const iframe = container.querySelector('iframe') || await waitForElement('.modal-container iframe', 3000);
+                if (!iframe) return;
+                
                 let src = iframe.getAttribute("src");
-                src = src.replace("disablekb=1", "disablekb=0");
-                // src = src.replace("autoplay=0", "autoplay=1");
-                src = src + "&cc_load_policy=1";
-                src = src + "&controls=0";
+                if (!src) return;
+                
+                if (!src.includes("disablekb=0")) {
+                    src = src.replace("disablekb=1", "disablekb=0");
+                }
+                if (!src.includes("cc_load_policy=1")) {
+                    src = src + "&cc_load_policy=1";
+                }
+                if (!src.includes("controls=0")) {
+                    src = src + "&controls=0";
+                }
                 iframe.setAttribute("src", src);
                 
                 const modalRelative = iframe.closest('.modal-content > .relative');
@@ -11083,41 +11092,48 @@
                     return lastCompletedPercentage;
                 }
                 
+                const videoContainer = document.querySelector(".video-player .modal-content > div, .modal-container .modal-content > div");
+                if (!videoContainer) return;
+                
+                const sliderTrack = document.querySelector('.audio-player--progress .rc-slider-track');
+                if (!sliderTrack) return;
+                
                 const lessonId = getLessonId();
+                if (!lessonId) return;
                 const lessonInfo = await getLessonInfo(lessonId);
+                if (!lessonInfo || typeof lessonInfo["progress"] === "undefined") return;
                 let lastCompletedPercentage = lessonInfo["progress"];
                 console.log(`last progress: ${lastCompletedPercentage}`);
                 
-                const sliderTrack = document.querySelector('.audio-player--progress .rc-slider-track');
+                if (videoContainer.querySelector(".rc-slider-horizontal")) return;
                 
-                const videoContainer = document.querySelector(".modal-content > div");
                 const sliderContainer = createSliderElements();
                 const videoSliderTrack = sliderContainer.querySelector(".rc-slider-track");
                 videoContainer.appendChild(sliderContainer);
                 
                 const isVideoStopped = document.querySelector(`.shared-player div[data-original-title="Play video"]`);
                 
-                const sliderObserver = new MutationObserver(function (mutations) {
-                    for (const mutation of mutations) {
+                const sliderObserver = new MutationObserver((mutations) => {
+                    mutations.forEach((mutation) => {
                         videoSliderTrack.style.cssText = sliderTrack.style.cssText;
                         
-                        const progressPercentage = parseFloat(sliderTrack.style.width);
+                        const progressPercentage = parseFloat(sliderTrack.style.width) || 0;
                         lastCompletedPercentage = updateLessonProgress(lessonId, lessonInfo, progressPercentage, lastCompletedPercentage);
                         console.debug('Observer:', `Slider Changed. Progress: ${progressPercentage}`);
                         
                         const isLessonFinished = ((progressPercentage >= 99) && isVideoStopped) || (progressPercentage >= 99.95);
                         if (isLessonFinished && settings.autoFinishing) {
-                            console.log('[Slider]', 'lesson finished.')
+                            console.log('[Slider]', 'lesson finished.');
                             setTimeout(moveNextPage, 1000);
                             sliderObserver.disconnect();
                         }
-                    }
+                    });
                 });
                 
                 sliderObserver.observe(sliderTrack, {attributes: true, attributeFilter: ['style']});
             }
             
-            const observer = new MutationObserver(async function (mutations) {
+            const observer = new MutationObserver(async (mutations) => {
                 for (const mutation of mutations) {
                     console.debug('Observer:', `Modal container created. ${mutation.type}`, mutation.addedNodes);
                     
@@ -11125,10 +11141,16 @@
                         if (node.nodeType !== Node.ELEMENT_NODE) continue;
                         if (!node.matches(".modal-container")) continue;
                         
-                        changeVideoPlayerSettings();
+                        const isVideoModal = node.matches(".video-player, .modal-container.video-player") ||
+                            Boolean(node.querySelector(".video-player, .video-wrapper, iframe"));
+                        if (!isVideoModal) continue;
                         
-                        await waitForElement('.modal-container .modal-section', 5000);
-                        clickElement('.modal-section button:nth-child(2)[title="Expand"]');
+                        changeVideoPlayerSettings(node);
+                        
+                        const modalSection = await waitForElement('.modal-container .modal-section', 3000);
+                        if (modalSection) {
+                            clickElement('.modal-section button:nth-child(2)[title="Expand"]');
+                        }
                         
                         setupSliderObserver();
                     }
