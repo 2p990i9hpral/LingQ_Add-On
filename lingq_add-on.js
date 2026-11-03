@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      19.0.7
+// @version      19.0.8
 // @license      GPL-3.0-or-later
 // @grant       GM_setValue
 // @grant       GM_getValue
@@ -2979,26 +2979,12 @@
             const css = bannerSelectors.map(selector => `${selector} { display: none !important; }`).join('\n');
             applyCSS(css);
             
-            let isThrottled = false;
-            const observer = new MutationObserver(() => {
-                if (isThrottled) return;
-                
-                isThrottled = true;
-                requestAnimationFrame(() => {
-                    const closeButton = document.querySelector(closeButtonSelectors);
-                    
-                    if (closeButton && !closeButton.dataset.addonClicked) {
-                        closeButton.dataset.addonClicked = 'true';
-                        closeButton.click();
-                        console.log('A banner is closed.');
-                    }
-                    isThrottled = false;
-                });
-            });
-            
-            observer.observe(document.documentElement, {
-                childList: true,
-                subtree: true
+            waitForElement(closeButtonSelectors, 5000).then((closeButton) => {
+                if (closeButton && !closeButton.dataset.addonClicked) {
+                    closeButton.dataset.addonClicked = 'true';
+                    closeButton.click();
+                    console.log('A banner is closed.');
+                }
             });
         }
         
@@ -8106,13 +8092,19 @@
         
         mountNavBarButtons();
 
-        const navBarObserver = new MutationObserver(() => {
-            if (!document.getElementById("lingqAddonSettings")) {
-                mountNavBarButtons();
+        waitForElement('header[data-site-header="true"] > div', 5000).then((headerInner) => {
+            mountNavBarButtons();
+            const headerParent = headerInner?.closest('header[data-site-header="true"]')?.parentElement ||
+                                 document.querySelector('[data-slot="sidebar-wrapper"]');
+            if (headerParent) {
+                const navBarObserver = new MutationObserver(() => {
+                    if (!document.getElementById("lingqAddonSettings")) {
+                        mountNavBarButtons();
+                    }
+                });
+                navBarObserver.observe(headerParent, { childList: true, subtree: false });
             }
         });
-        const navBarTarget = document.querySelector('[data-slot="sidebar-wrapper"]') || document.body;
-        navBarObserver.observe(navBarTarget, { childList: true, subtree: true });
         
         const settingsPopup = createSettingsPopup();
         document.body.appendChild(settingsPopup);
@@ -9327,8 +9319,9 @@
             
             audioPlayerObserver.observe(footer, {
                 attributes: true,
-                attributeFilter: ['aria-label', 'class'],
-                subtree: true
+                attributeFilter: ['aria-label'],
+                childList: true,
+                subtree: false
             });
             
             scheduleFooterUpdate();
@@ -9677,16 +9670,6 @@
             let layoutCSS = generateLayoutCSS();
             let specificCSS = "";
             
-            switch (settings.colorMode) {
-                case "white":
-                    clickElement(".reader-themes-component > button:nth-child(1)");
-                    break;
-                case "dark":
-                    clickElement(".reader-themes-component > button:nth-child(5)");
-                    break;
-            }
-            
-            
             const rawStyle = settings.styleType[language];
             const currentStyle = (rawStyle === "audio" || rawStyle === "video" || !rawStyle) ? "default" : rawStyle;
             
@@ -9696,7 +9679,7 @@
             } else if (currentStyle === "localVideo") {
                 specificCSS = generateLocalVideoCSS(settings.videoPosition[language]);
             } else {
-                specificCSS = generateAudioCSS() + generateVideoCSS(settings.videoPosition[language]);
+                specificCSS = generateVideoCSS(settings.videoPosition[language]);
             }
             
             handleLocalVideoContainerVisibility();
@@ -9931,27 +9914,19 @@
                     border-radius: .25rem;
                 }
 
-                div[data-reader-mode-body="true"] .sentence-item:hover,
-                .reader-body .sentence-item:hover,
                 .sentence-item:hover {
                     box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--font-color) 35%, transparent) !important;
                     border-radius: .25rem;
                 }
 
-                div[data-reader-mode-body="true"] .sentence-item.ar-new:hover,
-                .reader-body .sentence-item.ar-new:hover,
                 .sentence-item.ar-new:hover {
                     box-shadow: inset 0 0 0 1px var(--unknown-border) !important;
                 }
 
-                div[data-reader-mode-body="true"] .sentence-item.ar-lingq:hover,
-                .reader-body .sentence-item.ar-lingq:hover,
                 .sentence-item.ar-lingq:hover {
                     box-shadow: inset 0 0 0 1px var(--lingq-border) !important;
                 }
 
-                div[data-reader-mode-body="true"] .sentence-item.ar-learned:hover,
-                .reader-body .sentence-item.ar-learned:hover,
                 .sentence-item.ar-learned:hover {
                     box-shadow: inset 0 0 0 1px var(--lingq-border-learned) !important;
                 }
@@ -10292,7 +10267,7 @@
                     font-size: var(--font-size) !important;
                     line-height: var(--line-height) !important;
                     margin-bottom: 20px;
-                    max-height: min(calc(var(--article-height) * 0.5), 500px);
+                    max-height: min(50vh, 500px);
                     overflow-y: scroll;
                     resize: vertical;
                     flex-direction: column;
@@ -10354,10 +10329,8 @@
         function generateLayoutCSS() {
             return `
             :root {
-                --header-height: 48px;
                 --widget-width: ${settings.widgetWidth}px;
                 --chat-widget-height: ${settings.chatWidgetHeight}px;
-                --footer-height: 56px;
             }
 
             /* Disable native View Transition animation & cross-fade blur */
@@ -10495,8 +10468,6 @@
                 width: 100% !important;
                 flex: 1 1 0% !important;
             }
-            div[data-reader-mode-body="true"] .reader-paragraph,
-            .reader-body .reader-paragraph,
             .reader-paragraph {
                 margin-bottom: 0.75em !important;
             }
@@ -10674,8 +10645,7 @@
                         flex: 1 1 0% !important;
                         overflow: hidden !important;
                     }
-                    div.contents > div:has(> [data-reader-video-stage="true"]),
-                    .grid.grid-cols-2 > div:has(> [data-reader-video-stage="true"]) {
+                    div.contents > div:has(> [data-reader-video-stage="true"]) {
                         order: 1 !important;
                         grid-column: 1 !important;
                         align-self: stretch !important;
@@ -10683,8 +10653,7 @@
                         height: 100% !important;
                         padding: 0 !important;
                     }
-                    div.contents > div:has(> [data-reader-video-stage="true"]) [data-reader-video-stage="true"],
-                    .grid.grid-cols-2 > div:has(> [data-reader-video-stage="true"]) [data-reader-video-stage="true"] {
+                    div.contents > div:has(> [data-reader-video-stage="true"]) [data-reader-video-stage="true"] {
                         max-width: none !important;
                         width: 100% !important;
                         height: 100% !important;
@@ -10692,8 +10661,7 @@
                         background: #000 !important;
                         border-radius: 0.75rem !important;
                     }
-                    div.contents:has([data-reader-video-stage="true"]) > div[data-reader-mode-body="true"],
-                    .grid.grid-cols-2:has([data-reader-video-stage="true"]) > div[data-reader-mode-body="true"] {
+                    div.contents:has([data-reader-video-stage="true"]) > div[data-reader-mode-body="true"] {
                         order: 2 !important;
                         grid-column: 2 !important;
                         min-width: 0 !important;
@@ -10701,8 +10669,7 @@
                         height: 100% !important;
                         overflow: hidden !important;
                     }
-                    div.contents:has([data-reader-video-stage="true"]) > div[data-reader-mode-body="true"] > div.overflow-y-auto,
-                    .grid.grid-cols-2:has([data-reader-video-stage="true"]) > div[data-reader-mode-body="true"] > div.overflow-y-auto {
+                    div.contents:has([data-reader-video-stage="true"]) > div[data-reader-mode-body="true"] > div.overflow-y-auto {
                         height: 100% !important;
                         overflow-y: auto !important;
                     }
@@ -10719,8 +10686,7 @@
                         flex: 1 1 0% !important;
                         overflow: hidden !important;
                     }
-                    div.contents:has([data-reader-video-stage="true"]) > div[data-reader-mode-body="true"],
-                    .grid.grid-cols-2:has([data-reader-video-stage="true"]) > div[data-reader-mode-body="true"] {
+                    div.contents:has([data-reader-video-stage="true"]) > div[data-reader-mode-body="true"] {
                         order: 1 !important;
                         grid-column: 1 !important;
                         min-width: 0 !important;
@@ -10728,13 +10694,11 @@
                         height: 100% !important;
                         overflow: hidden !important;
                     }
-                    div.contents:has([data-reader-video-stage="true"]) > div[data-reader-mode-body="true"] > div.overflow-y-auto,
-                    .grid.grid-cols-2:has([data-reader-video-stage="true"]) > div[data-reader-mode-body="true"] > div.overflow-y-auto {
+                    div.contents:has([data-reader-video-stage="true"]) > div[data-reader-mode-body="true"] > div.overflow-y-auto {
                         height: 100% !important;
                         overflow-y: auto !important;
                     }
-                    div.contents > div:has(> [data-reader-video-stage="true"]),
-                    .grid.grid-cols-2 > div:has(> [data-reader-video-stage="true"]) {
+                    div.contents > div:has(> [data-reader-video-stage="true"]) {
                         order: 2 !important;
                         grid-column: 2 !important;
                         align-self: stretch !important;
@@ -10742,8 +10706,7 @@
                         height: 100% !important;
                         padding: 0 !important;
                     }
-                    div.contents > div:has(> [data-reader-video-stage="true"]) [data-reader-video-stage="true"],
-                    .grid.grid-cols-2 > div:has(> [data-reader-video-stage="true"]) [data-reader-video-stage="true"] {
+                    div.contents > div:has(> [data-reader-video-stage="true"]) [data-reader-video-stage="true"] {
                         max-width: none !important;
                         width: 100% !important;
                         height: 100% !important;
@@ -11007,14 +10970,6 @@
             `;
         }
         
-        function generateAudioCSS() {
-            return `
-            :root {
-                --footer-height: 48px;
-            }
-            `;
-        }
-        
         function generateOffModeCSS() {
             return `
             .quick-summary {
@@ -11112,134 +11067,38 @@
             }, true);
         }
         
-        function setupYoutubePlayerCustomization() {
-            async function changeVideoPlayerSettings(container = document) {
-                const iframe = container.querySelector('iframe') || await waitForElement('.modal-container iframe', 3000);
-                if (!iframe) return;
-                
-                let src = iframe.getAttribute("src");
-                if (!src) return;
-                
-                if (!src.includes("disablekb=0")) {
-                    src = src.replace("disablekb=1", "disablekb=0");
-                }
-                if (!src.includes("cc_load_policy=1")) {
-                    src = src + "&cc_load_policy=1";
-                }
-                if (!src.includes("controls=0")) {
-                    src = src + "&controls=0";
-                }
-                iframe.setAttribute("src", src);
-                
-                const modalRelative = iframe.closest('.modal-content > .relative');
-                modalRelative?.classList.remove('relative');
-                modalRelative?.style.setProperty('width', 'auto', 'important');
-                modalRelative?.style.setProperty('height', 'auto', 'important');
-                
-                const wrapperRelative = iframe.closest('.video-wrapper > .relative');
-                wrapperRelative?.classList.remove('relative');
-            }
-            
-            async function setupSliderObserver() {
-                function createSliderElements() {
-                    const sliderContainer = createElement("div", {className: "rc-slider rc-slider-horizontal"});
-                    const sliderRail = createElement("div", {className: "rc-slider-rail"});
-                    const sliderTrack = createElement("div", {className: "rc-slider-track"});
-                    sliderContainer.appendChild(sliderRail);
-                    sliderContainer.appendChild(sliderTrack);
-                    return sliderContainer;
-                }
-                
-                function updateLessonProgress(lessonId, lessonInfo, progressPercentage, lastCompletedPercentage) {
-                    const progressUpdatePeriod = 5;
-                    const flooredProgressPercentage = Math.floor(progressPercentage / progressUpdatePeriod) * progressUpdatePeriod;
-                    
-                    if (flooredProgressPercentage > lastCompletedPercentage) {
-                        console.log('[Slider]', `progress percentage: ${flooredProgressPercentage}`);
-                        const wordIndex = Math.floor(lessonInfo["totalWordsCount"] * (flooredProgressPercentage / 100));
-                        setLessonProgress(lessonId, wordIndex);
-                        return flooredProgressPercentage;
-                    }
-                    return lastCompletedPercentage;
-                }
-                
-                const videoContainer = document.querySelector(".video-player .modal-content > div, .modal-container .modal-content > div");
-                if (!videoContainer) return;
-                
-                const sliderTrack = document.querySelector('.audio-player--progress .rc-slider-track');
-                if (!sliderTrack) return;
-                
-                const lessonId = getLessonId();
-                if (!lessonId) return;
-                const lessonInfo = await getLessonInfo(lessonId);
-                if (!lessonInfo || typeof lessonInfo["progress"] === "undefined") return;
-                let lastCompletedPercentage = lessonInfo["progress"];
-                console.log(`last progress: ${lastCompletedPercentage}`);
-                
-                if (videoContainer.querySelector(".rc-slider-horizontal")) return;
-                
-                const sliderContainer = createSliderElements();
-                const videoSliderTrack = sliderContainer.querySelector(".rc-slider-track");
-                videoContainer.appendChild(sliderContainer);
-                
-                const isVideoStopped = document.querySelector(`.shared-player div[data-original-title="Play video"]`);
-                
-                const sliderObserver = new MutationObserver((mutations) => {
-                    mutations.forEach((mutation) => {
-                        videoSliderTrack.style.cssText = sliderTrack.style.cssText;
-                        
-                        const progressPercentage = parseFloat(sliderTrack.style.width) || 0;
-                        lastCompletedPercentage = updateLessonProgress(lessonId, lessonInfo, progressPercentage, lastCompletedPercentage);
-                        console.debug('Observer:', `Slider Changed. Progress: ${progressPercentage}`);
-                    });
-                });
-                
-                sliderObserver.observe(sliderTrack, {attributes: true, attributeFilter: ['style']});
-            }
-            
-            const observer = new MutationObserver(async (mutations) => {
-                for (const mutation of mutations) {
-                    console.debug('Observer:', `Modal container created. ${mutation.type}`, mutation.addedNodes);
-                    
-                    for (const node of mutation.addedNodes) {
-                        if (node.nodeType !== Node.ELEMENT_NODE) continue;
-                        if (!node.matches(".modal-container")) continue;
-                        
-                        const isVideoModal = node.matches(".video-player, .modal-container.video-player") ||
-                            Boolean(node.querySelector(".video-player, .video-wrapper, iframe"));
-                        if (!isVideoModal) continue;
-                        
-                        changeVideoPlayerSettings(node);
-                        
-                        const modalSection = await waitForElement('.modal-container .modal-section', 3000);
-                        if (modalSection) {
-                            clickElement('.modal-section button:nth-child(2)[title="Expand"]');
-                        }
-                        
-                        setupSliderObserver();
-                    }
-                }
-            });
-            
-            observer.observe(document.body, {childList: true});
-        }
-        
         async function setupReaderContainer() {
             let llmProvider = settings.llmProvider;
             let llmModel = settings.llmModel;
             let savedKeys = settings.llmApiKeys;
             let llmApiKey = savedKeys[llmProvider];
             
+            let sentenceFocusObserver = null;
+            let pageFlipObserver = null;
+            let modeSwitchObserver = null;
+            let mountSummaryToReaderBody = null;
+            
             function setupSentenceFocus(readerContainer) {
+                if (sentenceFocusObserver) {
+                    sentenceFocusObserver.disconnect();
+                    sentenceFocusObserver = null;
+                }
+                const targetContainer = readerContainer?.matches?.('.reader-body')
+                    ? readerContainer
+                    : (readerContainer?.querySelector?.('.reader-body') || readerContainer);
+                if (!targetContainer) return;
+
                 let selectedFocusRafId = null;
                 
-                const observer = new MutationObserver((mutations) => {
+                sentenceFocusObserver = new MutationObserver((mutations) => {
+                    if (!settings.focusSelectedText) return;
                     mutations.forEach((mutation) => {
                         const target = mutation.target;
+                        if (!(target instanceof Element) || !target.classList.contains('sentence-item')) return;
                         const hadIsSelected = mutation.oldValue?.split(' ').includes('selected');
                         const hasIsSelected = target.classList.contains('selected');
                         
-                        if (hasIsSelected && !hadIsSelected && settings.focusSelectedText) {
+                        if (hasIsSelected && !hadIsSelected) {
                             if (selectedFocusRafId) cancelAnimationFrame(selectedFocusRafId);
                             selectedFocusRafId = requestAnimationFrame(() => {
                                 selectedFocusRafId = null;
@@ -11249,31 +11108,12 @@
                     });
                 });
                 
-                observer.observe(readerContainer, {
+                sentenceFocusObserver.observe(targetContainer, {
                     attributes: true,
                     subtree: true,
                     attributeFilter: ['class'],
                     attributeOldValue: true
                 });
-            }
-            
-            function changeTranslationColor(readerContainer) {
-                const observer = new MutationObserver((mutations) => {
-                    for (const mutation of mutations) {
-                        for (const node of mutation.addedNodes) {
-                            if (!(node.nodeType === Node.ELEMENT_NODE && node.matches('p:has(.sentence)'))) continue;
-                            
-                            for (const sentence of node.querySelectorAll('.sentence')) {
-                                if (!(sentence.style.borderImageSource)) continue;
-                                
-                                const fontColor = settings[`${settings.colorMode}_translationFontColor`];
-                                const colorRegex = /color:%23[0-9a-fA-F]{6}/g;
-                                sentence.style.borderImageSource = sentence.style.borderImageSource.replace(colorRegex, `color:${fontColor}`);
-                            }
-                        }
-                    }
-                });
-                observer.observe(readerContainer, {childList: true, subtree: true});
             }
             
             async function generateLessonSummary(readerContainer) {
@@ -11595,6 +11435,7 @@
                     }
                 }
                 
+                mountSummaryToReaderBody = createAndPrependSummaryElement;
                 quickSummary = "";
                 lessonSummary = "";
                 let cachedContextualContent = "";
@@ -11602,17 +11443,6 @@
                     ? readerContainer
                     : (readerContainer.querySelector?.('.reader-body') || document.querySelector('.reader-body'));
                 if (existingSection) createAndPrependSummaryElement(existingSection);
-                
-                const observer = new MutationObserver((mutations) => {
-                    for (const mutation of mutations) {
-                        for (const node of mutation.addedNodes) {
-                            if (node.nodeType !== Node.ELEMENT_NODE) continue;
-                            const target = node.matches?.('.reader-body') ? node : node.querySelector?.('.reader-body');
-                            if (target) createAndPrependSummaryElement(target);
-                        }
-                    }
-                });
-                observer.observe(readerContainer, {childList: true, subtree: true});
                 
                 let lessonContent = "";
                 const lessonLanguage = getLessonLanguage();
@@ -11659,7 +11489,7 @@
             }
             
             function setupLessonCompletionObserver() {
-                const lessonReader = document.getElementById("lesson-reader");
+                const lessonReader = document.getElementById("lesson-reader") || document.querySelector(".reader-appearance");
                 if (!lessonReader || lessonReader.hasLessonCompletionObserver) return;
                 lessonReader.hasLessonCompletionObserver = true;
 
@@ -11730,7 +11560,6 @@
                             console.log(`  - ${category}: ${data.calls} calls, tokens: (${cached}/${input}/${reasoning}/${output}), $${data.cost.toFixed(6)} (${savedPercent}% saved)`);
                         });
 
-                    clickElement("div.player-wrapper > div.player-close a");
                     resetLocalVideo();
                     
                     const escEvent = new KeyboardEvent("keydown", {
@@ -11744,15 +11573,14 @@
                     window.dispatchEvent(escEvent);
                     document.dispatchEvent(escEvent);
 
-                    const nextButton = document.querySelector("#lesson-reader > div.h-full > div > header > div.col-3 > button");
-                    if (!nextButton) return;
-
                     if (settings.skipEndPage) {
                         for (let i = 0; i < 2; i++) {
-                            const currentPanel = document.querySelector('[id$="-content-lessonCompleted"]');
+                            const currentPanel = lessonReader.querySelector('[id$="-content-lessonCompleted"]');
                             if (currentPanel?.getAttribute("data-state") === "active") {
                                 break;
                             }
+                            const nextButton = lessonReader.querySelector('[data-slot="tabs"] > header button[data-variant="primary"], #lesson-reader > div.h-full > div > header > div.col-3 > button');
+                            if (!nextButton) break;
                             nextButton.click();
                             await sleep(500);
                         }
@@ -11782,14 +11610,18 @@
                 };
 
                 const checkCompletionState = () => {
-                    const completionPanel = document.querySelector('[id$="-content-lessonCompleted"]');
+                    const tabsContainer = lessonReader.querySelector('[data-slot="tabs"]');
+                    const completionPanel = lessonReader.querySelector('[id$="-content-lessonCompleted"]');
                     const isCompletedActive = completionPanel?.getAttribute("data-state") === "active";
                     const isReaderCompleted = lessonReader.getAttribute("data-lesson-completed-visible") === "true";
 
-                    if (isCompletedActive || isReaderCompleted) {
+                    if (tabsContainer) {
                         attachTabsObserver();
+                    }
+
+                    if (isCompletedActive || isReaderCompleted || (tabsContainer && settings.skipEndPage)) {
                         onCompletedActive();
-                    } else if (!isCompletedActive && !isReaderCompleted) {
+                    } else if (!tabsContainer && !isCompletedActive && !isReaderCompleted) {
                         detachTabsObserver();
                         isCompletedHandled = false;
                     }
@@ -11798,30 +11630,44 @@
                 checkCompletionState();
 
                 const completionObserver = new MutationObserver((mutations) => {
-                    const isRelevant = mutations.some((m) => {
+                    let isRelevant = false;
+                    for (const m of mutations) {
                         if (m.type === "attributes" && m.attributeName === "data-lesson-completed-visible") {
-                            return true;
+                            isRelevant = true;
+                        } else if (m.type === "childList") {
+                            for (const node of m.addedNodes) {
+                                if (node.nodeType !== Node.ELEMENT_NODE) continue;
+                                if (node.matches?.('[data-slot="tabs"], [id$="-content-lessonCompleted"]') ||
+                                    node.querySelector?.('[data-slot="tabs"], [id$="-content-lessonCompleted"]')) {
+                                    isRelevant = true;
+                                }
+                                const remountedBody = node.matches?.('div[data-reader-mode-body="true"]')
+                                    ? node
+                                    : node.querySelector?.('div[data-reader-mode-body="true"]');
+                                if (remountedBody) {
+                                    bindReaderModeBody(remountedBody);
+                                }
+                            }
+                            for (const node of m.removedNodes) {
+                                if (node.nodeType !== Node.ELEMENT_NODE) continue;
+                                if (node.matches?.('[data-slot="tabs"], [id$="-content-lessonCompleted"]') ||
+                                    node.querySelector?.('[data-slot="tabs"], [id$="-content-lessonCompleted"]')) {
+                                    isRelevant = true;
+                                }
+                            }
                         }
-                        if (m.type === "childList") {
-                            const matchNode = (node) =>
-                                node.nodeType === Node.ELEMENT_NODE && (
-                                    node.classList.contains("bg-editor") ||
-                                    node.querySelector?.('[id$="-content-lessonCompleted"], [data-slot="tabs"]')
-                                );
-                            return Array.from(m.addedNodes).some(matchNode) || Array.from(m.removedNodes).some(matchNode);
-                        }
-                        return false;
-                    });
+                    }
 
-                    if (!isRelevant) return;
-
-                    checkCompletionState();
+                    if (isRelevant) {
+                        checkCompletionState();
+                    }
                 });
 
                 completionObserver.observe(lessonReader, {
                     attributes: true,
                     attributeFilter: ["data-lesson-completed-visible"],
-                    childList: true
+                    childList: true,
+                    subtree: false
                 });
             }
             
@@ -11855,14 +11701,16 @@
             }
             function getFinishPageButton(action) {
                 if (action === "back") {
-                    return document.querySelector('#lesson-reader button[data-variant="link"]') ||
-                        document.querySelector('#lesson-reader button:has(svg.lucide-chevron-left)') ||
-                        document.querySelector('#lesson-reader button svg.lucide-chevron-left')?.closest('button');
+                    return document.querySelector('[data-slot="tabs"] > header button[data-variant="link"]') ||
+                        document.querySelector('[id$="-content-lessonCompleted"] button[data-variant="link"]') ||
+                        document.querySelector('.reader-appearance button:has(svg.lucide-chevron-left), #lesson-reader button[data-variant="link"]') ||
+                        document.querySelector('.reader-appearance button svg.lucide-chevron-left, #lesson-reader button svg.lucide-chevron-left')?.closest('button');
                 }
                 
                 if (action === "next") {
                     const completionPanel = document.querySelector('[id$="-content-lessonCompleted"]');
-                    return completionPanel?.querySelector('button[data-variant="primary"]');
+                    return completionPanel?.querySelector('button[data-variant="primary"]') ||
+                        document.querySelector('[data-slot="tabs"] > header button[data-variant="primary"]');
                 }
                 
                 return null;
@@ -11870,10 +11718,9 @@
 
             function isFinishPageActive() {
                 const completionPanel = document.querySelector('[id$="-content-lessonCompleted"]');
-                if (!completionPanel) return false;
-                const isCompletedActive = completionPanel.getAttribute("data-state") === "active";
-                const isReaderCompleted = document.getElementById("lesson-reader")?.getAttribute("data-lesson-completed-visible") === "true";
-                return isCompletedActive || isReaderCompleted;
+                if (completionPanel?.getAttribute("data-state") === "active") return true;
+                if (document.querySelector('.reader-appearance [data-slot="tabs"], #lesson-reader [data-slot="tabs"]')) return true;
+                return document.getElementById("lesson-reader")?.getAttribute("data-lesson-completed-visible") === "true";
             }
 
             function preventHorizontalScroll() {
@@ -11917,6 +11764,65 @@
                 }, {passive: false, capture: true});
             }
             
+            function attachPageFlipObserver(container = document) {
+                if (pageFlipObserver) {
+                    pageFlipObserver.disconnect();
+                    pageFlipObserver = null;
+                }
+                const pocPage = container.matches?.('.poc-page') ? container : container.querySelector?.('.poc-page');
+                if (!pocPage) return;
+
+                pageFlipObserver = new MutationObserver(() => {
+                    updateQuickSummaryPageVisibility();
+                    resetScroll();
+                });
+                pageFlipObserver.observe(pocPage, {
+                    childList: true,
+                    subtree: false
+                });
+            }
+
+            function syncReaderModeElements(bodyContainer) {
+                const readerBody = bodyContainer.querySelector('.reader-body') || bodyContainer;
+                setupSentenceFocus(readerBody);
+                attachPageFlipObserver(bodyContainer);
+                if (mountSummaryToReaderBody && readerBody.classList?.contains('reader-body')) {
+                    mountSummaryToReaderBody(readerBody);
+                }
+                updateQuickSummaryPageVisibility();
+                resetScroll();
+            }
+
+            function bindReaderModeBody(bodyContainer) {
+                if (!bodyContainer) return;
+                if (modeSwitchObserver) {
+                    modeSwitchObserver.disconnect();
+                    modeSwitchObserver = null;
+                }
+
+                const progressSlider = document.querySelector('input[type="range"][aria-label="Lesson progress"]');
+                if (progressSlider && !progressSlider.hasAddonPageSyncListener) {
+                    progressSlider.hasAddonPageSyncListener = true;
+                    progressSlider.addEventListener('input', () => {
+                        updateQuickSummaryPageVisibility();
+                        resetScroll();
+                    });
+                }
+
+                syncReaderModeElements(bodyContainer);
+
+                modeSwitchObserver = new MutationObserver((mutations) => {
+                    const hasChildChange = mutations.some((m) => m.type === "childList" && m.addedNodes.length > 0);
+                    if (!hasChildChange) return;
+                    syncReaderModeElements(bodyContainer);
+                });
+
+                modeSwitchObserver.observe(bodyContainer, {
+                    childList: true,
+                    subtree: false
+                });
+            }
+
             async function handleLoadedContent(node) {
                 resetScroll();
                 updateQuickSummaryPageVisibility();
@@ -11935,8 +11841,6 @@
                 
                 setupSentenceFocus(node);
                 
-                changeTranslationColor(node);
-                
                 const lessonLanguage = getLessonLanguage();
                 const lessonId = getLessonId();
                 if (lessonLanguage && lessonId) {
@@ -11949,58 +11853,9 @@
             
             const readerBodyContainer = await waitForElement('div[data-reader-mode-body="true"]', 10000);
             if (readerBodyContainer) {
-                const targetNode = readerBodyContainer.querySelector('.reader-body, .poc-page') || readerBodyContainer;
+                const targetNode = readerBodyContainer.querySelector('.reader-body') || readerBodyContainer;
+                bindReaderModeBody(readerBodyContainer);
                 handleLoadedContent(targetNode);
-                
-                const progressSlider = document.querySelector('input[type="range"][aria-label="Lesson progress"]');
-                if (progressSlider) {
-                    progressSlider.addEventListener('input', () => {
-                        updateQuickSummaryPageVisibility();
-                        resetScroll();
-                    });
-                }
-                
-                const observer = new MutationObserver((mutations) => {
-                    let shouldSyncPageState = false;
-                    for (const mutation of mutations) {
-                        if (mutation.type === "childList") {
-                            for (const node of mutation.addedNodes) {
-                                if (node.nodeType !== Node.ELEMENT_NODE) continue;
-                                if (node.matches?.('.reader-body, .poc-page')) {
-                                    handleLoadedContent(node);
-                                    return;
-                                }
-                                if (node.matches?.('.poc-column, .poc-line') || node.querySelector?.('.poc-column, .poc-line')) {
-                                    shouldSyncPageState = true;
-                                }
-                            }
-                            if (mutation.target.nodeType === Node.ELEMENT_NODE && mutation.target.matches?.('.poc-page, .poc-column')) {
-                                shouldSyncPageState = true;
-                            }
-                        } else if (mutation.type === "attributes" && mutation.attributeName === "class") {
-                            const oldClass = mutation.oldValue || "";
-                            const newClass = mutation.target.className || "";
-                            const oldPage = oldClass.match(/\bis-page-(\d+)\b/)?.[1];
-                            const newPage = newClass.match(/\bis-page-(\d+)\b/)?.[1];
-                            
-                            if (newPage && oldPage !== newPage) {
-                                shouldSyncPageState = true;
-                            }
-                        }
-                    }
-                    if (shouldSyncPageState) {
-                        updateQuickSummaryPageVisibility();
-                        resetScroll();
-                    }
-                });
-                
-                observer.observe(readerBodyContainer, {
-                    childList: true,
-                    subtree: true,
-                    attributes: true,
-                    attributeFilter: ['class'],
-                    attributeOldValue: true
-                });
             }
         }
         
@@ -13820,24 +13675,27 @@
                     selectedTextObserver.observe(selectedTextElement, {subtree: true, characterData: true, childList: true});
                 }
                 
-                if (sideColumnObserver) {
-                    sideColumnObserver.disconnect();
-                    sideColumnObserver = null;
-                }
                 const sideColumn = document.querySelector('div[data-reader-side-column="true"]');
-                if (sideColumn) {
+                if (sideColumn && observedSideColumn !== sideColumn) {
+                    if (sideColumnObserver) {
+                        sideColumnObserver.disconnect();
+                        sideColumnObserver = null;
+                    }
+                    observedSideColumn = sideColumn;
                     sideColumnObserver = new MutationObserver((mutations) => {
                         for (const mutation of mutations) {
+                            if (mutation.target.closest?.('#chat-widget, #memo-widget-container')) continue;
                             for (const node of mutation.addedNodes) {
                                 if (node.nodeType !== Node.ELEMENT_NODE) continue;
+                                if (node.matches?.('#chat-widget, #memo-widget-container, .addon-quick-meaning-form')) continue;
                                 if (node.matches?.("[data-word-widget]") || node.querySelector?.("[data-word-widget]")) {
                                     const currentText = getCurrentlyTargetedText();
-                                    if (currentText && currentText !== lastActiveWordText) {
+                                    if (currentText) {
                                         lastActiveWordText = currentText;
-                                        console.debug('Observer:', `Widget changed from resource: ${currentText}`);
-                                        updateWidget(false);
-                                        return;
                                     }
+                                    console.debug('Observer:', `Widget added/changed in sideColumn: ${currentText}`);
+                                    updateWidget(false);
+                                    return;
                                 }
                             }
                         }
@@ -13848,30 +13706,19 @@
             
             let selectedTextObserver = null;
             let sideColumnObserver = null;
+            let observedSideColumn = null;
             let lastActiveWordText = "";
             let lastActiveSentenceText = "";
             let lastAskedTargetText = "";
             
-            const readerContainer = document.querySelector('.reader-appearance') || document.querySelector('main') || document.getElementById('lesson-reader');
-            
             updateWidget();
-            if (readerContainer) {
-                const observer = new MutationObserver((mutations) => {
-                    for (const mutation of mutations) {
-                        for (const node of mutation.addedNodes) {
-                            if (node.nodeType !== Node.ELEMENT_NODE) continue;
-                            if (node.matches?.('div[data-reader-side-column="true"], [data-word-widget]') ||
-                                node.querySelector?.('div[data-reader-side-column="true"], [data-word-widget]')) {
-                                console.debug('Observer:', `Widget added.`);
-                                updateWidget();
-                                return;
-                            }
-                        }
-                    }
+            if (!document.querySelector('div[data-reader-side-column="true"]')) {
+                waitForElement('div[data-reader-side-column="true"]', 10000).then((sideColumn) => {
+                    if (sideColumn) updateWidget(false);
                 });
-                observer.observe(readerContainer, {childList: true, subtree: true});
             }
             
+            const popupRoot = document.querySelector('.reader-appearance') || document.body;
             const popupObserver = new MutationObserver((mutations) => {
                 for (const mutation of mutations) {
                     for (const node of mutation.addedNodes) {
@@ -13883,6 +13730,10 @@
                                 lastActiveSentenceText = popupText;
                                 updateWidget();
                             }
+                            return;
+                        }
+                        if (node.matches?.('div[data-reader-side-column="true"]') || node.querySelector?.('div[data-reader-side-column="true"]')) {
+                            updateWidget(false);
                             return;
                         }
                     }
@@ -13897,7 +13748,7 @@
                     }
                 }
             });
-            popupObserver.observe(document.body, {childList: true, subtree: true});
+            popupObserver.observe(popupRoot, {childList: true, subtree: popupRoot === document.body});
         }
         
         let styleElement = null;
@@ -14383,7 +14234,6 @@
         `;
         
         setupKeyboardShortcuts();
-        setupYoutubePlayerCustomization();
         setupReaderContainer();
         setupLLMs();
         handleLocalVideoContainerVisibility();
