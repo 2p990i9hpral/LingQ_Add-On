@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      19.0.0
+// @version      19.0.1
 // @license      GPL-3.0-or-later
 // @grant       GM_setValue
 // @grant       GM_getValue
@@ -997,12 +997,13 @@
     }
     
     function addElementToNavBar(element) {
-        const anchorElement = document.querySelector('#app > div > div > header > div > div:first-child');
+        const headerContainer = document.querySelector('header[data-site-header="true"] > div') || document.querySelector('#app > div > div > header > div');
+        if (!headerContainer) return;
+        
+        const anchorElement = headerContainer.firstElementChild;
         if (!anchorElement) return;
         
-        const headerDiv = anchorElement.parentElement;
-        const existingButtons = headerDiv.querySelectorAll('.nav-button');
-        
+        const existingButtons = headerContainer.querySelectorAll('.nav-button');
         if (existingButtons.length > 0) {
             existingButtons[existingButtons.length - 1].insertAdjacentElement('afterend', element);
         } else {
@@ -9420,11 +9421,11 @@
                 }
 
                 ${settings.hoverAnnotation === "reader" ? `
-                .reader-container > p rt {
+                div[data-reader-mode-body="true"] rt {
                     visibility: hidden !important;
                 }
-                .reader-container > p ruby:hover rt,
-                .reader-container > p .sentence-item:hover rt {
+                div[data-reader-mode-body="true"] ruby:hover rt,
+                div[data-reader-mode-body="true"] .sentence-item:hover rt {
                     visibility: visible !important;
                 }
                 ` : settings.hoverAnnotation === "all" ? `
@@ -9434,85 +9435,56 @@
                 }
                 ` : ""}
 
-                .reader-container p span.sentence-item,
-                .reader-container p .sentence {
+                .sentence-item {
                     color: var(--font-color) !important;
                 }
 
-                .sentence.is-playing,
-                .sentence.is-playing span {
+                .reader-sentence.playing,
+                .reader-sentence.playing span,
+                .sentence-item.playing {
                     text-underline-offset: .2em !important;
+                    text-decoration: underline !important;
                     text-decoration-color: var(--is-playing-underline) !important;
                 }
 
                 /*highlightings*/
 
-                    .phrase-item {
-                        padding: 0 !important;
-                        background-color: var(--lingq-background) !important;
-                    }
-                
-                    .phrase-item.phrase-item-status--1 {
-                        background-color: color-mix(in srgb, var(--lingq-background) 65%, transparent) !important;
-                    }
-                
-                    .phrase-item.phrase-item-status--2 {
-                        background-color: color-mix(in srgb, var(--lingq-background) 35%, transparent) !important;
-                    }
-                
-                    .phrase-item.phrase-item-status--3 {
-                        background-color: color-mix(in srgb, var(--lingq-background) 15%, transparent) !important;
-                    }
-                
-                    .phrase-item.phrase-item-status--4 {
-                        background-color: rgba(0, 0, 0, 0) !important;
-                    }
-                
-                    .phrase-cluster:not(:has(.phrase-item-status--4)) {
-                        border-radius: .25rem;
-                    }
-                
-                    .phrase-cluster:has(.phrase-item-status--4) {
-                        border-radius: .25rem;
-                    }
-                
-                    .reader-container .sentence .lingq-word {
-                        background-color: var(--lingq-background) !important;
-                    }
-                
-                    .reader-container .sentence .lingq-word.lingq-status-1 {
-                        background-color: color-mix(in srgb, var(--lingq-background) 65%, transparent) !important;
-                    }
-                
-                    .reader-container .sentence .lingq-word.lingq-status-2 {
-                        background-color: color-mix(in srgb, var(--lingq-background) 35%, transparent) !important;
-                    }
-                
-                    .reader-container .sentence .lingq-word.lingq-status-3 {
-                        background-color: color-mix(in srgb, var(--lingq-background) 15%, transparent) !important;
-                    }
-                
-                    .reader-container .sentence .lingq-word.is-learned {
-                        background-color: rgba(0, 0, 0, 0) !important;
-                    }
-                
-                    .reader-container .sentence .blue-word {
-                        background-color: var(--unknown-background) !important;
-                    }
-                
-                    .phrase-cluster:hover,
-                    .phrase-created:hover {
-                        padding: 0 !important;
-                    }
-                
-                    .phrase-cluster:hover .phrase-item,
-                    .phrase-created .phrase-item {
-                        padding: 0 !important;
-                    }
-                
-                    .reader-container .sentence .selected-text {
-                        padding: 0 !important;
-                    }
+                .sentence-item.ar-new {
+                    background-color: var(--unknown-background) !important;
+                    border: 1px solid var(--unknown-border) !important;
+                    border-radius: .25rem;
+                }
+
+                .sentence-item.ar-lingq {
+                    border: 1px solid var(--lingq-border) !important;
+                    border-radius: .25rem;
+                }
+
+                .sentence-item.ar-lingq.ar-lingq-0 {
+                    background-color: color-mix(in srgb, var(--lingq-background) 65%, transparent) !important;
+                }
+
+                .sentence-item.ar-lingq.ar-lingq-1 {
+                    background-color: color-mix(in srgb, var(--lingq-background) 35%, transparent) !important;
+                }
+
+                .sentence-item.ar-lingq.ar-lingq-2 {
+                    background-color: color-mix(in srgb, var(--lingq-background) 15%, transparent) !important;
+                }
+
+                .sentence-item.ar-lingq.ar-lingq-3 {
+                    background-color: rgba(0, 0, 0, 0) !important;
+                    border: 1px solid var(--lingq-border-learned) !important;
+                }
+
+                .sentence-item.ar-learned {
+                    border: 1px solid var(--lingq-border-learned) !important;
+                }
+
+                .sentence-item.selected {
+                    outline: 2px solid var(--font-color) !important;
+                    border-radius: .25rem;
+                }
 
                 /*Chat*/
 
@@ -9886,203 +9858,110 @@
         }
         
         function generateLayoutCSS() {
-            const isPageMode = isNativePageMode();
-            
             return `
             :root {
-                --article-height: calc(var(--app-height) - var(--height-big));
-                --header-height: 50px;
+                --header-height: 48px;
                 --widget-width: ${settings.widgetWidth}px;
                 --chat-widget-height: ${settings.chatWidgetHeight}px;
-                --footer-height: 80px;
-                --reader-layout-columns: 1fr var(--widget-width);
-                --reader-layout-rows: var(--article-height) calc(var(--height-big) - var(--footer-height)) var(--footer-height);
+                --footer-height: 48px;
             }
 
-            /*font settings*/
+            /* Site header compaction */
+            header[data-site-header="true"] {
+                min-height: 48px !important;
+                height: 48px !important;
+                padding-top: 4px !important;
+                padding-bottom: 4px !important;
+            }
+            header[data-site-header="true"] > div,
+            header[data-site-header="true"] .h-14 {
+                height: 100% !important;
+                min-height: 0 !important;
+            }
+            header[data-site-header="true"] img.size-10 {
+                width: 36px !important;
+                height: 36px !important;
+                margin-top: 2px !important;
+            }
 
-            .reader-container {
-                font-family: var(--custom-font, inherit) !important;
+            /* Sub-header compaction */
+            div.relative.z-40.shrink-0 {
+                padding-top: 0 !important;
+            }
+            div.relative.z-40.shrink-0 > div {
+                min-height: 36px !important;
+                padding-top: 2px !important;
+                padding-bottom: 2px !important;
+            }
+
+            /* Footer player compaction */
+            footer {
+                height: 48px !important;
+                min-height: 48px !important;
+                padding-top: 4px !important;
+                padding-bottom: 4px !important;
+                align-items: center !important;
+            }
+            footer div[role="group"][aria-label="Lesson player"] {
+                height: 40px !important;
+                min-height: 40px !important;
+            }
+
+            /* Reader body & text area */
+            .reader-body {
+                max-width: 100% !important;
                 line-height: var(--line-height) !important;
+                font-family: var(--custom-font, inherit) !important;
                 font-size: var(--font-size) !important;
             }
-
-            .sentence-text-head {
-                min-height: 4.5rem !important;
-            }
-
-            .reader-container p {
-                margin-top: 0 !important;
-            }
-
-            /*highlightings*/
-
-            .phrase-cluster:not(:has(.phrase-item-status--4, .phrase-item-status--4x2)) {
-                border: 1px solid var(--lingq-border) !important;
-            }
-
-            .phrase-cluster:has(.phrase-item-status--4, .phrase-item-status--4x2) {
-                border: 1px solid var(--lingq-border-learned) !important;
-            }
-
-            .reader-container .sentence .lingq-word:not(.is-learned) {
-                border: 1px solid var(--lingq-border) !important;
-            }
-
-            .reader-container .sentence .lingq-word.is-learned {
-                border: 1px solid var(--lingq-border-learned) !important;
-            }
-
-            .reader-container .sentence .blue-word {
-                border: 1px solid var(--unknown-border) !important;
-            }
-
-            /*header settings*/
-
-            .main-wrapper {
-                padding: 0 !important;
-            }
-
-            #app > .main-wrapper > [data-slot="sidebar-wrapper"] > header {
-                position: absolute;
-                z-index: 10;
-            }
-
-            #main-nav {
-                z-index: 1;
-            }
-
-            #main-nav > nav {
-                height: var(--header-height);
-            }
-
-            #main-nav > nav > div:nth-child(1) {
-                height: var(--header-height);
-            }
-
-            .main-header {
-                z-index: 20;
-                pointer-events: none;
-            }
-
-            .main-header > div {
-                grid-template-columns: 1fr 150px !important;
-            }
-
-            .main-header section:nth-child(1) {
-                /* display: none; */
-            }
-
-            .main-header section {
-                pointer-events: auto;
-                z-index: 1;
-            }
-
-            .main-header svg {
-                width: 20px !important;
-                height: 20px !important;
-            }
-
-            .main-header section .dropdown-content {
-                /*position: fixed;*/
-            }
-
-            .lesson-progress-section {
-                grid-template-rows: unset !important;
-                grid-template-columns: unset !important;
-                grid-column: 1 !important;
-                pointer-events: auto;
-            }
-
-            .lesson-progress-section .rc-slider{
-                grid-row: unset !important;
-                grid-column: unset !important;
-                width: 50% !important;
-            }
-
-            /*layout*/
-
-            #lesson-reader {
-                grid-template-columns: var(--reader-layout-columns);
-                grid-template-rows: var(--reader-layout-rows);
-                overflow: hidden;
-                height: auto !important;
-            }
-
-            .sentence-text {
-                max-width: max(80%, 1200px) !important;
-                height: calc(var(--article-height) - var(--header-height)) !important;
-                padding: 0 0 20px !important;
-            }
-
-            .reader-container-wrapper {
-                height: 100% !important;
-                overflow-y: ${isPageMode ? "auto" : "visible"} !important;
-                outline: none !important;
-                overflow-anchor: none !important;
-            }
-
-            .widget-area {
-                padding: var(--header-height) 0 10px !important;
-                margin: 0 10px !important;
-                height: 100% !important;
-                display: flex;
-                flex-direction: column;
-                justify-content: ${settings.widgetVerticalAlign || "flex-start"} !important;
-            }
-
-            .reader-widget {
-                position: relative;
-                display: flow !important;
-                overflow-y: auto;
+            div[data-reader-mode-body="true"] {
                 width: 100% !important;
-                height: fit-content !important;
-                max-width: none !important;
-                scrollbar-width: none !important;
-                margin-bottom: 15px !important;
+                flex: 1 1 0% !important;
             }
 
-            .reader-widget:not(.reader-widget--resources) {
-                padding: 10px !important;
-            }
-
-            .reader-widget.reader-widget--resources {
-                padding: 10px 15px !important;
-            }
-
-            .reader-widget--resources-content {
-                height: 40vh !important;
-            }
-
-            .reference-main {
-                margin-bottom: 5px;
-            }
-
-            .reference-word {
-                white-space: pre-line !important;
-            }
-
-            .section-widget--main {
-                margin: 0 !important;
+            /* Page mode prev/next buttons */
+            button[aria-label="Previous page"],
+            button[aria-label="Next page"],
+            div[data-reader-mode-body="true"] div[aria-hidden="true"].w-12 {
+                width: 2rem !important;
+                min-width: 2rem !important;
                 padding: 0 !important;
             }
 
-            .appCue-poular-hints {
-                max-height: 250px;
-                overflow-y: auto;
-                scrollbar-width: none !important;
+            /* Sidebar column width */
+            div[data-reader-side-column="true"]:not(.contents) {
+                width: var(--widget-width) !important;
+                min-width: var(--widget-width) !important;
+                max-width: var(--widget-width) !important;
             }
 
-            .reference-input-text {
-                font-size: 0.9rem !important;
-                scrollbar-width: none !important;
+            /* Player controllers styling */
+            #addon-volume-controller .addon-volume-text {
+                display: inline-flex !important;
+                align-items: center !important;
+                font-size: 0.65rem !important;
+                font-weight: 400 !important;
+                line-height: 1 !important;
+                color: inherit !important;
+            }
+            #addon-speed-controller .addon-speed-text {
+                display: inline-flex !important;
+                align-items: center !important;
+                min-width: 2.5em;
+                justify-content: center;
+                font-size: 0.85rem !important;
+                font-weight: 500 !important;
+                line-height: 1 !important;
+                color: inherit !important;
             }
 
+            /* Memo Widget */
             #memo-widget-container {
                 display: flex;
-                background-color: var(--readerWidgetBoxBackground);
+                background-color: var(--readerWidgetBoxBackground, rgba(125, 125, 125, 0.1));
                 padding: 10px;
-                border-radius: 1.25rem;
+                border-radius: 1rem;
+                margin-top: 8px;
             }
 
             .memo-textarea {
@@ -10092,447 +9971,48 @@
                 padding: 5px 10px;
                 border-radius: 5px;
                 border: 1px solid rgba(125, 125, 125, 0.35);
+                background: transparent;
+                color: inherit;
                 outline: none;
                 resize: none;
                 overflow-y: auto;
                 field-sizing: content;
-            }
-
-            .section-widget--foot {
-                margin: 0 !important;
-                padding: 10px 0 0 !important;
-                display: block !important;
-            }
-
-            .dictionary-resources {
-                width: 100% !important;
-            }
-
-            .word-status-bar {
-                width: 100%;
-                grid-template-columns: repeat(6, 1fr) !important;
-                grid-gap: 10px !important;
-            }
-
-            .reference-helper-coin-value {
-                display: none !important;
-            }
-
-            .section-widget--head .reference-helpers {
-                grid-template-columns: 1fr !important;
-            }
-
-            .section-widget--head .reference-helpers:not(:has(.reference-helper-tags)) {
-                display: none !important;
-                min-height: 0 !important;
-                padding: 0 !important;
-                margin: 0 !important;
-                border: none !important;
-            }
-
-            .main-footer {
-                grid-area: 3 / 1 / 3 / 1 !important;
-                align-self: end;
-                padding: 5px 10px 10px;
-                height: 100%;
-            }
-
-            .main-footer > div {
-                height: 100%;
-            }
-
-            .lesson-bottom > div {
-                position: unset !important;
-            }
-
-            .main-content {
-                grid-template-rows: var(--header-height) 1fr !important;
-                overflow: hidden;
-                align-items: center;
-            }
-
-            /*make prev/next page buttons compact*/
-
-            .reader-component {
-                grid-template-columns: ${isPageMode ? "2rem" : "0"} 1fr 2rem !important;
-            }
-
-            .reader-component > .nav--left {
-                visibility: ${isPageMode ? "visible" : "hidden"} !important;
-            }
-
-            .reader-component > div > a.button > span {
-                width: 0.5rem !important;
-            }
-
-            .reader-component > div > a.button > span > svg {
-                width: 15px !important;
-                height: 15px !important;
-            }
-
-            .loadedContent {
-                padding: 0 0 0 10px !important;;
-            }
-
-            /*font settings*/
-
-            .reader-container {
-                padding: 0 !important;
-                margin: 0 !important;
-                float: left !important;
-                max-width: unset !important;
-                columns: ${isPageMode ? "100vw auto" : "unset"} !important;
-                overflow-x: ${isPageMode ? "visible" : "unset"} !important;
-                overflow-y: ${isPageMode ? "visible" : "scroll"} !important;
-                height: ${isPageMode ? "1780px" : "100%"} !important;
-                outline: none !important;
-                overflow-anchor: none !important;
-            }
-
-            .reader-container .sentence-item--transliteration:not(.has-annotation) {
-                margin-bottom: 0 !important;
-            }
-
-            /*video viewer*/
-
-            .video-player:not(.is-minimized) {
-                display: flex !important;
-                justify-content: flex-end !important;
-                pointer-events: none;
-                z-index: 38 !important;
-            }
-
-            .video-player.is-minimized {
-                bottom: 0 !important;
-                right: 0 !important;
-                align-items: end !important;
-            }
-
-            .video-player > .modal-background {
-                background-color: rgb(26 28 30 / 0%) !important;
-            }
-
-            .video-player:not(.is-minimized) > .modal-content {
-                max-width: var(--width-big) !important;
-                margin: 0 0 10px 10px !important;
-                border-radius: 0.75rem !important;
-            }
-
-            .video-player.is-minimized > .modal-content {
-                width: calc(var(--widget-width) - 20px) !important;
-                max-width: unset !important;
-                margin: 0 10px var(--footer-height) 0 !important;
-            }
-
-            .video-player .modal-section {
-                display: none !important;
-            }
-
-            .video-player:not(.is-minimized) .video-wrapper {
-                height: var(--height-big) !important;
-                overflow: hidden;
-                pointer-events: auto;
-            }
-
-            .video-player.is-minimized .video-wrapper {
-                height: 250px !important;
-            }
-
-            /*video controller*/
-
-            .rc-slider-rail {
-                background-color: dimgrey !important;
-            }
-
-            .rc-slider-step {
-                margin-top: -8px !important;
-                height: 1.2rem !important;
-            }
-
-            .lingq-audio-player {
-                margin-left: 5px;
-                width: 30px;
-                height: 30px;
-                padding: 0 !important;
-            }
-            
-            .lingq-audio-player svg {
-                width: 19px !important;
-                height: 19px !important;
-            }
-
-            .section--player.is-expanded {
-                width: 100% !important;
-                height: 100%;
-                padding: 0 !important;
-            }
-
-            .sentence-mode-button {
-                margin: 0 0 10px 0;
-            }
-
-            .player-wrapper {
-                grid-template-columns: 1fr 40px !important;
-                padding: 0 !important;
-            }
-
-            .audio-player {
-                padding: 0 5px !important;
-                grid-template-rows: 16px 16px auto !important;
-            }
-
-            .audio-player--controllers {
-                grid-gap: unset !important;
-            }
-            
-            .audio-player--controllers > div.dropdown {
-                display: none !important;
-            }
-
-            .audio-player--controllers a {
-                height: 25px !important;
-                padding: 0 0.5em !important;
-                margin: 5px 0;
-            }
-
-            .audio-player--controllers svg {
-                width: 20px !important;
-                height: 20px !important;
-            }
-
-            .audio-player--controllers .controller-item--speed svg {
-                width: 17px !important;
-                height: auto !important;
-            }
-
-            #addon-volume-controller svg {
-                width: 23px !important;
-                height: 23px !important;
-            }
-
-            .audio-player--controllers span {
-                height: 25px !important;
-            }
-
-            #addon-volume-controller .addon-volume-text {
-                display: inline-flex !important;
-                align-items: center !important;
-                font-size: 0.6rem !important;
-                font-weight: 400 !important;
-                line-height: 1 !important;
-                color: inherit !important;
-            }
-
-            #addon-speed-controller .addon-speed-text {
-                display: inline-flex !important;
-                align-items: center !important;
-                min-width: 3em;
-                justify-content: center;
-                font-size: 0.9rem !important;
-                font-weight: 500 !important;
-                line-height: 1 !important;
-                color: inherit !important;
-            }
-
-            #lesson-reader > div.h-full > div[dir=ltr] > header {
-                margin-top: 60px;
             }
             `;
         }
         
         function generateVideoCSS(position = "Right") {
             let layoutCSS = `
-                #youtube-wireframe-container {
-                    display: flex;
-                    justify-content: center;
-                    align-items: center;
-                    border-radius: 0.75rem;
-                    border: 2px dashed rgb(125 125 125 / 35%);
-                    background-color: rgb(125 125 125 / 6%);
-                    color: var(--font-color);
-                    box-sizing: border-box;
-                    cursor: pointer;
-                    overflow: hidden;
-                    user-select: none;
-                    z-index: 10;
-                    transition: background-color 0.2s, border-color 0.2s;
+                :root {
+                    --height-big: ${settings.heightBig || 400}px;
                 }
-                #youtube-wireframe-container:hover {
-                    background-color: rgb(125 125 125 / 12%);
-                    border-color: rgb(125 125 125 / 55%);
-                }
-                .youtube-wireframe-content {
-                    display: flex;
-                    flex-direction: column;
-                    align-items: center;
-                    gap: 12px;
-                    opacity: 0.6;
-                    pointer-events: none;
-                }
-                .youtube-wireframe-content svg {
-                    width: 48px;
-                    height: 48px;
-                }
-                .youtube-wireframe-content span {
-                    font-size: 0.9em;
-                    font-weight: 500;
-                }
-                #lesson-reader[data-lesson-completed-visible="true"] #youtube-wireframe-container,
-                [id$="-content-lessonCompleted"][data-state="active"] ~ * #youtube-wireframe-container,
-                body:has([id$="-content-lessonCompleted"][data-state="active"]) #youtube-wireframe-container {
-                    display: none !important;
+                div[data-reader-video-stage="true"] {
+                    max-height: var(--height-big) !important;
                 }
             `;
             
-            if (position === "Right") {
+            if (position === "Bottom") {
                 layoutCSS += `
-                    :root {
-                        --width-big: calc(50vw - calc(var(--widget-width) / 2) - 10px);
-                        --height-big: calc(100vh - 65px);
-                        --reader-layout-columns: 1fr var(--widget-width) 1fr;
-                        --reader-layout-rows: calc(var(--article-height) - var(--footer-height)) var(--footer-height);
-                        --article-height: var(--app-height);
+                    div.relative.flex.min-h-0.flex-1.flex-col > .contents {
+                        display: flex !important;
+                        flex-direction: column !important;
                     }
-                    .main-header > div {
-                        padding: 0 0 0 420px !important;
+                    div.relative.flex.min-h-0.flex-1.flex-col > .contents > :has([data-reader-video-stage="true"]) {
+                        order: 2 !important;
                     }
-                    #lesson-reader {
-                        grid-template-columns: var(--reader-layout-columns);
-                    }
-                    .video-player {
-                        align-items: end !important;
-                        justify-content: flex-end !important;
-                    }
-                    .video-player:not(.is-minimized) > .modal-content {
-                        margin: 0 10px 10px 10px !important;
-                    }
-                    #youtube-wireframe-container {
-                        grid-area: 1 / 3 / 3 / 4 !important;
-                        margin: var(--header-height) 10px 10px 10px;
-                        height: calc(100% - var(--header-height) - 10px);
-                    }
-                    .widget-area {
-                        grid-area: 1 / 2 / 2 / 3 !important;
-                    }
-                    .main-content {
-                        grid-area: 1 / 1 / 3 / 2 !important;
-                    }
-                    .main-footer {
-                        grid-area: 2 / 2 / 3 / 3 !important;
+                    div.relative.flex.min-h-0.flex-1.flex-col > .contents > [data-reader-mode-body="true"] {
+                        order: 1 !important;
+                        flex: 1 1 0% !important;
                     }
                 `;
-            } else if (position === "Left") {
+            } else if (position === "Right") {
                 layoutCSS += `
-                    :root {
-                        --width-big: calc(50vw - calc(var(--widget-width) / 2) - 10px);
-                        --height-big: calc(100vh - 65px);
-                        --reader-layout-columns: 1fr var(--widget-width) 1fr;
-                        --reader-layout-rows: calc(var(--article-height) - var(--footer-height)) var(--footer-height);
-                        --article-height: var(--app-height);
+                    .grid:has([data-reader-video-stage="true"]) > :has([data-reader-video-stage="true"]) {
+                        order: 2 !important;
                     }
-                    .main-header > div {
-                        padding: 0 450px 0 0 !important;
+                    .grid:has([data-reader-video-stage="true"]) > [data-reader-mode-body="true"] {
+                        order: 1 !important;
                     }
-                    #lesson-reader {
-                        grid-template-columns: var(--reader-layout-columns);
-                    }
-                    .video-player {
-                        align-items: start !important;
-                        justify-content: flex-start !important;
-                    }
-                    .video-player:not(.is-minimized) > .modal-content {
-                        margin: 0 10px 10px 10px !important;
-                    }
-                    #youtube-wireframe-container {
-                        grid-area: 1 / 1 / 3 / 2 !important;
-                        margin: var(--header-height) 10px 10px 10px;
-                        height: calc(100% - var(--header-height) - 10px);
-                    }
-                    .widget-area {
-                        grid-area: 1 / 2 / 2 / 3 !important;
-                    }
-                    .main-content {
-                        grid-area: 1 / 3 / 3 / 4 !important;
-                    }
-                    .main-footer {
-                        grid-area: 2 / 2 / 3 / 3 !important;
-                    }
-                `;
-            } else if (position === "Bottom") {
-                layoutCSS += `
-                :root {
-                    --width-big: calc(100vw - var(--widget-width) - 10px);
-                    --height-big: ${settings.heightBig}px;
-                }
-                .main-header > div {
-                    padding: 0 0 0 420px !important;
-                }
-                .main-content {
-                    grid-area: 1 / 1 / 2 / 2 !important;
-                }
-                .widget-area {
-                    grid-area: 1 / 2 / 3 / 2 !important;
-                }
-                .main-footer {
-                    grid-area: 3 / 2 / 4 / 3 !important;
-                    align-self: end;
-                }
-                .video-player:not(.is-minimized) {
-                    align-items: flex-start !important;
-                }
-                #youtube-wireframe-container {
-                    grid-area: 2 / 1 / 3 / 2 !important;
-                    margin: 10px 10px 10px 10px;
-                    height: calc(100% - 20px);
-                }
-                `;
-            } else if (position === "Top") {
-                layoutCSS += `
-                :root {
-                    --width-big: calc(100vw - var(--widget-width) - 10px);
-                    --height-big: ${settings.heightBig}px;
-                    --reader-layout-rows: calc(var(--height-big) + var(--header-height)) calc(var(--article-height) - var(--header-height) - var(--footer-height)) var(--footer-height);
-                    --article-height: calc(var(--app-height) - var(--height-big));
-                }
-                .main-header > div {
-                    padding: 0 0 0 420px !important;
-                }
-                .main-content {
-                    grid-area: 2 / 1 / 3 / 2 !important;
-                }
-                .reader-component {
-                    height: 100%;
-                    min-height: 0;
-                }
-                .sentence-text {
-                    height: auto !important;
-                }
-                .widget-area {
-                    grid-area: 1 / 2 / 3 / 3 !important;
-                }
-                .main-footer {
-                    grid-area: 3 / 1 / 4 / 2 !important;
-                    align-self: end;
-                }
-                .video-player:not(.is-minimized) {
-                    align-items: flex-start !important;
-                    justify-content: flex-start !important;
-                }
-                .video-player:not(.is-minimized) > .modal-content {
-                    margin: var(--header-height) 0 10px 10px !important;
-                    max-width: var(--width-big) !important;
-                }
-                #lesson-reader[data-lesson-completed-visible="true"] {
-                    grid-template-rows: 1fr var(--footer-height) !important;
-                }
-                #lesson-reader[data-lesson-completed-visible="true"] .main-content {
-                    grid-area: 1 / 1 / 3 / 2 !important;
-                }
-                #youtube-wireframe-container {
-                    grid-area: 1 / 1 / 2 / 2 !important;
-                    margin: calc(var(--header-height) + 10px) 10px 10px 10px;
-                    height: calc(100% - var(--header-height) - 20px);
-                }
                 `;
             }
             
@@ -10540,150 +10020,51 @@
         }
         
         function generateLocalVideoCSS(position = "Right") {
-            let layoutCSS = "";
-            
-            if (position === "Right") {
-                layoutCSS = `
-                :root {
-                    --width-big: calc(50vw - calc(var(--widget-width) / 2) - 10px);
-                    --height-big: calc(100vh - 65px);
-                    --reader-layout-columns: minmax(0, 1fr) var(--widget-width) minmax(0, 1fr);
-                    --reader-layout-rows: calc(var(--article-height) - var(--footer-height)) var(--footer-height);
-                    --article-height: var(--app-height);
-                }
-                .main-header > div {
-                    padding: 0 0 0 420px !important;
-                }
-                .main-content {
-                    grid-area: 1 / 1 / 3 / 2 !important;
-                    min-width: 0;
-                }
-                .widget-area {
-                    grid-area: 1 / 2 / 2 / 3 !important;
-                }
-                .main-footer {
-                    grid-area: 2 / 2 / 3 / 3 !important;
-                }
-                #local-video-container {
-                    grid-area: 1 / 3 / 3 / 4 !important;
-                    margin: var(--header-height) 10px 10px 10px;
-                }
-                `;
-            } else if (position === "Left") {
-                layoutCSS = `
-                :root {
-                    --width-big: calc(50vw - calc(var(--widget-width) / 2) - 10px);
-                    --height-big: calc(100vh - 65px);
-                    --reader-layout-columns: minmax(0, 1fr) var(--widget-width) minmax(0, 1fr);
-                    --reader-layout-rows: calc(var(--article-height) - var(--footer-height)) var(--footer-height);
-                    --article-height: var(--app-height);
-                }
-                .main-header > div {
-                    padding: 0 450px 0 0 !important;
-                }
-                .main-content {
-                    grid-area: 1 / 3 / 3 / 4 !important;
-                    min-width: 0;
-                }
-                .widget-area {
-                    grid-area: 1 / 2 / 2 / 3 !important;
-                }
-                .main-footer {
-                    grid-area: 2 / 2 / 3 / 3 !important;
-                }
-                #local-video-container {
-                    grid-area: 1 / 1 / 3 / 2 !important;
-                    margin: var(--header-height) 10px 10px 10px;
-                }
-                `;
-            } else if (position === "Bottom") {
-                layoutCSS = `
-                :root {
-                    --width-big: calc(100vw - var(--widget-width) - 10px);
-                    --height-big: ${settings.heightBig}px;
-                    --reader-layout-columns: minmax(0, 1fr) var(--widget-width);
-                    --reader-layout-rows: var(--article-height) calc(var(--height-big) - var(--footer-height)) var(--footer-height);
-                    --article-height: calc(var(--app-height) - var(--height-big));
-                }
-                .main-header > div {
-                    padding: 0 0 0 420px !important;
-                }
-                .main-content {
-                    grid-area: 1 / 1 / 2 / 2 !important;
-                    min-width: 0;
-                }
-                .widget-area {
-                    grid-area: 1 / 2 / 4 / 3 !important;
-                }
-                .main-footer {
-                    grid-area: 3 / 1 / 4 / 2 !important;
-                }
-                #local-video-container {
-                    grid-area: 2 / 1 / 3 / 2 !important;
-                    margin: 0 0 10px 10px;
-                }
-                `;
-            } else if (position === "Top") {
-                layoutCSS = `
-                :root {
-                    --width-big: calc(100vw - var(--widget-width) - 10px);
-                    --height-big: ${settings.heightBig}px;
-                    --reader-layout-columns: minmax(0, 1fr) var(--widget-width);
-                    --reader-layout-rows: calc(var(--height-big) + var(--header-height)) calc(var(--article-height) - var(--header-height) - var(--footer-height)) var(--footer-height);
-                    --article-height: calc(var(--app-height) - var(--height-big));
-                }
-                .main-header > div {
-                    padding: 0 0 0 420px !important;
-                }
-                .main-content {
-                    grid-area: 2 / 1 / 3 / 2 !important;
-                    min-width: 0;
-                }
-                .reader-component {
-                    height: 100%;
-                    min-height: 0;
-                }
-                .sentence-text {
-                    height: auto !important;
-                }
-                .widget-area {
-                    grid-area: 1 / 2 / 4 / 3 !important;
-                }
-                .main-footer {
-                    grid-area: 3 / 1 / 4 / 2 !important;
-                }
-                #local-video-container {
-                    grid-area: 1 / 1 / 2 / 2 !important;
-                    margin: var(--header-height) 0 10px 10px;
-                }
-                #lesson-reader[data-lesson-completed-visible="true"] {
-                    grid-template-rows: 1fr var(--footer-height) !important;
-                }
-                #lesson-reader[data-lesson-completed-visible="true"] .main-content {
-                    grid-area: 1 / 1 / 3 / 2 !important;
-                }
-                `;
-            }
-            
-            return `
-            ${layoutCSS}
-
+            let layoutCSS = `
             :root {
+                --height-big: ${settings.heightBig || 400}px;
                 --caption-font-size: ${settings.captionFontsize}px;
-            }
-            #lesson-reader {
-                grid-template-columns: var(--reader-layout-columns);
             }
             #local-video-container {
                 display: flex;
                 border-radius: 0.75rem;
                 background-color: #000000;
                 position: relative !important;
-                height: ${position === "Bottom" ? "100%" : "calc(100% - var(--header-height) - 10px)"};
+                max-height: var(--height-big);
                 min-width: 0;
                 overflow: hidden;
                 cursor: pointer;
             }
+            `;
+            
+            if (position === "Bottom") {
+                layoutCSS += `
+                    div.relative.flex.min-h-0.flex-1.flex-col > .contents {
+                        display: flex !important;
+                        flex-direction: column !important;
+                    }
+                    #local-video-container {
+                        order: 2 !important;
+                    }
+                    div[data-reader-mode-body="true"] {
+                        order: 1 !important;
+                        flex: 1 1 0% !important;
+                    }
+                `;
+            } else if (position === "Right") {
+                layoutCSS += `
+                    .grid:has(#local-video-container) > #local-video-container {
+                        order: 2 !important;
+                    }
+                    .grid:has(#local-video-container) > [data-reader-mode-body="true"] {
+                        order: 1 !important;
+                    }
+                `;
+            }
+            
+            return `
+            ${layoutCSS}
+
             .local-video-title-bar {
                 position: absolute;
                 top: 0;
@@ -10709,7 +10090,6 @@
                 white-space: nowrap;
                 overflow: hidden;
             }
-            #lesson-reader[data-lesson-completed-visible="true"] #local-video-container,
             [id$="-content-lessonCompleted"][data-state="active"] ~ * #local-video-container,
             body:has([id$="-content-lessonCompleted"][data-state="active"]) #local-video-container {
                 display: none !important;
@@ -10790,100 +10170,15 @@
         function generateAudioCSS() {
             return `
             :root {
-                --width-big: calc(var(--widget-width) - 20px);
-                --height-big: calc(var(--widget-width) * 0.6);
-
-                --reader-layout-rows: var(--article-height) var(--footer-height);
-                --article-height: calc(var(--app-height) - var(--footer-height));
-            }
-
-            .main-header > div {
-                padding: 0 0 0 420px !important;
-            }
-
-            .main-content {
-                grid-area: 1 / 1 / 2 / 2 !important;
-            }
-
-            .widget-area {
-                grid-area: 1 / 2 / 2 / 2 !important;
-            }
-
-            .main-footer {
-                grid-area: 2 / 1 / 3 / 2 !important;
-                align-self: end;
-            }
-
-            .video-player:not(.is-minimized) {
-                align-items: end !important;
-            }
-
-            .video-player:not(.is-minimized) > .modal-content {
-                margin: 0 10px 10px !important;
+                --footer-height: 48px;
             }
             `;
         }
         
         function generateOffModeCSS() {
             return `
-            :root {
-                --width-small: 440px;
-                --height-small: 260px;
-                --right-pos: 0.5%;
-                --bottom-pos: 5.5%;
-            }
-
-            .main-header > div {
-                padding: 0 0 0 420px !important;
-            }
-
             .quick-summary {
                 display: none !important;
-            }
-
-            /*video player*/
-
-            .video-player.is-minimized .video-wrapper,
-            .sent-video-player.is-minimized .video-wrapper {
-                height: var(--height-small);
-                width: var(--width-small);
-                overflow: auto;
-                resize: both;
-            }
-
-            .video-player.is-minimized .modal-content,
-            .sent-video-player.is-minimized .modal-content {
-                max-width: calc(var(--width-small)* 3);
-                margin-bottom: 0;
-            }
-
-            .video-player.is-minimized,
-            .sent-video-player.is-minimized {
-                left: auto;
-                top: auto;
-                right: var(--right-pos);
-                bottom: var(--bottom-pos);
-                z-index: 99999999;
-                overflow: visible
-            }
-
-            /*sentence mode video player*/
-            .loadedContent:has(#sentence-video-player-portal) {
-                grid-template-rows: var(--sentence-height) auto 1fr !important;
-            }
-
-            #sentence-video-player-portal .video-section {
-                width: 100% !important;
-                max-width: none !important;
-            }
-
-            #sentence-video-player-portal .video-wrapper {
-                height: 100% !important;
-                max-height: none !important;
-            }
-
-            #sentence-video-player-portal div:has(> iframe) {
-                height: 100% !important;
             }
             `;
         }
@@ -11778,7 +11073,9 @@
                 
                 preventHorizontalScroll();
                 
-                changeScrollAmount('[data-reader-mode-body="true"] > div.overflow-y-auto', 0.3);
+                if (!isNativePageMode()) {
+                    changeScrollAmount('[data-reader-mode-body="true"] > div.overflow-y-auto', 0.3);
+                }
                 
                 setupSentenceFocus(node);
                 
