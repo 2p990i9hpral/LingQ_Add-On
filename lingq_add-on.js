@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      19.0.10
+// @version      19.0.11
 // @license      GPL-3.0-or-later
 // @grant       GM_setValue
 // @grant       GM_getValue
@@ -9986,23 +9986,22 @@
                     box-sizing: border-box;
                 }
 
-                div[data-word-widget] #chat-widget {
+                div[data-word-widget] #chat-widget { /* AI chat widget embedded inside right word widget */
                     padding: 0 !important;
                     margin: 0 !important;
                 }
 
-                #addon-sentence-header + #chat-widget {
+                #addon-sentence-header + #chat-widget { /* Chat widget positioned directly below custom sentence header */
                     margin-top: 8px !important;
                 }
 
-                /* Word widget header alignment and compact sections */
-                div[data-word-widget] .px-4.pt-3 .flex.min-w-0 {
+                div[data-word-widget] div:has(> * > bdi) { /* Word widget header container wrapping the word title */
                     align-items: center !important;
                 }
-                div[data-word-widget] .px-4.pt-3 bdi {
+                div[data-word-widget] bdi { /* Word title term in word widget header */
                     align-self: center !important;
                 }
-                div[data-word-widget] div.min-h-0.flex-1.overflow-y-auto {
+                div[data-word-widget] div[class*="overflow-y-auto"] { /* Scrollable sections container inside word widget */
                     gap: 12px !important;
                     padding-top: 8px !important;
                 }
@@ -10376,7 +10375,7 @@
                 --chat-widget-height: ${settings.chatWidgetHeight}px;
             }
 
-            /* Disable native View Transition animation & cross-fade blur */
+            /* Reading/split mode transition motion classes on html root */
             html.split-motion,
             html.theater-motion {
                 view-transition-name: none !important;
@@ -10384,60 +10383,58 @@
 
             ::view-transition-group(*),
             ::view-transition-old(*),
-            ::view-transition-new(*) {
+            ::view-transition-new(*) { /* Native browser view transition pseudo-elements */
                 animation: none !important;
                 animation-duration: 0s !important;
             }
 
-            /* Site header compaction */
-            header[data-site-header="true"] {
+            header[data-site-header="true"] { /* Top site navigation bar */
                 min-height: 48px !important;
                 height: 48px !important;
                 padding-top: 4px !important;
                 padding-bottom: 4px !important;
             }
             header[data-site-header="true"] > div,
-            header[data-site-header="true"] .h-14 {
+            header[data-site-header="true"] > div > div:not([data-slot]) { /* Inner header flex container and controls wrapper */
                 height: 100% !important;
                 min-height: 0 !important;
             }
-            header[data-site-header="true"] img.size-10 {
+            header[data-site-header="true"] img { /* Lesson thumbnail image in header next to title */
                 width: 36px !important;
                 height: 36px !important;
                 margin-top: 2px !important;
             }
 
-            /* Sub-header compaction */
-            div.relative.z-40.shrink-0 {
+            .reader-appearance > div > div:first-child { /* Reader sub-header bar containing title, audio scrubber, and options */
                 padding-top: 0 !important;
             }
-            div.relative.z-40.shrink-0 > div {
+            .reader-appearance > div > div:first-child > div { /* Inner container of reader sub-header bar */
                 min-height: 36px !important;
                 padding-top: 2px !important;
                 padding-bottom: 2px !important;
             }
 
-            /* Footer player & pills */
-            footer {
+            footer { /* Bottom audio/video media player bar */
                 height: 56px !important;
                 padding: 0 24px !important;
                 align-items: center !important;
             }
-            footer div[role="group"] {
+            footer div[role="group"] { /* Main playback controls group container (play, pause, skip, speed, volume) */
                 height: 42px !important;
                 align-items: center !important;
             }
             footer button[aria-label="Play"],
-            footer button[aria-label="Pause"]${!settings.hideLynxUI ? `,\n            footer button[aria-label="Ask Lynx AI"]` : ""} {
+            footer button[aria-label="Pause"]${!settings.hideLynxUI ? `,\n            footer button[aria-label="Ask Lynx AI"]` : ""} { /* Play, Pause, and Lynx AI circular action buttons */
                 width: 38px !important;
                 height: 38px !important;
                 padding: 0 !important;
             }
-            ${!settings.hideLynxUI ? `footer button[aria-label="Ask Lynx AI"] svg {
+            ${!settings.hideLynxUI ? `footer button[aria-label="Ask Lynx AI"] svg { /* Lynx AI button icon */
                 width: 20px !important;
                 height: 20px !important;
             }` : ""}
-            footer .rounded-full:not([data-slot="slider-thumb"]):not([role="slider"]):not([data-reader-lynx-entry="true"]) {
+            footer div.rounded-full:has(button[aria-label="More player options"]),
+            footer .rounded-full.bg-surface-default { /* Right-side playback pill container (speed, volume, more options) */
                 display: inline-flex !important;
                 align-items: center !important;
                 justify-content: center !important;
@@ -10445,21 +10442,23 @@
                 padding: 1px 8px !important;
                 line-height: normal !important;
             }
-            footer .rounded-full:not([data-slot="slider-thumb"]):not([role="slider"]):not([data-reader-lynx-entry="true"]) button,
-            footer .rounded-full:not([data-slot="slider-thumb"]):not([role="slider"]):not([data-reader-lynx-entry="true"]) a {
+            footer div.rounded-full:has(button[aria-label="More player options"]) button,
+            footer div.rounded-full:has(button[aria-label="More player options"]) a,
+            footer .rounded-full.bg-surface-default button,
+            footer .rounded-full.bg-surface-default a { /* Action buttons inside the right-side playback pill */
                 height: 28px !important;
                 padding: 1px 0 !important;
                 display: inline-flex !important;
                 align-items: center !important;
             }
-            footer .rounded-full:not([data-slot="slider-thumb"]):not([role="slider"]):not([data-reader-lynx-entry="true"]) svg {
+            footer div.rounded-full:has(button[aria-label="More player options"]) svg,
+            footer .rounded-full.bg-surface-default svg { /* Icons inside the right-side playback pill */
                 width: 16px !important;
                 height: 16px !important;
             }
 
-            /* Footer progress bar slider thumb */
             footer [data-slot="slider-thumb"],
-            footer [role="slider"] {
+            footer [role="slider"] { /* Audio scrubber handle / slider thumb */
                 width: 14px !important;
                 height: 14px !important;
                 padding: 0 !important;
@@ -10468,14 +10467,13 @@
                 box-sizing: border-box !important;
             }
 
-            /* Footer skip buttons */
             footer button[aria-label^="Replay"] svg,
-            footer button[aria-label^="Forward"] svg {
+            footer button[aria-label^="Forward"] svg { /* Skip backward and forward circular arrow icons */
                 width: 22px !important;
                 height: 22px !important;
                 stroke-width: 1.5 !important;
             }
-            .addon-skip-text {
+            .addon-skip-text { /* Injected skip seconds text (e.g. 5, 10) centered inside skip button SVGs */
                 fill: currentColor !important;
                 stroke: none !important;
                 font-family: ui-sans-serif, system-ui, -apple-system, sans-serif !important;
@@ -10486,69 +10484,65 @@
                 pointer-events: none !important;
                 user-select: none !important;
             }
-            .addon-skip-text[data-single-digit="true"] {
+            .addon-skip-text[data-single-digit="true"] { /* Single-digit skip seconds font size adjustment */
                 font-size: 9.5px !important;
             }
 
-            /* Reader body & text area */
-            .reader-body {
+            .reader-body { /* Main reader content area container */
                 max-width: 100% !important;
                 font-family: var(--custom-font, inherit) !important;
             }
-            .reader-body:not(:has(.poc-page)) {
+            .reader-body:not(:has(.poc-page)) { /* Scroll mode text sizing and line spacing */
                 line-height: var(--line-height) !important;
                 font-size: var(--font-size) !important;
             }
-            .reader-body:has(.poc-page) {
+            .reader-body:has(.poc-page) { /* Page mode vertical scroll wrapper */
                 overflow-y: auto !important;
                 scrollbar-width: none !important;
             }
             .poc-page,
-            .poc-line {
+            .poc-line { /* Page mode page wrapper and line containers */
                 font-family: var(--custom-font, inherit) !important;
             }
-            div[data-reader-mode-body="true"] {
+            div[data-reader-mode-body="true"] { /* Inner reading stage container wrapping paragraphs and page columns */
                 width: 100% !important;
                 flex: 1 1 0% !important;
             }
-            .reader-paragraph {
+            .reader-paragraph { /* Individual paragraph block in Scroll Mode */
                 margin-bottom: 0.75em !important;
             }
 
-            /* Page mode prev/next buttons */
             button[aria-label="Previous page"],
             button[aria-label="Next page"],
-            div[data-reader-mode-body="true"] div[aria-hidden="true"].w-12 {
+            div[data-reader-mode-body="true"] div[aria-hidden="true"] { /* Left/right page navigation buttons and side spacer columns */
                 width: 2rem !important;
                 min-width: 2rem !important;
                 padding: 0 !important;
             }
 
-            /* Sidebar column width */
-            div[data-reader-side-column="true"]:not(.contents) {
+            div[data-reader-side-column="true"]:not(.contents) { /* Right sidebar column containing widgets and dictionary */
                 width: var(--widget-width) !important;
                 min-width: var(--widget-width) !important;
                 max-width: var(--widget-width) !important;
             }
-            div[data-reader-side-column="true"].contents #memo-widget-container {
+            div[data-reader-side-column="true"].contents #memo-widget-container { /* Hidden memo container when sidebar is collapsed */
                 display: none !important;
             }
 
-            /* Player controllers styling */
-            footer .rounded-full:has(#addon-speed-controller) {
+            footer .rounded-full:has(#addon-speed-controller) { /* Wrapper for custom speed controller in footer */
                 height: 38px !important;
                 padding: 2px 12px !important;
                 gap: 6px !important;
             }
             #addon-speed-controller button.addon-speed-btn,
-            #addon-volume-controller button.addon-volume-btn {
+            #addon-volume-controller button.addon-volume-btn { /* Custom speed and volume increment/decrement buttons */
                 height: 32px !important;
                 padding: 0 12px !important;
                 display: inline-flex !important;
                 align-items: center !important;
                 justify-content: center !important;
             }
-            #addon-volume-controller .addon-volume-text {
+            #addon-volume-controller .addon-volume-text { /* Volume percentage text label */
                 display: inline-flex !important;
                 align-items: center !important;
                 font-size: 0.8125rem !important;
@@ -10556,7 +10550,7 @@
                 line-height: 1 !important;
                 color: inherit !important;
             }
-            #addon-speed-controller .addon-speed-text {
+            #addon-speed-controller .addon-speed-text { /* Playback speed multiplier text label */
                 display: inline-flex !important;
                 align-items: center !important;
                 min-width: 2.2em;
@@ -10567,8 +10561,7 @@
                 color: inherit !important;
             }
 
-            /* Memo Widget */
-            #memo-widget-container {
+            #memo-widget-container { /* Custom addon lesson notes container in the sidebar */
                 display: flex;
                 background-color: var(--readerWidgetBoxBackground, rgba(125, 125, 125, 0.1));
                 padding: 10px;
@@ -10576,7 +10569,7 @@
                 margin-top: 8px;
             }
 
-            .memo-textarea {
+            .memo-textarea { /* Textarea input for writing and saving lesson notes */
                 width: 100%;
                 min-height: 2.5em;
                 max-height: 150px;
