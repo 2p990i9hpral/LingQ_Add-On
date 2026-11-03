@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      19.0.5
+// @version      19.0.6
 // @license      GPL-3.0-or-later
 // @grant       GM_setValue
 // @grant       GM_getValue
@@ -9050,6 +9050,20 @@
                     [currentLanguage]: clampedSpeed
                 };
             }
+            localStorage.setItem("videoPlayerRate", String(clampedSpeed));
+
+            const controllers = document.querySelector('.audio-player--controllers');
+            const isYoutube = controllers?.querySelector('.controller-item--speed') || document.querySelector('iframe[src*="youtube"]');
+            if (isYoutube) {
+                const youtubeIframe = document.querySelector('.modal-container iframe, #sentence-video-player-portal iframe, iframe[src*="youtube"]');
+                if (youtubeIframe && youtubeIframe.contentWindow) {
+                    youtubeIframe.contentWindow.postMessage(JSON.stringify({
+                        event: "command",
+                        func: "setPlaybackRate",
+                        args: [clampedSpeed]
+                    }), "*");
+                }
+            }
             
             mediaInstances.forEach(media => {
                 if (media) media.playbackRate = clampedSpeed;
@@ -9063,12 +9077,6 @@
             const addonSpeedText = document.querySelector('#addon-speed-controller .addon-speed-text');
             if (addonSpeedText) {
                 addonSpeedText.textContent = `${clampedSpeed}×`;
-            }
-
-            const speedBtn = document.querySelector('footer button[aria-label^="Playback speed"]');
-            if (speedBtn) {
-                speedBtn.textContent = `${clampedSpeed}×`;
-                speedBtn.setAttribute('aria-label', `Playback speed ${clampedSpeed}×`);
             }
         }
 
@@ -9248,6 +9256,8 @@
                     const pauseBtn = footer.querySelector('button[aria-label="Pause"]');
                     if (pauseBtn && !pauseBtn.dataset.addonExpanding) {
                         pauseBtn.dataset.addonExpanding = "true";
+                        setLingqVolume(settings.lingqVolume);
+                        setLingqSpeed(settings.lingqSpeed[getLessonLanguage()] || 1.0);
                         pauseBtn.click();
                         const intervalId = setInterval(() => {
                             const currentFooter = document.querySelector('footer');
@@ -9285,6 +9295,10 @@
 
         async function attachAudioPlayerObserver() {
             if (isTextOnlyLesson()) return;
+            const currentLanguage = getLessonLanguage();
+            if (currentLanguage) {
+                localStorage.setItem("videoPlayerRate", String(settings.lingqSpeed[currentLanguage] || 1.0));
+            }
             const footer = await waitForElement('footer', 5000);
             if (!footer) return;
             
@@ -9420,10 +9434,13 @@
                         className: "addon-speed-controller inline-flex items-center"
                     }, speedBtn);
 
+                    setLingqSpeed(currentSpeed());
                     updateSpeedLabel();
                 } else {
+                    const speed = currentSpeed();
                     const speedText = speedWrapper.querySelector('.addon-speed-text');
-                    if (speedText) speedText.textContent = `${parseFloat(currentSpeed().toFixed(2))}×`;
+                    if (speedText) speedText.textContent = `${parseFloat(speed.toFixed(2))}×`;
+                    setLingqSpeed(speed);
                 }
 
                 if (nativeSpeedBtn && nativeSpeedBtn.parentElement) {
@@ -9580,11 +9597,13 @@
                     className: "addon-volume-controller inline-flex items-center"
                 }, volumeBtn);
 
+                setLingqVolume(settings.lingqVolume);
                 updateVolumeUI();
             } else {
                 const volPct = Math.round(settings.lingqVolume * 100);
                 const volumeText = volumeWrapper.querySelector('.addon-volume-text');
                 if (volumeText) volumeText.textContent = `${volPct}%`;
+                setLingqVolume(settings.lingqVolume);
             }
 
             if (footer) {
@@ -9726,12 +9745,8 @@
             }
             if (settings.hideLynxUI) {
                 baseCSS += `
-                button[data-reader-lynx-entry="true"],
-                button[aria-label="Ask Lynx AI"],
-                button[data-reader-lynx-entry="true"] + span[class*="w-px"],
-                button[aria-label="Ask Lynx AI"] + span[class*="w-px"],
-                div[role="menuitem"]:has(> svg path[d^="M22.5.9"]),
-                li[data-slot="sidebar-menu-item"]:has(> a[href*="/lynx"]) {
+                footer button[data-reader-lynx-entry="true"],
+                footer button[data-reader-lynx-entry="true"] + span {
                     display: none !important;
                 }
                 `;
@@ -10381,17 +10396,16 @@
                 align-items: center !important;
             }
             footer button[aria-label="Play"],
-            footer button[aria-label="Pause"],
-            footer button[aria-label="Ask Lynx AI"] {
+            footer button[aria-label="Pause"]${!settings.hideLynxUI ? `,\n            footer button[aria-label="Ask Lynx AI"]` : ""} {
                 width: 38px !important;
                 height: 38px !important;
                 padding: 0 !important;
             }
-            footer button[aria-label="Ask Lynx AI"] svg {
+            ${!settings.hideLynxUI ? `footer button[aria-label="Ask Lynx AI"] svg {
                 width: 20px !important;
                 height: 20px !important;
-            }
-            footer .rounded-full:not([data-slot="slider-thumb"]):not([role="slider"]) {
+            }` : ""}
+            footer .rounded-full:not([data-slot="slider-thumb"]):not([role="slider"]):not([data-reader-lynx-entry="true"]) {
                 display: inline-flex !important;
                 align-items: center !important;
                 justify-content: center !important;
@@ -10399,14 +10413,14 @@
                 padding: 1px 8px !important;
                 line-height: normal !important;
             }
-            footer .rounded-full:not([data-slot="slider-thumb"]):not([role="slider"]) button,
-            footer .rounded-full:not([data-slot="slider-thumb"]):not([role="slider"]) a {
+            footer .rounded-full:not([data-slot="slider-thumb"]):not([role="slider"]):not([data-reader-lynx-entry="true"]) button,
+            footer .rounded-full:not([data-slot="slider-thumb"]):not([role="slider"]):not([data-reader-lynx-entry="true"]) a {
                 height: 28px !important;
                 padding: 1px 0 !important;
                 display: inline-flex !important;
                 align-items: center !important;
             }
-            footer .rounded-full:not([data-slot="slider-thumb"]):not([role="slider"]) svg {
+            footer .rounded-full:not([data-slot="slider-thumb"]):not([role="slider"]):not([data-reader-lynx-entry="true"]) svg {
                 width: 16px !important;
                 height: 16px !important;
             }
@@ -14984,14 +14998,6 @@
             });
             resizeObserver.observe(player);
         }
-        
-        async function applyInitialVolume() {
-            const video = await waitForElement('video.html5-main-video', 10000);
-            if (video && typeof settings.lingqVolume === "number") {
-                video.volume = settings.lingqVolume;
-            }
-        }
-        applyInitialVolume();
         
         if (settings.relocateCaption !== "default") adjustCaptionPosition();
     }
