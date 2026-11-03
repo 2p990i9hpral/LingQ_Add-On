@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      19.0.9
+// @version      19.0.10
 // @license      GPL-3.0-or-later
 // @grant       GM_setValue
 // @grant       GM_getValue
@@ -14302,134 +14302,215 @@
     
     async function setupCourse() {
         function createCourseUI() {
+            if (document.getElementById("resetLessonPositions")) return;
+            const archivedButton = document.querySelector('button[data-slot="toggle"]');
+            if (!archivedButton?.parentElement) return;
+
             const resetButton = createElement("button", {
                 id: "resetLessonPositions",
-                textContent: "⏮️",
+                type: "button",
                 title: "Reset all lessons to the first page",
-                className: "nav-button"
+                className: "group/toggle inline-flex items-center justify-center text-sm font-medium whitespace-nowrap transition-all border border-default-lighter bg-transparent text-default-darkest hover:bg-default-lighter/80 rounded-full h-9 px-4 gap-1.5 cursor-pointer"
             });
-            
-            let nav = document.querySelector(".library-section > .list-header > .list-header-index");
-            nav.appendChild(resetButton);
+            resetButton.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-rotate-ccw size-3.5" aria-hidden="true"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path><path d="M3 3v5h5"></path></svg><span>Reset all</span>`;
+
+            archivedButton.parentElement.insertBefore(resetButton, archivedButton.nextSibling);
         }
-        
-        function setupCourseStyles() {
-            const css = `
-            .nav-button {
-                background: none;
-                border: none;
-                cursor: pointer;
-                font-size: 1.5rem;
+
+        function enrichCourseHeaderPercentages() {
+            const uniqueSpan = Array.from(document.querySelectorAll('span')).find((s) => s.textContent.trim() === 'Unique words');
+            const uniqueTitleSpan = uniqueSpan?.parentElement?.querySelector('span[title]');
+            const uniqueWordsCount = uniqueTitleSpan ? parseInt(uniqueTitleSpan.getAttribute('title').replace(/,/g, ''), 10) : 0;
+            if (!uniqueWordsCount) return;
+
+            const lingqsSpan = Array.from(document.querySelectorAll('span')).find((s) => s.textContent.trim() === 'LingQs');
+            const lingqsB = lingqsSpan?.parentElement?.querySelector('b');
+            const lingqsCol = lingqsSpan?.closest('div[style*="flex"]');
+            const lingqsFlexMatch = lingqsCol?.getAttribute('style')?.match(/flex:\s*(\d+)/);
+            const lingqsCount = lingqsFlexMatch ? parseInt(lingqsFlexMatch[1], 10) : parseInt(lingqsB?.innerText.replace(/,/g, '') || '0', 10);
+            const lingqsRatio = Math.round((lingqsCount / uniqueWordsCount) * 100);
+
+            if (lingqsB && !lingqsB.querySelector('.addon-percent')) {
+                const pctSpan = createElement('span', {
+                    className: 'ml-1 text-xs font-medium text-muted-foreground addon-percent',
+                    textContent: `(${lingqsRatio}%)`
+                });
+                lingqsB.appendChild(pctSpan);
             }
 
-            .library-section > .list-header > .list-header-index {
-                grid-template-columns: auto 1fr auto !important;
-            }
+            const knownSpan = Array.from(document.querySelectorAll('span')).find((s) => s.textContent.trim() === 'Known words');
+            const knownB = knownSpan?.parentElement?.querySelector('b');
+            const knownTitleSpan = knownB?.querySelector('span[title]');
+            const knownCol = knownSpan?.closest('div[style*="flex"]');
+            const knownFlexMatch = knownCol?.getAttribute('style')?.match(/flex:\s*(\d+)/);
+            const knownWordsCount = knownTitleSpan ? parseInt(knownTitleSpan.getAttribute('title').replace(/,/g, ''), 10)
+                                  : (knownFlexMatch ? parseInt(knownFlexMatch[1], 10) : 0);
+            const knownRatio = Math.round((knownWordsCount / uniqueWordsCount) * 100);
 
-            .dynamic--word-progress {
-                grid-template-columns: repeat(3, auto) !important;
+            if (knownB && !knownB.querySelector('.addon-percent')) {
+                const pctSpan = createElement('span', {
+                    className: 'ml-1 text-xs font-medium text-muted-foreground addon-percent',
+                    textContent: `(${knownRatio}%)`
+                });
+                knownB.appendChild(pctSpan);
             }
-
-            .word-indicator--box-white {
-                background-color: rgb(255 255 255 / 85%);
-                border-color: rgb(255 255 255);
-            }
-            `;
-            applyCSS(css);
         }
-        
+
+        const cachedCounters = new Map();
+        async function fetchBatchCounters(lessonIds, languageCode) {
+            const missingIds = lessonIds.filter((id) => !cachedCounters.has(id));
+            if (missingIds.length > 0) {
+                const query = missingIds.map((id) => `lesson=${id}`).join('&');
+                try {
+                    const response = await fetch(`https://www.lingq.com/api/v3/${languageCode}/lessons/counters/?${query}`, { credentials: 'include' });
+                    if (response.ok) {
+                        const data = await response.json();
+                        Object.entries(data).forEach(([id, counters]) => cachedCounters.set(id, counters));
+                    }
+                } catch (err) {
+                    console.error('[Course View] Failed to fetch lesson counters:', err);
+                }
+            }
+            return cachedCounters;
+        }
+
+        function updateTileBadges(tile, lessonInfo) {
+            if (!lessonInfo || !lessonInfo.uniqueWordsCount) return;
+
+            const lingqsPercent = Math.round((lessonInfo.cardsCount / lessonInfo.uniqueWordsCount) * 100);
+            const knownPercent = Math.round((lessonInfo.knownWordsCount / lessonInfo.uniqueWordsCount) * 100);
+
+            const lingqsBadge = tile.querySelector('span[title*="LingQs"]');
+            if (lingqsBadge && !lingqsBadge.querySelector('.addon-percent')) {
+                const pctSpan = createElement('span', {
+                    className: '-ms-0.5 text-xs addon-percent',
+                    textContent: ` (${lingqsPercent}%)`
+                });
+                lingqsBadge.appendChild(pctSpan);
+            }
+
+            const knownBadge = tile.querySelector('span[title*="Known Words"]');
+            if (knownBadge && !knownBadge.querySelector('.addon-percent')) {
+                const pctSpan = createElement('span', {
+                    className: '-ms-0.5 text-xs addon-percent',
+                    textContent: ` (${knownPercent}%)`
+                });
+                knownBadge.appendChild(pctSpan);
+            }
+        }
+
+        async function processLessonTiles() {
+            const tiles = Array.from(document.querySelectorAll('.library-tile'));
+            if (tiles.length === 0) return;
+
+            const pendingFetchIds = [];
+            const tilesToUpdate = [];
+
+            tiles.forEach((tile) => {
+                const lingqsBadge = tile.querySelector('span[title*="LingQs"]');
+                const knownBadge = tile.querySelector('span[title*="Known Words"]');
+                const needsLingqs = lingqsBadge && !lingqsBadge.querySelector('.addon-percent');
+                const needsKnown = knownBadge && !knownBadge.querySelector('.addon-percent');
+
+                if (needsLingqs || needsKnown) {
+                    const readerLink = tile.querySelector('a[href*="/web/reader/"]');
+                    const lessonId = readerLink?.getAttribute('href')?.match(/\/web\/reader\/(\d+)/)?.[1];
+                    if (lessonId) {
+                        tilesToUpdate.push({ tile, lessonId });
+                        if (!cachedCounters.has(lessonId)) {
+                            pendingFetchIds.push(lessonId);
+                        }
+                    }
+                }
+            });
+
+            if (tilesToUpdate.length === 0) return;
+
+            if (pendingFetchIds.length > 0) {
+                const languageCode = await getLanguageCode();
+                await fetchBatchCounters(pendingFetchIds, languageCode);
+            }
+
+            tilesToUpdate.forEach(({ tile, lessonId }) => {
+                updateTileBadges(tile, cachedCounters.get(lessonId));
+            });
+        }
+
+        let processDebounceTimer = null;
         function enrichLessonDetails() {
-            function addKnownWordsIndicator(lessonElement, lessonInfo) {
-                const dynamicWordProgress = lessonElement.querySelector('.dynamic--word-progress');
-                
-                const knownWordPercentage = Math.round((lessonInfo.knownWordsCount / lessonInfo.uniqueWordsCount) * 100);
-                
-                const knownWordsItem = createElement('div', {
-                    className: 'word-indicator--item grid-layout grid-align--center grid-item is-fluid--left',
-                    title: 'Known Words'
-                });
-                
-                const knownWordsBox = createElement('div', {className: 'word-indicator--box word-indicator--box-white'});
-                knownWordsItem.appendChild(knownWordsBox);
-                
-                const textWrapper = createElement('span', {className: 'text-wrapper is-size-8'});
-                textWrapper.appendChild(createElement('span', {textContent: `${lessonInfo.knownWordsCount} (${knownWordPercentage}%)`}));
-                
-                knownWordsItem.appendChild(textWrapper);
-                dynamicWordProgress.appendChild(knownWordsItem);
-            }
-            
-            async function updateWordIndicatorPercentages(lessonElement, lessonId) {
-                const lessonInfo = await getLessonInfo(lessonId);
-                
-                const wordIndicatorItems = lessonElement.querySelector(".word-indicator--item");
-                if (!wordIndicatorItems) return;
-                
-                const lingqsPercentage = Math.round((lessonInfo.cardsCount / lessonInfo.uniqueWordsCount) * 100);
-                const lingqsElement = lessonElement.querySelector('.word-indicator--item[title="LingQs"] > span > span');
-                lingqsElement.textContent = `${lessonInfo.cardsCount} (${lingqsPercentage}%)`;
-                
-                addKnownWordsIndicator(lessonElement, lessonInfo);
-            }
-            
-            const observer = new MutationObserver((mutations) => {
-                mutations.forEach((mutation) => {
-                    console.debug('Observer:', `Library item added. ${mutation.type}`, mutation.addedNodes);
-                    mutation.addedNodes.forEach((node) => {
-                        if (node.nodeType !== Node.ELEMENT_NODE) return;
-                        if (!node.matches('.library-item-wrap')) return;
-                        
-                        const lessonId = /l-search--(\d*)-horizontal/.exec(node.id)[1];
-                        updateWordIndicatorPercentages(node, lessonId);
-                    });
-                });
+            enrichCourseHeaderPercentages();
+            processLessonTiles();
+
+            const observer = new MutationObserver(() => {
+                enrichCourseHeaderPercentages();
+                if (processDebounceTimer) clearTimeout(processDebounceTimer);
+                processDebounceTimer = setTimeout(() => {
+                    processLessonTiles();
+                }, 100);
             });
-            
-            const targetNode = document.querySelector('.library-section .library-list > .grid-layout');
-            observer.observe(targetNode, {childList: true});
+
+            const mainContent = document.querySelector('main') || document.body;
+            observer.observe(mainContent, { childList: true, subtree: true });
         }
-        
-        function enableCourseSorting() {
-            const dropdownItems = document.querySelectorAll('.library-section > .list-header .tw-dropdown--item');
-            if (dropdownItems.length) {
-                dropdownItems.forEach((item, index) => {
-                    item.addEventListener('click', () => {
-                        console.log(`Clicked sort option: ${index}`);
-                        settings.librarySortOption = index;
-                    });
-                });
-                
-                dropdownItems[settings.librarySortOption].click();
-                return true;
-            } else {
-                console.warn("Dropdown items not found for library sort.");
-                return false;
+
+        async function enableCourseSorting() {
+            const trigger = await waitForElement('button[aria-label="Sort by"][data-slot="select-trigger"]', 5000);
+            const valueSpan = trigger?.querySelector('[data-slot="select-value"]');
+            if (!trigger || !valueSpan) return;
+
+            if (settings.librarySortOption && valueSpan.textContent.trim() !== settings.librarySortOption) {
+                trigger.click();
+                const menu = await waitForElement('[data-slot="select-content"][role="listbox"]', 1500);
+                if (menu) {
+                    const targetOption = Array.from(menu.querySelectorAll('[role="option"]'))
+                        .find((opt) => opt.textContent.trim() === settings.librarySortOption);
+                    if (targetOption) {
+                        targetOption.click();
+                    } else {
+                        trigger.click();
+                    }
+                }
             }
+
+            const sortObserver = new MutationObserver(() => {
+                const currentSort = valueSpan.textContent.trim();
+                if (currentSort && currentSort !== settings.librarySortOption) {
+                    settings.librarySortOption = currentSort;
+                    saveSettings();
+                }
+            });
+            sortObserver.observe(valueSpan, { childList: true, characterData: true, subtree: true });
         }
-        
+
         function setupLessonResetButton() {
             const resetButton = document.getElementById("resetLessonPositions");
+            if (!resetButton) return;
+
             resetButton.addEventListener("click", async () => {
                 const languageCode = await getLanguageCode();
                 const collectionId = await getCollectionId();
-                
+                if (!collectionId) return;
+
                 const allLessons = await getAllLessons(languageCode, collectionId);
                 const confirmed = confirm(`Reset all ${allLessons.length} lessons to their starting positions?`);
                 if (!confirmed) return;
-                
+
+                resetButton.disabled = true;
+                resetButton.textContent = "Resetting...";
+
                 for (const lesson of allLessons) {
                     await setLessonProgress(lesson.id, 0);
                     console.log(`Reset lesson ID: ${lesson.id} to the first page`);
                 }
-                
+
+                resetButton.disabled = false;
+                resetButton.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-rotate-ccw size-3.5" aria-hidden="true"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path><path d="M3 3v5h5"></path></svg><span>Reset all</span>`;
                 alert(`Successfully reset ${allLessons.length} lessons to their starting positions.`);
             });
         }
-        
-        const libraryHeader = await waitForElement('.library-section > .list-header', 5000);
+
+        await waitForElement('button[data-slot="toggle"], button[aria-label="Sort by"][data-slot="select-trigger"]', 6000);
         createCourseUI();
-        setupCourseStyles();
-        
         enrichLessonDetails();
         enableCourseSorting();
         setupLessonResetButton();
