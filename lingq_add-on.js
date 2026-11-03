@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      19.0.1
+// @version      19.0.2
 // @license      GPL-3.0-or-later
 // @grant       GM_setValue
 // @grant       GM_getValue
@@ -58,10 +58,8 @@
         dark_playingUnderline: "rgb(255, 255, 255)",
         
         librarySortOption: 0,
-        autoFinishing: false,
         focusSelectedText: false,
         hoverAnnotation: "off",
-        showTranslation: false,
         skipEndPage: false,
         relocateCaption: 'default',
         captionFontsize: 1.1,
@@ -579,27 +577,64 @@
     }
     
     async function setLingQMeaning(newMeaning) {
-        let input = document.querySelector('div[data-word-widget] input, div[data-word-widget] textarea');
+        if (!newMeaning) return;
+        const meaningText = String(newMeaning).trim();
+        if (!meaningText) return;
+        
+        let input = document.querySelector('div[data-word-widget] form input[name="text"]');
+        let navigatedToMeanings = false;
+        
+        if (!input) {
+            const openMeaningsBtn = document.querySelector('div[data-word-widget] button[aria-label="Open Meanings"]');
+            if (openMeaningsBtn) {
+                openMeaningsBtn.click();
+                navigatedToMeanings = true;
+                await new Promise((resolve) => setTimeout(resolve, 100));
+                
+                const addMeaningBtn = document.querySelector('div[data-word-widget] button[data-size="txt"]') ||
+                    Array.from(document.querySelectorAll('div[data-word-widget] button')).find((btn) =>
+                        btn.textContent.includes('Add Meaning') || btn.querySelector('svg.lucide-plus')
+                    );
+                if (addMeaningBtn) {
+                    addMeaningBtn.click();
+                    await new Promise((resolve) => setTimeout(resolve, 100));
+                    input = document.querySelector('div[data-word-widget] form input[name="text"]');
+                }
+            }
+        }
+        
         if (!input) {
             const editBtn = document.querySelector('div[data-word-widget] button[aria-label^="Edit this meaning"]');
             if (editBtn) {
                 editBtn.click();
-                await new Promise(resolve => setTimeout(resolve, 100));
-                input = document.querySelector('div[data-word-widget] input, div[data-word-widget] textarea');
+                await new Promise((resolve) => setTimeout(resolve, 100));
+                input = document.querySelector('div[data-word-widget] form input[name="text"]');
             }
         }
+        
         if (!input) return;
         
         input.focus();
         input.dispatchEvent(new FocusEvent("focus", {bubbles: true}));
         
-        const prototype = (input instanceof HTMLTextAreaElement) ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
-        Object.getOwnPropertyDescriptor(prototype, "value")?.set.call(input, newMeaning);
-        input.dispatchEvent(new InputEvent("input", {bubbles: true, composed: true, data: newMeaning}));
+        Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set.call(input, meaningText);
+        input.dispatchEvent(new InputEvent("input", {bubbles: true, composed: true, data: meaningText}));
         input.dispatchEvent(new Event("change", {bubbles: true}));
+        
+        const form = input.closest('form');
+        if (form) {
+            input.dispatchEvent(new KeyboardEvent('keydown', {key: 'Enter', code: 'Enter', bubbles: true}));
+            form.dispatchEvent(new Event('submit', {bubbles: true, cancelable: true}));
+        }
         
         input.blur();
         input.dispatchEvent(new FocusEvent("focusout", {bubbles: true}));
+        
+        if (navigatedToMeanings) {
+            await new Promise((resolve) => setTimeout(resolve, 150));
+            const backBtn = document.querySelector('div[data-word-widget] button[aria-label="Back to the word"]');
+            if (backBtn) backBtn.click();
+        }
     }
     
     function waitForElement(selector, timeout = 1000) {
@@ -842,25 +877,6 @@
         document.querySelector("head").appendChild(cssElement);
     }
     
-    async function showTranslation() {
-        const readerOptionsBtn = document.querySelector('button[aria-label="Reader options"]');
-        if (readerOptionsBtn) {
-            readerOptionsBtn.click();
-            const switchItem = await waitForElement('div[role="menuitemcheckbox"][data-slot="dropdown-menu-switch-item"]', 2000);
-            if (switchItem && switchItem.getAttribute('aria-checked') !== 'true') {
-                switchItem.click();
-            }
-            document.dispatchEvent(new KeyboardEvent('keydown', {key: 'Escape', bubbles: true}));
-            return;
-        }
-        const selector = "#lesson-menu  .dropdown-content";
-        const dropdownList = await waitForElement(selector, 2000);
-        if (!dropdownList) return;
-        const translationButton = Array.from(dropdownList.querySelectorAll('.dropdown-item > a')).find(link =>
-            link.querySelector('.text-wrapper')?.textContent.trim() === "Show Translation"
-        );
-        if (translationButton) setTimeout(() => translationButton.click(), 500);
-    }
     
     function removeIndent(text) {
         const lines = text.split('\n');
@@ -4192,8 +4208,6 @@
             addCheckbox(container1, "focusSelectedTextCheckbox", "Focus on Selected Text", settings.focusSelectedText);
             addCheckbox(container1, "showMemoWidgetCheckbox", "Show Memo Widget", settings.showMemoWidget);
             addCheckbox(container1, "skipEndPageCheckbox", "Skip End Page", settings.skipEndPage);
-            addCheckbox(container1, "autoFinishingCheckbox", "Finish Lesson Automatically", settings.autoFinishing);
-            addCheckbox(container1, "showTranslationCheckbox", "Show Translation Automatically", settings.showTranslation);
             
             columns.appendChild(container1);
             
@@ -5354,11 +5368,6 @@
                 radio.addEventListener("change", updateColorMode);
             });
             
-            const autoFinishingCheckbox = document.getElementById("autoFinishingCheckbox");
-            autoFinishingCheckbox.addEventListener('change', (event) => {
-                settings.autoFinishing = event.target.checked
-            });
-            
             const focusSelectedTextCheckbox = document.getElementById("focusSelectedTextCheckbox");
             focusSelectedTextCheckbox.addEventListener('change', (event) => {
                 settings.focusSelectedText = event.target.checked
@@ -5368,11 +5377,6 @@
                 radio.addEventListener("change", (event) => {
                     settings.hoverAnnotation = event.currentTarget.value;
                 });
-            });
-            
-            const showTranslationCheckbox = document.getElementById("showTranslationCheckbox");
-            showTranslationCheckbox.addEventListener('change', (event) => {
-                settings.showTranslation = event.target.checked
             });
             
             const skipEndPageCheckbox = document.getElementById("skipEndPageCheckbox");
@@ -5783,12 +5787,10 @@
                 document.documentElement.style.setProperty("--widget-width", `${defaults.widgetWidth}px`);
                 updateCssColorVariables(defaultColorSettings);
                 
-                document.getElementById("autoFinishingCheckbox").checked = defaults.autoFinishing;
                 document.getElementById("focusSelectedTextCheckbox").checked = defaults.focusSelectedText;
                 document.querySelectorAll('input[name="hoverAnnotation"]').forEach((radio) => {
                     radio.checked = radio.value === defaults.hoverAnnotation;
                 });
-                document.getElementById("showTranslationCheckbox").checked = defaults.showTranslation;
                 document.getElementById("skipEndPageCheckbox").checked = defaults.skipEndPage;
                 document.querySelectorAll('input[name="relocateCaption"]').forEach((radio) => {
                     radio.checked = radio.value === defaults.relocateCaption;
@@ -9493,15 +9495,39 @@
                     flex-direction: column;
                     min-height: 150px;
                     max-height: var(--chat-widget-height, 100px);
+                    margin: 16px 0 16px 0 !important;
+                    padding: 0 16px !important;
+                    box-sizing: border-box;
+                }
+
+                div[data-word-widget] #chat-widget {
+                    padding: 0 !important;
+                    margin: 0 !important;
+                }
+
+                #addon-sentence-header + #chat-widget {
+                    margin-top: 8px !important;
+                }
+
+                /* Word widget header alignment and compact sections */
+                div[data-word-widget] .px-4.pt-3 .flex.min-w-0 {
+                    align-items: center !important;
+                }
+                div[data-word-widget] .px-4.pt-3 bdi {
+                    align-self: center !important;
+                }
+                div[data-word-widget] div.min-h-0.flex-1.overflow-y-auto {
+                    gap: 12px !important;
+                    padding-top: 8px !important;
                 }
 
                 #chat-container {
                     flex: 1;
-                    margin-bottom:5px;
+                    margin-bottom: 8px;
                     border: 1px solid rgb(125 125 125 / 35%);
-                    border-radius: 5px;
+                    border-radius: 8px;
                     overflow-y: auto;
-                    padding: 5px !important;
+                    padding: 8px !important;
                     scrollbar-width: none !important;
                 }
 
@@ -9522,9 +9548,9 @@
 
                 .input-container {
                     display: flex;
-                    margin-bottom: 10px;
+                    margin-bottom: 4px;
                     border: 1px solid rgb(125 125 125 / 35%);
-                    border-radius: 5px;
+                    border-radius: 8px;
                 }
 
                 #user-input {
@@ -9863,7 +9889,7 @@
                 --header-height: 48px;
                 --widget-width: ${settings.widgetWidth}px;
                 --chat-widget-height: ${settings.chatWidgetHeight}px;
-                --footer-height: 48px;
+                --footer-height: 56px;
             }
 
             /* Site header compaction */
@@ -9894,17 +9920,45 @@
                 padding-bottom: 2px !important;
             }
 
-            /* Footer player compaction */
+            /* Footer player & pills */
             footer {
-                height: 48px !important;
-                min-height: 48px !important;
-                padding-top: 4px !important;
-                padding-bottom: 4px !important;
+                height: 56px !important;
+                padding: 0 24px !important;
                 align-items: center !important;
             }
-            footer div[role="group"][aria-label="Lesson player"] {
-                height: 40px !important;
-                min-height: 40px !important;
+            footer div[role="group"] {
+                height: 42px !important;
+                align-items: center !important;
+            }
+            footer button[aria-label="Play"],
+            footer button[aria-label="Pause"],
+            footer button[aria-label="Ask Lynx AI"] {
+                width: 38px !important;
+                height: 38px !important;
+                padding: 0 !important;
+            }
+            footer button[aria-label="Ask Lynx AI"] svg {
+                width: 20px !important;
+                height: 20px !important;
+            }
+            footer .rounded-full {
+                display: inline-flex !important;
+                align-items: center !important;
+                justify-content: center !important;
+                height: 34px !important;
+                padding: 1px 8px !important;
+                line-height: normal !important;
+            }
+            footer .rounded-full button,
+            footer .rounded-full a {
+                height: 28px !important;
+                padding: 1px 0 !important;
+                display: inline-flex !important;
+                align-items: center !important;
+            }
+            footer .rounded-full svg {
+                width: 16px !important;
+                height: 16px !important;
             }
 
             /* Reader body & text area */
@@ -10204,7 +10258,7 @@
                 const withoutModifierKeys = !event.ctrlKey && !event.shiftKey && !event.altKey;
                 const eventKey = event.key.toLowerCase();
                 if (isTextInput) {
-                    if (targetElement.id === "user-input") return;
+                    if (targetElement.id === "user-input" || targetElement.classList?.contains("addon-quick-meaning-input")) return;
                     
                     if (withoutModifierKeys) {
                         if (eventKey === 'escape') {
@@ -10214,7 +10268,7 @@
                         }
                         
                         if (eventKey === 'enter') {
-                            if (targetElement.className === 'memo-textarea') {
+                            if (targetElement.classList?.contains('memo-textarea')) {
                                 event.stopPropagation();
                                 return;
                             } else {
@@ -10246,7 +10300,31 @@
                 
                 const shortcuts = {
                     [settings.shortcutVideoFullscreen]: () => clickElement(".modal-section > div > button:nth-child(2)"), // video full screen toggle
-                    [settings.shortcutMeaningInput]: () => focusElement(".reference-input-text"), // Move cursor to meaning input
+                    [settings.shortcutMeaningInput]: () => {
+                        let input = document.querySelector("div[data-word-widget] form input[name='text']");
+                        if (!input) {
+                            const openMeaningsBtn = document.querySelector('div[data-word-widget] button[aria-label="Open Meanings"]');
+                            if (openMeaningsBtn) {
+                                openMeaningsBtn.click();
+                                setTimeout(() => {
+                                    const addMeaningBtn = document.querySelector('div[data-word-widget] button[data-size="txt"]') ||
+                                        Array.from(document.querySelectorAll('div[data-word-widget] button')).find((btn) =>
+                                            btn.textContent.includes('Add Meaning') || btn.querySelector('svg.lucide-plus')
+                                        );
+                                    if (addMeaningBtn) {
+                                        addMeaningBtn.click();
+                                        setTimeout(() => {
+                                            focusElement("div[data-word-widget] form input[name='text']");
+                                        }, 50);
+                                    } else {
+                                        focusElement("div[data-word-widget] form input[name='text']");
+                                    }
+                                }, 100);
+                                return;
+                            }
+                        }
+                        focusElement("div[data-word-widget] form input[name='text']");
+                    },
                     [settings.shortcutChatInput]: () => focusElement("#user-input"), // Move cursor to the chat widget input
                     [settings.shortcutFlashcard]: () => {
                         const wordMessages = document.querySelectorAll("#chat-container .word-message");
@@ -10254,7 +10332,7 @@
                         const lastWordMessage = wordMessages[wordMessages.length - 1];
                         lastWordMessage.querySelector(".save-flashcard-button")?.click();
                     }, // Make a flashcard
-                    [settings.shortcutTTSPlay]: () => clickElement(".is-tts"), // Play tts audio
+                    [settings.shortcutTTSPlay]: () => clickElement('div[data-word-widget] button[aria-label="Listen"], div[data-reader-popup="true"] button[aria-label="Listen"]'), // Play tts audio
                     [settings.shortcutTranslator]: () => clickElement(".dictionary-resources > a:nth-last-child(1)"), // Open Translator
                     [settings.shortcutBackward5s]: () => triggerThrottledSkip(-settings.skipDuration), // Rewind
                     [settings.shortcutForward5s]: () => triggerThrottledSkip(settings.skipDuration), // Fast Forward
@@ -10349,13 +10427,6 @@
                         const progressPercentage = parseFloat(sliderTrack.style.width) || 0;
                         lastCompletedPercentage = updateLessonProgress(lessonId, lessonInfo, progressPercentage, lastCompletedPercentage);
                         console.debug('Observer:', `Slider Changed. Progress: ${progressPercentage}`);
-                        
-                        const isLessonFinished = ((progressPercentage >= 99) && isVideoStopped) || (progressPercentage >= 99.95);
-                        if (isLessonFinished && settings.autoFinishing) {
-                            console.log('[Slider]', 'lesson finished.');
-                            setTimeout(moveNextPage, 1000);
-                            sliderObserver.disconnect();
-                        }
                     });
                 });
                 
@@ -10647,7 +10718,7 @@
                 }
                 
                 function createAndPrependSummaryElement(section) {
-                    if (section.parentNode.querySelector(".quick-summary")) return;
+                    if (!section || section.querySelector(".quick-summary") || section.parentNode?.querySelector?.(".quick-summary")) return;
                     
                     const summaryElement = createElement("div", {
                         className: "quick-summary",
@@ -10762,7 +10833,9 @@
                 quickSummary = "";
                 lessonSummary = "";
                 let cachedContextualContent = "";
-                const existingSection = readerContainer.querySelector('.reader-body');
+                const existingSection = readerContainer.matches?.('.reader-body')
+                    ? readerContainer
+                    : (readerContainer.querySelector?.('.reader-body') || document.querySelector('.reader-body'));
                 if (existingSection) createAndPrependSummaryElement(existingSection);
                 
                 const observer = new MutationObserver((mutations) => {
@@ -11073,13 +11146,8 @@
                 
                 preventHorizontalScroll();
                 
-                if (!isNativePageMode()) {
-                    changeScrollAmount('[data-reader-mode-body="true"] > div.overflow-y-auto', 0.3);
-                }
-                
                 setupSentenceFocus(node);
                 
-                if (settings.showTranslation) showTranslation();
                 changeTranslationColor(node);
                 
                 const lessonLanguage = getLessonLanguage();
@@ -11234,151 +11302,262 @@
             let savedKeys = settings.llmApiKeys;
             let llmApiKey = savedKeys[llmProvider] || "";
             
-            async function updateTTS(click = true) {
-                async function replaceTTSButton() {
-                    const selectedTextElement = document.querySelector(".chat-message:last-child > b") || document.querySelector(".reference-word");
-                    const selectedText = selectedTextElement ? selectedTextElement.textContent.trim() : "";
-                    if (!selectedText) return;
-                    
-                    if (selectedText.length > 1000) {
-                        console.log("The length of the selected text exceeds 1,000.")
-                        return;
-                    }
-                    
-                    ttsButton.disabled = true;
-                    let audioData = await getTTSResponse(settings.ttsProvider, settings.ttsApiKeys[settings.ttsProvider] || "", (settings.ttsVoice[language]), selectedText);
-                    if (audioData == null) {
-                        console.log("audioData can't be got.")
-                        return;
-                    }
-                    ttsButton.disabled = false;
-                    
-                    const newTTSButton = ttsButton.cloneNode(true);
-                    newTTSButton.id = "playAudio";
-                    newTTSButton.addEventListener('click', async (event) => {
-                        await playAudio(audioData, 1.0);
-                    })
-                    ttsButton.replaceWith(newTTSButton);
-                    showToast("TTS Replaced", true);
-                    
-                    if (settings.ttsAutoplay) playAudio(audioData, 1.0);
+            const ttsAudioCache = new Map();
+            let currentTTSRequestId = 0;
+            let ttsInterceptorInitialized = false;
+            let lastAutoplayText = "";
+            
+            function getPopupSentenceText() {
+                if (document.querySelector('div[data-word-widget]')) return "";
+                const popup = document.querySelector('div[data-reader-popup="true"]');
+                if (!popup) return "";
+                
+                const ariaLabel = popup.getAttribute('aria-label');
+                if (ariaLabel && !ariaLabel.includes('Not a phrase') && ariaLabel.startsWith('Actions for ')) {
+                    return ariaLabel.replace(/^Actions for\s+/i, '').trim();
                 }
                 
-                if (!settings.tts) return;
+                const statusBtn = popup.querySelector('button[aria-label^="Status of "]');
+                if (statusBtn) {
+                    return statusBtn.getAttribute('aria-label').replace(/^Status of\s+/i, '').trim();
+                }
                 
-                const ttsButton = document.querySelector('.is-tts');
-                if (!ttsButton) return;
+                const saveBtn = popup.querySelector('button[aria-label^="Save "]');
+                if (saveBtn) {
+                    const saveMatch = saveBtn.getAttribute('aria-label').match(/^Save\s+(.*?)\s+as\s+/i);
+                    if (saveMatch && saveMatch[1]) return saveMatch[1].trim();
+                }
                 
-                const isWord = document.querySelector("span.selected-text, span.is-selected");
+                const pEl = popup.querySelector('p[dir="ltr"]') || popup.querySelector('p') || popup.querySelector('.text-foreground');
+                if (pEl && pEl.textContent.trim()) {
+                    return pEl.textContent.trim();
+                }
                 
-                const ttsWordOffCondition = !settings.ttsWord && isWord;
-                const ttsSentenceOffCondition = !settings.ttsSentence && !isWord;
+                return "";
+            }
+            
+            function getCurrentlyTargetedText() {
+                const isWord = Boolean(document.querySelector('div[data-word-widget]'));
+                if (isWord) {
+                    const selectedTextElement = document.querySelector('div[data-word-widget] bdi[dir="ltr"]');
+                    if (selectedTextElement) return selectedTextElement.textContent.trim();
+                }
                 
-                if (ttsWordOffCondition || ttsSentenceOffCondition) {
-                    if (click) ttsButton.click();
-                    
-                    ttsButton.addEventListener('click', (event) => {
-                        event.stopImmediatePropagation();
-                        replaceTTSButton();
-                    }, true);
+                const popupText = getPopupSentenceText();
+                if (popupText) return popupText;
+                
+                const selectedTextElement = document.querySelector(".chat-message:last-child > b") ||
+                                           document.querySelector('div[data-word-widget] bdi[dir="ltr"]');
+                return selectedTextElement ? selectedTextElement.textContent.trim() : "";
+            }
+            
+            async function playCustomTTSForText(text, autoplay = false, forceCustom = false) {
+                if (!text || !settings.tts) return;
+                if (text.length > 1000) {
+                    console.log("The length of the selected text exceeds 1,000.");
+                    return;
+                }
+                
+                if (!forceCustom) {
+                    const isWord = Boolean(document.querySelector('div[data-word-widget]'));
+                    const isSentencePopup = Boolean(document.querySelector('div[data-reader-popup="true"]'));
+                    const isSentence = isSentencePopup || !isWord;
+                    const ttsWordOff = !settings.ttsWord && !isSentence;
+                    const ttsSentenceOff = !settings.ttsSentence && isSentence;
+                    if (ttsWordOff || ttsSentenceOff) return;
+                }
+                
+                const requestId = ++currentTTSRequestId;
+                let audioData = ttsAudioCache.get(text);
+                if (!audioData) {
+                    audioData = await getTTSResponse(settings.ttsProvider, settings.ttsApiKeys[settings.ttsProvider] || "", (settings.ttsVoice[language]), text);
+                    if (!audioData) {
+                        console.log("audioData can't be got.");
+                        return;
+                    }
+                    ttsAudioCache.set(text, audioData);
+                }
+                
+                if (requestId !== currentTTSRequestId) return;
+                
+                stopPlayingAudio(audioContext);
+                await playAudio(audioData, 1.0);
+            }
+            
+            let isProgrammaticNativeTTS = false;
+            
+            function playNativeTTS() {
+                const ttsBtn = document.querySelector('div[data-word-widget] button[aria-label="Listen"], div[data-reader-popup="true"] button[aria-label="Listen"]');
+                if (ttsBtn) {
+                    isProgrammaticNativeTTS = true;
+                    try {
+                        ttsBtn.click();
+                    } finally {
+                        isProgrammaticNativeTTS = false;
+                    }
                 } else {
-                    replaceTTSButton();
+                    setTimeout(() => {
+                        const retryBtn = document.querySelector('div[data-word-widget] button[aria-label="Listen"], div[data-reader-popup="true"] button[aria-label="Listen"]');
+                        if (retryBtn) {
+                            isProgrammaticNativeTTS = true;
+                            try {
+                                retryBtn.click();
+                            } finally {
+                                isProgrammaticNativeTTS = false;
+                            }
+                        }
+                    }, 50);
                 }
             }
             
-            async function updateWidget() {
+            function initTTSInterceptor() {
+                if (ttsInterceptorInitialized) return;
+                ttsInterceptorInitialized = true;
+                
+                document.addEventListener('click', async (event) => {
+                    const ttsBtn = event.target.closest('div[data-word-widget] button[aria-label="Listen"], div[data-reader-popup="true"] button[aria-label="Listen"]');
+                    if (!ttsBtn) return;
+                    if (isProgrammaticNativeTTS) return;
+                    if (!settings.tts) return;
+                    
+                    event.preventDefault();
+                    event.stopImmediatePropagation();
+                    
+                    const targetText = getCurrentlyTargetedText();
+                    if (!targetText) return;
+                    await playCustomTTSForText(targetText, false, true);
+                }, true);
+            }
+            
+            async function updateTTS(autoplay = false) {
+                initTTSInterceptor();
+                
+                const targetText = getCurrentlyTargetedText();
+                if (!targetText) return;
+                
+                if (autoplay && settings.ttsAutoplay) {
+                    if (targetText === lastAutoplayText) return;
+                    lastAutoplayText = targetText;
+                    
+                    const isSentence = Boolean(getPopupSentenceText());
+                    const useAiTTS = settings.tts && (isSentence ? settings.ttsSentence : settings.ttsWord);
+                    if (useAiTTS) {
+                        await playCustomTTSForText(targetText, true, false);
+                    } else {
+                        playNativeTTS();
+                    }
+                }
+            }
+            
+            async function updateWidget(autoplay = settings.ttsAutoplay) {
                 function getSectionHead() {
-                    let targetSectionHead = document.querySelector("#lesson-reader .widget-area > .reader-widget > .section-widget--head");
-                    targetSectionHead = targetSectionHead ? targetSectionHead : document.querySelector("#lesson-reader .widget-area > .reader-widget");
-                    return targetSectionHead;
+                    return document.querySelector('div[data-word-widget] div.min-h-0.flex-1.overflow-y-auto') ||
+                           document.querySelector('div[data-word-widget]') ||
+                           document.querySelector("#lesson-reader .widget-area > .reader-widget");
                 }
                 
                 function getInPageSelectedWithContext(targetSideWords = 50, targetSideLength = 350) {
-                    const selectedTextElement = document.querySelector(".reference-word");
-                    const selectedEl = document.querySelector("span.is-selected, span.selected-text");
-                    let currentSentenceEl = selectedEl?.closest(".sentence");
+                    const isWord = Boolean(document.querySelector('div[data-word-widget]'));
+                    if (!isWord) {
+                        const popupText = getPopupSentenceText();
+                        if (popupText) {
+                            return {input: popupText, context: popupText};
+                        }
+                    }
                     
+                    const selectedTextElement = document.querySelector('div[data-word-widget] bdi[dir="ltr"]');
                     const selectedText = selectedTextElement ? extractTextFromDOM(selectedTextElement).trim() : "";
-                    const allSentences = [...document.querySelectorAll(".sentence")];
+                    if (!selectedText) return {input: "", context: ""};
                     
-                    if (!currentSentenceEl) {
-                        const selection = window.getSelection();
-                        const rangeNode = selection?.rangeCount > 0 ? selection.getRangeAt(0).commonAncestorContainer : null;
-                        currentSentenceEl = rangeNode?.nodeType === Node.ELEMENT_NODE 
-                            ? rangeNode.closest(".sentence") 
-                            : rangeNode?.parentElement?.closest(".sentence");
+                    // Extract sentence and surrounding context using LingQ redesign data-sentence-index
+                    const allWordItems = Array.from(document.querySelectorAll('.sentence-item'));
+                    const selectedEl = document.querySelector('.sentence-item.is-selected, .sentence-item.selected, .sentence-item[data-selected="true"], [data-is-active="true"]') ||
+                                       allWordItems.find(el => el.textContent.trim() === selectedText);
+                    
+                    if (selectedEl?.dataset?.sentenceIndex) {
+                        const sentenceIdxNum = Number(selectedEl.dataset.sentenceIndex);
+                        if (!isNaN(sentenceIdxNum)) {
+                            const prevText = allWordItems.filter(el => Number(el.dataset.sentenceIndex) === sentenceIdxNum - 1).map(el => el.textContent).join('');
+                            const currentWords = allWordItems.filter(el => Number(el.dataset.sentenceIndex) === sentenceIdxNum);
+                            const nextText = allWordItems.filter(el => Number(el.dataset.sentenceIndex) === sentenceIdxNum + 1).map(el => el.textContent).join('');
                             
-                        if (!currentSentenceEl && selectedText) {
-                            currentSentenceEl = allSentences.find((el) => {
-                                const elText = extractTextFromDOM(el);
-                                return elText && elText.includes(selectedText);
-                            });
+                            let tagged = false;
+                            const currentText = currentWords.map(el => {
+                                const t = el.textContent;
+                                if (!tagged && (el === selectedEl || t.trim() === selectedText)) {
+                                    tagged = true;
+                                    return `<selected>${t}</selected>`;
+                                }
+                                return t;
+                            }).join('');
+                            
+                            const contextCombined = [prevText, currentText, nextText].filter(Boolean).join(' ').trim();
+                            if (contextCombined) {
+                                return {input: selectedText, context: contextCombined};
+                            }
                         }
                     }
                     
-                    if (!currentSentenceEl) return {input: selectedText, context: ""};
-                    
-                    const currentIndex = allSentences.indexOf(currentSentenceEl);
-                    
-                    const prefixTexts = [];
-                    let prevIdx = currentIndex - 1;
-                    let prefixLength = 0;
-                    while (prefixLength < targetSideLength && prevIdx >= 0) {
-                        const text = extractTextFromDOM(allSentences[prevIdx])?.trim();
-                        if (text) {
-                            prefixTexts.unshift(text);
-                            prefixLength += text.length;
+                    // Fallback to word widget Sentence section
+                    const sentenceSection = Array.from(document.querySelectorAll('div[data-word-widget] section')).find(s => s.querySelector('h3')?.textContent.includes('Sentence'));
+                    if (sentenceSection) {
+                        const sentenceBody = sentenceSection.querySelector('p, div:not(:has(h3)), [data-reader-sentence="true"]');
+                        const sentenceRaw = (sentenceBody || sentenceSection).textContent.replace(/^Sentence\s*/i, '').trim();
+                        if (sentenceRaw) {
+                            const tagged = sentenceRaw.includes(selectedText)
+                                ? sentenceRaw.replace(selectedText, `<selected>${selectedText}</selected>`)
+                                : `<selected>${selectedText}</selected> ${sentenceRaw}`;
+                            return {input: selectedText, context: tagged};
                         }
-                        prevIdx--;
                     }
                     
-                    const suffixTexts = [];
-                    let nextIdx = currentIndex + 1;
-                    let suffixLength = 0;
-                    while (suffixLength < targetSideLength && nextIdx < allSentences.length) {
-                        const text = extractTextFromDOM(allSentences[nextIdx])?.trim();
-                        if (text) {
-                            suffixTexts.push(text);
-                            suffixLength += text.length;
+                    // Fallback to legacy sentence container
+                    let currentSentenceEl = selectedEl?.closest(".reader-sentence, .sentence");
+                    const allSentences = [...document.querySelectorAll(".reader-sentence, .sentence")];
+                    if (currentSentenceEl && allSentences.length > 0) {
+                        const currentIndex = allSentences.indexOf(currentSentenceEl);
+                        const prefixTexts = [];
+                        let prevIdx = currentIndex - 1;
+                        let prefixLength = 0;
+                        while (prefixLength < targetSideLength && prevIdx >= 0) {
+                            const text = extractTextFromDOM(allSentences[prevIdx])?.trim();
+                            if (text) {
+                                prefixTexts.unshift(text);
+                                prefixLength += text.length;
+                            }
+                            prevIdx--;
                         }
-                        nextIdx++;
+                        const suffixTexts = [];
+                        let nextIdx = currentIndex + 1;
+                        let suffixLength = 0;
+                        while (suffixLength < targetSideLength && nextIdx < allSentences.length) {
+                            const text = extractTextFromDOM(allSentences[nextIdx])?.trim();
+                            if (text) {
+                                suffixTexts.push(text);
+                                suffixLength += text.length;
+                            }
+                            nextIdx++;
+                        }
+                        const currentText = extractTextFromDOM(currentSentenceEl, selectedEl || currentSentenceEl).trim();
+                        const rawCombined = [...prefixTexts, currentText, ...suffixTexts].filter(Boolean).join(" ");
+                        if (rawCombined) {
+                            return {input: selectedText, context: rawCombined};
+                        }
                     }
                     
-                    const isSentenceMode = typeof isSentence !== "undefined" ? isSentence : !document.querySelector(".section-widget--main");
-                    const targetElForTag = isSentenceMode ? currentSentenceEl : (selectedEl || currentSentenceEl);
-                    const currentText = extractTextFromDOM(currentSentenceEl, targetElForTag).trim();
-                    const rawCombined = [...prefixTexts, currentText, ...suffixTexts].filter(Boolean).join(" ");
-                    
-                    const selectedMatch = rawCombined.match(/<selected>(.*?)<\/selected>/);
-                    let contextText = rawCombined;
-                    if (selectedMatch) {
-                        const tagStart = selectedMatch.index;
-                        const tagEnd = tagStart + selectedMatch[0].length;
-                        const rawBefore = rawCombined.slice(0, tagStart).trimEnd();
-                        const rawTag = selectedMatch[0];
-                        const rawAfter = rawCombined.slice(tagEnd).trimStart();
-                        
-                        const beforeWords = rawBefore ? rawBefore.split(/\s+/) : [];
-                        const afterWords = rawAfter ? rawAfter.split(/\s+/) : [];
-                        
-                        let leftPart = beforeWords.slice(-targetSideWords).join(" ");
-                        let rightPart = afterWords.slice(0, targetSideWords).join(" ");
-                        
-                        if (leftPart.length > targetSideLength) {
-                            leftPart = leftPart.slice(-targetSideLength).trimStart();
-                        }
-                        if (rightPart.length > targetSideLength) {
-                            rightPart = rightPart.slice(0, targetSideLength).trimEnd();
-                        }
-                        
-                        contextText = [leftPart, rawTag, rightPart].filter(Boolean).join(" ").trim();
-                    }
-                    
-                    return {input: selectedText, context: contextText};
+                    return {input: selectedText, context: `<selected>${selectedText}</selected>`};
                 }
                 
                 function getSelectedWithContext(targetSideWords = 50, targetSideLength = 350) {
-                    const selectedTextElement = document.querySelector(".reference-word");
+                    const isWord = Boolean(document.querySelector('div[data-word-widget]'));
+                    if (!isWord) {
+                        const popupText = getPopupSentenceText();
+                        if (popupText) {
+                            return {input: popupText, context: popupText};
+                        }
+                    }
+                    
+                    const selectedTextElement = document.querySelector('div[data-word-widget] bdi[dir="ltr"]');
                     const rawSelectedText = selectedTextElement ? extractTextFromDOM(selectedTextElement)?.trim() : "";
                     
                     const inPageData = getInPageSelectedWithContext(targetSideWords, targetSideLength);
@@ -11506,16 +11685,25 @@
                 
                 function updateReferenceWord() {
                     isProgrammaticReferenceWordUpdate = true;
-                    const selection = window.getSelection();
-                    if (selection.rangeCount === 0) {
-                        console.log('Selection rangeCount is zero.')
+                    const referenceWord = document.querySelector('div[data-word-widget] bdi[dir="ltr"]');
+                    if (!referenceWord) {
+                        isProgrammaticReferenceWordUpdate = false;
                         return;
                     }
                     
-                    const referenceWord = document.querySelector(".reference-word");
-                    const extractedText = extractTextFromDOM(selection.getRangeAt(0).cloneContents());
-                    if (referenceWord && extractedText && isSentence) {
-                        referenceWord.textContent = extractedText;
+                    const popupText = getPopupSentenceText();
+                    if (popupText && isSentence) {
+                        referenceWord.textContent = popupText;
+                        isProgrammaticReferenceWordUpdate = false;
+                        return;
+                    }
+                    
+                    const selection = window.getSelection();
+                    if (selection && selection.rangeCount > 0) {
+                        const extractedText = extractTextFromDOM(selection.getRangeAt(0).cloneContents());
+                        if (extractedText && isSentence) {
+                            referenceWord.textContent = extractedText;
+                        }
                     }
                     isProgrammaticReferenceWordUpdate = false;
                 }
@@ -12064,15 +12252,10 @@
                                     const currentExampleSentence = exampleSentenceElem?.textContent?.trim() || "";
                                     const currentExampleTranslation = exampleTranslationElem?.textContent?.trim() || "";
                                     
-                                    const lingqMeaningElement = document.querySelector(".reference-input-text");
-                                    if (lingqMeaningElement && currentMeaning) {
-                                        const existingValue = lingqMeaningElement.value.trim();
-                                        const existingLines = existingValue ? existingValue.split("\n").map(line => line.trim()) : [];
-                                        
-                                        if (!existingLines.includes(currentMeaning)) {
-                                            const updatedMeaning = existingValue ? `${existingValue}\n${currentMeaning}` : currentMeaning;
-                                            setLingQMeaning(updatedMeaning);
-                                        }
+                                    const existingMeaningBadges = document.querySelectorAll('div[data-word-widget] bdi[data-slot="meaning"], .reference-input-text');
+                                    const existingMeanings = Array.from(existingMeaningBadges).map((el) => el.textContent.trim()).filter(Boolean);
+                                    if (currentMeaning && !existingMeanings.includes(currentMeaning)) {
+                                        setLingQMeaning(currentMeaning);
                                     }
                                     
                                     const {data: existing} = await getDbClient()
@@ -12543,8 +12726,8 @@
                 function updateMemoWidget() {
                     if (!settings.showMemoWidget) return;
                     
-                    const widgetArea = document.querySelector("#lesson-reader .widget-area");
-                    if (!widgetArea) return;
+                    const sideColumn = document.querySelector('div[data-reader-side-column="true"]') || document.querySelector("#lesson-reader .widget-area");
+                    if (!sideColumn) return;
                     
                     const existingMemoWidget = document.getElementById("memo-widget-container");
                     if (existingMemoWidget) return;
@@ -12569,9 +12752,9 @@
                     
                     const memoContainer = createElement("div", {id: "memo-widget-container"}, memoTextarea);
                     
-                    const readerWidget = widgetArea.querySelector(".reader-widget");
+                    const readerWidget = sideColumn.querySelector("[data-reader-widget], .reader-widget");
                     if (readerWidget) readerWidget.insertAdjacentElement("afterend", memoContainer);
-                    else widgetArea.appendChild(memoContainer);
+                    else sideColumn.appendChild(memoContainer);
                     
                     requestAnimationFrame(() => {
                         memoTextarea.scrollTop = memoTextarea.scrollHeight;
@@ -12590,7 +12773,7 @@
                         id: "send-button",
                         innerHTML: `<svg style="width: 17px; height: 17px;" viewBox="0 0 512 512"><path fill="currentColor" d="M481.508,210.336L68.414,38.926c-17.403-7.222-37.064-4.045-51.309,8.287C2.86,59.547-3.098,78.551,1.558,96.808 L38.327,241h180.026c8.284,0,15.001,6.716,15.001,15.001c0,8.284-6.716,15.001-15.001,15.001H38.327L1.558,415.193 c-4.656,18.258,1.301,37.262,15.547,49.595c14.274,12.357,33.937,15.495,51.31,8.287l413.094-171.409 C500.317,293.862,512,276.364,512,256.001C512,235.638,500.317,218.139,481.508,210.336z"/></svg>`
                     });
-                    const chatWrapper = createElement("div", {id: "chat-widget", style: "margin-top: 5px 0 10px;"},
+                    const chatWrapper = createElement("div", {id: "chat-widget"},
                         chatContainer,
                         createElement("div", {className: "input-container"},
                             userInput,
@@ -12598,17 +12781,84 @@
                         )
                     );
                     
-                    const sectionHead = getSectionHead();
+                    const currentTargetText = getCurrentlyTargetedText();
                     const existingChatWidget = document.getElementById('chat-widget');
-                    if (existingChatWidget) {
-                        existingChatWidget.replaceWith(chatWrapper);
-                    } else if (sectionHead.matches(".section-widget--head")) {
-                        sectionHead.appendChild(chatWrapper);
-                    } else {
-                        sectionHead.prepend(chatWrapper);
+                    const wordWidgetScrollArea = document.querySelector('div[data-word-widget] div.min-h-0.flex-1.overflow-y-auto');
+                    const sideColumnScrollArea = document.querySelector('div[data-reader-side-column="true"] div.min-h-0.flex-1.overflow-y-auto') ||
+                                                 document.querySelector('div[data-reader-side-column="true"]');
+                    
+                    if (currentTargetText && currentTargetText === lastAskedTargetText && existingChatWidget) {
+                        if (wordWidgetScrollArea && existingChatWidget.parentElement !== wordWidgetScrollArea) {
+                            wordWidgetScrollArea.prepend(existingChatWidget);
+                        } else if (!wordWidgetScrollArea && sideColumnScrollArea && existingChatWidget.parentElement !== sideColumnScrollArea) {
+                            sideColumnScrollArea.prepend(existingChatWidget);
+                        }
+                        return;
                     }
                     
-                    changeScrollAmount("#chat-container", 0.2)
+                    lastAskedTargetText = currentTargetText || "";
+                    
+                    if (wordWidgetScrollArea) {
+                        if (existingChatWidget) {
+                            if (existingChatWidget.parentElement === wordWidgetScrollArea) {
+                                existingChatWidget.replaceWith(chatWrapper);
+                            } else {
+                                existingChatWidget.remove();
+                                wordWidgetScrollArea.prepend(chatWrapper);
+                            }
+                        } else {
+                            wordWidgetScrollArea.prepend(chatWrapper);
+                        }
+                    } else if (sideColumnScrollArea) {
+                        if (existingChatWidget) {
+                            if (existingChatWidget.parentElement === sideColumnScrollArea) {
+                                existingChatWidget.replaceWith(chatWrapper);
+                            } else {
+                                existingChatWidget.remove();
+                                sideColumnScrollArea.prepend(chatWrapper);
+                            }
+                        } else {
+                            sideColumnScrollArea.prepend(chatWrapper);
+                        }
+                    }
+
+                    const existingSentenceHeader = document.getElementById('addon-sentence-header');
+                    if (existingSentenceHeader) existingSentenceHeader.remove();
+
+                    const popupSentence = getPopupSentenceText();
+                    if (isSentence && popupSentence && !wordWidgetScrollArea && sideColumnScrollArea) {
+                        const sentenceHeader = createElement("div", {
+                            id: "addon-sentence-header",
+                            className: "addon-sentence-header flex items-center justify-between gap-3 px-4 pt-3 pb-1"
+                        },
+                            createElement("div", {className: "flex min-w-0 flex-1 items-center"},
+                                createElement("span", {
+                                    className: "truncate text-sm font-medium text-foreground",
+                                    title: popupSentence,
+                                    textContent: popupSentence
+                                })
+                            ),
+                            createElement("button", {
+                                type: "button",
+                                className: "addon-sentence-tts-btn flex size-9 shrink-0 items-center justify-center rounded-full border border-border bg-ghost hover:bg-ghost-hover text-muted-foreground cursor-pointer transition-colors",
+                                ariaLabel: "Listen to sentence",
+                                title: "Listen",
+                                onclick: (e) => {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    playCustomTTSForText(popupSentence, false, true);
+                                }
+                            },
+                                createElement("span", {
+                                    className: "flex items-center justify-center pointer-events-none",
+                                    innerHTML: `<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-volume-2"><path d="M11 4.702a.705.705 0 0 0-1.203-.498L6.413 7.587A1.4 1.4 0 0 1 5.416 8H3a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h2.416a1.4 1.4 0 0 1 .997.413l3.383 3.384A.705.705 0 0 0 11 19.298z"></path><path d="M16 9a5 5 0 0 1 0 6"></path><path d="M19.364 18.364a9 9 0 0 0 0-12.728"></path></svg>`
+                                })
+                            )
+                        );
+                        chatWrapper.before(sentenceHeader);
+                    }
+                    
+                    changeScrollAmount("#chat-container", 0.2);
                     userInput.addEventListener('keydown', (event) => {
                         if (event.isComposing || event.keyCode === 229) return;
                         if (event.key === 'Enter' && !event.shiftKey) {
@@ -12633,7 +12883,7 @@
                             : `Input: "${selectedData.input}"` + (selectedData.context ? `, Context: "${selectedData.context}"` : "");
                         
                         if (initialUserMessage.length > 1000) {
-                            console.log("The length of the selected text exceeds 1,000.")
+                            console.log("The length of the selected text exceeds 1,000.");
                             return;
                         }
                         
@@ -12655,9 +12905,13 @@
                         chatHistory = updateChatHistoryState(chatHistory, removeIndent(plainTextPrompt), "system-plain");
                     }
                     
-                    if (settings.askSelected && sectionHead.matches(".section-widget--head")) {
+                    const hasWordWidget = Boolean(document.querySelector('div[data-word-widget]'));
+                    const hasSentencePopup = Boolean(document.querySelector('div[data-reader-popup="true"]'));
+                    const canAsk = Boolean(hasWordWidget || hasSentencePopup);
+                    
+                    if (settings.askSelected && canAsk) {
                         await askSelectedText();
-                    } else if (sectionHead.matches(".section-widget--head")) {
+                    } else if (canAsk) {
                         chatHistory = updateChatHistoryState(chatHistory, removeIndent(plainTextPrompt), "system-plain");
                         
                         const askButton = createElement("button", {
@@ -12676,70 +12930,177 @@
                     }
                 }
                 
-                if (document.getElementById('chatWidget')) {
-                    console.log('chatWidget already exists.');
-                    return;
+                function updateInlineMeaningInput() {
+                    const wordWidget = document.querySelector('div[data-word-widget]');
+                    if (!wordWidget) return;
+                    
+                    const scrollArea = wordWidget.querySelector('div.min-h-0.flex-1.overflow-y-auto');
+                    if (!scrollArea) return;
+                    
+                    const meaningsSection = Array.from(scrollArea.querySelectorAll('section')).find((s) => s.querySelector('h3')?.textContent.includes('Meanings'));
+                    if (!meaningsSection || meaningsSection.querySelector('.addon-quick-meaning-form')) return;
+                    
+                    const meaningInput = createElement("input", {
+                        type: "text",
+                        className: "addon-quick-meaning-input w-full px-3 py-1.5 text-sm rounded-md border border-input bg-background outline-none",
+                        placeholder: "Add meaning directly...",
+                        autocomplete: "off"
+                    });
+                    
+                    async function submitMeaning() {
+                        const text = meaningInput.value.trim();
+                        if (!text) return;
+                        meaningInput.disabled = true;
+                        try {
+                            await setLingQMeaning(text);
+                            meaningInput.value = "";
+                        } catch (err) {
+                            console.error("Failed to add meaning:", err);
+                        } finally {
+                            meaningInput.disabled = false;
+                            meaningInput.focus();
+                        }
+                    }
+                    
+                    const form = createElement("form", {
+                        className: "addon-quick-meaning-form w-full mt-2",
+                        onsubmit: async (e) => {
+                            e.preventDefault();
+                            await submitMeaning();
+                        }
+                    }, meaningInput);
+                    
+                    meaningInput.addEventListener("keydown", async (e) => {
+                        if (e.isComposing || e.keyCode === 229) return;
+                        if (e.key === "Enter" && !e.shiftKey) {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            await submitMeaning();
+                        } else if (e.key === "Escape") {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            meaningInput.blur();
+                        } else {
+                            e.stopPropagation();
+                        }
+                    }, true);
+                    
+                    meaningsSection.appendChild(form);
                 }
                 
-                const isSentence = !document.querySelector(".section-widget--main");
+                const isWord = Boolean(document.querySelector('div[data-word-widget]'));
+                const isSentence = !isWord && Boolean(getPopupSentenceText());
                 
                 let chatHistory = [];
                 
                 updateReferenceWord();
                 updateChatWidget();
                 updateMemoWidget();
+                updateInlineMeaningInput();
                 stopPlayingAudio(audioContext);
-                updateTTS(settings.ttsAutoplay);
+                updateTTS(autoplay);
                 
-                const selectedTextElement = document.querySelector(".reference-word");
+                if (selectedTextObserver) {
+                    selectedTextObserver.disconnect();
+                    selectedTextObserver = null;
+                }
+                const selectedTextElement = document.querySelector('div[data-word-widget] bdi[dir="ltr"]');
                 if (selectedTextElement) {
-                    const observer = new MutationObserver((mutations) => {
+                    selectedTextObserver = new MutationObserver((mutations) => {
                         if (isProgrammaticReferenceWordUpdate) return;
-                        mutations.forEach(async (mutation) => {
-                            if (mutation.type !== 'characterData') return;
-                            console.debug('Observer:', `Widget changed from word/sentence. ${mutation.type}, ${mutation.attributeName}`);
-                            updateReferenceWord();
-                            updateChatWidget();
-                            updateMemoWidget();
-                            stopPlayingAudio(audioContext);
-                            updateTTS(false);
-                        });
+                        for (const mutation of mutations) {
+                            if (mutation.type === 'characterData' || mutation.type === 'childList') {
+                                const currentText = getCurrentlyTargetedText();
+                                if (currentText && currentText !== lastActiveWordText) {
+                                    lastActiveWordText = currentText;
+                                    console.debug('Observer:', `Widget changed from word/sentence: ${currentText}`);
+                                    updateWidget(false);
+                                    break;
+                                }
+                            }
+                        }
                     });
-                    observer.observe(selectedTextElement, {subtree: true, characterData: true});
+                    selectedTextObserver.observe(selectedTextElement, {subtree: true, characterData: true, childList: true});
                 }
                 
-                const widgetArea = document.querySelector("#lesson-reader .widget-area");
-                const observer = new MutationObserver((mutations) => {
-                    mutations.forEach((mutation) => {
-                        mutation.addedNodes.forEach(async (node) => {
-                            if (node.nodeType !== Node.ELEMENT_NODE) return;
-                            if (!node.matches(".reader-widget")) return;
-                            console.debug('Observer:', `Widget changed from resource. ${mutation.type}, ${mutation.addedNodes}`);
-                            updateReferenceWord();
-                            updateChatWidget();
-                            updateMemoWidget();
-                            stopPlayingAudio(audioContext);
-                            updateTTS(settings.ttsAutoplay);
-                        });
+                if (sideColumnObserver) {
+                    sideColumnObserver.disconnect();
+                    sideColumnObserver = null;
+                }
+                const sideColumn = document.querySelector('div[data-reader-side-column="true"]');
+                if (sideColumn) {
+                    sideColumnObserver = new MutationObserver((mutations) => {
+                        for (const mutation of mutations) {
+                            for (const node of mutation.addedNodes) {
+                                if (node.nodeType !== Node.ELEMENT_NODE) continue;
+                                if (node.matches?.("[data-word-widget]") || node.querySelector?.("[data-word-widget]")) {
+                                    const currentText = getCurrentlyTargetedText();
+                                    if (currentText && currentText !== lastActiveWordText) {
+                                        lastActiveWordText = currentText;
+                                        console.debug('Observer:', `Widget changed from resource: ${currentText}`);
+                                        updateWidget(false);
+                                        return;
+                                    }
+                                }
+                            }
+                        }
                     });
-                });
-                observer.observe(widgetArea, {childList: true});
+                    sideColumnObserver.observe(sideColumn, {childList: true, subtree: true});
+                }
             }
             
-            const lessonReader = document.getElementById('lesson-reader');
+            let selectedTextObserver = null;
+            let sideColumnObserver = null;
+            let lastActiveWordText = "";
+            let lastActiveSentenceText = "";
+            let lastAskedTargetText = "";
+            
+            const readerContainer = document.querySelector('.reader-appearance') || document.querySelector('main') || document.getElementById('lesson-reader');
             
             updateWidget();
-            const observer = new MutationObserver((mutations) => {
-                mutations.forEach((mutation) => {
-                    mutation.addedNodes.forEach((node) => {
-                        if (node.nodeType !== Node.ELEMENT_NODE) return;
-                        if (!(node.matches(".widget-area") && node.parentNode)) return;
-                        console.debug('Observer:', `Widget added. ${mutation.type}`, mutation.addedNodes);
-                        updateWidget();
-                    });
+            if (readerContainer) {
+                const observer = new MutationObserver((mutations) => {
+                    for (const mutation of mutations) {
+                        for (const node of mutation.addedNodes) {
+                            if (node.nodeType !== Node.ELEMENT_NODE) continue;
+                            if (node.matches?.('div[data-reader-side-column="true"], [data-word-widget]') ||
+                                node.querySelector?.('div[data-reader-side-column="true"], [data-word-widget]')) {
+                                console.debug('Observer:', `Widget added.`);
+                                updateWidget();
+                                return;
+                            }
+                        }
+                    }
                 });
+                observer.observe(readerContainer, {childList: true, subtree: true});
+            }
+            
+            const popupObserver = new MutationObserver((mutations) => {
+                for (const mutation of mutations) {
+                    for (const node of mutation.addedNodes) {
+                        if (node.nodeType !== Node.ELEMENT_NODE) continue;
+                        if (node.matches?.('div[data-reader-popup="true"]') || node.querySelector?.('div[data-reader-popup="true"]')) {
+                            console.debug('Observer: Sentence popup added.');
+                            const popupText = getPopupSentenceText();
+                            if (popupText && popupText !== lastActiveSentenceText) {
+                                lastActiveSentenceText = popupText;
+                                updateWidget();
+                            }
+                            return;
+                        }
+                    }
+                    for (const node of mutation.removedNodes) {
+                        if (node.nodeType !== Node.ELEMENT_NODE) continue;
+                        if (node.matches?.('div[data-reader-popup="true"]') || node.querySelector?.('div[data-reader-popup="true"]')) {
+                            console.debug('Observer: Sentence popup removed.');
+                            lastActiveSentenceText = "";
+                            updateWidget(false);
+                            return;
+                        }
+                    }
+                }
             });
-            observer.observe(lessonReader, {childList: true});
+            popupObserver.observe(document.body, {childList: true, subtree: true});
         }
         
         let styleElement = null;
