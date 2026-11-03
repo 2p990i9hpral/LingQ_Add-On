@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      19.0.11
+// @version      19.1.0
 // @license      GPL-3.0-or-later
 // @grant       GM_setValue
 // @grant       GM_getValue
@@ -5309,6 +5309,9 @@
             let currentSortField = "idx";
             let currentSortOrder = "desc";
             let searchKeyword = "";
+            let currentLoadRequestId = 0;
+            let currentLoadAbortController = null;
+            let debouncedSearch = null;
             
             let flashcardStatsChart = null;
             let flashcardDailyStats = [];
@@ -5419,6 +5422,7 @@
                 targetLanguage = newLang;
                 if (languageSelector && languageSelector.value !== newLang) languageSelector.value = newLang;
                 if (reportLanguageSelector && reportLanguageSelector.value !== newLang) reportLanguageSelector.value = newLang;
+                if (debouncedSearch?.cancel) debouncedSearch.cancel();
                 currentPage = 1;
                 totalCount = 0;
                 searchKeyword = "";
@@ -5477,6 +5481,13 @@
             }
             
             async function loadFlashcardPage(page) {
+                if (currentLoadAbortController) {
+                    currentLoadAbortController.abort();
+                }
+                currentLoadAbortController = new AbortController();
+                const currentSignal = currentLoadAbortController.signal;
+                const requestId = ++currentLoadRequestId;
+                
                 const from = (page - 1) * pageSize;
                 const to = from + pageSize - 1;
                 
@@ -5484,6 +5495,10 @@
                     .from(getTableName())
                     .select("idx, word, pronunciation, meaning, explanation", {count: "exact"})
                     .eq("language", targetLanguage);
+                
+                if (typeof queryBase.abortSignal === "function") {
+                    queryBase = queryBase.abortSignal(currentSignal);
+                }
                 
                 if (settings.useCentralDb && centralUserId) {
                     queryBase = queryBase.eq("user_id", centralUserId);
@@ -5500,11 +5515,24 @@
                     queryBase = queryBase.or(searchConditions);
                 }
                 
-                const {data, error, count} = await queryBase
-                    .order(currentSortField, {ascending: currentSortOrder === "asc"})
-                    .range(from, to);
+                let queryResult;
+                try {
+                    queryResult = await queryBase
+                        .order(currentSortField, {ascending: currentSortOrder === "asc"})
+                        .range(from, to);
+                } catch (err) {
+                    if (currentSignal.aborted || err?.name === "AbortError") return;
+                    console.error("Flashcard fetch error:", err);
+                    return;
+                }
                 
+                if (requestId !== currentLoadRequestId || currentSignal.aborted) {
+                    return;
+                }
+                
+                const {data, error, count} = queryResult;
                 if (error) {
+                    if (currentSignal.aborted || error?.name === "AbortError") return;
                     console.error("Flashcard fetch error:", error);
                     return;
                 }
@@ -5679,10 +5707,14 @@
                         if (settings.useCentralDb && centralUserId) {
                             countQuery = countQuery.eq("user_id", centralUserId);
                         }
-                        countQuery.then(({count}) => {
+                        if (typeof countQuery.abortSignal === "function") {
+                            countQuery = countQuery.abortSignal(currentSignal);
+                        }
+                        countQuery.then(({count, error: countError}) => {
+                            if (requestId !== currentLoadRequestId || currentSignal.aborted || countError) return;
                             totalCount = count || 0;
                             countLabel.textContent = `Flashcards: ${totalCount}`;
-                        });
+                        }).catch(() => {});
                     }
                 }
             }
@@ -5974,6 +6006,7 @@
                     selector.value = targetLanguage;
                 });
                 
+                if (debouncedSearch?.cancel) debouncedSearch.cancel();
                 currentPage = 1;
                 totalCount = 0;
                 searchKeyword = "";
@@ -5989,6 +6022,10 @@
             });
             
             document.getElementById("closeFlashcardPopupBtn").addEventListener("click", () => {
+                if (debouncedSearch?.cancel) debouncedSearch.cancel();
+                if (currentLoadAbortController) {
+                    currentLoadAbortController.abort();
+                }
                 flashcardPopup.style.display = "none";
             });
             
@@ -5998,7 +6035,7 @@
                 loadFlashcardPage(currentPage);
             }
             
-            const debouncedSearch = debounce(executeFlashcardSearch, 200);
+            debouncedSearch = debounce(executeFlashcardSearch, 200);
             
             let isPastingSearch = false;
             searchInput.addEventListener("paste", () => {
@@ -6065,6 +6102,7 @@
                         tableHeaders[1].textContent = tableHeaders[1].textContent.replace(/[▲▼]/g, "").trim() + arrow;
                     }
                     
+                    if (debouncedSearch?.cancel) debouncedSearch.cancel();
                     loadFlashcardPage(1);
                 });
             });
