@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      19.0.6
+// @version      19.0.7
 // @license      GPL-3.0-or-later
 // @grant       GM_setValue
 // @grant       GM_getValue
@@ -9814,6 +9814,7 @@
                     --line-height: ${settings.lineHeight[language]};
 
                     --font-color: ${colorSettings.fontColor};
+                    --translation-font-color: ${colorSettings.translationFontColor};
                     --lingq-background: ${colorSettings.lingqBackground};
                     --lingq-border: ${colorSettings.lingqBorder};
                     --lingq-border-learned: ${colorSettings.lingqBorderLearned};
@@ -9840,6 +9841,12 @@
 
                 /*font settings*/
 
+                .poc-line ruby,
+                .reader-body ruby {
+                    font-size: inherit !important;
+                }
+
+                .reader-body rt.sentence-item--transliteration,
                 rt {
                     font-family: var(--custom-font, inherit) !important;
                     font-size: var(--annotation-size) !important;
@@ -9852,20 +9859,29 @@
                     visibility: hidden !important;
                 }
                 div[data-reader-mode-body="true"] ruby:hover rt,
-                div[data-reader-mode-body="true"] .sentence-item:hover rt {
+                div[data-reader-mode-body="true"] .sentence-item:hover rt,
+                div[data-reader-mode-body="true"] .sentence-item:hover + rt {
                     visibility: visible !important;
                 }
                 ` : settings.hoverAnnotation === "all" ? `
                 ruby:hover rt,
-                .sentence-item:hover rt {
+                .sentence-item:hover rt,
+                .sentence-item:hover + rt {
                     visibility: visible !important;
                 }
                 ` : ""}
 
                 .reader-paragraph,
                 .reader-sentence,
+                .poc-line,
                 .sentence-item {
                     color: var(--font-color) !important;
+                }
+
+                .poc-line.poc-translation-line,
+                .poc-line.poc-translation-line span,
+                [data-reader-translation="true"] {
+                    color: var(--translation-font-color) !important;
                 }
 
                 .reader-sentence.playing,
@@ -10461,9 +10477,19 @@
             /* Reader body & text area */
             .reader-body {
                 max-width: 100% !important;
-                line-height: var(--line-height) !important;
                 font-family: var(--custom-font, inherit) !important;
+            }
+            .reader-body:not(:has(.poc-page)) {
+                line-height: var(--line-height) !important;
                 font-size: var(--font-size) !important;
+            }
+            .reader-body:has(.poc-page) {
+                overflow-y: auto !important;
+                scrollbar-width: none !important;
+            }
+            .poc-page,
+            .poc-line {
+                font-family: var(--custom-font, inherit) !important;
             }
             div[data-reader-mode-body="true"] {
                 width: 100% !important;
@@ -11458,9 +11484,10 @@
                 function createAndPrependSummaryElement(section) {
                     if (!section || section.querySelector(".quick-summary") || section.parentNode?.querySelector?.(".quick-summary")) return;
                     
+                    const shouldShowSummary = Boolean(settings.prependSummary[language]) && isFirstPageInPageMode();
                     const summaryElement = createElement("div", {
                         className: "quick-summary",
-                        style: `position: relative; ${(settings.prependSummary[language]) ? '' : 'display: none;'}`
+                        style: `position: relative; ${shouldShowSummary ? '' : 'display: none;'}`
                     });
                     
                     if (lessonSummary) {
@@ -11798,12 +11825,33 @@
                 });
             }
             
-            function resetScroll() {
-                const scrollTarget = document.querySelector('[data-reader-mode-body="true"] > div.overflow-y-auto');
-                if (scrollTarget) {
-                    scrollTarget.scrollTop = 0;
-                    scrollTarget.scrollLeft = 0;
+            function isFirstPageInPageMode() {
+                if (!isNativePageMode()) return true;
+                const prevBtn = document.querySelector('button[aria-label="Previous page"]');
+                if (prevBtn) return false;
+                const progressInput = document.querySelector('input[type="range"][aria-label="Lesson progress"]');
+                if (progressInput && Number(progressInput.value) > 0) return false;
+                const firstToken = document.querySelector('.poc-page .sentence-item[data-word-index]');
+                if (firstToken && Number(firstToken.dataset.wordIndex) > 0) return false;
+                return true;
+            }
+
+            function updateQuickSummaryPageVisibility() {
+                const summaryEl = document.querySelector(".quick-summary");
+                if (!summaryEl) return;
+                if (!settings.prependSummary[language] || !isFirstPageInPageMode()) {
+                    summaryEl.style.display = "none";
+                } else {
+                    summaryEl.style.display = "block";
                 }
+            }
+
+            function resetScroll() {
+                const scrollTargets = document.querySelectorAll('[data-reader-mode-body="true"] > div.overflow-y-auto, .reader-body');
+                scrollTargets.forEach((target) => {
+                    target.scrollTop = 0;
+                    target.scrollLeft = 0;
+                });
             }
             function getFinishPageButton(action) {
                 if (action === "back") {
@@ -11862,7 +11910,7 @@
                             }
                         }
 
-                        if (!event.shiftKey) {
+                        if (!event.shiftKey && !isNativePageMode()) {
                             event.preventDefault();
                         }
                     }
@@ -11871,6 +11919,7 @@
             
             async function handleLoadedContent(node) {
                 resetScroll();
+                updateQuickSummaryPageVisibility();
                 
                 currentGeminiCacheName = null;
                 geminiCachePromise = null;
@@ -11906,12 +11955,13 @@
                 const progressSlider = document.querySelector('input[type="range"][aria-label="Lesson progress"]');
                 if (progressSlider) {
                     progressSlider.addEventListener('input', () => {
-                        document.querySelector(".quick-summary")?.remove();
+                        updateQuickSummaryPageVisibility();
                         resetScroll();
                     });
                 }
                 
                 const observer = new MutationObserver((mutations) => {
+                    let shouldSyncPageState = false;
                     for (const mutation of mutations) {
                         if (mutation.type === "childList") {
                             for (const node of mutation.addedNodes) {
@@ -11920,6 +11970,12 @@
                                     handleLoadedContent(node);
                                     return;
                                 }
+                                if (node.matches?.('.poc-column, .poc-line') || node.querySelector?.('.poc-column, .poc-line')) {
+                                    shouldSyncPageState = true;
+                                }
+                            }
+                            if (mutation.target.nodeType === Node.ELEMENT_NODE && mutation.target.matches?.('.poc-page, .poc-column')) {
+                                shouldSyncPageState = true;
                             }
                         } else if (mutation.type === "attributes" && mutation.attributeName === "class") {
                             const oldClass = mutation.oldValue || "";
@@ -11928,10 +11984,13 @@
                             const newPage = newClass.match(/\bis-page-(\d+)\b/)?.[1];
                             
                             if (newPage && oldPage !== newPage) {
-                                document.querySelector(".quick-summary")?.remove();
-                                resetScroll();
+                                shouldSyncPageState = true;
                             }
                         }
+                    }
+                    if (shouldSyncPageState) {
+                        updateQuickSummaryPageVisibility();
+                        resetScroll();
                     }
                 });
                 
