@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      19.0.2
+// @version      19.0.3
 // @license      GPL-3.0-or-later
 // @grant       GM_setValue
 // @grant       GM_getValue
@@ -3005,9 +3005,9 @@
 
     function handleLocalVideoContainerVisibility() {
         async function bindLingQPlayerControls(videoElement) {
-            const sliderHandle = await waitForElement('.audio-player--progress .rc-slider-handle', 10000);
-            const playButton = await waitForElement(".section--player button.lingq-audio-player", 10000);
-            const speedLabel = await waitForElement(".audio-player--controllers span.leading-none.text-xl", 10000);
+            const sliderHandle = await waitForElement('footer [data-slot="slider-thumb"], footer [role="slider"], .audio-player--progress .rc-slider-handle', 10000);
+            const playButton = await waitForElement('footer button[aria-label="Play"], footer button[aria-label="Pause"], .section--player button.lingq-audio-player', 10000);
+            const speedLabel = document.querySelector('#addon-speed-controller .addon-speed-text, footer button[aria-label^="Playback speed"], .audio-player--controllers span.leading-none.text-xl');
             const miniProgressBar = document.getElementById("local-video-mini-progress");
             
             if (!sliderHandle || !playButton) {
@@ -3019,14 +3019,19 @@
                 for (const media of mediaInstances) {
                     if (media && media.id !== "addonLocalVideo" && !media.paused && !media.ended) return true;
                 }
-                const currentPlayBtn = document.querySelector(".section--player button.lingq-audio-player") || playButton;
+                const pauseBtn = document.querySelector('footer button[aria-label="Pause"], .section--player button.lingq-audio-player .svg-icon--pause');
+                if (pauseBtn) return true;
+                const currentPlayBtn = document.querySelector('footer button[aria-label="Play"], footer button[aria-label="Pause"], .section--player button.lingq-audio-player') || playButton;
                 const svg = currentPlayBtn?.querySelector("svg");
-                return Boolean(svg && svg.classList.contains("svg-icon--pause"));
+                return Boolean(svg && (svg.classList.contains("svg-icon--pause") || svg.classList.contains("lucide-pause")));
             };
             
-            const getLingQSpeed = () => isCustomSpeedActive()
-                ? settings.lingqSpeed[getLessonLanguage()]
-                : parseFloat(speedLabel?.textContent ?? 1.0);
+            const getLingQSpeed = () => {
+                if (isCustomSpeedActive()) return settings.lingqSpeed[getLessonLanguage()];
+                const speedBtn = document.querySelector('footer button[aria-label^="Playback speed"]');
+                if (speedBtn) return parseFloat(speedBtn.textContent) || 1.0;
+                return parseFloat(speedLabel?.textContent ?? 1.0);
+            };
             
             const syncPlaybackRate = () => {
                 const targetSpeed = getLingQSpeed();
@@ -3098,16 +3103,28 @@
                 progressContainer.addEventListener("mousedown", () => unlockVideoEnded(), true);
             }
 
-            const lessonReader = document.querySelector(".lesson-reader") || document.body;
+            const lessonReader = document.querySelector('div[data-reader-mode-body="true"]') || document.querySelector(".lesson-reader") || document.body;
             lessonReader.addEventListener("click", (event) => {
-                if (event.target.closest(".sentence, .reader-sentence, .sentence-text")) {
+                if (event.target.closest(".sentence-item, .reader-sentence, .sentence, .sentence-text")) {
                     unlockVideoEnded();
                 }
             }, true);
 
             const playerObserver = new MutationObserver(() => {
                 const duration = videoElement.duration || 0;
-                const preciseTargetTime = parseFloat(sliderHandle.getAttribute("aria-valuenow")) || 0;
+                let preciseTargetTime = parseFloat(sliderHandle.getAttribute("aria-valuenow"));
+                if (isNaN(preciseTargetTime) || preciseTargetTime === 0) {
+                    const ariaText = sliderHandle.getAttribute("aria-valuetext");
+                    if (ariaText) {
+                        const timeParts = ariaText.split('/')[0].trim().split(':');
+                        if (timeParts.length === 2) {
+                            preciseTargetTime = parseInt(timeParts[0], 10) * 60 + parseFloat(timeParts[1]);
+                        } else if (timeParts.length === 3) {
+                            preciseTargetTime = parseInt(timeParts[0], 10) * 3600 + parseInt(timeParts[1], 10) * 60 + parseFloat(timeParts[2]);
+                        }
+                    }
+                }
+                if (isNaN(preciseTargetTime)) preciseTargetTime = 0;
                 const isVideoAtEnd = videoElement.ended || (duration > 0 && videoElement.currentTime >= duration - 0.1);
                 const isTargetNearEnd = duration > 0 && preciseTargetTime >= duration - 0.1;
                 const isPlaying = isLingQPlaying();
@@ -3750,10 +3767,31 @@
             }
         } else {
             mediaInstances.forEach(media => {
-                if (media) media.volume = 1.0;
+                if (media) media.volume = settings.lingqVolume;
+            });
+            document.querySelectorAll('audio').forEach(audio => {
+                if (audio) audio.volume = settings.lingqVolume;
             });
             const localVideo = document.getElementById("addonLocalVideo");
-            if (localVideo) localVideo.volume = 1.0;
+            if (localVideo) localVideo.volume = settings.lingqVolume;
+        }
+
+        const addonVolume = document.getElementById('addon-volume-controller');
+        if (addonVolume) {
+            const volPct = Math.round(settings.lingqVolume * 100);
+            const volumeText = addonVolume.querySelector('.addon-volume-text');
+            if (volumeText) volumeText.textContent = `${volPct}%`;
+            const iconWrapper = addonVolume.querySelector('.icon-wrapper');
+            if (iconWrapper) {
+                const svgMute = `<svg style="width: 17px; height: 17px; flex-shrink: 0;" viewBox="-2 -3 32 32"><path fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" d="m12 21-5-5H3v-6h4l5-5zm10-10-6 6m0-6 6 6"/></svg>`;
+                const svgLow = `<svg style="width: 17px; height: 17px; flex-shrink: 0;" viewBox="-2 -3 32 32"><path fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" d="m12 21-5-5H3v-6h4l5-5zm5-10c1.5 1.5 1.5 4.5 0 6"/></svg>`;
+                const svgHigh = `<svg style="width: 18px; height: 18px; flex-shrink: 0;" viewBox="-2 -3 32 32"><path fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" d="m12 21-5-5H3v-6h4l5-5zm5-10c1.5 1.5 1.5 4.5 0 6m4-9c3 2.5 3 7.5 0 10"/></svg>`;
+                if (settings.lingqVolume === 0) iconWrapper.innerHTML = svgMute;
+                else if (settings.lingqVolume <= 0.5) iconWrapper.innerHTML = svgLow;
+                else iconWrapper.innerHTML = svgHigh;
+            }
+            const volumeBtn = addonVolume.querySelector('button, a');
+            if (volumeBtn) volumeBtn.setAttribute("title", `Volume: ${volPct}% (Click to cycle, Scroll to adjust)`);
         }
     }
     
@@ -3771,15 +3809,29 @@
         mediaInstances.forEach(media => {
             if (media) media.playbackRate = clampedSpeed;
         });
+        document.querySelectorAll('audio').forEach(audio => {
+            if (audio) audio.playbackRate = clampedSpeed;
+        });
         const localVideo = document.getElementById("addonLocalVideo");
         if (localVideo) localVideo.playbackRate = clampedSpeed;
+
+        const addonSpeedText = document.querySelector('#addon-speed-controller .addon-speed-text');
+        if (addonSpeedText) {
+            addonSpeedText.textContent = `${clampedSpeed}×`;
+        }
+
+        const speedBtn = document.querySelector('footer button[aria-label^="Playback speed"]');
+        if (speedBtn) {
+            speedBtn.textContent = `${clampedSpeed}×`;
+            speedBtn.setAttribute('aria-label', `Playback speed ${clampedSpeed}×`);
+        }
     }
     
     function skipPlayback(deltaSeconds) {
         unlockVideoEnded();
         const localVideo = document.getElementById("addonLocalVideo");
         const isLocalVideoActive = localVideo && localVideo.style.display !== "none" && !isNaN(localVideo.currentTime);
-        const sliderHandle = document.querySelector('.audio-player--progress .rc-slider-handle');
+        const sliderHandle = document.querySelector('footer [data-slot="slider-thumb"], footer [role="slider"], .audio-player--progress .rc-slider-handle');
 
         const now = Date.now();
         let baseTime;
@@ -3829,15 +3881,15 @@
     }
     
     function updateSkipButtonsUI() {
-        const controllers = document.querySelector('.audio-player--controllers');
-        if (!controllers) return;
-
         const duration = settings.skipDuration;
 
-        const backwardBtn = controllers.querySelector('.controller-item--backward') || controllers.querySelector('.svg-icon--backward')?.closest('a');
+        const backwardBtn = document.querySelector('footer button[aria-label^="Replay"], .audio-player--controllers .controller-item--backward') ||
+                           document.querySelector('.svg-icon--backward')?.closest('a');
         if (backwardBtn) {
+            backwardBtn.setAttribute('title', `Replay ${duration} seconds (Shift+<)`);
+            backwardBtn.setAttribute('aria-label', `Replay ${duration} seconds`);
             const backwardContainer = backwardBtn.parentElement;
-            if (backwardContainer) {
+            if (backwardContainer && backwardContainer !== backwardBtn.closest('footer')) {
                 backwardContainer.setAttribute('data-original-title', `Rewind ${duration} seconds`);
             }
             const backwardText = backwardBtn.querySelector('text.is-text') || backwardBtn.querySelector('text');
@@ -3848,10 +3900,13 @@
             }
         }
 
-        const forwardBtn = controllers.querySelector('.controller-item--forward') || controllers.querySelector('.svg-icon--forward')?.closest('a');
+        const forwardBtn = document.querySelector('footer button[aria-label^="Forward"], .audio-player--controllers .controller-item--forward') ||
+                          document.querySelector('.svg-icon--forward')?.closest('a');
         if (forwardBtn) {
+            forwardBtn.setAttribute('title', `Forward ${duration} seconds (Shift+>)`);
+            forwardBtn.setAttribute('aria-label', `Forward ${duration} seconds`);
             const forwardContainer = forwardBtn.parentElement;
-            if (forwardContainer) {
+            if (forwardContainer && forwardContainer !== forwardBtn.closest('footer')) {
                 forwardContainer.setAttribute('data-original-title', `Fast forward ${duration} seconds`);
             }
             const forwardText = forwardBtn.querySelector('text.is-text') || forwardBtn.querySelector('text');
@@ -9005,7 +9060,7 @@
         }
 
         function isTextOnlyLesson() {
-            return !document.querySelector('div[aria-label="Lesson player"]') && !isVideoLesson();
+            return !document.querySelector('footer button[aria-label="Play"], footer button[aria-label="Pause"], footer[aria-label="Lesson player"], div[aria-label="Lesson player"]') && !isVideoLesson();
         }
 
         function getLessonTitle() {
@@ -9043,41 +9098,88 @@
             smoothScrollTo(scrollTarget, targetScrollTop, 300);
         }
 
+        function isFooterExpanded(footer = document.querySelector('footer')) {
+            if (!footer) return false;
+            return footer.getAttribute('aria-label') === 'Lesson player' ||
+                   Boolean(footer.querySelector('button[aria-label^="Playback speed"], button[aria-label="Collapse player"]'));
+        }
+
+        let observedFooter = null;
         let audioPlayerObserver = null;
+        let updateFooterFrame = null;
         
-        async function attachAudioPlayerObserver() {
-            const playerContainer = await waitForElement(".section--player", 10000);
-            if (!playerContainer) return;
-            
-            if (audioPlayerObserver) audioPlayerObserver.disconnect();
-            
-            audioPlayerObserver = new MutationObserver((mutations) => {
-                for (const mutation of mutations) {
-                    for (const node of mutation.addedNodes) {
-                        if (node.nodeType !== Node.ELEMENT_NODE) continue;
-                        
-                        if (node.matches('.audio-player--controllers') || node.querySelector('.audio-player--controllers')) {
-                            setupVolumeController();
-                            setupSpeedController();
-                            setupCustomSkipController();
-                        }
-                    }
+        function updateFooterControllers() {
+            const footer = document.querySelector('footer');
+            if (footer) {
+                if (footer !== observedFooter) {
+                    attachAudioPlayerObserver();
+                    return;
                 }
+                if (!isFooterExpanded(footer)) {
+                    document.getElementById('addon-speed-controller')?.remove();
+                    document.getElementById('addon-volume-controller')?.remove();
+                    return;
+                }
+            }
+            setupSpeedController();
+            setupVolumeController();
+            setupCustomSkipController();
+        }
+
+        function scheduleFooterUpdate() {
+            if (updateFooterFrame) return;
+            updateFooterFrame = requestAnimationFrame(() => {
+                updateFooterFrame = null;
+                updateFooterControllers();
+            });
+        }
+
+        async function attachAudioPlayerObserver() {
+            if (isTextOnlyLesson()) return;
+            const footer = await waitForElement('footer', 5000);
+            if (!footer) return;
+            
+            if (audioPlayerObserver) {
+                audioPlayerObserver.disconnect();
+                audioPlayerObserver = null;
+            }
+
+            observedFooter = footer;
+            
+            audioPlayerObserver = new MutationObserver(() => {
+                const currentFooter = document.querySelector('footer');
+                if (currentFooter && currentFooter !== observedFooter) {
+                    attachAudioPlayerObserver();
+                    return;
+                }
+                scheduleFooterUpdate();
             });
             
-            audioPlayerObserver.observe(playerContainer, {childList: true, subtree: true});
-            setupVolumeController();
-            setupSpeedController();
-            setupCustomSkipController();
+            if (footer.parentElement) {
+                audioPlayerObserver.observe(footer.parentElement, {
+                    childList: true,
+                    subtree: false
+                });
+            }
+            
+            audioPlayerObserver.observe(footer, {
+                attributes: true,
+                attributeFilter: ['aria-label', 'class'],
+                subtree: false
+            });
+            
+            scheduleFooterUpdate();
         }
         
         attachAudioPlayerObserver();
         
         function setupCustomSkipController() {
+            const footer = document.querySelector('footer');
             const controllers = document.querySelector('.audio-player--controllers');
-            if (!controllers) return;
+            if (!footer && !controllers) return;
 
-            const backwardBtn = controllers.querySelector('.controller-item--backward') || controllers.querySelector('.svg-icon--backward')?.closest('a');
+            const backwardBtn = document.querySelector('footer button[aria-label^="Replay"], .audio-player--controllers .controller-item--backward') ||
+                               document.querySelector('.svg-icon--backward')?.closest('a');
             if (backwardBtn && !backwardBtn.dataset.addonSkipHooked) {
                 backwardBtn.dataset.addonSkipHooked = "true";
                 backwardBtn.addEventListener('click', (e) => {
@@ -9088,7 +9190,8 @@
                 }, true);
             }
 
-            const forwardBtn = controllers.querySelector('.controller-item--forward') || controllers.querySelector('.svg-icon--forward')?.closest('a');
+            const forwardBtn = document.querySelector('footer button[aria-label^="Forward"], .audio-player--controllers .controller-item--forward') ||
+                              document.querySelector('.svg-icon--forward')?.closest('a');
             if (forwardBtn && !forwardBtn.dataset.addonSkipHooked) {
                 forwardBtn.dataset.addonSkipHooked = "true";
                 forwardBtn.addEventListener('click', (e) => {
@@ -9102,86 +9205,88 @@
             updateSkipButtonsUI();
         }
         
-        function setupVolumeController() {
-            const controllers = document.querySelector('.audio-player--controllers');
-            if (!controllers || controllers.querySelector('#addon-volume-controller')) return;
-            
-            const volumeWrapper = createElement("div", {
-                id: "addon-volume-controller",
-                style: "display: inline;"
-            });
-            
-            const volumeBtn = createElement("a", {
-                className: "controller-item button is-white",
-                style: "cursor: pointer; position: relative; display: inline-flex; align-items: center; justify-content: center; gap: 1px;"
-            });
-            
-            const iconWrapper = createElement("span", {
-                className: "icon-wrapper icon t-btn-text-player hover:t-btn-text-hover-player",
-                style: "display: flex; align-items: center; justify-content: center;"
-            });
-            
-            const svgMute = `<svg style="width: 25px; height: 25px; flex-shrink: 0;" class="svg-icon svg-icon--volume is-dark" viewBox="-2 -3 32 32"><path fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" class="is-stroke" d="m12 21-5-5H3v-6h4l5-5zm10-10-6 6m0-6 6 6"/></svg>`;
-            const svgLow = `<svg style="width: 25px; height: 25px; flex-shrink: 0;" class="svg-icon svg-icon--volume is-dark" viewBox="-2 -3 32 32"><path fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" class="is-stroke" d="m12 21-5-5H3v-6h4l5-5zm5-10c1.5 1.5 1.5 4.5 0 6"/></svg>`;
-            const svgHigh = `<svg style="width: 25px; height: 25px; flex-shrink: 0;" class="svg-icon svg-icon--volume is-dark" viewBox="-2 -3 32 32"><path fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" class="is-stroke" d="m12 21-5-5H3v-6h4l5-5zm5-10c1.5 1.5 1.5 4.5 0 6m4-9c3 2.5 3 7.5 0 10"/></svg>`;
-            
-            function updateIcon() {
-                const vol = settings.lingqVolume;
-                const volPct = Math.round(vol * 100);
-                let svgStr = "";
-                
-                if (vol === 0) svgStr = svgMute;
-                else if (vol <= 0.5) svgStr = svgLow;
-                else svgStr = svgHigh;
-                
-                const textHtml = `<span class="addon-volume-text">${volPct}</span>`;
-                
-                iconWrapper.innerHTML = svgStr + textHtml;
-                volumeBtn.setAttribute("title", `Volume: ${volPct}%`);
-            }
-            
-            updateIcon();
-            
-            volumeBtn.addEventListener('click', () => {
-                const levels = [0, 0.25, 0.5, 0.75, 1.0];
-                let nextIdx = (levels.indexOf(settings.lingqVolume) + 1) % levels.length;
-                if (nextIdx === 0 && settings.lingqVolume !== 1.0) {
-                    const closest = levels.reduce((prev, curr) => Math.abs(curr - settings.lingqVolume) < Math.abs(prev - settings.lingqVolume) ? curr : prev);
-                    nextIdx = (levels.indexOf(closest) + 1) % levels.length;
-                }
-                setLingqVolume(levels[nextIdx]);
-                updateIcon();
-            });
-            
-            volumeBtn.addEventListener('wheel', (e) => {
-                e.preventDefault();
-                let vol = settings.lingqVolume;
-                if (e.deltaY < 0) {
-                    vol = Math.min(1.0, vol + 0.05);
-                } else {
-                    vol = Math.max(0.0, vol - 0.05);
-                }
-                vol = Math.round(vol * 20) / 20;
-                setLingqVolume(vol);
-                updateIcon();
-            });
-            
-            volumeBtn.appendChild(iconWrapper);
-            volumeWrapper.appendChild(volumeBtn);
-            
-            const lyricsBtn = controllers.querySelector('.controller-item--lyrics');
-            if (lyricsBtn) {
-                let targetSibling = lyricsBtn;
-                while (targetSibling.parentElement && targetSibling.parentElement !== controllers) {
-                    targetSibling = targetSibling.parentElement;
-                }
-                controllers.insertBefore(volumeWrapper, targetSibling);
-            } else {
-                controllers.appendChild(volumeWrapper);
-            }
-        }
-        
         function setupSpeedController() {
+            const footer = document.querySelector('footer');
+            if (footer) {
+                if (!isFooterExpanded(footer)) {
+                    document.getElementById('addon-speed-controller')?.remove();
+                    return;
+                }
+
+                const nativeSpeedBtn = footer.querySelector('button[aria-label^="Playback speed"]');
+                if (nativeSpeedBtn && nativeSpeedBtn.style.display !== "none") {
+                    nativeSpeedBtn.style.setProperty("display", "none", "important");
+                }
+
+                const currentSpeed = () => settings.lingqSpeed[getLessonLanguage()] || 1.0;
+                let speedWrapper = document.getElementById('addon-speed-controller');
+
+                const collapseBtn = footer.querySelector('button[aria-label="Collapse player"]');
+                const rightControls = collapseBtn?.parentElement || footer;
+
+                if (!speedWrapper) {
+                    const minSpeed = 0.5;
+                    const maxSpeed = 3.0;
+                    const speedSteps = [0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0, 2.5, 3.0];
+                    const wheelStep = 0.05;
+
+                    const speedText = createElement("span", {
+                        className: "addon-speed-text font-semibold select-none tabular-nums"
+                    });
+
+                    const speedBtn = createElement("button", {
+                        type: "button",
+                        className: "addon-speed-btn inline-flex items-center justify-center rounded-full hover:bg-ghost-hover text-foreground h-8 px-3 text-xs font-semibold cursor-pointer transition-colors select-none tabular-nums",
+                        title: "Playback speed (Click to cycle, Scroll to adjust)"
+                    }, speedText);
+
+                    function updateSpeedLabel() {
+                        const speed = currentSpeed();
+                        const label = `${parseFloat(speed.toFixed(2))}×`;
+                        speedText.textContent = label;
+                        speedBtn.setAttribute("title", `Speed: ${label} (Click to cycle, Scroll to adjust)`);
+                    }
+
+                    speedBtn.addEventListener('click', (e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        const speed = currentSpeed();
+                        const next = speedSteps.find((s) => s > speed + 0.01) || speedSteps[0];
+                        setLingqSpeed(next);
+                        updateSpeedLabel();
+                    });
+
+                    speedBtn.addEventListener('wheel', (e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        const speed = currentSpeed();
+                        const delta = e.deltaY < 0 ? wheelStep : -wheelStep;
+                        const next = Math.round((speed + delta) * 20) / 20;
+                        setLingqSpeed(Math.min(maxSpeed, Math.max(minSpeed, next)));
+                        updateSpeedLabel();
+                    });
+
+                    speedWrapper = createElement("div", {
+                        id: "addon-speed-controller",
+                        className: "addon-speed-controller inline-flex items-center"
+                    }, speedBtn);
+
+                    updateSpeedLabel();
+                } else {
+                    const speedText = speedWrapper.querySelector('.addon-speed-text');
+                    if (speedText) speedText.textContent = `${parseFloat(currentSpeed().toFixed(2))}×`;
+                }
+
+                if (nativeSpeedBtn && nativeSpeedBtn.parentElement) {
+                    if (speedWrapper.nextElementSibling !== nativeSpeedBtn) {
+                        nativeSpeedBtn.parentElement.insertBefore(speedWrapper, nativeSpeedBtn);
+                    }
+                } else if (rightControls && speedWrapper.parentElement !== rightControls) {
+                    rightControls.prepend(speedWrapper);
+                }
+                return;
+            }
+
             const controllers = document.querySelector('.audio-player--controllers');
             if (!controllers || controllers.querySelector('.controller-item--speed')) return;
             
@@ -9252,6 +9357,112 @@
             
             setLingqSpeed(currentSpeed());
             updateLabel();
+        }
+        
+        function setupVolumeController() {
+            const footer = document.querySelector('footer');
+            if (footer && !isFooterExpanded(footer)) {
+                document.getElementById('addon-volume-controller')?.remove();
+                return;
+            }
+            const legacyControllers = document.querySelector('.audio-player--controllers');
+            if (!footer && !legacyControllers) return;
+
+            let volumeWrapper = document.getElementById('addon-volume-controller');
+
+            if (!volumeWrapper) {
+                const volumeText = createElement("span", {
+                    className: "addon-volume-text font-semibold tabular-nums"
+                });
+
+                const iconWrapper = createElement("span", {
+                    className: "icon-wrapper inline-flex items-center justify-center shrink-0"
+                });
+
+                const volumeBtn = createElement("button", {
+                    type: "button",
+                    className: footer
+                        ? "addon-volume-btn inline-flex flex-row items-center justify-center gap-1.5 rounded-full hover:bg-ghost-hover text-foreground h-8 px-3 text-xs font-semibold cursor-pointer transition-colors select-none tabular-nums"
+                        : "controller-item button is-white cursor-pointer relative inline-flex items-center justify-center gap-1",
+                    title: "Volume: 100% (Click to cycle, Scroll to adjust)"
+                }, iconWrapper, volumeText);
+
+                const svgMute = `<svg style="width: 15px; height: 15px; flex-shrink: 0;" viewBox="-2 -3 32 32"><path fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" d="m12 21-5-5H3v-6h4l5-5zm10-10-6 6m0-6 6 6"/></svg>`;
+                const svgLow = `<svg style="width: 15px; height: 15px; flex-shrink: 0;" viewBox="-2 -3 32 32"><path fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" d="m12 21-5-5H3v-6h4l5-5zm5-10c1.5 1.5 1.5 4.5 0 6"/></svg>`;
+                const svgHigh = `<svg style="width: 15px; height: 15px; flex-shrink: 0;" viewBox="-2 -3 32 32"><path fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" d="m12 21-5-5H3v-6h4l5-5zm5-10c1.5 1.5 1.5 4.5 0 6m4-9c3 2.5 3 7.5 0 10"/></svg>`;
+
+                function updateVolumeUI() {
+                    const vol = settings.lingqVolume;
+                    const volPct = Math.round(vol * 100);
+
+                    if (vol === 0) iconWrapper.innerHTML = svgMute;
+                    else if (vol <= 0.5) iconWrapper.innerHTML = svgLow;
+                    else iconWrapper.innerHTML = svgHigh;
+
+                    volumeText.textContent = `${volPct}%`;
+                    volumeBtn.setAttribute("title", `Volume: ${volPct}% (Click to cycle, Scroll to adjust)`);
+                }
+
+                volumeBtn.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    const levels = [0, 0.25, 0.5, 0.75, 1.0];
+                    let nextIdx = (levels.indexOf(settings.lingqVolume) + 1) % levels.length;
+                    if (nextIdx === 0 && settings.lingqVolume !== 1.0) {
+                        const closest = levels.reduce((prev, curr) => Math.abs(curr - settings.lingqVolume) < Math.abs(prev - settings.lingqVolume) ? curr : prev);
+                        nextIdx = (levels.indexOf(closest) + 1) % levels.length;
+                    }
+                    setLingqVolume(levels[nextIdx]);
+                    updateVolumeUI();
+                });
+
+                volumeBtn.addEventListener('wheel', (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    let vol = settings.lingqVolume;
+                    const delta = e.deltaY < 0 ? 0.05 : -0.05;
+                    vol = Math.round(Math.min(1.0, Math.max(0.0, vol + delta)) * 20) / 20;
+                    setLingqVolume(vol);
+                    updateVolumeUI();
+                });
+
+                volumeWrapper = createElement("div", {
+                    id: "addon-volume-controller",
+                    className: "addon-volume-controller inline-flex items-center"
+                }, volumeBtn);
+
+                updateVolumeUI();
+            } else {
+                const volPct = Math.round(settings.lingqVolume * 100);
+                const volumeText = volumeWrapper.querySelector('.addon-volume-text');
+                if (volumeText) volumeText.textContent = `${volPct}%`;
+            }
+
+            if (footer) {
+                const speedController = document.getElementById('addon-speed-controller');
+                if (speedController && speedController.parentElement) {
+                    if (volumeWrapper.previousElementSibling !== speedController) {
+                        speedController.after(volumeWrapper);
+                    }
+                } else {
+                    const collapseBtn = footer.querySelector('button[aria-label="Collapse player"]');
+                    const rightControls = collapseBtn?.parentElement || footer;
+                    if (rightControls && volumeWrapper.parentElement !== rightControls) {
+                        rightControls.prepend(volumeWrapper);
+                    }
+                }
+            } else if (legacyControllers) {
+                const lyricsBtn = legacyControllers.querySelector('.controller-item--lyrics');
+                if (lyricsBtn) {
+                    let targetSibling = lyricsBtn;
+                    while (targetSibling.parentElement && targetSibling.parentElement !== legacyControllers) {
+                        targetSibling = targetSibling.parentElement;
+                    }
+                    legacyControllers.insertBefore(volumeWrapper, targetSibling);
+                } else {
+                    legacyControllers.appendChild(volumeWrapper);
+                }
+            }
         }
         
         function resetLocalVideo() {
@@ -9990,21 +10201,34 @@
             }
 
             /* Player controllers styling */
+            footer .rounded-full:has(#addon-speed-controller) {
+                height: 38px !important;
+                padding: 2px 12px !important;
+                gap: 6px !important;
+            }
+            #addon-speed-controller button.addon-speed-btn,
+            #addon-volume-controller button.addon-volume-btn {
+                height: 32px !important;
+                padding: 0 12px !important;
+                display: inline-flex !important;
+                align-items: center !important;
+                justify-content: center !important;
+            }
             #addon-volume-controller .addon-volume-text {
                 display: inline-flex !important;
                 align-items: center !important;
-                font-size: 0.65rem !important;
-                font-weight: 400 !important;
+                font-size: 0.8125rem !important;
+                font-weight: 600 !important;
                 line-height: 1 !important;
                 color: inherit !important;
             }
             #addon-speed-controller .addon-speed-text {
                 display: inline-flex !important;
                 align-items: center !important;
-                min-width: 2.5em;
+                min-width: 2.2em;
                 justify-content: center;
-                font-size: 0.85rem !important;
-                font-weight: 500 !important;
+                font-size: 0.8125rem !important;
+                font-weight: 600 !important;
                 line-height: 1 !important;
                 color: inherit !important;
             }
@@ -10301,29 +10525,7 @@
                 const shortcuts = {
                     [settings.shortcutVideoFullscreen]: () => clickElement(".modal-section > div > button:nth-child(2)"), // video full screen toggle
                     [settings.shortcutMeaningInput]: () => {
-                        let input = document.querySelector("div[data-word-widget] form input[name='text']");
-                        if (!input) {
-                            const openMeaningsBtn = document.querySelector('div[data-word-widget] button[aria-label="Open Meanings"]');
-                            if (openMeaningsBtn) {
-                                openMeaningsBtn.click();
-                                setTimeout(() => {
-                                    const addMeaningBtn = document.querySelector('div[data-word-widget] button[data-size="txt"]') ||
-                                        Array.from(document.querySelectorAll('div[data-word-widget] button')).find((btn) =>
-                                            btn.textContent.includes('Add Meaning') || btn.querySelector('svg.lucide-plus')
-                                        );
-                                    if (addMeaningBtn) {
-                                        addMeaningBtn.click();
-                                        setTimeout(() => {
-                                            focusElement("div[data-word-widget] form input[name='text']");
-                                        }, 50);
-                                    } else {
-                                        focusElement("div[data-word-widget] form input[name='text']");
-                                    }
-                                }, 100);
-                                return;
-                            }
-                        }
-                        focusElement("div[data-word-widget] form input[name='text']");
+                        focusElement("input.addon-quick-meaning-input");
                     },
                     [settings.shortcutChatInput]: () => focusElement("#user-input"), // Move cursor to the chat widget input
                     [settings.shortcutFlashcard]: () => {
@@ -10332,7 +10534,7 @@
                         const lastWordMessage = wordMessages[wordMessages.length - 1];
                         lastWordMessage.querySelector(".save-flashcard-button")?.click();
                     }, // Make a flashcard
-                    [settings.shortcutTTSPlay]: () => clickElement('div[data-word-widget] button[aria-label="Listen"], div[data-reader-popup="true"] button[aria-label="Listen"]'), // Play tts audio
+                    [settings.shortcutTTSPlay]: () => clickElement('div[data-word-widget] button[aria-label="Listen"], #addon-sentence-header button.addon-sentence-tts-btn, div[data-reader-popup="true"] button[aria-label="Listen"]'), // Play tts audio
                     [settings.shortcutTranslator]: () => clickElement(".dictionary-resources > a:nth-last-child(1)"), // Open Translator
                     [settings.shortcutBackward5s]: () => triggerThrottledSkip(-settings.skipDuration), // Rewind
                     [settings.shortcutForward5s]: () => triggerThrottledSkip(settings.skipDuration), // Fast Forward
