@@ -414,7 +414,7 @@ Enhances LingQ's course overview and lesson list pages with detailed vocabulary 
 - **Vocabulary Distribution Percentages**: Automatically calculates and displays ratio percentages for **LingQs** and **Known words** alongside new words:
   - **Course Header**: Shows aggregated course vocabulary ratios (e.g., `LingQs 1,967 (10%)`, `Known words 16K (82%)`).
   - **Lesson Cards**: Injects real-time percentage badges into individual lesson tiles.
-- **Reset All Lessons (`Reset all`)**: A dedicated action button placed beside the `Archived` toggle to reset reading progress for all lessons in the course back to page 1 in a single click with confirmation protection.
+- **Reset All Lessons (`Reset all`)**: Reset reading progress for all lessons in the course back to page 1 in a single click.
 - **Persistent Sort Memory**: Remembers your preferred course sorting option (e.g., `A-Z`, `New Words %`) across browser sessions and restores it automatically.
 
 ---
@@ -620,11 +620,11 @@ In the addon's **Flashcard Manager**, click **Export as CSV**.
 
 > [!TIP]
 > **Want to add audio pronunciation to your imported cards?**  
-> See [14. HyperTTS Audio Setup & Batch Generation Guide](#14-hypertts-audio-setup--batch-generation-guide-additional-tip) to automatically generate audio using free Google Cloud TTS.
+> See [13. HyperTTS Audio Setup & Batch Generation Guide](#13-hypertts-audio-setup--batch-generation-guide-additional-tip) to automatically generate audio using free Google Cloud TTS.
 
 ---
 
-## 14. HyperTTS Audio Setup & Batch Generation Guide (Additional Tip)
+## 13. HyperTTS Audio Setup & Batch Generation Guide (Additional Tip)
 
 <img src="images/hypertts_output.png" width=400>
 
