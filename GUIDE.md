@@ -18,6 +18,7 @@ This guide is structured around the **Settings Popup** (where the majority of fe
     - [1.6 Typography, Sizing & Memo Widget](#16-typography-sizing--memo-widget)
     - [1.7 Color Themes & Palette](#17-color-themes--palette)
     - [1.8 Video Captions & Player Tweaks](#18-video-captions--player-tweaks)
+    - [1.9 Selective UI Hiding](#19-selective-ui-hiding)
   - [2. Keyboard Shortcuts](#2-keyboard-shortcuts)
     - [2.1 Configuration & Hotkeys Table](#21-configuration--hotkeys-table)
   - [3. AI Chat & Interactive Dictionary](#3-ai-chat--interactive-dictionary)
@@ -38,12 +39,13 @@ This guide is structured around the **Settings Popup** (where the majority of fe
   - [8. Lesson Audio Generator (Editor Page)](#8-lesson-audio-generator-editor-page)
   - [9. Vocabulary Downloader](#9-vocabulary-downloader)
   - [10. Print a Lesson](#10-print-a-lesson)
+  - [11. Course View Enhancements](#11-course-view-enhancements)
 - [Part III: Setup & Integrations](#part-iii-setup--integrations)
-  - [11. Supabase Cloud Database Setup](#11-supabase-cloud-database-setup)
-  - [12. Anki Integration Guide](#12-anki-integration-guide)
+  - [12. Supabase Cloud Database Setup](#12-supabase-cloud-database-setup)
+  - [13. Anki Integration Guide](#13-anki-integration-guide)
     - [Method 1: Direct Sync via Anki-Connect (Recommended)](#method-1-direct-sync-via-anki-connect-recommended)
     - [Method 2: Manual Import via CSV (Alternative)](#method-2-manual-import-via-csv-alternative)
-  - [13. HyperTTS Audio Setup & Batch Generation Guide (Additional Tip)](#13-hypertts-audio-setup--batch-generation-guide-additional-tip)
+  - [14. HyperTTS Audio Setup & Batch Generation Guide (Additional Tip)](#14-hypertts-audio-setup--batch-generation-guide-additional-tip)
 
 ---
 
@@ -156,6 +158,14 @@ Play your own downloaded movies, anime, or video lessons directly within LingQ, 
   - `Below`: Relocated underneath the video viewport so video visuals remain completely unobstructed.
 - **YouTube Simplification**: The addon automatically suppresses the intrusive "More videos" overlay when pausing embedded YouTube videos.
 
+### 1.9 Selective UI Hiding
+Clean up and customize your reading view by selectively hiding default LingQ interface elements:
+- **Hide Meanings**: Hides the community/popular meanings list in the word widget.
+- **Hide Dictionaries**: Hides the external dictionary section in the word widget.
+- **Hide Sentence**: Hides the example sentence section in the word widget.
+- **Hide Lynx AI UI**: Hides Lynx AI assistant buttons across the site header, footer player, and word widget.
+- **Hide Meaning Popup**: Suppresses the floating popup dialog when selecting words or sentences.
+
 ---
 
 ## 2. Keyboard Shortcuts
@@ -254,7 +264,7 @@ Click the **Usage Log** button to open the token monitoring popup:
 - **Custom (Personal Supabase DB)**:
   - Connect your own private [Supabase](https://supabase.com) project.
   - Enter your **DB URL** and **DB Key** (Publishable anon key), then click **Save** to verify the connection.
-  - *(See [Section 10](#10-supabase-cloud-database-setup) for the complete SQL schema and setup walkthrough)*.
+  - *(See [Section 12. Supabase Cloud Database Setup](#12-supabase-cloud-database-setup) for the complete SQL schema and setup walkthrough)*.
 
 ---
 
@@ -303,7 +313,7 @@ A comprehensive vocabulary hub to review, search, audit, and export your flashca
 ### Prerequisites (Database Connection)
 Before creating or managing flashcards, you must connect a database backend in **Settings** (⚙️):
 - **Built-in Database**: Sign in via email OTP. *(See [Section 4.1 Storage Mode](#41-storage-mode-built-in-vs-custom))*
-- **Custom Supabase Database**: Set up your private Supabase project and save your DB URL and key. *(See [Section 4.1](#41-storage-mode-built-in-vs-custom) and [Section 11. Supabase Cloud Database Setup](#11-supabase-cloud-database-setup))*
+- **Custom Supabase Database**: Set up your private Supabase project and save your DB URL and key. *(See [Section 4.1](#41-storage-mode-built-in-vs-custom) and [Section 12. Supabase Cloud Database Setup](#12-supabase-cloud-database-setup))*
 
 ### How to Create Flashcards
 
@@ -320,7 +330,7 @@ Flashcards are created directly within the chat widget during your lessons:
   - Click directly on the **Meaning**, or **Explanation** cell to edit it inline.
 2. **Export as CSV**:
   - Generates a cleanly structured CSV file formatted specifically for Anki import with HTML context highlights.
-  - *(See [Section 12. Anki Integration Guide](#12-anki-integration-guide) for complete importing instructions, deck templates, and field mappings)*.
+  - *(See [Section 13. Anki Integration Guide](#13-anki-integration-guide) for complete importing instructions, deck templates, and field mappings)*.
 3. **Visual Learning Trends**:
   - Interactive bar chart displaying flashcard creation volume over time.
   - Switchable time horizons: **Week**, **Month**, **Year**, and **All**.
@@ -393,11 +403,27 @@ Formats the current lesson into clean, printer-friendly study handouts.
 
 ---
 
+## 11. Course View Enhancements
+
+<img src="images/course_view.png" width=800></br>
+
+### Overview & Purpose
+Enhances LingQ's course overview and lesson list pages with detailed vocabulary distribution analytics and course management tools.
+
+### Features
+- **Vocabulary Distribution Percentages**: Automatically calculates and displays ratio percentages for **LingQs** and **Known words** alongside new words:
+  - **Course Header**: Shows aggregated course vocabulary ratios (e.g., `LingQs 1,967 (10%)`, `Known words 16K (82%)`).
+  - **Lesson Cards**: Injects real-time percentage badges into individual lesson tiles.
+- **Reset All Lessons (`Reset all`)**: A dedicated action button placed beside the `Archived` toggle to reset reading progress for all lessons in the course back to page 1 in a single click with confirmation protection.
+- **Persistent Sort Memory**: Remembers your preferred course sorting option (e.g., `A-Z`, `New Words %`) across browser sessions and restores it automatically.
+
+---
+
 # Part III: Setup & Integrations
 
 ---
 
-## 11. Supabase Cloud Database Setup
+## 12. Supabase Cloud Database Setup
 
 To store flashcards and LLM usage logs in your own private cloud database:
 
@@ -528,7 +554,7 @@ $$;
 
 ---
 
-## 12. Anki Integration Guide
+## 13. Anki Integration Guide
 
 <img src="images/anki flashcard format.png" width=600></br>
 
@@ -594,11 +620,11 @@ In the addon's **Flashcard Manager**, click **Export as CSV**.
 
 > [!TIP]
 > **Want to add audio pronunciation to your imported cards?**  
-> See [13. HyperTTS Audio Setup & Batch Generation Guide](#13-hypertts-audio-setup--batch-generation-guide-additional-tip) to automatically generate audio using free Google Cloud TTS.
+> See [14. HyperTTS Audio Setup & Batch Generation Guide](#14-hypertts-audio-setup--batch-generation-guide-additional-tip) to automatically generate audio using free Google Cloud TTS.
 
 ---
 
-## 13. HyperTTS Audio Setup & Batch Generation Guide (Additional Tip)
+## 14. HyperTTS Audio Setup & Batch Generation Guide (Additional Tip)
 
 <img src="images/hypertts_output.png" width=400>
 
