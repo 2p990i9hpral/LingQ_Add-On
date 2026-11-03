@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      19.0.3
+// @version      19.0.4
 // @license      GPL-3.0-or-later
 // @grant       GM_setValue
 // @grant       GM_getValue
@@ -109,7 +109,7 @@
     };
     
     const languageScopedDefaults = {
-        styleType: "audio",
+        styleType: "default",
         videoPosition: "Right",
         customFont: "",
         prependSummary: false,
@@ -505,10 +505,27 @@
     /* Utils */
     
     function createElement(tag, props = {}, ...children) {
-        const element = document.createElement(tag);
+        const svgTags = new Set(['svg', 'text', 'tspan', 'path', 'circle', 'rect', 'line', 'polyline', 'polygon', 'g', 'use']);
+        const element = svgTags.has(tag)
+            ? document.createElementNS('http://www.w3.org/2000/svg', tag)
+            : document.createElement(tag);
         const {dataset, style, ...restProps} = props || {};
         
-        Object.assign(element, restProps);
+        if (svgTags.has(tag)) {
+            Object.entries(restProps).forEach(([key, val]) => {
+                if (val != null) {
+                    if (key === 'className') {
+                        element.setAttribute('class', String(val));
+                    } else if (key === 'textContent') {
+                        element.textContent = String(val);
+                    } else {
+                        element.setAttribute(key, String(val));
+                    }
+                }
+            });
+        } else {
+            Object.assign(element, restProps);
+        }
         
         if (typeof style === 'string') {
             element.style.cssText = style;
@@ -2919,1005 +2936,18 @@
         document.head.appendChild(link);
     }
     
-    function getCalculatedVttCueSettings() {
-        const container = document.getElementById("local-video-container");
-        if (!container) return "size:80% align:middle line:90%";
-        
-        const containerWidth = container.clientWidth;
-        const containerHeight = container.clientHeight;
-        if (!containerWidth || !containerHeight) return "size:80% align:middle line:90%";
-        
-        const videoAspectRatio = 16 / 9;
-        const videoWidthRatio = Math.min(1.0, (containerHeight * videoAspectRatio) / containerWidth);
-        const targetSubtitlePercent = Math.max(20, Math.round(80 * videoWidthRatio));
-        
-        return `size:${targetSubtitlePercent}% align:center`;
-    }
-    
-    function convertSrtToVttBlobUrl(srtText) {
-        const cueSettings = getCalculatedVttCueSettings();
+    function convertSrtToVttBlobUrl(srtText, cueSettings = "") {
+        const cueSuffix = cueSettings ? ` ${cueSettings}` : "";
         let vttText = srtText.startsWith("WEBVTT")
             ? srtText
             : ("WEBVTT\n\n" + srtText.replace(/(\d{2}:\d{2}:\d{2}),(\d{3})/g, "$1.$2"));
-        vttText = vttText.replace(/(--> \d{2}:\d{2}:\d{2}\.\d{3})(?:[^\r\n]*)/g, `$1 ${cueSettings}`);
+        if (cueSuffix) {
+            vttText = vttText.replace(/(--> \d{2}:\d{2}:\d{2}\.\d{3})(?:[^\r\n]*)/g, `$1${cueSuffix}`);
+        }
         const blob = new Blob([vttText], {type: "text/vtt"});
         return URL.createObjectURL(blob);
     }
-    
-    function convertSentencesToVttBlobUrl(sentences) {
-        function formatTime(seconds) {
-            const date = new Date(0);
-            date.setSeconds(seconds);
-            const match = date.toISOString().match(/T(\d{2}:\d{2}:\d{2})\.(\d{3})/);
-            return `${match[1]}.${match[2]}`;
-        }
-        
-        const cueSettings = getCalculatedVttCueSettings();
-        const vttLines = ["WEBVTT\n"];
-        
-        sentences.forEach((sentence) => {
-            if (!sentence.timestamp || sentence.timestamp.length < 2) return;
-            
-            const startTime = formatTime(sentence.timestamp[0]);
-            const endTime = formatTime(sentence.timestamp[1]);
-            const text = sentence.text || "";
-            
-            vttLines.push(`${startTime} --> ${endTime} ${cueSettings}\n${text}\n`);
-        });
-        
-        const blob = new Blob([vttLines.join("\n")], {type: "text/vtt"});
-        return URL.createObjectURL(blob);
-    }
-    
-    let cachedLocalVideoFiles, attemptAutoMatch;
-    const mediaInstances = new Set();
-    let isVideoEnded = false;
-    let lastSkipTargetTime = null;
-    let lastSkipTimestamp = 0;
 
-    function isSkipActive() {
-        return Date.now() - lastSkipTimestamp < 800;
-    }
-
-    function markVideoEnded() {
-        if (isVideoEnded) return;
-        isVideoEnded = true;
-        const video = document.getElementById("addonLocalVideo");
-        if (video && !video.paused) {
-            video.pause();
-        }
-        mediaInstances.forEach(media => {
-            if (media && !media.paused) {
-                media.pause();
-            }
-        });
-        const playButton = document.querySelector(".section--player button.lingq-audio-player");
-        const playButtonSvg = playButton?.querySelector("svg");
-        if (playButton && playButtonSvg && playButtonSvg.classList.contains("svg-icon--pause")) {
-            playButton.click();
-        }
-    }
-
-    function unlockVideoEnded() {
-        if (!isVideoEnded) return;
-        isVideoEnded = false;
-    }
-
-    function handleLocalVideoContainerVisibility() {
-        async function bindLingQPlayerControls(videoElement) {
-            const sliderHandle = await waitForElement('footer [data-slot="slider-thumb"], footer [role="slider"], .audio-player--progress .rc-slider-handle', 10000);
-            const playButton = await waitForElement('footer button[aria-label="Play"], footer button[aria-label="Pause"], .section--player button.lingq-audio-player', 10000);
-            const speedLabel = document.querySelector('#addon-speed-controller .addon-speed-text, footer button[aria-label^="Playback speed"], .audio-player--controllers span.leading-none.text-xl');
-            const miniProgressBar = document.getElementById("local-video-mini-progress");
-            
-            if (!sliderHandle || !playButton) {
-                console.warn("Required LingQ control elements missing. Sync binder stopped.");
-                return;
-            }
-            
-            const isLingQPlaying = () => {
-                for (const media of mediaInstances) {
-                    if (media && media.id !== "addonLocalVideo" && !media.paused && !media.ended) return true;
-                }
-                const pauseBtn = document.querySelector('footer button[aria-label="Pause"], .section--player button.lingq-audio-player .svg-icon--pause');
-                if (pauseBtn) return true;
-                const currentPlayBtn = document.querySelector('footer button[aria-label="Play"], footer button[aria-label="Pause"], .section--player button.lingq-audio-player') || playButton;
-                const svg = currentPlayBtn?.querySelector("svg");
-                return Boolean(svg && (svg.classList.contains("svg-icon--pause") || svg.classList.contains("lucide-pause")));
-            };
-            
-            const getLingQSpeed = () => {
-                if (isCustomSpeedActive()) return settings.lingqSpeed[getLessonLanguage()];
-                const speedBtn = document.querySelector('footer button[aria-label^="Playback speed"]');
-                if (speedBtn) return parseFloat(speedBtn.textContent) || 1.0;
-                return parseFloat(speedLabel?.textContent ?? 1.0);
-            };
-            
-            const syncPlaybackRate = () => {
-                const targetSpeed = getLingQSpeed();
-                if (videoElement.playbackRate !== targetSpeed) {
-                    videoElement.playbackRate = targetSpeed;
-                    console.log('[Sync]', `Playback speed updated to ${targetSpeed}x`);
-                }
-            };
-            
-            let isVideoSeeking = false;
-            let isAudioDrivenSeek = false;
-            let seekingReleaseTimer = null;
-            let pendingVideoSeek = false;
-            let pendingMediaSeekCount = 0;
-            let settleReleaseTimer = null;
-
-            const checkAndReleaseSeekingLock = () => {
-                if (!pendingVideoSeek && pendingMediaSeekCount === 0) {
-                    if (settleReleaseTimer) clearTimeout(settleReleaseTimer);
-                    settleReleaseTimer = setTimeout(() => {
-                        if (isVideoSeeking) {
-                            isVideoSeeking = false;
-                        }
-                        settleReleaseTimer = null;
-                    }, 80);
-                }
-            };
-
-            // User interaction hooks to unlock playback when user intends to play/seek
-            playButton.addEventListener("click", (event) => {
-                if (!event.isTrusted) return;
-                if (isLingQPlaying()) return;
-
-                const duration = videoElement.duration || 0;
-                if (isVideoEnded && duration > 0 && videoElement.currentTime >= duration - 0.1) {
-                    isAudioDrivenSeek = true;
-                    videoElement.currentTime = 0;
-                    mediaInstances.forEach(media => {
-                        if (media) media.currentTime = 0;
-                    });
-                }
-                unlockVideoEnded();
-            }, true);
-
-            videoElement.addEventListener("click", () => {
-                unlockVideoEnded();
-            });
-
-            const handleUserKeydown = (event) => {
-                if (event.code === "Space" && !event.target.closest("input, textarea, [contenteditable='true']")) {
-                    if (isLingQPlaying()) return;
-
-                    const duration = videoElement.duration || 0;
-                    if (isVideoEnded && duration > 0 && videoElement.currentTime >= duration - 0.1) {
-                        isAudioDrivenSeek = true;
-                        videoElement.currentTime = 0;
-                        mediaInstances.forEach(media => {
-                            if (media) media.currentTime = 0;
-                        });
-                    }
-                    unlockVideoEnded();
-                }
-            };
-            window.addEventListener("keydown", handleUserKeydown, true);
-
-            const progressContainer = document.querySelector(".audio-player--progress") || sliderHandle.parentElement;
-            if (progressContainer) {
-                progressContainer.addEventListener("pointerdown", () => unlockVideoEnded(), true);
-                progressContainer.addEventListener("mousedown", () => unlockVideoEnded(), true);
-            }
-
-            const lessonReader = document.querySelector('div[data-reader-mode-body="true"]') || document.querySelector(".lesson-reader") || document.body;
-            lessonReader.addEventListener("click", (event) => {
-                if (event.target.closest(".sentence-item, .reader-sentence, .sentence, .sentence-text")) {
-                    unlockVideoEnded();
-                }
-            }, true);
-
-            const playerObserver = new MutationObserver(() => {
-                const duration = videoElement.duration || 0;
-                let preciseTargetTime = parseFloat(sliderHandle.getAttribute("aria-valuenow"));
-                if (isNaN(preciseTargetTime) || preciseTargetTime === 0) {
-                    const ariaText = sliderHandle.getAttribute("aria-valuetext");
-                    if (ariaText) {
-                        const timeParts = ariaText.split('/')[0].trim().split(':');
-                        if (timeParts.length === 2) {
-                            preciseTargetTime = parseInt(timeParts[0], 10) * 60 + parseFloat(timeParts[1]);
-                        } else if (timeParts.length === 3) {
-                            preciseTargetTime = parseInt(timeParts[0], 10) * 3600 + parseInt(timeParts[1], 10) * 60 + parseFloat(timeParts[2]);
-                        }
-                    }
-                }
-                if (isNaN(preciseTargetTime)) preciseTargetTime = 0;
-                const isVideoAtEnd = videoElement.ended || (duration > 0 && videoElement.currentTime >= duration - 0.1);
-                const isTargetNearEnd = duration > 0 && preciseTargetTime >= duration - 0.1;
-                const isPlaying = isLingQPlaying();
-
-                if (duration > 0 && (isVideoAtEnd || isTargetNearEnd)) {
-                    markVideoEnded();
-                }
-
-                if (isVideoEnded) {
-                    if (!videoElement.paused) {
-                        videoElement.pause();
-                    }
-                    if (miniProgressBar) {
-                        miniProgressBar.style.width = "100%";
-                    }
-                    return;
-                }
-
-                // 1. Sync Play/Pause State
-                if (isPlaying && videoElement.paused) {
-                    if (isVideoAtEnd) {
-                        isAudioDrivenSeek = true;
-                        videoElement.currentTime = isTargetNearEnd ? 0 : preciseTargetTime;
-                    }
-                    videoElement.play().catch(() => {});
-                } else if (!isPlaying && !videoElement.paused) {
-                    videoElement.pause();
-                }
-                
-                // 2. Sync Precise Timeline
-                if (isVideoSeeking && !isSkipActive()) return;
-                if (videoElement.readyState < 3) return;
-                if (isVideoAtEnd && isTargetNearEnd) return;
-
-                const diff = videoElement.currentTime - preciseTargetTime;
-                const baseSpeed = getLingQSpeed();
-                
-                // Adjust threshold based on playing state and current playback rate
-                const syncThreshold = !isPlaying ? 0.1 : Math.max(0.5, 0.5 * baseSpeed);
-                const softSyncEnterThreshold = Math.max(0.25, 0.25 * baseSpeed);
-                const softSyncExitThreshold = Math.max(0.10, 0.10 * baseSpeed);
-                let syncStatus = "In Sync";
-                
-                if (Math.abs(diff) > syncThreshold) {
-                    // Check if video is ahead due to Jump Cutter forward skip while media is catching up
-                    let isMediaCatchingUp = false;
-                    if (isPlaying && diff > 0 && !isSkipActive()) {
-                        mediaInstances.forEach(media => {
-                            if (media && (Math.abs(videoElement.currentTime - media.currentTime) <= syncThreshold || media.currentTime > preciseTargetTime)) {
-                                isMediaCatchingUp = true;
-                            }
-                        });
-                    }
-
-                    if (!isMediaCatchingUp) {
-                        // Hard Seek: Compensate using fixed delay * playback speed
-                        isAudioDrivenSeek = true;
-                        const seekOffset = isPlaying ? (0.3 * baseSpeed) : 0;
-                        videoElement.currentTime = preciseTargetTime + seekOffset;
-                    }
-                } else if (isPlaying) {
-                    // Soft Sync: Adjust playback rate with hysteresis to prevent chattering
-                    const isAlreadyAdjusted = videoElement.playbackRate !== baseSpeed;
-
-                    if (diff < -softSyncEnterThreshold) {
-                        // Video is behind: play slightly faster to catch up
-                        videoElement.playbackRate = baseSpeed + 0.1;
-                    } else if (diff > softSyncEnterThreshold) {
-                        // Video is ahead: play slightly slower to wait
-                        videoElement.playbackRate = Math.max(0.25, baseSpeed - 0.1);
-                    } else if (isAlreadyAdjusted && Math.abs(diff) <= softSyncExitThreshold) {
-                        // Recover base speed once difference is reduced within exit threshold
-                        videoElement.playbackRate = baseSpeed;
-                    }
-                }
-                
-                // 3. Update Mini Progress Bar
-                if (miniProgressBar) {
-                    const maxVal = parseFloat(sliderHandle.getAttribute("aria-valuemax")) || 1;
-                    const percentage = (preciseTargetTime / maxVal) * 100;
-                    miniProgressBar.style.width = `${percentage}%`;
-                }
-            });
-            
-            const speedObserver = new MutationObserver(() => {
-                syncPlaybackRate();
-            });
-            
-            playerObserver.observe(sliderHandle, {attributes: true, attributeFilter: ["aria-valuenow", "style"]});
-            playerObserver.observe(playButton, {childList: true, subtree: true, attributes: true, attributeFilter: ["class"]});
-            
-            if (speedLabel) {
-                speedObserver.observe(speedLabel, {childList: true, characterData: true, subtree: true});
-            }
-            
-            // Ensure accurate tracking across playback status switches
-            videoElement.addEventListener("play", () => {
-                if (isVideoEnded || !isLingQPlaying()) {
-                    videoElement.pause();
-                    return;
-                }
-            });
-            videoElement.addEventListener("playing", () => {
-                if (isVideoEnded || !isLingQPlaying()) {
-                    videoElement.pause();
-                    return;
-                }
-                if (isSkipActive()) return;
-                mediaInstances.forEach(media => {
-                    if (media) {
-                        const baseSpeed = getLingQSpeed();
-                        const mediaDiffThreshold = Math.max(0.3, 0.3 * baseSpeed);
-                        const diff = Math.abs(videoElement.currentTime - media.currentTime);
-                        if (diff > mediaDiffThreshold) {
-                            isVideoSeeking = true;
-                            pendingMediaSeekCount++;
-                            media.currentTime = videoElement.currentTime;
-                            media.addEventListener("seeked", () => {
-                                pendingMediaSeekCount = Math.max(0, pendingMediaSeekCount - 1);
-                                checkAndReleaseSeekingLock();
-                            }, { once: true });
-
-                            if (seekingReleaseTimer) clearTimeout(seekingReleaseTimer);
-                            const lockTimeout = 400;
-                            seekingReleaseTimer = setTimeout(() => {
-                                pendingMediaSeekCount = 0;
-                                isVideoSeeking = false;
-                                seekingReleaseTimer = null;
-                            }, lockTimeout);
-                        }
-                    }
-                });
-            });
-            videoElement.addEventListener("loadedmetadata", () => {
-                videoElement.volume = 1.0;
-            });
-            videoElement.addEventListener("seeked", () => {
-                pendingVideoSeek = false;
-                if (isVideoSeeking) {
-                    checkAndReleaseSeekingLock();
-                }
-            });
-            videoElement.addEventListener("seeking", () => {
-                const duration = videoElement.duration || 0;
-                if (duration > 0 && videoElement.currentTime >= duration - 0.1) {
-                    markVideoEnded();
-                }
-                if (isAudioDrivenSeek) {
-                    isAudioDrivenSeek = false;
-                    return;
-                }
-                if (isSkipActive()) {
-                    return;
-                }
-
-                if (isVideoEnded && videoElement.currentTime < 1.0) {
-                    videoElement.pause();
-                    if (duration > 0) {
-                        isAudioDrivenSeek = true;
-                        videoElement.currentTime = duration;
-                    }
-                    return;
-                }
-
-                isVideoSeeking = true;
-                pendingVideoSeek = true;
-                if (settleReleaseTimer) {
-                    clearTimeout(settleReleaseTimer);
-                    settleReleaseTimer = null;
-                }
-
-                mediaInstances.forEach(media => {
-                    if (media) {
-                        const mediaDiff = Math.abs(videoElement.currentTime - media.currentTime);
-                        if (mediaDiff > 0.1) {
-                            pendingMediaSeekCount++;
-                            media.currentTime = videoElement.currentTime;
-                            media.addEventListener("seeked", () => {
-                                pendingMediaSeekCount = Math.max(0, pendingMediaSeekCount - 1);
-                                checkAndReleaseSeekingLock();
-                            }, { once: true });
-                        }
-                    }
-                });
-
-                if (seekingReleaseTimer) clearTimeout(seekingReleaseTimer);
-                const maxLockTimeout = 600;
-                seekingReleaseTimer = setTimeout(() => {
-                    if (isVideoSeeking) {
-                        pendingVideoSeek = false;
-                        pendingMediaSeekCount = 0;
-                        isVideoSeeking = false;
-                    }
-                    seekingReleaseTimer = null;
-                }, maxLockTimeout);
-            });
-            videoElement.addEventListener("ended", () => {
-                markVideoEnded();
-            });
-
-            videoElement.addEventListener("timeupdate", () => {
-                const duration = videoElement.duration || 0;
-                if (duration > 0 && videoElement.currentTime >= duration - 0.1) {
-                    markVideoEnded();
-                }
-            });
-            
-            const isLingQPlayingInit = isLingQPlaying();
-            if (isLingQPlayingInit && videoElement.paused) {
-                videoElement.play().catch(() => {
-                });
-            }
-            syncPlaybackRate();
-        }
-        
-        function normalizeTitle(str) {
-            return str
-                .toLowerCase()
-                .normalize("NFKC")
-                .replace(/[\\/:*?"<>|?？:：*＊"＂<＜>＞|｜/／\＼]/g, " ")
-                .replace(/\s+/g, " ")
-                .trim();
-        }
-        
-        function findBestMatchingFiles(files, lessonTitle) {
-            const targetTitle = normalizeTitle(lessonTitle);
-            if (!targetTitle) return {video: null, sub: null};
-            
-            const isTruncated = /(?:\.{2,}|…)\s*$/.test(targetTitle);
-            const cleanTarget = isTruncated ? targetTitle.replace(/[\s.·…]+$/, "").trim() : targetTitle;
-            
-            let bestVideo = null;
-            let bestSub = null;
-            
-            for (const file of files) {
-                const nameWithoutExt = file.name.replace(/\.[^/.]+$/, "");
-                const normalizedName = normalizeTitle(nameWithoutExt);
-                
-                const isMatch = isTruncated && cleanTarget.length >= 3
-                    ? (normalizedName.startsWith(cleanTarget) || normalizedName.includes(cleanTarget))
-                    : (normalizedName.includes(targetTitle) || targetTitle.includes(normalizedName));
-
-                if (!isMatch) continue;
-                
-                const isVideo = file.type.startsWith("video/") || /\.(mp4)$/i.test(file.name);
-                const isSub = /\.(srt|vtt)$/i.test(file.name);
-                
-                if (isVideo) {
-                    if (!bestVideo) bestVideo = file;
-                } else if (isSub) {
-                    if (!bestSub) bestSub = file;
-                }
-            }
-            
-            return {video: bestVideo, sub: bestSub};
-        }
-        
-        function buildLocalVideoUI() {
-            const lessonReader = document.getElementById("lesson-reader");
-            if (!lessonReader) return;
-            
-            const currentStyle = settings.styleType[getLessonLanguage()];
-            let container = document.getElementById("local-video-container");
-            
-            if (currentStyle !== "localVideo") {
-                if (container) container.style.display = "none";
-                return;
-            }
-            
-            if (container) {
-                container.style.display = "flex";
-                return;
-            }
-            
-            container = createElement("div", {id: "local-video-container"});
-            
-            const setupBox = createElement("div", {className: "local-video-setup-box"});
-            const title = createElement("span", {
-                style: "font-weight: bold; font-size: 1.1em;",
-                textContent: "Local Video Player Setup"
-            });
-            
-            let selectedVideoFile = null;
-            let selectedSubtitleFile = null;
-            
-            const buttonRow = createElement("div", {
-                style: "display: flex; gap: 10px; width: 100%; min-width: 0; box-sizing: border-box; margin-bottom: 5px;"
-            });
-            
-            const fileInput = createElement("input", {
-                className: "local-video-file-input",
-                type: "file",
-                multiple: true,
-                accept: "video/*,.srt,.vtt",
-                style: "display: none;"
-            });
-            const fileLabel = createElement("label", {
-                className: "local-video-button",
-                style: "flex: 1; min-width: 0; box-sizing: border-box; text-align: center;",
-                textContent: "Choose Files",
-                title: "Choose Files"
-            });
-            fileLabel.appendChild(fileInput);
-            
-            const folderInput = createElement("input", {
-                className: "local-video-folder-input",
-                type: "file",
-                webkitdirectory: true,
-                directory: true,
-                style: "display: none;"
-            });
-            const folderLabel = createElement("label", {
-                className: "local-video-button",
-                style: "flex: 1; min-width: 0; box-sizing: border-box; text-align: center;",
-                textContent: "Select Folder (Auto-match)",
-                title: "Select Folder (Auto-match)"
-            });
-            folderLabel.appendChild(folderInput);
-            
-            buttonRow.append(fileLabel, folderLabel);
-            
-            const startButton = createElement("button", {
-                className: "local-video-button",
-                textContent: "Start Player",
-                disabled: true,
-            });
-            
-            const handleSpacebarStart = (event) => {
-                if (event.code === "Space" && !startButton.disabled && setupBox.style.display !== "none") {
-                    event.preventDefault();
-                    event.stopImmediatePropagation();
-                    startButton.click();
-                }
-            };
-            window.addEventListener("keydown", handleSpacebarStart, true);
-            
-            setupBox.append(title, buttonRow, startButton);
-            container.appendChild(setupBox);
-            lessonReader.appendChild(container);
-            
-            const titleBar = createElement("div", {
-                className: "local-video-title-bar",
-                style: "display: none;"
-            }, createElement("span", {
-                className: "local-video-title-text"
-            }));
-            container.appendChild(titleBar);
-
-            const videoElement = createElement("video", {
-                id: "addonLocalVideo",
-                muted: false,
-                style: "width: 100%; height: 100%; flex-grow: 1; object-fit: contain; display: none; cursor: pointer;"
-            });
-            
-            container.addEventListener("click", (event) => {
-                if (setupBox.style.display !== "none") return;
-                if (event.target.closest(".local-video-progress-wrapper")) return;
-                unlockVideoEnded();
-                clickElement(".section--player button.lingq-audio-player");
-            });
-            
-            const trackElement = createElement("track", {
-                kind: "subtitles",
-                srclang: "en",
-                label: "Local Sub",
-                id: "addonLocalVideoTrack"
-            });
-            
-            videoElement.appendChild(trackElement);
-            container.appendChild(videoElement);
-            
-            const progressWrapper = createElement("div", {
-                className: "local-video-progress-wrapper",
-                style: "display: none;"
-            });
-            const miniProgressBar = createElement("div", {id: "local-video-mini-progress"});
-            progressWrapper.appendChild(miniProgressBar);
-            container.appendChild(progressWrapper);
-            
-            attemptAutoMatch = async function attemptAutoMatch() {
-                if (!cachedLocalVideoFiles) return false;
-                
-                const titleElement = await waitForElement('header[data-site-header="true"] .truncate, h1.reader-heading', 3000);
-                if (!titleElement) return false;
-                
-                const title = titleElement.textContent.trim();
-                if (!title) return false;
-                
-                const match = findBestMatchingFiles(cachedLocalVideoFiles, title);
-                if (match.video) {
-                    selectedVideoFile = match.video;
-                    selectedSubtitleFile = match.sub;
-                    
-                    let statusText = `${selectedVideoFile.name}`;
-                    if (selectedSubtitleFile) statusText += ` + ${selectedSubtitleFile.name}`;
-                    
-                    folderLabel.textContent = statusText;
-                    folderLabel.title = statusText;
-                    folderLabel.appendChild(folderInput);
-                    startButton.disabled = false;
-                    return true;
-                }
-                return false;
-            }
-            
-            fileInput.addEventListener("change", (event) => {
-                const files = Array.from(event.target.files).slice(0, 2);
-                selectedVideoFile = files.find(file => file.type.startsWith("video/"));
-                selectedSubtitleFile = files.find(file => file.name.endsWith(".srt") || file.name.endsWith(".vtt"));
-                
-                if (selectedVideoFile) {
-                    let statusText = `${selectedVideoFile.name}`;
-                    if (selectedSubtitleFile) statusText += ` + ${selectedSubtitleFile.name}`;
-                    else statusText += ` (Default Subtitle)`;
-                    fileLabel.textContent = statusText;
-                    fileLabel.title = statusText;
-                    fileLabel.appendChild(fileInput);
-                    startButton.disabled = false;
-                } else {
-                    fileLabel.textContent = "Missing Video File! Try Again.";
-                    fileLabel.title = "Missing Video File! Try Again.";
-                    fileLabel.appendChild(fileInput);
-                    startButton.disabled = true;
-                    selectedSubtitleFile = null;
-                }
-            });
-            
-            folderInput.addEventListener("change", async (event) => {
-                const files = Array.from(event.target.files);
-                if (files.length > 0) {
-                    cachedLocalVideoFiles = files;
-                    const matched = await attemptAutoMatch();
-                    if (!matched) {
-                        folderLabel.textContent = "No match found in folder.";
-                        folderLabel.title = "No match found in folder.";
-                        folderLabel.appendChild(folderInput);
-                    }
-                }
-            });
-            
-            if (cachedLocalVideoFiles) {
-                attemptAutoMatch();
-            }
-            
-            startButton.addEventListener("click", () => {
-                if (!selectedVideoFile) return;
-                
-                videoElement.src = URL.createObjectURL(selectedVideoFile);
-                
-                if (selectedSubtitleFile) {
-                    const reader = new FileReader();
-                    reader.onload = (e) => {
-                        const text = e.target.result;
-                        const vttUrl = convertSrtToVttBlobUrl(text);
-                        
-                        trackElement.src = vttUrl;
-                        trackElement.track.mode = "showing";
-                    };
-                    reader.readAsText(selectedSubtitleFile);
-                } else {
-                    const lessonLanguage = getLessonLanguage();
-                    const lessonId = getLessonId();
-                    
-                    getLessonSentences(lessonLanguage, lessonId)
-                        .then((sentences) => {
-                            if (sentences && sentences.length > 0) {
-                                trackElement.src = convertSentencesToVttBlobUrl(sentences);
-                                trackElement.track.mode = "showing";
-                            }
-                        })
-                        .catch((error) => {
-                            console.error("Failed to fetch default subtitles:", error);
-                        });
-                }
-                
-                setupBox.style.display = "none";
-                videoElement.style.display = "block";
-                progressWrapper.style.display = "block";
-                
-                if (selectedVideoFile) {
-                    const videoTitle = selectedVideoFile.name.replace(/\.[^/.]+$/, "");
-                    const titleText = titleBar.querySelector(".local-video-title-text");
-                    if (titleText) {
-                        titleText.textContent = videoTitle;
-                    }
-                    titleBar.style.display = "flex";
-                }
-                
-                // Capture existing playback position from LingQ player before loading video
-                let initialTime = 0;
-                const sliderHandle = document.querySelector('.audio-player--progress .rc-slider-handle');
-                if (sliderHandle) {
-                    const currentProgress = parseFloat(sliderHandle.getAttribute("aria-valuenow")) || 0;
-                    const maxProgress = parseFloat(sliderHandle.getAttribute("aria-valuemax")) || 0;
-                    const isCompleted = maxProgress > 0 && currentProgress >= maxProgress - 0.5;
-
-                    if (!isCompleted && currentProgress > 0) {
-                        initialTime = currentProgress;
-                    }
-                } else if (typeof mediaInstances !== "undefined") {
-                    mediaInstances.forEach((media) => {
-                        if (media && document.body.contains(media) && media.currentTime > 0) {
-                            const isCompleted = media.duration > 0 && media.currentTime >= media.duration - 0.5;
-                            if (!isCompleted) {
-                                initialTime = media.currentTime;
-                            }
-                        }
-                    });
-                }
-
-                const startPlayback = () => {
-                    videoElement.currentTime = initialTime;
-                    if (typeof mediaInstances !== "undefined") {
-                        mediaInstances.forEach(media => {
-                            if (media) media.currentTime = initialTime;
-                        });
-                    }
-                    
-                    const playButton = document.querySelector(".section--player button.lingq-audio-player");
-                    const playButtonSvg = playButton?.querySelector("svg");
-                    if (playButton && playButtonSvg && playButtonSvg.classList.contains("svg-icon--play")) {
-                        playButton.click();
-                    }
-                };
-
-                // Pause LingQ audio player if it was already playing during video loading
-                const playButton = document.querySelector(".section--player button.lingq-audio-player");
-                const playButtonSvg = playButton?.querySelector("svg");
-                if (playButton && playButtonSvg && playButtonSvg.classList.contains("svg-icon--pause")) {
-                    playButton.click();
-                }
-
-                if (videoElement.readyState >= 3) {
-                    startPlayback();
-                } else {
-                    videoElement.addEventListener("canplay", startPlayback, { once: true });
-                }
-                
-                bindLingQPlayerControls(videoElement);
-                window.removeEventListener("keydown", handleSpacebarStart, true);
-            });
-        }
-        
-        buildLocalVideoUI();
-    }
-    
-    /* Features */
-    
-    // Volume Control & Local Video Audio Mute Hook
-    const PageMediaElement = window.HTMLMediaElement;
-    if (PageMediaElement) {
-        const volumeDescriptor = Object.getOwnPropertyDescriptor(PageMediaElement.prototype, 'volume');
-        const originalVolumeSetter = volumeDescriptor.set;
-        const originalVolumeGetter = volumeDescriptor.get;
-        
-        Object.defineProperty(PageMediaElement.prototype, 'volume', {
-            get: function () {
-                return originalVolumeGetter.call(this);
-            },
-            set: function (val) {
-                const src = this.src || '';
-                
-                if (src.startsWith('data:') || src.includes('/tts/')) {
-                    return originalVolumeSetter.call(this, val);
-                }
-                
-                const isReaderPage = document.URL.includes("/reader");
-                const lessonLang = getLessonLanguage();
-                if (isReaderPage && lessonLang && settings.styleType[lessonLang] === "localVideo" && this.id !== "addonLocalVideo") {
-                    return originalVolumeSetter.call(this, 0);
-                }
-                
-                const targetVolume = settings.lingqVolume;
-                const adjustedVolume = Math.min(Math.max(val * targetVolume, 0), 1);
-                return originalVolumeSetter.call(this, adjustedVolume);
-            }
-        });
-        
-        const originalPlay = PageMediaElement.prototype.play;
-        PageMediaElement.prototype.play = function () {
-            const isReaderPage = document.URL.includes("/reader");
-            const lessonLang = getLessonLanguage();
-            const isLocalVideoActive = isReaderPage && lessonLang && settings.styleType[lessonLang] === "localVideo";
-
-            if (isLocalVideoActive && isVideoEnded) {
-                this.pause();
-                return Promise.resolve();
-            }
-
-            const src = this.src || '';
-            if (this.id !== "addonLocalVideo" && !src.startsWith('data:') && !src.includes('/tts/')) {
-                if (!mediaInstances.has(this)) {
-                    mediaInstances.add(this);
-                }
-                this.volume = 1.0;
-                if (isCustomSpeedActive()) this.playbackRate = settings.lingqSpeed[getLessonLanguage()];
-            }
-            return originalPlay.apply(this, arguments);
-        };
-        
-        const playbackRateDescriptor = Object.getOwnPropertyDescriptor(PageMediaElement.prototype, 'playbackRate');
-        const originalPlaybackRateSetter = playbackRateDescriptor.set;
-        
-        Object.defineProperty(PageMediaElement.prototype, 'playbackRate', {
-            get: playbackRateDescriptor.get,
-            set: function (val) {
-                const src = this.src || '';
-                const isLingQAudio = this.id !== "addonLocalVideo" && !src.startsWith('data:') && !src.includes('/tts/');
-                if (isLingQAudio && isCustomSpeedActive()) {
-                    return originalPlaybackRateSetter.call(this, settings.lingqSpeed[getLessonLanguage()]);
-                }
-                return originalPlaybackRateSetter.call(this, val);
-            }
-        });
-    }
-    
-    function isCustomSpeedActive() {
-        return Boolean(document.getElementById('addon-speed-controller'));
-    }
-    
-    function setLingqVolume(vol) {
-        settings.lingqVolume = Math.min(Math.max(vol, 0), 1);
-        
-        const controllers = document.querySelector('.audio-player--controllers');
-        const isYoutube = controllers?.querySelector('.controller-item--speed') || document.querySelector('iframe[src*="youtube"]');
-        
-        if (isYoutube) {
-            const youtubeIframe = document.querySelector('.modal-container iframe, #sentence-video-player-portal iframe, iframe[src*="youtube"]');
-            if (youtubeIframe && youtubeIframe.contentWindow) {
-                const volumePercent = Math.round(settings.lingqVolume * 100);
-                youtubeIframe.contentWindow.postMessage(JSON.stringify({
-                    event: "command",
-                    func: "setVolume",
-                    args: [volumePercent]
-                }), "*");
-                youtubeIframe.contentWindow.postMessage(JSON.stringify({
-                    event: "command",
-                    func: volumePercent === 0 ? "mute" : "unMute"
-                }), "*");
-            }
-        } else {
-            mediaInstances.forEach(media => {
-                if (media) media.volume = settings.lingqVolume;
-            });
-            document.querySelectorAll('audio').forEach(audio => {
-                if (audio) audio.volume = settings.lingqVolume;
-            });
-            const localVideo = document.getElementById("addonLocalVideo");
-            if (localVideo) localVideo.volume = settings.lingqVolume;
-        }
-
-        const addonVolume = document.getElementById('addon-volume-controller');
-        if (addonVolume) {
-            const volPct = Math.round(settings.lingqVolume * 100);
-            const volumeText = addonVolume.querySelector('.addon-volume-text');
-            if (volumeText) volumeText.textContent = `${volPct}%`;
-            const iconWrapper = addonVolume.querySelector('.icon-wrapper');
-            if (iconWrapper) {
-                const svgMute = `<svg style="width: 17px; height: 17px; flex-shrink: 0;" viewBox="-2 -3 32 32"><path fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" d="m12 21-5-5H3v-6h4l5-5zm10-10-6 6m0-6 6 6"/></svg>`;
-                const svgLow = `<svg style="width: 17px; height: 17px; flex-shrink: 0;" viewBox="-2 -3 32 32"><path fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" d="m12 21-5-5H3v-6h4l5-5zm5-10c1.5 1.5 1.5 4.5 0 6"/></svg>`;
-                const svgHigh = `<svg style="width: 18px; height: 18px; flex-shrink: 0;" viewBox="-2 -3 32 32"><path fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" d="m12 21-5-5H3v-6h4l5-5zm5-10c1.5 1.5 1.5 4.5 0 6m4-9c3 2.5 3 7.5 0 10"/></svg>`;
-                if (settings.lingqVolume === 0) iconWrapper.innerHTML = svgMute;
-                else if (settings.lingqVolume <= 0.5) iconWrapper.innerHTML = svgLow;
-                else iconWrapper.innerHTML = svgHigh;
-            }
-            const volumeBtn = addonVolume.querySelector('button, a');
-            if (volumeBtn) volumeBtn.setAttribute("title", `Volume: ${volPct}% (Click to cycle, Scroll to adjust)`);
-        }
-    }
-    
-    function setLingqSpeed(speed) {
-        const language = getLessonLanguage();
-        const clampedSpeed = Math.round(Math.min(Math.max(speed, 0.5), 3.0) * 100) / 100;
-        
-        if (language) {
-            settings.lingqSpeed = {
-                ...settings.lingqSpeed,
-                [language]: clampedSpeed
-            };
-        }
-        
-        mediaInstances.forEach(media => {
-            if (media) media.playbackRate = clampedSpeed;
-        });
-        document.querySelectorAll('audio').forEach(audio => {
-            if (audio) audio.playbackRate = clampedSpeed;
-        });
-        const localVideo = document.getElementById("addonLocalVideo");
-        if (localVideo) localVideo.playbackRate = clampedSpeed;
-
-        const addonSpeedText = document.querySelector('#addon-speed-controller .addon-speed-text');
-        if (addonSpeedText) {
-            addonSpeedText.textContent = `${clampedSpeed}×`;
-        }
-
-        const speedBtn = document.querySelector('footer button[aria-label^="Playback speed"]');
-        if (speedBtn) {
-            speedBtn.textContent = `${clampedSpeed}×`;
-            speedBtn.setAttribute('aria-label', `Playback speed ${clampedSpeed}×`);
-        }
-    }
-    
-    function skipPlayback(deltaSeconds) {
-        unlockVideoEnded();
-        const localVideo = document.getElementById("addonLocalVideo");
-        const isLocalVideoActive = localVideo && localVideo.style.display !== "none" && !isNaN(localVideo.currentTime);
-        const sliderHandle = document.querySelector('footer [data-slot="slider-thumb"], footer [role="slider"], .audio-player--progress .rc-slider-handle');
-
-        const now = Date.now();
-        let baseTime;
-        if (lastSkipTargetTime !== null && (now - lastSkipTimestamp < 800)) {
-            baseTime = lastSkipTargetTime;
-        } else {
-            baseTime = isLocalVideoActive
-                ? localVideo.currentTime
-                : (sliderHandle ? (parseFloat(sliderHandle.getAttribute("aria-valuenow")) || 0) : 0);
-        }
-        const targetTime = Math.max(0, baseTime + deltaSeconds);
-        lastSkipTargetTime = targetTime;
-        lastSkipTimestamp = now;
-
-        if (isLocalVideoActive && !isNaN(localVideo.duration)) {
-            localVideo.currentTime = Math.min(localVideo.duration, targetTime);
-        }
-
-        const controllers = document.querySelector('.audio-player--controllers');
-        const isYoutube = controllers?.querySelector('.controller-item--speed') || document.querySelector('iframe[src*="youtube"]');
-        
-        if (isYoutube) {
-            const youtubeIframe = document.querySelector('.modal-container iframe, #sentence-video-player-portal iframe, iframe[src*="youtube"]');
-            if (youtubeIframe && youtubeIframe.contentWindow) {
-                youtubeIframe.contentWindow.postMessage(JSON.stringify({
-                    event: "command",
-                    func: "seekTo",
-                    args: [targetTime, true]
-                }), "*");
-            }
-            return;
-        }
-
-        if (typeof mediaInstances !== "undefined" && mediaInstances.size > 0) {
-            mediaInstances.forEach((media) => {
-                if (media && !isNaN(media.duration)) {
-                    media.currentTime = Math.min(media.duration, targetTime);
-                }
-            });
-        } else {
-            const audio = document.querySelector('audio');
-            if (audio) {
-                const maxTime = !isNaN(audio.duration) ? audio.duration : targetTime;
-                audio.currentTime = Math.min(maxTime, targetTime);
-            }
-        }
-    }
-    
-    function updateSkipButtonsUI() {
-        const duration = settings.skipDuration;
-
-        const backwardBtn = document.querySelector('footer button[aria-label^="Replay"], .audio-player--controllers .controller-item--backward') ||
-                           document.querySelector('.svg-icon--backward')?.closest('a');
-        if (backwardBtn) {
-            backwardBtn.setAttribute('title', `Replay ${duration} seconds (Shift+<)`);
-            backwardBtn.setAttribute('aria-label', `Replay ${duration} seconds`);
-            const backwardContainer = backwardBtn.parentElement;
-            if (backwardContainer && backwardContainer !== backwardBtn.closest('footer')) {
-                backwardContainer.setAttribute('data-original-title', `Rewind ${duration} seconds`);
-            }
-            const backwardText = backwardBtn.querySelector('text.is-text') || backwardBtn.querySelector('text');
-            if (backwardText) {
-                backwardText.textContent = duration;
-                backwardText.setAttribute('text-anchor', 'middle');
-                backwardText.setAttribute('transform', 'matrix(1 0 0 1 16 23.5457)');
-            }
-        }
-
-        const forwardBtn = document.querySelector('footer button[aria-label^="Forward"], .audio-player--controllers .controller-item--forward') ||
-                          document.querySelector('.svg-icon--forward')?.closest('a');
-        if (forwardBtn) {
-            forwardBtn.setAttribute('title', `Forward ${duration} seconds (Shift+>)`);
-            forwardBtn.setAttribute('aria-label', `Forward ${duration} seconds`);
-            const forwardContainer = forwardBtn.parentElement;
-            if (forwardContainer && forwardContainer !== forwardBtn.closest('footer')) {
-                forwardContainer.setAttribute('data-original-title', `Fast forward ${duration} seconds`);
-            }
-            const forwardText = forwardBtn.querySelector('text.is-text') || forwardBtn.querySelector('text');
-            if (forwardText) {
-                forwardText.textContent = duration;
-                forwardText.setAttribute('text-anchor', 'middle');
-                forwardText.setAttribute('transform', 'matrix(1 0 0 1 16 23.5457)');
-            }
-        }
-    }
-    
     function globalSetup() {
         function resizeToast() {
             const css = `
@@ -4154,19 +3184,20 @@
             
             const container1 = createElement("div", {style: "padding: 5px; width: 350px;"});
             
-            const baseType = settings.styleType[language];
+            const rawBaseType = settings.styleType[language];
+            const baseType = (rawBaseType === "audio" || rawBaseType === "video" || !rawBaseType) ? "default" : rawBaseType;
             const position = settings.videoPosition[language];
             
             addSelect(container1, "styleTypeSelector", "Layout Style:", [
-                {value: "audio", text: "Audio Only"},
-                {value: "video", text: "YouTube Video"},
+                {value: "default", text: "Default (Auto)"},
                 {value: "localVideo", text: "Local Video"},
                 {value: "off", text: "Layout Off"}
             ], baseType);
             
+            const hasPositionSettings = baseType !== "off";
             const positionSettingsContainer = createElement("div", {
                 id: "positionSettingsContainer",
-                style: `${["video", "localVideo"].includes(baseType) ? "" : "display: none;"}`
+                style: `${hasPositionSettings ? "" : "display: none;"}`
             });
             addSelect(positionSettingsContainer, "videoPositionSelector", "Video Position:", [
                 {value: "Right", text: "Right"},
@@ -4176,9 +3207,10 @@
             ], position);
             container1.appendChild(positionSettingsContainer);
             
+            const hasHeightSettings = hasPositionSettings && ["Top", "Bottom"].includes(position);
             const videoSettings = createElement("div", {
                 id: "videoSettings",
-                style: `${["video", "localVideo"].includes(baseType) && ["Top", "Bottom"].includes(position) ? "" : "display: none"}`
+                style: `${hasHeightSettings ? "" : "display: none;"}`
             });
             addSlider(videoSettings, "heightBigSlider", "Video Height:", "heightBigValue", settings.heightBig, "px", 300, 1200, 10);
             container1.appendChild(videoSettings);
@@ -5394,13 +4426,13 @@
             function handleStyleSelectorChange() {
                 const baseType = styleTypeSelector.value;
                 const position = videoPositionSelector.value;
-                const isVideoMode = ["video", "localVideo"].includes(baseType);
+                const hasPositionSettings = baseType !== "off";
                 
                 settings.styleType = {...settings.styleType, [language]: baseType};
                 settings.videoPosition = {...settings.videoPosition, [language]: position};
                 
-                positionSettingsContainer.style.display = isVideoMode ? "block" : "none";
-                document.getElementById("videoSettings").style.display = isVideoMode && ["Top", "Bottom"].includes(position) ? "block" : "none";
+                positionSettingsContainer.style.display = hasPositionSettings ? "block" : "none";
+                document.getElementById("videoSettings").style.display = hasPositionSettings && ["Top", "Bottom"].includes(position) ? "block" : "none";
             }
             
             styleTypeSelector.addEventListener("change", handleStyleSelectorChange);
@@ -5501,7 +4533,7 @@
                     const forwardLabel = document.querySelector('label[for="shortcutForward5sInput"]');
                     if (forwardLabel) forwardLabel.textContent = `Fast Forward ${val}s:`;
                     
-                    updateSkipButtonsUI();
+                    window.dispatchEvent(new CustomEvent("addon:skip-duration-changed", { detail: val }));
                 });
             }
             
@@ -5832,7 +4864,9 @@
                 updateColorInputs(defaultColorSettings);
                 updateColorPickerBackgrounds(defaultColorSettings);
                 
-                document.getElementById("videoSettings").style.display = languageScopedDefaults.styleType === "video" ? "block" : "none";
+                const defaultHasPos = languageScopedDefaults.styleType !== "off";
+                document.getElementById("positionSettingsContainer").style.display = defaultHasPos ? "block" : "none";
+                document.getElementById("videoSettings").style.display = defaultHasPos && ["Top", "Bottom"].includes(languageScopedDefaults.videoPosition) ? "block" : "none";
                 
                 document.documentElement.style.setProperty("--font-size", `${defaults.fontSize}rem`);
                 document.documentElement.style.setProperty("--annotation-size", `${languageScopedDefaults.annotationScale}%`);
@@ -9005,11 +8039,24 @@
             className: "nav-button"
         });
         
-        addElementToNavBar(settingsButton);
-        addElementToNavBar(downloadWordsButton);
-        addElementToNavBar(ttsPlaygroundButton);
-        addElementToNavBar(flashcardManagerButton);
-        addElementToNavBar(llmUsageButton);
+        function mountNavBarButtons() {
+            if (document.getElementById("lingqAddonSettings")) return;
+            addElementToNavBar(settingsButton);
+            addElementToNavBar(downloadWordsButton);
+            addElementToNavBar(ttsPlaygroundButton);
+            addElementToNavBar(flashcardManagerButton);
+            addElementToNavBar(llmUsageButton);
+        }
+        
+        mountNavBarButtons();
+
+        const navBarObserver = new MutationObserver(() => {
+            if (!document.getElementById("lingqAddonSettings")) {
+                mountNavBarButtons();
+            }
+        });
+        const navBarTarget = document.querySelector('[data-slot="sidebar-wrapper"]') || document.body;
+        navBarObserver.observe(navBarTarget, { childList: true, subtree: true });
         
         const settingsPopup = createSettingsPopup();
         document.body.appendChild(settingsPopup);
@@ -9051,6 +8098,8 @@
     }
     
     async function setupReader() {
+        const language = getLessonLanguage();
+
         function isNativePageMode() {
             return Boolean(document.querySelector(".poc-page"));
         }
@@ -9062,6 +8111,1027 @@
         function isTextOnlyLesson() {
             return !document.querySelector('footer button[aria-label="Play"], footer button[aria-label="Pause"], footer[aria-label="Lesson player"], div[aria-label="Lesson player"]') && !isVideoLesson();
         }
+
+        try {
+            document.startViewTransition = undefined;
+        } catch (e) {}
+
+        function getCalculatedVttCueSettings() {
+            const container = document.getElementById("local-video-container");
+            if (!container) return "size:80% align:middle line:90%";
+            
+            const containerWidth = container.clientWidth;
+            const containerHeight = container.clientHeight;
+            if (!containerWidth || !containerHeight) return "size:80% align:middle line:90%";
+            
+            const videoAspectRatio = 16 / 9;
+            const videoWidthRatio = Math.min(1.0, (containerHeight * videoAspectRatio) / containerWidth);
+            const targetSubtitlePercent = Math.max(20, Math.round(80 * videoWidthRatio));
+            
+            return `size:${targetSubtitlePercent}% align:center`;
+        }
+
+        function convertSentencesToVttBlobUrl(sentences) {
+            function formatTime(seconds) {
+                const date = new Date(0);
+                date.setSeconds(seconds);
+                const match = date.toISOString().match(/T(\d{2}:\d{2}:\d{2})\.(\d{3})/);
+                return `${match[1]}.${match[2]}`;
+            }
+            
+            const cueSettings = getCalculatedVttCueSettings();
+            const vttLines = ["WEBVTT\n"];
+            
+            sentences.forEach((sentence) => {
+                if (!sentence.timestamp || sentence.timestamp.length < 2) return;
+                
+                const startTime = formatTime(sentence.timestamp[0]);
+                const endTime = formatTime(sentence.timestamp[1]);
+                const text = sentence.text || "";
+                
+                vttLines.push(`${startTime} --> ${endTime} ${cueSettings}\n${text}\n`);
+            });
+            
+            const blob = new Blob([vttLines.join("\n")], {type: "text/vtt"});
+            return URL.createObjectURL(blob);
+        }
+
+        let cachedLocalVideoFiles, attemptAutoMatch;
+        const mediaInstances = new Set();
+        let isVideoEnded = false;
+        let lastSkipTargetTime = null;
+        let lastSkipTimestamp = 0;
+
+        function isSkipActive() {
+            return Date.now() - lastSkipTimestamp < 800;
+        }
+
+        function markVideoEnded() {
+            if (isVideoEnded) return;
+            isVideoEnded = true;
+            const video = document.getElementById("addonLocalVideo");
+            if (video && !video.paused) {
+                video.pause();
+            }
+            mediaInstances.forEach(media => {
+                if (media && !media.paused) {
+                    media.pause();
+                }
+            });
+            const playButton = document.querySelector(".section--player button.lingq-audio-player");
+            const playButtonSvg = playButton?.querySelector("svg");
+            if (playButton && playButtonSvg && playButtonSvg.classList.contains("svg-icon--pause")) {
+                playButton.click();
+            }
+        }
+
+        function unlockVideoEnded() {
+            if (!isVideoEnded) return;
+            isVideoEnded = false;
+        }
+
+        function handleLocalVideoContainerVisibility() {
+            async function bindLingQPlayerControls(videoElement) {
+                const sliderHandle = await waitForElement('footer [data-slot="slider-thumb"], footer [role="slider"], .audio-player--progress .rc-slider-handle', 10000);
+                const playButton = await waitForElement('footer button[aria-label="Play"], footer button[aria-label="Pause"], .section--player button.lingq-audio-player', 10000);
+                const speedLabel = document.querySelector('#addon-speed-controller .addon-speed-text, footer button[aria-label^="Playback speed"], .audio-player--controllers span.leading-none.text-xl');
+                const miniProgressBar = document.getElementById("local-video-mini-progress");
+                
+                if (!sliderHandle || !playButton) {
+                    console.warn("Required LingQ control elements missing. Sync binder stopped.");
+                    return;
+                }
+                
+                const isLingQPlaying = () => {
+                    for (const media of mediaInstances) {
+                        if (media && media.id !== "addonLocalVideo" && !media.paused && !media.ended) return true;
+                    }
+                    const pauseBtn = document.querySelector('footer button[aria-label="Pause"], .section--player button.lingq-audio-player .svg-icon--pause');
+                    if (pauseBtn) return true;
+                    const currentPlayBtn = document.querySelector('footer button[aria-label="Play"], footer button[aria-label="Pause"], .section--player button.lingq-audio-player') || playButton;
+                    const svg = currentPlayBtn?.querySelector("svg");
+                    return Boolean(svg && (svg.classList.contains("svg-icon--pause") || svg.classList.contains("lucide-pause")));
+                };
+                
+                const getLingQSpeed = () => {
+                    if (isCustomSpeedActive()) return settings.lingqSpeed[getLessonLanguage()];
+                    const speedBtn = document.querySelector('footer button[aria-label^="Playback speed"]');
+                    if (speedBtn) return parseFloat(speedBtn.textContent) || 1.0;
+                    return parseFloat(speedLabel?.textContent ?? 1.0);
+                };
+                
+                const syncPlaybackRate = () => {
+                    const targetSpeed = getLingQSpeed();
+                    if (videoElement.playbackRate !== targetSpeed) {
+                        videoElement.playbackRate = targetSpeed;
+                        console.log('[Sync]', `Playback speed updated to ${targetSpeed}x`);
+                    }
+                };
+                
+                let isVideoSeeking = false;
+                let isAudioDrivenSeek = false;
+                let seekingReleaseTimer = null;
+                let pendingVideoSeek = false;
+                let pendingMediaSeekCount = 0;
+                let settleReleaseTimer = null;
+
+                const checkAndReleaseSeekingLock = () => {
+                    if (!pendingVideoSeek && pendingMediaSeekCount === 0) {
+                        if (settleReleaseTimer) clearTimeout(settleReleaseTimer);
+                        settleReleaseTimer = setTimeout(() => {
+                            if (isVideoSeeking) {
+                                isVideoSeeking = false;
+                            }
+                            settleReleaseTimer = null;
+                        }, 80);
+                    }
+                };
+
+                playButton.addEventListener("click", (event) => {
+                    if (!event.isTrusted) return;
+                    if (isLingQPlaying()) return;
+
+                    const duration = videoElement.duration || 0;
+                    if (isVideoEnded && duration > 0 && videoElement.currentTime >= duration - 0.1) {
+                        isAudioDrivenSeek = true;
+                        videoElement.currentTime = 0;
+                        mediaInstances.forEach(media => {
+                            if (media) media.currentTime = 0;
+                        });
+                    }
+                    unlockVideoEnded();
+                }, true);
+
+                videoElement.addEventListener("click", () => {
+                    unlockVideoEnded();
+                });
+
+                const handleUserKeydown = (event) => {
+                    if (event.code === "Space" && !event.target.closest("input, textarea, [contenteditable='true']")) {
+                        if (isLingQPlaying()) return;
+
+                        const duration = videoElement.duration || 0;
+                        if (isVideoEnded && duration > 0 && videoElement.currentTime >= duration - 0.1) {
+                            isAudioDrivenSeek = true;
+                            videoElement.currentTime = 0;
+                            mediaInstances.forEach(media => {
+                                if (media) media.currentTime = 0;
+                            });
+                        }
+                        unlockVideoEnded();
+                    }
+                };
+                window.addEventListener("keydown", handleUserKeydown, true);
+
+                const progressContainer = document.querySelector(".audio-player--progress") || sliderHandle.parentElement;
+                if (progressContainer) {
+                    progressContainer.addEventListener("pointerdown", () => unlockVideoEnded(), true);
+                    progressContainer.addEventListener("mousedown", () => unlockVideoEnded(), true);
+                }
+
+                const lessonReader = document.querySelector('div[data-reader-mode-body="true"]') || document.querySelector(".lesson-reader") || document.body;
+                lessonReader.addEventListener("click", (event) => {
+                    if (event.target.closest(".sentence-item, .reader-sentence, .sentence, .sentence-text")) {
+                        unlockVideoEnded();
+                    }
+                }, true);
+
+                const playerObserver = new MutationObserver(() => {
+                    const duration = videoElement.duration || 0;
+                    let preciseTargetTime = parseFloat(sliderHandle.getAttribute("aria-valuenow"));
+                    if (isNaN(preciseTargetTime) || preciseTargetTime === 0) {
+                        const ariaText = sliderHandle.getAttribute("aria-valuetext");
+                        if (ariaText) {
+                            const timeParts = ariaText.split('/')[0].trim().split(':');
+                            if (timeParts.length === 2) {
+                                preciseTargetTime = parseInt(timeParts[0], 10) * 60 + parseFloat(timeParts[1]);
+                            } else if (timeParts.length === 3) {
+                                preciseTargetTime = parseInt(timeParts[0], 10) * 3600 + parseInt(timeParts[1], 10) * 60 + parseFloat(timeParts[2]);
+                            }
+                        }
+                    }
+                    if (isNaN(preciseTargetTime)) preciseTargetTime = 0;
+                    const isVideoAtEnd = videoElement.ended || (duration > 0 && videoElement.currentTime >= duration - 0.1);
+                    const isTargetNearEnd = duration > 0 && preciseTargetTime >= duration - 0.1;
+                    const isPlaying = isLingQPlaying();
+
+                    if (duration > 0 && (isVideoAtEnd || isTargetNearEnd)) {
+                        markVideoEnded();
+                    }
+
+                    if (isVideoEnded) {
+                        if (!videoElement.paused) {
+                            videoElement.pause();
+                        }
+                        if (miniProgressBar) {
+                            miniProgressBar.style.width = "100%";
+                        }
+                        return;
+                    }
+
+                    if (isPlaying && videoElement.paused) {
+                        if (isVideoAtEnd) {
+                            isAudioDrivenSeek = true;
+                            videoElement.currentTime = isTargetNearEnd ? 0 : preciseTargetTime;
+                        }
+                        videoElement.play().catch(() => {});
+                    } else if (!isPlaying && !videoElement.paused) {
+                        videoElement.pause();
+                    }
+                    
+                    if (isVideoSeeking && !isSkipActive()) return;
+                    if (videoElement.readyState < 3) return;
+                    if (isVideoAtEnd && isTargetNearEnd) return;
+
+                    const diff = videoElement.currentTime - preciseTargetTime;
+                    const baseSpeed = getLingQSpeed();
+                    
+                    const syncThreshold = !isPlaying ? 0.1 : Math.max(0.5, 0.5 * baseSpeed);
+                    const softSyncEnterThreshold = Math.max(0.25, 0.25 * baseSpeed);
+                    const softSyncExitThreshold = Math.max(0.10, 0.10 * baseSpeed);
+                    
+                    if (Math.abs(diff) > syncThreshold) {
+                        let isMediaCatchingUp = false;
+                        if (isPlaying && diff > 0 && !isSkipActive()) {
+                            mediaInstances.forEach(media => {
+                                if (media && (Math.abs(videoElement.currentTime - media.currentTime) <= syncThreshold || media.currentTime > preciseTargetTime)) {
+                                    isMediaCatchingUp = true;
+                                }
+                            });
+                        }
+
+                        if (!isMediaCatchingUp) {
+                            isAudioDrivenSeek = true;
+                            const seekOffset = isPlaying ? (0.3 * baseSpeed) : 0;
+                            videoElement.currentTime = preciseTargetTime + seekOffset;
+                        }
+                    } else if (isPlaying) {
+                        const isAlreadyAdjusted = videoElement.playbackRate !== baseSpeed;
+
+                        if (diff < -softSyncEnterThreshold) {
+                            videoElement.playbackRate = baseSpeed + 0.1;
+                        } else if (diff > softSyncEnterThreshold) {
+                            videoElement.playbackRate = Math.max(0.25, baseSpeed - 0.1);
+                        } else if (isAlreadyAdjusted && Math.abs(diff) <= softSyncExitThreshold) {
+                            videoElement.playbackRate = baseSpeed;
+                        }
+                    }
+                    
+                    if (miniProgressBar) {
+                        const maxVal = parseFloat(sliderHandle.getAttribute("aria-valuemax")) || 1;
+                        const percentage = (preciseTargetTime / maxVal) * 100;
+                        miniProgressBar.style.width = `${percentage}%`;
+                    }
+                });
+                
+                const speedObserver = new MutationObserver(() => {
+                    syncPlaybackRate();
+                });
+                
+                playerObserver.observe(sliderHandle, {attributes: true, attributeFilter: ["aria-valuenow", "style"]});
+                playerObserver.observe(playButton, {childList: true, subtree: true, attributes: true, attributeFilter: ["class"]});
+                
+                if (speedLabel) {
+                    speedObserver.observe(speedLabel, {childList: true, characterData: true, subtree: true});
+                }
+                
+                videoElement.addEventListener("play", () => {
+                    if (isVideoEnded || !isLingQPlaying()) {
+                        videoElement.pause();
+                        return;
+                    }
+                });
+                videoElement.addEventListener("playing", () => {
+                    if (isVideoEnded || !isLingQPlaying()) {
+                        videoElement.pause();
+                        return;
+                    }
+                    if (isSkipActive()) return;
+                    mediaInstances.forEach(media => {
+                        if (media) {
+                            const baseSpeed = getLingQSpeed();
+                            const mediaDiffThreshold = Math.max(0.3, 0.3 * baseSpeed);
+                            const diff = Math.abs(videoElement.currentTime - media.currentTime);
+                            if (diff > mediaDiffThreshold) {
+                                isVideoSeeking = true;
+                                pendingMediaSeekCount++;
+                                media.currentTime = videoElement.currentTime;
+                                media.addEventListener("seeked", () => {
+                                    pendingMediaSeekCount = Math.max(0, pendingMediaSeekCount - 1);
+                                    checkAndReleaseSeekingLock();
+                                }, { once: true });
+
+                                if (seekingReleaseTimer) clearTimeout(seekingReleaseTimer);
+                                const lockTimeout = 400;
+                                seekingReleaseTimer = setTimeout(() => {
+                                    pendingMediaSeekCount = 0;
+                                    isVideoSeeking = false;
+                                    seekingReleaseTimer = null;
+                                }, lockTimeout);
+                            }
+                        }
+                    });
+                });
+                videoElement.addEventListener("loadedmetadata", () => {
+                    videoElement.volume = 1.0;
+                });
+                videoElement.addEventListener("seeked", () => {
+                    pendingVideoSeek = false;
+                    if (isVideoSeeking) {
+                        checkAndReleaseSeekingLock();
+                    }
+                });
+                videoElement.addEventListener("seeking", () => {
+                    const duration = videoElement.duration || 0;
+                    if (duration > 0 && videoElement.currentTime >= duration - 0.1) {
+                        markVideoEnded();
+                    }
+                    if (isAudioDrivenSeek) {
+                        isAudioDrivenSeek = false;
+                        return;
+                    }
+                    if (isSkipActive()) {
+                        return;
+                    }
+
+                    if (isVideoEnded && videoElement.currentTime < 1.0) {
+                        videoElement.pause();
+                        if (duration > 0) {
+                            isAudioDrivenSeek = true;
+                            videoElement.currentTime = duration;
+                        }
+                        return;
+                    }
+
+                    isVideoSeeking = true;
+                    pendingVideoSeek = true;
+                    if (settleReleaseTimer) {
+                        clearTimeout(settleReleaseTimer);
+                        settleReleaseTimer = null;
+                    }
+
+                    mediaInstances.forEach(media => {
+                        if (media) {
+                            const mediaDiff = Math.abs(videoElement.currentTime - media.currentTime);
+                            if (mediaDiff > 0.1) {
+                                pendingMediaSeekCount++;
+                                media.currentTime = videoElement.currentTime;
+                                media.addEventListener("seeked", () => {
+                                    pendingMediaSeekCount = Math.max(0, pendingMediaSeekCount - 1);
+                                    checkAndReleaseSeekingLock();
+                                }, { once: true });
+                            }
+                        }
+                    });
+
+                    if (seekingReleaseTimer) clearTimeout(seekingReleaseTimer);
+                    const maxLockTimeout = 600;
+                    seekingReleaseTimer = setTimeout(() => {
+                        if (isVideoSeeking) {
+                            pendingVideoSeek = false;
+                            pendingMediaSeekCount = 0;
+                            isVideoSeeking = false;
+                        }
+                        seekingReleaseTimer = null;
+                    }, maxLockTimeout);
+                });
+                videoElement.addEventListener("ended", () => {
+                    markVideoEnded();
+                });
+
+                videoElement.addEventListener("timeupdate", () => {
+                    const duration = videoElement.duration || 0;
+                    if (duration > 0 && videoElement.currentTime >= duration - 0.1) {
+                        markVideoEnded();
+                    }
+                });
+                
+                const isLingQPlayingInit = isLingQPlaying();
+                if (isLingQPlayingInit && videoElement.paused) {
+                    videoElement.play().catch(() => {
+                    });
+                }
+                syncPlaybackRate();
+            }
+            
+            function normalizeTitle(str) {
+                return str
+                    .toLowerCase()
+                    .normalize("NFKC")
+                    .replace(/[\\/:*?"<>|?？:：*＊"＂<＜>＞|｜/／\＼]/g, " ")
+                    .replace(/\s+/g, " ")
+                    .trim();
+            }
+            
+            function findBestMatchingFiles(files, lessonTitle) {
+                const targetTitle = normalizeTitle(lessonTitle);
+                if (!targetTitle) return {video: null, sub: null};
+                
+                const isTruncated = /(?:\.{2,}|…)\s*$/.test(targetTitle);
+                const cleanTarget = isTruncated ? targetTitle.replace(/[\s.·…]+$/, "").trim() : targetTitle;
+                
+                let bestVideo = null;
+                let bestSub = null;
+                
+                for (const file of files) {
+                    const nameWithoutExt = file.name.replace(/\.[^/.]+$/, "");
+                    const normalizedName = normalizeTitle(nameWithoutExt);
+                    
+                    const isMatch = isTruncated && cleanTarget.length >= 3
+                        ? (normalizedName.startsWith(cleanTarget) || normalizedName.includes(cleanTarget))
+                        : (normalizedName.includes(targetTitle) || targetTitle.includes(normalizedName));
+
+                    if (!isMatch) continue;
+                    
+                    const isVideo = file.type.startsWith("video/") || /\.(mp4)$/i.test(file.name);
+                    const isSub = /\.(srt|vtt)$/i.test(file.name);
+                    
+                    if (isVideo) {
+                        if (!bestVideo) bestVideo = file;
+                    } else if (isSub) {
+                        if (!bestSub) bestSub = file;
+                    }
+                }
+                
+                return {video: bestVideo, sub: bestSub};
+            }
+            
+            function buildLocalVideoUI() {
+                const readerBody = document.querySelector('div[data-reader-mode-body="true"]');
+                const targetParent = readerBody?.parentElement || document.querySelector('.reader-appearance') || document.body;
+                if (!targetParent) return;
+                
+                const currentStyle = settings.styleType[getLessonLanguage()];
+                let container = document.getElementById("local-video-container");
+                
+                if (currentStyle !== "localVideo") {
+                    if (container) container.style.display = "none";
+                    return;
+                }
+                
+                if (container) {
+                    container.style.display = "flex";
+                    if (readerBody && container.parentElement !== targetParent) {
+                        targetParent.insertBefore(container, readerBody);
+                    }
+                    return;
+                }
+                
+                container = createElement("div", {id: "local-video-container"});
+                
+                const setupBox = createElement("div", {className: "local-video-setup-box"});
+                const title = createElement("span", {
+                    style: "font-weight: bold; font-size: 1.1em;",
+                    textContent: "Local Video Player Setup"
+                });
+                
+                let selectedVideoFile = null;
+                let selectedSubtitleFile = null;
+                
+                const buttonRow = createElement("div", {
+                    style: "display: flex; gap: 10px; width: 100%; min-width: 0; box-sizing: border-box; margin-bottom: 5px;"
+                });
+                
+                const fileInput = createElement("input", {
+                    className: "local-video-file-input",
+                    type: "file",
+                    multiple: true,
+                    accept: "video/*,.srt,.vtt",
+                    style: "display: none;"
+                });
+                const fileLabel = createElement("label", {
+                    className: "local-video-button",
+                    style: "flex: 1; min-width: 0; box-sizing: border-box; text-align: center;",
+                    textContent: "Choose Files",
+                    title: "Choose Files"
+                });
+                fileLabel.appendChild(fileInput);
+                
+                const folderInput = createElement("input", {
+                    className: "local-video-folder-input",
+                    type: "file",
+                    webkitdirectory: true,
+                    directory: true,
+                    style: "display: none;"
+                });
+                const folderLabel = createElement("label", {
+                    className: "local-video-button",
+                    style: "flex: 1; min-width: 0; box-sizing: border-box; text-align: center;",
+                    textContent: "Select Folder (Auto-match)",
+                    title: "Select Folder (Auto-match)"
+                });
+                folderLabel.appendChild(folderInput);
+                
+                buttonRow.append(fileLabel, folderLabel);
+                
+                const startButton = createElement("button", {
+                    className: "local-video-button",
+                    textContent: "Start Player",
+                    disabled: true,
+                });
+                
+                const handleSpacebarStart = (event) => {
+                    if (event.code === "Space" && !startButton.disabled && setupBox.style.display !== "none") {
+                        event.preventDefault();
+                        event.stopImmediatePropagation();
+                        startButton.click();
+                    }
+                };
+                window.addEventListener("keydown", handleSpacebarStart, true);
+                
+                setupBox.append(title, buttonRow, startButton);
+                container.appendChild(setupBox);
+                if (readerBody && targetParent) {
+                    targetParent.insertBefore(container, readerBody);
+                } else {
+                    targetParent.appendChild(container);
+                }
+                
+                const titleBar = createElement("div", {
+                    className: "local-video-title-bar",
+                    style: "display: none;"
+                }, createElement("span", {
+                    className: "local-video-title-text"
+                }));
+                container.appendChild(titleBar);
+
+                const videoElement = createElement("video", {
+                    id: "addonLocalVideo",
+                    muted: false,
+                    style: "width: 100%; height: 100%; flex-grow: 1; object-fit: contain; display: none; cursor: pointer;"
+                });
+                
+                container.addEventListener("click", (event) => {
+                    if (setupBox.style.display !== "none") return;
+                    if (event.target.closest(".local-video-progress-wrapper")) return;
+                    unlockVideoEnded();
+                    clickElement('footer button[aria-label="Play"], footer button[aria-label="Pause"], .section--player button.lingq-audio-player');
+                });
+                
+                const trackElement = createElement("track", {
+                    kind: "subtitles",
+                    srclang: "en",
+                    label: "Local Sub",
+                    id: "addonLocalVideoTrack"
+                });
+                
+                videoElement.appendChild(trackElement);
+                container.appendChild(videoElement);
+                
+                const progressWrapper = createElement("div", {
+                    className: "local-video-progress-wrapper",
+                    style: "display: none;"
+                });
+                const miniProgressBar = createElement("div", {id: "local-video-mini-progress"});
+                progressWrapper.appendChild(miniProgressBar);
+                container.appendChild(progressWrapper);
+                
+                attemptAutoMatch = async function attemptAutoMatch() {
+                    if (!cachedLocalVideoFiles) return false;
+                    
+                    const titleElement = await waitForElement('header[data-site-header="true"] .truncate, h1.reader-heading', 3000);
+                    if (!titleElement) return false;
+                    
+                    const title = titleElement.textContent.trim();
+                    if (!title) return false;
+                    
+                    const match = findBestMatchingFiles(cachedLocalVideoFiles, title);
+                    if (match.video) {
+                        selectedVideoFile = match.video;
+                        selectedSubtitleFile = match.sub;
+                        
+                        let statusText = `${selectedVideoFile.name}`;
+                        if (selectedSubtitleFile) statusText += ` + ${selectedSubtitleFile.name}`;
+                        
+                        folderLabel.textContent = statusText;
+                        folderLabel.title = statusText;
+                        folderLabel.appendChild(folderInput);
+                        startButton.disabled = false;
+                        return true;
+                    }
+                    return false;
+                };
+                
+                fileInput.addEventListener("change", (event) => {
+                    const files = Array.from(event.target.files).slice(0, 2);
+                    selectedVideoFile = files.find(file => file.type.startsWith("video/"));
+                    selectedSubtitleFile = files.find(file => file.name.endsWith(".srt") || file.name.endsWith(".vtt"));
+                    
+                    if (selectedVideoFile) {
+                        let statusText = `${selectedVideoFile.name}`;
+                        if (selectedSubtitleFile) statusText += ` + ${selectedSubtitleFile.name}`;
+                        else statusText += ` (Default Subtitle)`;
+                        fileLabel.textContent = statusText;
+                        fileLabel.title = statusText;
+                        fileLabel.appendChild(fileInput);
+                        startButton.disabled = false;
+                    } else {
+                        fileLabel.textContent = "Missing Video File! Try Again.";
+                        fileLabel.title = "Missing Video File! Try Again.";
+                        fileLabel.appendChild(fileInput);
+                        startButton.disabled = true;
+                        selectedSubtitleFile = null;
+                    }
+                });
+                
+                folderInput.addEventListener("change", async (event) => {
+                    const files = Array.from(event.target.files);
+                    if (files.length > 0) {
+                        cachedLocalVideoFiles = files;
+                        const matched = await attemptAutoMatch();
+                        if (!matched) {
+                            folderLabel.textContent = "No match found in folder.";
+                            folderLabel.title = "No match found in folder.";
+                            folderLabel.appendChild(folderInput);
+                        }
+                    }
+                });
+                
+                if (cachedLocalVideoFiles) {
+                    attemptAutoMatch();
+                }
+                
+                startButton.addEventListener("click", () => {
+                    if (!selectedVideoFile) return;
+                    
+                    videoElement.src = URL.createObjectURL(selectedVideoFile);
+                    
+                    if (selectedSubtitleFile) {
+                        const reader = new FileReader();
+                        reader.onload = (e) => {
+                            const text = e.target.result;
+                            const vttUrl = convertSrtToVttBlobUrl(text, getCalculatedVttCueSettings());
+                            
+                            trackElement.src = vttUrl;
+                            trackElement.track.mode = "showing";
+                        };
+                        reader.readAsText(selectedSubtitleFile);
+                    } else {
+                        const lessonLanguage = getLessonLanguage();
+                        const lessonId = getLessonId();
+                        
+                        getLessonSentences(lessonLanguage, lessonId)
+                            .then((sentences) => {
+                                if (sentences && sentences.length > 0) {
+                                    trackElement.src = convertSentencesToVttBlobUrl(sentences);
+                                    trackElement.track.mode = "showing";
+                                }
+                            })
+                            .catch((error) => {
+                                console.error("Failed to fetch default subtitles:", error);
+                            });
+                    }
+                    
+                    setupBox.style.display = "none";
+                    videoElement.style.display = "block";
+                    progressWrapper.style.display = "block";
+                    
+                    if (selectedVideoFile) {
+                        const videoTitle = selectedVideoFile.name.replace(/\.[^/.]+$/, "");
+                        const titleText = titleBar.querySelector(".local-video-title-text");
+                        if (titleText) {
+                            titleText.textContent = videoTitle;
+                        }
+                        titleBar.style.display = "flex";
+                    }
+                    
+                    let initialTime = 0;
+                    const sliderHandle = document.querySelector('footer [data-slot="slider-thumb"], footer [role="slider"], .audio-player--progress .rc-slider-handle');
+                    if (sliderHandle) {
+                        let currentProgress = parseFloat(sliderHandle.getAttribute("aria-valuenow"));
+                        if (isNaN(currentProgress)) {
+                            const valueText = sliderHandle.getAttribute("aria-valuetext");
+                            if (valueText && valueText.includes("/")) {
+                                const currentStr = valueText.split("/")[0].trim();
+                                const parts = currentStr.split(":").map(Number);
+                                if (parts.length === 2) currentProgress = parts[0] * 60 + parts[1];
+                                else if (parts.length === 3) currentProgress = parts[0] * 3600 + parts[1] * 60 + parts[2];
+                            }
+                        }
+                        currentProgress = currentProgress || 0;
+                        const maxProgress = parseFloat(sliderHandle.getAttribute("aria-valuemax")) || 0;
+                        const isCompleted = maxProgress > 0 && currentProgress >= maxProgress - 0.5;
+
+                        if (!isCompleted && currentProgress > 0) {
+                            initialTime = currentProgress;
+                        }
+                    } else if (typeof mediaInstances !== "undefined") {
+                        mediaInstances.forEach((media) => {
+                            if (media && document.body.contains(media) && media.currentTime > 0) {
+                                const isCompleted = media.duration > 0 && media.currentTime >= media.duration - 0.5;
+                                if (!isCompleted) {
+                                    initialTime = media.currentTime;
+                                }
+                            }
+                        });
+                    }
+
+                    const startPlayback = () => {
+                        videoElement.currentTime = initialTime;
+                        if (typeof mediaInstances !== "undefined") {
+                            mediaInstances.forEach(media => {
+                                if (media) media.currentTime = initialTime;
+                            });
+                        }
+                        
+                        const playButton = document.querySelector('footer button[aria-label="Play"], .section--player button.lingq-audio-player');
+                        if (playButton) {
+                            playButton.click();
+                        }
+                    };
+
+                    const pauseButton = document.querySelector('footer button[aria-label="Pause"], .section--player button.lingq-audio-player .svg-icon--pause')?.closest('button');
+                    if (pauseButton) {
+                        pauseButton.click();
+                    }
+
+                    if (videoElement.readyState >= 3) {
+                        startPlayback();
+                    } else {
+                        videoElement.addEventListener("canplay", startPlayback, { once: true });
+                    }
+                    
+                    bindLingQPlayerControls(videoElement);
+                    window.removeEventListener("keydown", handleSpacebarStart, true);
+                });
+            }
+            
+            buildLocalVideoUI();
+        }
+
+        // Volume Control & Local Video Audio Mute Hook
+        function setupMediaElementHook() {
+            const PageMediaElement = window.HTMLMediaElement;
+            if (!PageMediaElement || window.__lingqAddonMediaHooked) return;
+            window.__lingqAddonMediaHooked = true;
+
+            const volumeDescriptor = Object.getOwnPropertyDescriptor(PageMediaElement.prototype, 'volume');
+            const originalVolumeSetter = volumeDescriptor.set;
+            const originalVolumeGetter = volumeDescriptor.get;
+            
+            Object.defineProperty(PageMediaElement.prototype, 'volume', {
+                get: function () {
+                    return originalVolumeGetter.call(this);
+                },
+                set: function (val) {
+                    const src = this.src || '';
+                    
+                    if (src.startsWith('data:') || src.includes('/tts/')) {
+                        return originalVolumeSetter.call(this, val);
+                    }
+                    
+                    const lessonLang = getLessonLanguage();
+                    if (lessonLang && settings.styleType[lessonLang] === "localVideo" && this.id !== "addonLocalVideo") {
+                        return originalVolumeSetter.call(this, 0);
+                    }
+                    
+                    const targetVolume = settings.lingqVolume;
+                    const adjustedVolume = Math.min(Math.max(val * targetVolume, 0), 1);
+                    return originalVolumeSetter.call(this, adjustedVolume);
+                }
+            });
+            
+            const originalPlay = PageMediaElement.prototype.play;
+            PageMediaElement.prototype.play = function () {
+                const lessonLang = getLessonLanguage();
+                const isLocalVideoActive = lessonLang && settings.styleType[lessonLang] === "localVideo";
+
+                if (isLocalVideoActive && isVideoEnded) {
+                    this.pause();
+                    return Promise.resolve();
+                }
+
+                const src = this.src || '';
+                if (this.id !== "addonLocalVideo" && !src.startsWith('data:') && !src.includes('/tts/')) {
+                    if (!mediaInstances.has(this)) {
+                        mediaInstances.add(this);
+                    }
+                    this.volume = 1.0;
+                    if (isCustomSpeedActive()) this.playbackRate = settings.lingqSpeed[getLessonLanguage()];
+                }
+                return originalPlay.apply(this, arguments);
+            };
+            
+            const playbackRateDescriptor = Object.getOwnPropertyDescriptor(PageMediaElement.prototype, 'playbackRate');
+            const originalPlaybackRateSetter = playbackRateDescriptor.set;
+            
+            Object.defineProperty(PageMediaElement.prototype, 'playbackRate', {
+                get: playbackRateDescriptor.get,
+                set: function (val) {
+                    const src = this.src || '';
+                    const isLingQAudio = this.id !== "addonLocalVideo" && !src.startsWith('data:') && !src.includes('/tts/');
+                    if (isLingQAudio && isCustomSpeedActive()) {
+                        return originalPlaybackRateSetter.call(this, settings.lingqSpeed[getLessonLanguage()]);
+                    }
+                    return originalPlaybackRateSetter.call(this, val);
+                }
+            });
+        }
+        setupMediaElementHook();
+
+        function isCustomSpeedActive() {
+            return Boolean(document.getElementById('addon-speed-controller'));
+        }
+
+        function setLingqVolume(vol) {
+            settings.lingqVolume = Math.min(Math.max(vol, 0), 1);
+            const perceptualVol = Math.pow(settings.lingqVolume, 2);
+            
+            const controllers = document.querySelector('.audio-player--controllers');
+            const isYoutube = controllers?.querySelector('.controller-item--speed') || document.querySelector('iframe[src*="youtube"]');
+            
+            if (isYoutube) {
+                const youtubeIframe = document.querySelector('.modal-container iframe, #sentence-video-player-portal iframe, iframe[src*="youtube"]');
+                if (youtubeIframe && youtubeIframe.contentWindow) {
+                    const volumePercent = Math.round(perceptualVol * 100);
+                    youtubeIframe.contentWindow.postMessage(JSON.stringify({
+                        event: "command",
+                        func: "setVolume",
+                        args: [volumePercent]
+                    }), "*");
+                    youtubeIframe.contentWindow.postMessage(JSON.stringify({
+                        event: "command",
+                        func: volumePercent === 0 ? "mute" : "unMute"
+                    }), "*");
+                }
+            } else {
+                mediaInstances.forEach(media => {
+                    if (media) media.volume = perceptualVol;
+                });
+                document.querySelectorAll('audio').forEach(audio => {
+                    if (audio) audio.volume = perceptualVol;
+                });
+                const localVideo = document.getElementById("addonLocalVideo");
+                if (localVideo) localVideo.volume = perceptualVol;
+            }
+
+            const addonVolume = document.getElementById('addon-volume-controller');
+            if (addonVolume) {
+                const volPct = Math.round(settings.lingqVolume * 100);
+                const volumeText = addonVolume.querySelector('.addon-volume-text');
+                if (volumeText) volumeText.textContent = `${volPct}%`;
+                const iconWrapper = addonVolume.querySelector('.icon-wrapper');
+                if (iconWrapper) {
+                    const svgMute = `<svg style="width: 17px; height: 17px; flex-shrink: 0;" viewBox="-2 -3 32 32"><path fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" d="m12 21-5-5H3v-6h4l5-5zm10-10-6 6m0-6 6 6"/></svg>`;
+                    const svgLow = `<svg style="width: 17px; height: 17px; flex-shrink: 0;" viewBox="-2 -3 32 32"><path fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" d="m12 21-5-5H3v-6h4l5-5zm5-10c1.5 1.5 1.5 4.5 0 6"/></svg>`;
+                    const svgHigh = `<svg style="width: 18px; height: 18px; flex-shrink: 0;" viewBox="-2 -3 32 32"><path fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" d="m12 21-5-5H3v-6h4l5-5zm5-10c1.5 1.5 1.5 4.5 0 6m4-9c3 2.5 3 7.5 0 10"/></svg>`;
+                    if (settings.lingqVolume === 0) iconWrapper.innerHTML = svgMute;
+                    else if (settings.lingqVolume <= 0.5) iconWrapper.innerHTML = svgLow;
+                    else iconWrapper.innerHTML = svgHigh;
+                }
+                const volumeBtn = addonVolume.querySelector('button, a');
+                if (volumeBtn) volumeBtn.setAttribute("title", `Volume: ${volPct}% (Click to cycle, Scroll to adjust)`);
+            }
+        }
+
+        function setLingqSpeed(speed) {
+            const currentLanguage = getLessonLanguage();
+            const clampedSpeed = Math.round(Math.min(Math.max(speed, 0.5), 3.0) * 100) / 100;
+            
+            if (currentLanguage) {
+                settings.lingqSpeed = {
+                    ...settings.lingqSpeed,
+                    [currentLanguage]: clampedSpeed
+                };
+            }
+            
+            mediaInstances.forEach(media => {
+                if (media) media.playbackRate = clampedSpeed;
+            });
+            document.querySelectorAll('audio').forEach(audio => {
+                if (audio) audio.playbackRate = clampedSpeed;
+            });
+            const localVideo = document.getElementById("addonLocalVideo");
+            if (localVideo) localVideo.playbackRate = clampedSpeed;
+
+            const addonSpeedText = document.querySelector('#addon-speed-controller .addon-speed-text');
+            if (addonSpeedText) {
+                addonSpeedText.textContent = `${clampedSpeed}×`;
+            }
+
+            const speedBtn = document.querySelector('footer button[aria-label^="Playback speed"]');
+            if (speedBtn) {
+                speedBtn.textContent = `${clampedSpeed}×`;
+                speedBtn.setAttribute('aria-label', `Playback speed ${clampedSpeed}×`);
+            }
+        }
+
+        function skipPlayback(deltaSeconds) {
+            unlockVideoEnded();
+            const localVideo = document.getElementById("addonLocalVideo");
+            const isLocalVideoActive = localVideo && localVideo.style.display !== "none" && !isNaN(localVideo.currentTime);
+            const sliderHandle = document.querySelector('footer [data-slot="slider-thumb"], footer [role="slider"], .audio-player--progress .rc-slider-handle');
+
+            const now = Date.now();
+            let baseTime;
+            if (lastSkipTargetTime !== null && (now - lastSkipTimestamp < 800)) {
+                baseTime = lastSkipTargetTime;
+            } else {
+                baseTime = isLocalVideoActive
+                    ? localVideo.currentTime
+                    : (sliderHandle ? (parseFloat(sliderHandle.getAttribute("aria-valuenow")) || 0) : 0);
+            }
+            const targetTime = Math.max(0, baseTime + deltaSeconds);
+            lastSkipTargetTime = targetTime;
+            lastSkipTimestamp = now;
+
+            if (isLocalVideoActive && !isNaN(localVideo.duration)) {
+                localVideo.currentTime = Math.min(localVideo.duration, targetTime);
+            }
+
+            const controllers = document.querySelector('.audio-player--controllers');
+            const isYoutube = controllers?.querySelector('.controller-item--speed') || document.querySelector('iframe[src*="youtube"]');
+            
+            if (isYoutube) {
+                const youtubeIframe = document.querySelector('.modal-container iframe, #sentence-video-player-portal iframe, iframe[src*="youtube"]');
+                if (youtubeIframe && youtubeIframe.contentWindow) {
+                    youtubeIframe.contentWindow.postMessage(JSON.stringify({
+                        event: "command",
+                        func: "seekTo",
+                        args: [targetTime, true]
+                    }), "*");
+                    const volumePercent = Math.round(settings.lingqVolume * 100);
+                    youtubeIframe.contentWindow.postMessage(JSON.stringify({
+                        event: "command",
+                        func: "setVolume",
+                        args: [volumePercent]
+                    }), "*");
+                    youtubeIframe.contentWindow.postMessage(JSON.stringify({
+                        event: "command",
+                        func: volumePercent === 0 ? "mute" : "unMute"
+                    }), "*");
+                }
+                return;
+            }
+
+            if (typeof mediaInstances !== "undefined" && mediaInstances.size > 0) {
+                mediaInstances.forEach((media) => {
+                    if (media && !isNaN(media.duration)) {
+                        media.currentTime = Math.min(media.duration, targetTime);
+                    }
+                });
+            } else {
+                const audio = document.querySelector('audio');
+                if (audio) {
+                    const maxTime = !isNaN(audio.duration) ? audio.duration : targetTime;
+                    audio.currentTime = Math.min(maxTime, targetTime);
+                }
+            }
+        }
+
+        function updateSkipButtonsUI() {
+            const duration = settings.skipDuration;
+
+            const updateButton = (btn, actionPrefix, shiftKey) => {
+                if (!btn) return;
+                const expectedTitle = `${actionPrefix} ${duration} seconds (${shiftKey})`;
+                const expectedAria = `${actionPrefix} ${duration} seconds`;
+                if (btn.getAttribute('title') !== expectedTitle) {
+                    btn.setAttribute('title', expectedTitle);
+                }
+                if (btn.getAttribute('aria-label') !== expectedAria) {
+                    btn.setAttribute('aria-label', expectedAria);
+                }
+                const container = btn.parentElement;
+                if (container && container !== btn.closest('footer')) {
+                    if (container.getAttribute('data-original-title') !== expectedAria) {
+                        container.setAttribute('data-original-title', expectedAria);
+                    }
+                }
+
+                const svg = btn.querySelector('svg');
+                if (svg) {
+                    let textNode = svg.querySelector('.addon-skip-text');
+                    if (!textNode) {
+                        textNode = createElement('text', {
+                            className: 'addon-skip-text',
+                            x: '12',
+                            y: '12.5'
+                        });
+                        svg.appendChild(textNode);
+                    }
+                    const expectedDigit = duration < 10 ? 'true' : 'false';
+                    if (textNode.dataset.singleDigit !== expectedDigit) {
+                        textNode.dataset.singleDigit = expectedDigit;
+                    }
+                    if (textNode.textContent !== String(duration)) {
+                        textNode.textContent = duration;
+                    }
+                }
+            };
+
+            const backwardBtn = document.querySelector('footer button[aria-label^="Replay"], .audio-player--controllers .controller-item--backward') ||
+                               document.querySelector('.svg-icon--backward')?.closest('a');
+            updateButton(backwardBtn, 'Replay', 'Shift+<');
+
+            const forwardBtn = document.querySelector('footer button[aria-label^="Forward"], .audio-player--controllers .controller-item--forward') ||
+                              document.querySelector('.svg-icon--forward')?.closest('a');
+            updateButton(forwardBtn, 'Forward', 'Shift+>');
+        }
+
+        window.addEventListener("addon:skip-duration-changed", () => {
+            updateSkipButtonsUI();
+        });
 
         function getLessonTitle() {
             const titleElement = document.querySelector('header[data-site-header="true"] .truncate') || document.querySelector("h1.reader-heading");
@@ -9118,6 +9188,29 @@
                 if (!isFooterExpanded(footer)) {
                     document.getElementById('addon-speed-controller')?.remove();
                     document.getElementById('addon-volume-controller')?.remove();
+
+                    const pauseBtn = footer.querySelector('button[aria-label="Pause"]');
+                    if (pauseBtn && !pauseBtn.dataset.addonExpanding) {
+                        pauseBtn.dataset.addonExpanding = "true";
+                        pauseBtn.click();
+                        const intervalId = setInterval(() => {
+                            const currentFooter = document.querySelector('footer');
+                            if (!currentFooter || isFooterExpanded(currentFooter)) {
+                                clearInterval(intervalId);
+                                return;
+                            }
+                            const playBtn = currentFooter.querySelector('button[aria-label="Play"]');
+                            if (playBtn) {
+                                clearInterval(intervalId);
+                                playBtn.click();
+                            }
+                        }, 50);
+                        setTimeout(() => {
+                            clearInterval(intervalId);
+                            delete pauseBtn.dataset.addonExpanding;
+                        }, 1500);
+                    }
+
                     return;
                 }
             }
@@ -9165,7 +9258,7 @@
             audioPlayerObserver.observe(footer, {
                 attributes: true,
                 attributeFilter: ['aria-label', 'class'],
-                subtree: false
+                subtree: true
             });
             
             scheduleFooterUpdate();
@@ -9519,20 +9612,20 @@
             }
             
             
-            switch (settings.styleType[language]) {
-                case "video":
+            const rawStyle = settings.styleType[language];
+            const currentStyle = (rawStyle === "audio" || rawStyle === "video" || !rawStyle) ? "default" : rawStyle;
+            
+            if (currentStyle === "off") {
+                specificCSS = generateOffModeCSS();
+                layoutCSS = '';
+            } else if (currentStyle === "localVideo") {
+                specificCSS = generateLocalVideoCSS(settings.videoPosition[language]);
+            } else {
+                if (isVideoLesson()) {
                     specificCSS = generateVideoCSS(settings.videoPosition[language]);
-                    break;
-                case "localVideo":
-                    specificCSS = generateLocalVideoCSS(settings.videoPosition[language]);
-                    break;
-                case "audio":
+                } else {
                     specificCSS = generateAudioCSS();
-                    break;
-                case "off":
-                    specificCSS = generateOffModeCSS();
-                    layoutCSS = '';
-                    break;
+                }
             }
             
             handleLocalVideoContainerVisibility();
@@ -9564,13 +9657,13 @@
             function handleReaderStyleTrigger() {
                 const baseType = styleTypeSelector.value;
                 const position = videoPositionSelector.value;
-                const isVideoMode = ["video", "localVideo"].includes(baseType);
+                const hasPositionSettings = baseType !== "off";
                 
                 settings.styleType = {...settings.styleType, [language]: baseType};
                 settings.videoPosition = {...settings.videoPosition, [language]: position};
                 
-                positionSettingsContainer.style.display = isVideoMode ? "block" : "none";
-                document.getElementById("videoSettings").style.display = isVideoMode && ["Top", "Bottom"].includes(position) ? "block" : "none";
+                positionSettingsContainer.style.display = hasPositionSettings ? "block" : "none";
+                document.getElementById("videoSettings").style.display = hasPositionSettings && ["Top", "Bottom"].includes(position) ? "block" : "none";
                 
                 applyStyles();
             }
@@ -9648,6 +9741,8 @@
                 }
                 ` : ""}
 
+                .reader-paragraph,
+                .reader-sentence,
                 .sentence-item {
                     color: var(--font-color) !important;
                 }
@@ -9697,6 +9792,31 @@
                 .sentence-item.selected {
                     outline: 2px solid var(--font-color) !important;
                     border-radius: .25rem;
+                }
+
+                div[data-reader-mode-body="true"] .sentence-item:hover,
+                .reader-body .sentence-item:hover,
+                .sentence-item:hover {
+                    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--font-color) 35%, transparent) !important;
+                    border-radius: .25rem;
+                }
+
+                div[data-reader-mode-body="true"] .sentence-item.ar-new:hover,
+                .reader-body .sentence-item.ar-new:hover,
+                .sentence-item.ar-new:hover {
+                    box-shadow: inset 0 0 0 1px var(--unknown-border) !important;
+                }
+
+                div[data-reader-mode-body="true"] .sentence-item.ar-lingq:hover,
+                .reader-body .sentence-item.ar-lingq:hover,
+                .sentence-item.ar-lingq:hover {
+                    box-shadow: inset 0 0 0 1px var(--lingq-border) !important;
+                }
+
+                div[data-reader-mode-body="true"] .sentence-item.ar-learned:hover,
+                .reader-body .sentence-item.ar-learned:hover,
+                .sentence-item.ar-learned:hover {
+                    box-shadow: inset 0 0 0 1px var(--lingq-border-learned) !important;
                 }
 
                 /*Chat*/
@@ -10103,6 +10223,19 @@
                 --footer-height: 56px;
             }
 
+            /* Disable native View Transition animation & cross-fade blur */
+            html.split-motion,
+            html.theater-motion {
+                view-transition-name: none !important;
+            }
+
+            ::view-transition-group(*),
+            ::view-transition-old(*),
+            ::view-transition-new(*) {
+                animation: none !important;
+                animation-duration: 0s !important;
+            }
+
             /* Site header compaction */
             header[data-site-header="true"] {
                 min-height: 48px !important;
@@ -10152,7 +10285,7 @@
                 width: 20px !important;
                 height: 20px !important;
             }
-            footer .rounded-full {
+            footer .rounded-full:not([data-slot="slider-thumb"]):not([role="slider"]) {
                 display: inline-flex !important;
                 align-items: center !important;
                 justify-content: center !important;
@@ -10160,16 +10293,49 @@
                 padding: 1px 8px !important;
                 line-height: normal !important;
             }
-            footer .rounded-full button,
-            footer .rounded-full a {
+            footer .rounded-full:not([data-slot="slider-thumb"]):not([role="slider"]) button,
+            footer .rounded-full:not([data-slot="slider-thumb"]):not([role="slider"]) a {
                 height: 28px !important;
                 padding: 1px 0 !important;
                 display: inline-flex !important;
                 align-items: center !important;
             }
-            footer .rounded-full svg {
+            footer .rounded-full:not([data-slot="slider-thumb"]):not([role="slider"]) svg {
                 width: 16px !important;
                 height: 16px !important;
+            }
+
+            /* Footer progress bar slider thumb */
+            footer [data-slot="slider-thumb"],
+            footer [role="slider"] {
+                width: 14px !important;
+                height: 14px !important;
+                padding: 0 !important;
+                display: block !important;
+                border-radius: 9999px !important;
+                box-sizing: border-box !important;
+            }
+
+            /* Footer skip buttons */
+            footer button[aria-label^="Replay"] svg,
+            footer button[aria-label^="Forward"] svg {
+                width: 22px !important;
+                height: 22px !important;
+                stroke-width: 1.5 !important;
+            }
+            .addon-skip-text {
+                fill: currentColor !important;
+                stroke: none !important;
+                font-family: ui-sans-serif, system-ui, -apple-system, sans-serif !important;
+                font-weight: 600 !important;
+                font-size: 8px !important;
+                text-anchor: middle !important;
+                dominant-baseline: central !important;
+                pointer-events: none !important;
+                user-select: none !important;
+            }
+            .addon-skip-text[data-single-digit="true"] {
+                font-size: 9.5px !important;
             }
 
             /* Reader body & text area */
@@ -10182,6 +10348,11 @@
             div[data-reader-mode-body="true"] {
                 width: 100% !important;
                 flex: 1 1 0% !important;
+            }
+            div[data-reader-mode-body="true"] .reader-paragraph,
+            .reader-body .reader-paragraph,
+            .reader-paragraph {
+                margin-bottom: 0.75em !important;
             }
 
             /* Page mode prev/next buttons */
@@ -10198,6 +10369,9 @@
                 width: var(--widget-width) !important;
                 min-width: var(--widget-width) !important;
                 max-width: var(--widget-width) !important;
+            }
+            div[data-reader-side-column="true"].contents #memo-widget-container {
+                display: none !important;
             }
 
             /* Player controllers styling */
@@ -10264,32 +10438,170 @@
                 :root {
                     --height-big: ${settings.heightBig || 400}px;
                 }
-                div[data-reader-video-stage="true"] {
-                    max-height: var(--height-big) !important;
-                }
             `;
             
-            if (position === "Bottom") {
+            if (position === "Top") {
                 layoutCSS += `
                     div.relative.flex.min-h-0.flex-1.flex-col > .contents {
                         display: flex !important;
                         flex-direction: column !important;
+                        flex: 1 1 0% !important;
+                        min-height: 0 !important;
+                        height: 100% !important;
+                        overflow: hidden !important;
                     }
-                    div.relative.flex.min-h-0.flex-1.flex-col > .contents > :has([data-reader-video-stage="true"]) {
+                    div.contents > div:has(> [data-reader-video-stage="true"]) {
+                        order: 1 !important;
+                        width: 100% !important;
+                        flex-shrink: 0 !important;
+                        padding-top: 0.5rem !important;
+                        padding-bottom: 0.5rem !important;
+                    }
+                    div[data-reader-video-stage="true"] {
+                        width: 100% !important;
+                        height: var(--height-big) !important;
+                        max-height: var(--height-big) !important;
+                        max-width: none !important;
+                        aspect-ratio: auto !important;
+                        background: #000 !important;
+                        border-radius: 0.75rem !important;
+                    }
+                    div[data-reader-mode-body="true"] {
                         order: 2 !important;
+                        flex: 1 1 0% !important;
+                        min-height: 0 !important;
+                        height: 100% !important;
+                        overflow: hidden !important;
                     }
-                    div.relative.flex.min-h-0.flex-1.flex-col > .contents > [data-reader-mode-body="true"] {
+                    div[data-reader-mode-body="true"] > div.overflow-y-auto {
+                        height: 100% !important;
+                        overflow-y: auto !important;
+                    }
+                `;
+            } else if (position === "Bottom") {
+                layoutCSS += `
+                    div.relative.flex.min-h-0.flex-1.flex-col > .contents {
+                        display: flex !important;
+                        flex-direction: column !important;
+                        flex: 1 1 0% !important;
+                        min-height: 0 !important;
+                        height: 100% !important;
+                        overflow: hidden !important;
+                    }
+                    div[data-reader-mode-body="true"] {
                         order: 1 !important;
                         flex: 1 1 0% !important;
+                        min-height: 0 !important;
+                        height: 100% !important;
+                        overflow: hidden !important;
+                    }
+                    div[data-reader-mode-body="true"] > div.overflow-y-auto {
+                        height: 100% !important;
+                        overflow-y: auto !important;
+                    }
+                    div.contents > div:has(> [data-reader-video-stage="true"]) {
+                        order: 2 !important;
+                        width: 100% !important;
+                        flex-shrink: 0 !important;
+                        padding-top: 0.5rem !important;
+                        padding-bottom: 0.5rem !important;
+                    }
+                    div[data-reader-video-stage="true"] {
+                        width: 100% !important;
+                        height: var(--height-big) !important;
+                        max-height: var(--height-big) !important;
+                        max-width: none !important;
+                        aspect-ratio: auto !important;
+                        background: #000 !important;
+                        border-radius: 0.75rem !important;
+                    }
+                `;
+            } else if (position === "Left") {
+                layoutCSS += `
+                    div.relative.flex.min-h-0.flex-1.flex-col > .contents {
+                        display: grid !important;
+                        grid-template-columns: 1fr 1fr !important;
+                        gap: 1.5rem !important;
+                        padding-left: 1.5rem !important;
+                        min-height: 0 !important;
+                        height: 100% !important;
+                        flex: 1 1 0% !important;
+                        overflow: hidden !important;
+                    }
+                    div.contents > div:has(> [data-reader-video-stage="true"]),
+                    .grid.grid-cols-2 > div:has(> [data-reader-video-stage="true"]) {
+                        order: 1 !important;
+                        grid-column: 1 !important;
+                        align-self: stretch !important;
+                        min-height: 0 !important;
+                        height: 100% !important;
+                        padding: 0 !important;
+                    }
+                    div.contents > div:has(> [data-reader-video-stage="true"]) [data-reader-video-stage="true"],
+                    .grid.grid-cols-2 > div:has(> [data-reader-video-stage="true"]) [data-reader-video-stage="true"] {
+                        max-width: none !important;
+                        width: 100% !important;
+                        height: 100% !important;
+                        aspect-ratio: auto !important;
+                        background: #000 !important;
+                        border-radius: 0.75rem !important;
+                    }
+                    div.contents > div[data-reader-mode-body="true"],
+                    .grid.grid-cols-2 > div[data-reader-mode-body="true"] {
+                        order: 2 !important;
+                        grid-column: 2 !important;
+                        min-width: 0 !important;
+                        min-height: 0 !important;
+                        height: 100% !important;
+                        overflow: hidden !important;
+                    }
+                    div[data-reader-mode-body="true"] > div.overflow-y-auto {
+                        height: 100% !important;
+                        overflow-y: auto !important;
                     }
                 `;
             } else if (position === "Right") {
                 layoutCSS += `
-                    .grid:has([data-reader-video-stage="true"]) > :has([data-reader-video-stage="true"]) {
-                        order: 2 !important;
+                    div.relative.flex.min-h-0.flex-1.flex-col > .contents {
+                        display: grid !important;
+                        grid-template-columns: 1fr 1fr !important;
+                        gap: 1.5rem !important;
+                        padding-left: 1.5rem !important;
+                        min-height: 0 !important;
+                        height: 100% !important;
+                        flex: 1 1 0% !important;
+                        overflow: hidden !important;
                     }
-                    .grid:has([data-reader-video-stage="true"]) > [data-reader-mode-body="true"] {
+                    div.contents > div[data-reader-mode-body="true"],
+                    .grid.grid-cols-2 > div[data-reader-mode-body="true"] {
                         order: 1 !important;
+                        grid-column: 1 !important;
+                        min-width: 0 !important;
+                        min-height: 0 !important;
+                        height: 100% !important;
+                        overflow: hidden !important;
+                    }
+                    div[data-reader-mode-body="true"] > div.overflow-y-auto {
+                        height: 100% !important;
+                        overflow-y: auto !important;
+                    }
+                    div.contents > div:has(> [data-reader-video-stage="true"]),
+                    .grid.grid-cols-2 > div:has(> [data-reader-video-stage="true"]) {
+                        order: 2 !important;
+                        grid-column: 2 !important;
+                        align-self: stretch !important;
+                        min-height: 0 !important;
+                        height: 100% !important;
+                        padding: 0 !important;
+                    }
+                    div.contents > div:has(> [data-reader-video-stage="true"]) [data-reader-video-stage="true"],
+                    .grid.grid-cols-2 > div:has(> [data-reader-video-stage="true"]) [data-reader-video-stage="true"] {
+                        max-width: none !important;
+                        width: 100% !important;
+                        height: 100% !important;
+                        aspect-ratio: auto !important;
+                        background: #000 !important;
+                        border-radius: 0.75rem !important;
                     }
                 `;
             }
@@ -10305,37 +10617,139 @@
             }
             #local-video-container {
                 display: flex;
+                align-items: center;
+                justify-content: center;
                 border-radius: 0.75rem;
                 background-color: #000000;
                 position: relative !important;
-                max-height: var(--height-big);
                 min-width: 0;
                 overflow: hidden;
                 cursor: pointer;
             }
             `;
             
-            if (position === "Bottom") {
+            if (position === "Top") {
                 layoutCSS += `
                     div.relative.flex.min-h-0.flex-1.flex-col > .contents {
                         display: flex !important;
                         flex-direction: column !important;
+                        flex: 1 1 0% !important;
+                        min-height: 0 !important;
+                        height: 100% !important;
+                        overflow: hidden !important;
                     }
                     #local-video-container {
+                        order: 1 !important;
+                        width: 100% !important;
+                        height: var(--height-big) !important;
+                        max-height: var(--height-big) !important;
+                        flex-shrink: 0 !important;
+                        margin-bottom: 0.5rem !important;
+                    }
+                    div[data-reader-mode-body="true"] {
                         order: 2 !important;
+                        flex: 1 1 0% !important;
+                        min-height: 0 !important;
+                        height: 100% !important;
+                        overflow: hidden !important;
+                    }
+                    div[data-reader-mode-body="true"] > div.overflow-y-auto {
+                        height: 100% !important;
+                        overflow-y: auto !important;
+                    }
+                `;
+            } else if (position === "Bottom") {
+                layoutCSS += `
+                    div.relative.flex.min-h-0.flex-1.flex-col > .contents {
+                        display: flex !important;
+                        flex-direction: column !important;
+                        flex: 1 1 0% !important;
+                        min-height: 0 !important;
+                        height: 100% !important;
+                        overflow: hidden !important;
                     }
                     div[data-reader-mode-body="true"] {
                         order: 1 !important;
                         flex: 1 1 0% !important;
+                        min-height: 0 !important;
+                        height: 100% !important;
+                        overflow: hidden !important;
+                    }
+                    div[data-reader-mode-body="true"] > div.overflow-y-auto {
+                        height: 100% !important;
+                        overflow-y: auto !important;
+                    }
+                    #local-video-container {
+                        order: 2 !important;
+                        width: 100% !important;
+                        height: var(--height-big) !important;
+                        max-height: var(--height-big) !important;
+                        flex-shrink: 0 !important;
+                        margin-top: 0.5rem !important;
+                    }
+                `;
+            } else if (position === "Left") {
+                layoutCSS += `
+                    div.relative.flex.min-h-0.flex-1.flex-col > .contents {
+                        display: flex !important;
+                        flex-direction: row !important;
+                        flex: 1 1 0% !important;
+                        min-height: 0 !important;
+                        height: 100% !important;
+                        overflow: hidden !important;
+                        gap: 1.5rem !important;
+                    }
+                    #local-video-container {
+                        order: 1 !important;
+                        flex: 1 1 0% !important;
+                        min-width: 0 !important;
+                        height: 100% !important;
+                        max-height: 100% !important;
+                        align-self: stretch !important;
+                    }
+                    div[data-reader-mode-body="true"] {
+                        order: 2 !important;
+                        flex: 1 1 0% !important;
+                        min-width: 0 !important;
+                        min-height: 0 !important;
+                        height: 100% !important;
+                        overflow: hidden !important;
+                    }
+                    div[data-reader-mode-body="true"] > div.overflow-y-auto {
+                        height: 100% !important;
+                        overflow-y: auto !important;
                     }
                 `;
             } else if (position === "Right") {
                 layoutCSS += `
-                    .grid:has(#local-video-container) > #local-video-container {
-                        order: 2 !important;
+                    div.relative.flex.min-h-0.flex-1.flex-col > .contents {
+                        display: flex !important;
+                        flex-direction: row !important;
+                        flex: 1 1 0% !important;
+                        min-height: 0 !important;
+                        height: 100% !important;
+                        overflow: hidden !important;
+                        gap: 1.5rem !important;
                     }
-                    .grid:has(#local-video-container) > [data-reader-mode-body="true"] {
+                    div[data-reader-mode-body="true"] {
                         order: 1 !important;
+                        flex: 1 1 0% !important;
+                        min-width: 0 !important;
+                        min-height: 0 !important;
+                        height: 100% !important;
+                        overflow: hidden !important;
+                    }
+                    div[data-reader-mode-body="true"] > div.overflow-y-auto {
+                        height: 100% !important;
+                        overflow-y: auto !important;
+                    }
+                    #local-video-container {
+                        order: 2 !important;
+                        flex: 1 1 0% !important;
+                        min-width: 0 !important;
+                        height: 100% !important;
+                        max-height: 100% !important;
+                        align-self: stretch !important;
                     }
                 `;
             }
@@ -13316,7 +13730,6 @@
             lessonUsageHistory.push(event.detail);
         });
         
-        const language = getLessonLanguage();
         ensureLanguageSettings(language);
         
         const DictionaryLocalePairs = await getDictionaryLocalePairs();
@@ -14376,16 +14789,30 @@
         if (!isTargetOrigin()) return;
         
         const youtubeLayoutCSS = `
-            #player-control-overlay > div > player-fullscreen-controls > player-fullscreen-action-menu > div > div,
-            #player-control-overlay > div > div.player-controls-background-container > div.player-controls-background,
-            #player-control-overlay > div > div:nth-child(5) > player-middle-controls,
-            .ytp-paid-content-overlay, .ytmPaidContentOverlayHost,
-            .ytp-pause-overlay-container, .ytp-watermark,
-            #player-control-overlay > div > player-fullscreen-controls > div {
+            #player-control-overlay .player-controls-background-container,
+            #player-control-overlay .player-controls-background,
+            #player-control-overlay player-middle-controls,
+            #player-control-overlay player-bottom-controls,
+            #player-control-overlay player-fullscreen-controls,
+            #player-control-overlay yt-bigboard,
+            .ytp-pause-overlay,
+            .ytp-pause-overlay-container,
+            .ytp-paid-content-overlay,
+            .ytmPaidContentOverlayHost,
+            .ytp-watermark,
+            .ytp-ce-element {
                 display: none !important;
             }
-            #player-controls {
-                height: 60px;
+
+            #player-control-overlay player-top-controls {
+                display: block !important;
+                opacity: 0 !important;
+                pointer-events: auto !important;
+                transition: opacity 0.2s ease-in-out !important;
+            }
+
+            #player-control-overlay player-top-controls:hover {
+                opacity: 1 !important;
             }
         `;
         applyCSS(youtubeLayoutCSS);
