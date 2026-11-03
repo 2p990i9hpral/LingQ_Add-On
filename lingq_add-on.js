@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      18.0.2
+// @version      19.0.0
 // @license      GPL-3.0-or-later
 // @grant       GM_setValue
 // @grant       GM_getValue
@@ -33,8 +33,6 @@
         styleType: {},
         videoPosition: {},
         heightBig: 400,
-        sentenceHeight: 400,
-        sentenceAutoplay: false,
         widgetWidth: 400,
         fontSize: {},
         annotationScale: {},
@@ -61,11 +59,9 @@
         
         librarySortOption: 0,
         autoFinishing: false,
-        focusPlayingSentence: false,
         focusSelectedText: false,
         hoverAnnotation: "off",
         showTranslation: false,
-        usePageMode: {},
         skipEndPage: false,
         relocateCaption: 'default',
         captionFontsize: 1.1,
@@ -123,7 +119,6 @@
         fontSize: 1.1,
         annotationScale: 50,
         lineHeight: 1.7,
-        usePageMode: true,
         ttsVoice: "random",
         ankiDeck: "",
         lingqSpeed: 1.0
@@ -378,20 +373,7 @@
         
         return match?.[2];
     }
-    
-    function getLessonTitle() {
-        const overviewTitle = document.querySelector(".lesson-progress-section .lesson-quick-overview > .lesson-title");
-        if (overviewTitle && overviewTitle.textContent.trim()) {
-            return overviewTitle.textContent.trim();
-        }
 
-        const titleWrapper = document.querySelector(".sentence-text-head > .title-wrapper");
-        if (!titleWrapper) return "";
-        const clone = titleWrapper.cloneNode(true);
-        const collection = clone.querySelector(".collection-title-wrapper");
-        if (collection) collection.remove();
-        return clone.textContent.trim();
-    }
     
     async function getUserProfile() {
         const url = `https://www.lingq.com/api/v3/profiles/`;
@@ -597,18 +579,27 @@
     }
     
     async function setLingQMeaning(newMeaning) {
-        const textarea = document.querySelector(".reference-input-text");
-        if (!textarea) return;
+        let input = document.querySelector('div[data-word-widget] input, div[data-word-widget] textarea');
+        if (!input) {
+            const editBtn = document.querySelector('div[data-word-widget] button[aria-label^="Edit this meaning"]');
+            if (editBtn) {
+                editBtn.click();
+                await new Promise(resolve => setTimeout(resolve, 100));
+                input = document.querySelector('div[data-word-widget] input, div[data-word-widget] textarea');
+            }
+        }
+        if (!input) return;
         
-        textarea.focus();
-        textarea.dispatchEvent(new FocusEvent("focus", {bubbles: true}));
+        input.focus();
+        input.dispatchEvent(new FocusEvent("focus", {bubbles: true}));
         
-        Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")?.set.call(textarea, newMeaning);
-        textarea.dispatchEvent(new InputEvent("input", {bubbles: true, composed: true, data: newMeaning}));
-        textarea.dispatchEvent(new Event("change", {bubbles: true}));
+        const prototype = (input instanceof HTMLTextAreaElement) ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
+        Object.getOwnPropertyDescriptor(prototype, "value")?.set.call(input, newMeaning);
+        input.dispatchEvent(new InputEvent("input", {bubbles: true, composed: true, data: newMeaning}));
+        input.dispatchEvent(new Event("change", {bubbles: true}));
         
-        textarea.blur();
-        textarea.dispatchEvent(new FocusEvent("focusout", {bubbles: true}));
+        input.blur();
+        input.dispatchEvent(new FocusEvent("focusout", {bubbles: true}));
     }
     
     function waitForElement(selector, timeout = 1000) {
@@ -649,9 +640,9 @@
     }
     
     function copySelectedText() {
-        const selected_text = document.querySelector(".reference-word");
-        if (selected_text) {
-            navigator.clipboard.writeText(selected_text.textContent);
+        const selectedWordEl = document.querySelector('div[data-word-widget] bdi[dir="ltr"]');
+        if (selectedWordEl) {
+            navigator.clipboard.writeText(selectedWordEl.textContent.trim());
         }
     }
     
@@ -685,7 +676,7 @@
         }
         
         const textParts = [];
-        let sentenceElements = domElement.querySelectorAll('.sentence');
+        let sentenceElements = domElement.querySelectorAll('.reader-sentence, .sentence');
         sentenceElements = sentenceElements.length ? sentenceElements : [domElement];
         
         if (domElement.childNodes.length === 0) return null;
@@ -752,7 +743,7 @@
             style: `box-shadow: 0 0 10px 0 ${success ? 'rgb(76, 175, 80)' : 'rgb(175, 76, 80)'}`
         });
         
-        const widget = document.querySelector('.reader-widget');
+        const widget = document.querySelector('div[data-word-widget]') || document.body;
         if (widget) {
             widget.appendChild(toast);
         }
@@ -771,7 +762,8 @@
     }
     
     function moveNextPage() {
-        clickElement(".reader-component > .nav--right > a");
+        const nextButton = document.querySelector('button[aria-label="Next page"]');
+        if (nextButton) nextButton.click();
     }
     
     function preventPropagation(event) {
@@ -838,45 +830,7 @@
         requestAnimationFrame(animateScroll);
     }
     
-    let isReaderMouseDown = false;
 
-    window.addEventListener("mousedown", (event) => {
-        isReaderMouseDown = !!event.target.closest?.(".reader-container");
-    }, true);
-
-    window.addEventListener("mouseup", () => {
-        isReaderMouseDown = false;
-        document.body.style.removeProperty("user-select");
-    }, true);
-
-    function focusReaderElement(targetElement, scrollHorizontal = false) {
-        const language = getLessonLanguage();
-        const isPageMode = settings.usePageMode[language];
-        const wrapper = document.querySelector(".reader-container-wrapper");
-        const container = document.querySelector(".reader-container");
-        
-        const scrollTarget = isPageMode ? wrapper : container;
-        if (!scrollTarget || !container || !targetElement) return;
-        if (!targetElement.isConnected || targetElement.getClientRects().length === 0) return;
-
-        if (isReaderMouseDown) {
-            document.body.style.setProperty("user-select", "none");
-            window.getSelection()?.removeAllRanges();
-        }
-        
-        const targetRect = targetElement.getBoundingClientRect();
-        const containerRect = scrollTarget.getBoundingClientRect();
-        
-        const relativeTop = targetRect.top - containerRect.top + scrollTarget.scrollTop;
-        const containerHalfHeight = Math.floor(scrollTarget.offsetHeight / 2);
-        const targetScrollTop = relativeTop + Math.floor(targetElement.offsetHeight / 2) - containerHalfHeight;
-        smoothScrollTo(scrollTarget, targetScrollTop, 300);
-        
-        if (isPageMode && scrollHorizontal) {
-            const offsetLeft = targetElement.offsetLeft;
-            smoothScrollTo(scrollTarget, offsetLeft, 300, true);
-        }
-    }
     
     function getRandomElement(arr) {
         const randomIndex = Math.floor(Math.random() * arr.length);
@@ -889,12 +843,23 @@
     }
     
     async function showTranslation() {
+        const readerOptionsBtn = document.querySelector('button[aria-label="Reader options"]');
+        if (readerOptionsBtn) {
+            readerOptionsBtn.click();
+            const switchItem = await waitForElement('div[role="menuitemcheckbox"][data-slot="dropdown-menu-switch-item"]', 2000);
+            if (switchItem && switchItem.getAttribute('aria-checked') !== 'true') {
+                switchItem.click();
+            }
+            document.dispatchEvent(new KeyboardEvent('keydown', {key: 'Escape', bubbles: true}));
+            return;
+        }
         const selector = "#lesson-menu  .dropdown-content";
-        const dropdownList = await waitForElement(selector, 5000);
+        const dropdownList = await waitForElement(selector, 2000);
+        if (!dropdownList) return;
         const translationButton = Array.from(dropdownList.querySelectorAll('.dropdown-item > a')).find(link =>
             link.querySelector('.text-wrapper')?.textContent.trim() === "Show Translation"
         );
-        if (translationButton) setTimeout(() => translationButton.click(), 1000);
+        if (translationButton) setTimeout(() => translationButton.click(), 500);
     }
     
     function removeIndent(text) {
@@ -3021,40 +2986,6 @@
         isVideoEnded = false;
     }
 
-    function handleYoutubeWireframeVisibility() {
-        const lessonReader = document.getElementById("lesson-reader");
-        if (!lessonReader) return;
-
-        const currentStyle = settings.styleType[getLessonLanguage()];
-        let wireframe = document.getElementById("youtube-wireframe-container");
-
-        if (currentStyle !== "video") {
-            if (wireframe) wireframe.style.display = "none";
-            return;
-        }
-
-        if (!wireframe) {
-            wireframe = createElement("div", {
-                id: "youtube-wireframe-container",
-                title: "Click to play YouTube video"
-            }, createElement("div", {
-                className: "youtube-wireframe-content"
-            }, createElement("div", {
-                innerHTML: '<svg viewBox="0 0 24 24" style="width: 40px; height: 40px;" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="m6 3 14 9-14 9z"/></svg>'
-            }), createElement("span", {
-                textContent: "Click to play YouTube video"
-            })));
-
-            wireframe.addEventListener("click", () => {
-                clickElement(".section--player button.lingq-audio-player");
-            });
-
-            lessonReader.appendChild(wireframe);
-        }
-
-        wireframe.style.display = "flex";
-    }
-
     function handleLocalVideoContainerVisibility() {
         async function bindLingQPlayerControls(videoElement) {
             const sliderHandle = await waitForElement('.audio-player--progress .rc-slider-handle', 10000);
@@ -3542,10 +3473,10 @@
             attemptAutoMatch = async function attemptAutoMatch() {
                 if (!cachedLocalVideoFiles) return false;
                 
-                const titleElement = await waitForElement(".lesson-progress-section .lesson-quick-overview > .lesson-title, .sentence-text-head > .title-wrapper", 3000);
+                const titleElement = await waitForElement('header[data-site-header="true"] .truncate, h1.reader-heading', 3000);
                 if (!titleElement) return false;
                 
-                const title = getLessonTitle();
+                const title = titleElement.textContent.trim();
                 if (!title) return false;
                 
                 const match = findBestMatchingFiles(cachedLocalVideoFiles, title);
@@ -4154,8 +4085,6 @@
             const baseType = settings.styleType[language];
             const position = settings.videoPosition[language];
             
-            addCheckbox(container1, "usePageModeCheckbox", "Use Paging Mode", settings.usePageMode[language]);
-            
             addSelect(container1, "styleTypeSelector", "Layout Style:", [
                 {value: "audio", text: "Audio Only"},
                 {value: "video", text: "YouTube Video"},
@@ -4181,14 +4110,6 @@
             });
             addSlider(videoSettings, "heightBigSlider", "Video Height:", "heightBigValue", settings.heightBig, "px", 300, 1200, 10);
             container1.appendChild(videoSettings);
-            
-            const sentenceVideoSettings = createElement("div", {
-                id: "sentenceVideoSettings",
-                style: `${settings.styleType[language] === "off" ? "" : "display: none"}`
-            });
-            addSlider(sentenceVideoSettings, "sentenceHeightSlider", "Sentence View Video Height:", "sentenceHeightValue", settings.sentenceHeight, "px", 300, 600, 10);
-            addCheckbox(sentenceVideoSettings, "sentenceAutoplayCheckbox", "Autoplay in Sentence View", settings.sentenceAutoplay);
-            container1.appendChild(sentenceVideoSettings);
             
             addSlider(container1, "widgetWidthSlider", "Widget Width:", "widgetWidthValue", settings.widgetWidth, "px", 330, 500, 10);
             
@@ -4267,7 +4188,6 @@
             widgetRadioGroup.style.whiteSpace = "nowrap";
             container1.appendChild(widgetSection);
             
-            addCheckbox(container1, "focusPlayingSentenceCheckbox", "Focus on Playing Sentence", settings.focusPlayingSentence);
             addCheckbox(container1, "focusSelectedTextCheckbox", "Focus on Selected Text", settings.focusSelectedText);
             addCheckbox(container1, "showMemoWidgetCheckbox", "Show Memo Widget", settings.showMemoWidget);
             addCheckbox(container1, "skipEndPageCheckbox", "Skip End Page", settings.skipEndPage);
@@ -5411,18 +5331,12 @@
                 
                 positionSettingsContainer.style.display = isVideoMode ? "block" : "none";
                 document.getElementById("videoSettings").style.display = isVideoMode && ["Top", "Bottom"].includes(position) ? "block" : "none";
-                document.getElementById("sentenceVideoSettings").style.display = baseType === "off" ? "block" : "none";
             }
             
             styleTypeSelector.addEventListener("change", handleStyleSelectorChange);
             videoPositionSelector.addEventListener("change", handleStyleSelectorChange);
             
             setupSlider("heightBigSlider", "heightBigValue", "heightBig", "px", "--height-big", (val) => `${val}px`);
-            setupSlider("sentenceHeightSlider", "sentenceHeightValue", "sentenceHeight", "px", "--sentence-height", (val) => `${val}px`);
-            const sentenceAutoplayCheckbox = document.getElementById("sentenceAutoplayCheckbox");
-            sentenceAutoplayCheckbox.addEventListener('change', (event) => {
-                settings.sentenceAutoplay = event.target.checked
-            });
             setupSlider("widgetWidthSlider", "widgetWidthValue", "widgetWidth", "px", "--widget-width", (val) => `${val}px`);
             setupSlider("fontSizeSlider", "fontSizeValue", "fontSize", "rem", "--font-size", (val) => `${val}rem`);
             setupSlider("annotationScaleSlider", "annotationScaleValue", "annotationScale", "%", "--annotation-size", (val) => `${val}%`);
@@ -5444,11 +5358,6 @@
                 settings.autoFinishing = event.target.checked
             });
             
-            const focusPlayingSentenceCheckbox = document.getElementById("focusPlayingSentenceCheckbox");
-            focusPlayingSentenceCheckbox.addEventListener('change', (event) => {
-                settings.focusPlayingSentence = event.target.checked
-            });
-            
             const focusSelectedTextCheckbox = document.getElementById("focusSelectedTextCheckbox");
             focusSelectedTextCheckbox.addEventListener('change', (event) => {
                 settings.focusSelectedText = event.target.checked
@@ -5463,11 +5372,6 @@
             const showTranslationCheckbox = document.getElementById("showTranslationCheckbox");
             showTranslationCheckbox.addEventListener('change', (event) => {
                 settings.showTranslation = event.target.checked
-            });
-            
-            const usePageModeCheckbox = document.getElementById("usePageModeCheckbox");
-            usePageModeCheckbox.addEventListener('change', (event) => {
-                settings.usePageMode = {...settings.usePageMode, [language]: event.target.checked};
             });
             
             const skipEndPageCheckbox = document.getElementById("skipEndPageCheckbox");
@@ -5855,8 +5759,6 @@
                 document.getElementById("styleTypeSelector").value = languageScopedDefaults.styleType;
                 document.getElementById("heightBigSlider").value = defaults.heightBig;
                 document.getElementById("heightBigValue").textContent = defaults.heightBig;
-                document.getElementById("sentenceHeightSlider").value = defaults.sentenceHeight;
-                document.getElementById("sentenceHeightValue").textContent = defaults.sentenceHeight;
                 document.getElementById("widgetWidthSlider").value = defaults.widgetWidth;
                 document.getElementById("widgetWidthValue").value = defaults.widgetWidth;
                 document.getElementById("fontSizeSlider").value = defaults.fontSize;
@@ -5871,26 +5773,21 @@
                 updateColorPickerBackgrounds(defaultColorSettings);
                 
                 document.getElementById("videoSettings").style.display = languageScopedDefaults.styleType === "video" ? "block" : "none";
-                document.getElementById("sentenceVideoSettings").style.display = languageScopedDefaults.styleType === "off" ? "block" : "none";
                 
                 document.documentElement.style.setProperty("--font-size", `${defaults.fontSize}rem`);
                 document.documentElement.style.setProperty("--annotation-size", `${languageScopedDefaults.annotationScale}%`);
                 document.documentElement.style.setProperty("--line-height", defaults.lineHeight);
                 document.documentElement.style.setProperty("--height-big", `${defaults.heightBig}px`);
-                document.documentElement.style.setProperty("--sentence-height", `${defaults.sentenceHeight}px`);
                 document.documentElement.style.setProperty("--custom-font", defaults.lineHeight);
-                document.getElementById("sentenceAutoplayCheckbox").checked = defaults.sentenceAutoplay;
                 document.documentElement.style.setProperty("--widget-width", `${defaults.widgetWidth}px`);
                 updateCssColorVariables(defaultColorSettings);
                 
                 document.getElementById("autoFinishingCheckbox").checked = defaults.autoFinishing;
-                document.getElementById("focusPlayingSentenceCheckbox").checked = defaults.focusPlayingSentence;
                 document.getElementById("focusSelectedTextCheckbox").checked = defaults.focusSelectedText;
                 document.querySelectorAll('input[name="hoverAnnotation"]').forEach((radio) => {
                     radio.checked = radio.value === defaults.hoverAnnotation;
                 });
                 document.getElementById("showTranslationCheckbox").checked = defaults.showTranslation;
-                document.getElementById("usePageModeCheckbox").checked = languageScopedDefaults.usePageMode;
                 document.getElementById("skipEndPageCheckbox").checked = defaults.skipEndPage;
                 document.querySelectorAll('input[name="relocateCaption"]').forEach((radio) => {
                     radio.checked = radio.value === defaults.relocateCaption;
@@ -9096,6 +8993,53 @@
     }
     
     async function setupReader() {
+        function isNativePageMode() {
+            return Boolean(document.querySelector(".poc-page"));
+        }
+
+        function isVideoLesson() {
+            return Boolean(document.querySelector('div[data-reader-video-stage="true"]'));
+        }
+
+        function isTextOnlyLesson() {
+            return !document.querySelector('div[aria-label="Lesson player"]') && !isVideoLesson();
+        }
+
+        function getLessonTitle() {
+            const titleElement = document.querySelector('header[data-site-header="true"] .truncate') || document.querySelector("h1.reader-heading");
+            return titleElement?.textContent.trim() || "";
+        }
+
+        let isReaderMouseDown = false;
+        window.addEventListener("mousedown", (event) => {
+            isReaderMouseDown = !!event.target.closest?.('[data-reader-mode-body="true"]');
+        }, true);
+        window.addEventListener("mouseup", () => {
+            isReaderMouseDown = false;
+            document.body.style.removeProperty("user-select");
+        }, true);
+
+        function focusReaderElement(targetElement) {
+            if (!targetElement || !targetElement.isConnected || targetElement.getClientRects().length === 0) return;
+            if (isNativePageMode()) return;
+            
+            const scrollTarget = document.querySelector('[data-reader-mode-body="true"] > div.overflow-y-auto');
+            if (!scrollTarget) return;
+
+            if (isReaderMouseDown) {
+                document.body.style.setProperty("user-select", "none");
+                window.getSelection()?.removeAllRanges();
+            }
+            
+            const targetRect = targetElement.getBoundingClientRect();
+            const containerRect = scrollTarget.getBoundingClientRect();
+            
+            const relativeTop = targetRect.top - containerRect.top + scrollTarget.scrollTop;
+            const containerHalfHeight = Math.floor(scrollTarget.offsetHeight / 2);
+            const targetScrollTop = relativeTop + Math.floor(targetElement.offsetHeight / 2) - containerHalfHeight;
+            smoothScrollTo(scrollTarget, targetScrollTop, 300);
+        }
+
         let audioPlayerObserver = null;
         
         async function attachAudioPlayerObserver() {
@@ -9378,7 +9322,6 @@
             }
             
             handleLocalVideoContainerVisibility();
-            handleYoutubeWireframeVisibility();
             
             baseCSS += layoutCSS;
             baseCSS += specificCSS;
@@ -9414,20 +9357,12 @@
                 
                 positionSettingsContainer.style.display = isVideoMode ? "block" : "none";
                 document.getElementById("videoSettings").style.display = isVideoMode && ["Top", "Bottom"].includes(position) ? "block" : "none";
-                document.getElementById("sentenceVideoSettings").style.display = baseType === "off" ? "block" : "none";
                 
                 applyStyles();
             }
             
             styleTypeSelector.addEventListener("change", handleReaderStyleTrigger);
             videoPositionSelector.addEventListener("change", handleReaderStyleTrigger);
-            
-            const usePageModeCheckbox = document.getElementById("usePageModeCheckbox");
-            if (usePageModeCheckbox) {
-                usePageModeCheckbox.addEventListener('change', () => {
-                    applyStyles();
-                });
-            }
             
             document.querySelectorAll('input[name="hoverAnnotation"]').forEach((radio) => {
                 radio.addEventListener("change", applyStyles);
@@ -9951,7 +9886,7 @@
         }
         
         function generateLayoutCSS() {
-            const isPageMode = settings.usePageMode[language];
+            const isPageMode = isNativePageMode();
             
             return `
             :root {
@@ -10894,7 +10829,6 @@
             :root {
                 --width-small: 440px;
                 --height-small: 260px;
-                --sentence-height: ${settings.sentenceHeight}px;
                 --right-pos: 0.5%;
                 --bottom-pos: 5.5%;
             }
@@ -11167,78 +11101,19 @@
             let llmApiKey = savedKeys[llmProvider];
             
             function setupSentenceFocus(readerContainer) {
-                function isPlayerPlaying() {
-                    const playButtonSelector = ".section--player > div:nth-child(1) > button";
-                    const svgEl = document.querySelector(`${playButtonSelector} > span > svg`);
-                    return svgEl?.classList.contains('svg-icon--pause') ?? false;
-                }
-                
-                function isLastPage() {
-                    const sentenceText = document.querySelector(".sentence-text");
-                    if (!sentenceText) return false;
-                    const curPage = sentenceText.className.match(/\bis-page-(\d+)\b/)?.[1];
-                    const totalPages = sentenceText.className.match(/\bhas-pages-(\d+)\b/)?.[1];
-                    return Boolean(curPage && totalPages && curPage === totalPages);
-                }
-
-                function checkAndAdvancePage(sentence) {
-                    const container = document.querySelector(".reader-container");
-                    if (!container) return;
-                    
-                    const allSentences = container.querySelectorAll(".sentence");
-                    const lastSentence = allSentences[allSentences.length - 1];
-                    if (sentence !== lastSentence) return;
-                    console.log('[PageAdvance]', 'Last sentence detected.');
-                    
-                    if (isLastPage()) {
-                        console.log('[PageAdvance]', 'Last page detected. Skip auto-advance.');
-                        return;
-                    }
-
-                    const playing = isPlayerPlaying();
-                    if (!playing) {
-                        console.log('[PageAdvance]', 'Player is paused — skip.');
-                        return;
-                    }
-                    
-                    const otherPlaying = container.querySelector(".sentence.is-playing");
-                    if (otherPlaying) {
-                        console.log('[PageAdvance]', 'Another sentence is playing — user went back, skip.');
-                        return;
-                    }
-                    
-                    console.log('[PageAdvance]', 'All conditions passed — advance to next page.');
-                    moveNextPage();
-                }
-                
                 let selectedFocusRafId = null;
                 
                 const observer = new MutationObserver((mutations) => {
                     mutations.forEach((mutation) => {
                         const target = mutation.target;
-                        const hadIsPlaying = mutation.oldValue?.split(' ').includes('is-playing');
-                        const hasIsPlaying = target.classList.contains('is-playing');
-                        
-                        if (hasIsPlaying && settings.focusPlayingSentence) {
-                            focusReaderElement(target, true);
-                            return;
-                        }
-                        
-                        if (hadIsPlaying && !hasIsPlaying && settings.usePageMode) {
-                            checkAndAdvancePage(target);
-                        }
-
-                        const hadIsSelected = mutation.oldValue?.split(' ').includes('is-selected');
-                        const hasIsSelected = target.classList.contains('is-selected');
+                        const hadIsSelected = mutation.oldValue?.split(' ').includes('selected');
+                        const hasIsSelected = target.classList.contains('selected');
                         
                         if (hasIsSelected && !hadIsSelected && settings.focusSelectedText) {
-                            if (document.querySelector(".is-playing") || isPlayerPlaying()) return;
-                            
                             if (selectedFocusRafId) cancelAnimationFrame(selectedFocusRafId);
                             selectedFocusRafId = requestAnimationFrame(() => {
                                 selectedFocusRafId = null;
-                                if (document.querySelector(".is-playing") || isPlayerPlaying()) return;
-                                focusReaderElement(target, false);
+                                focusReaderElement(target);
                             });
                         }
                     });
@@ -11535,9 +11410,6 @@
                         
                         try {
                             await getQuickSummary(llmProvider, llmApiKey, llmModel, contentToUse, isRegenerationMode);
-                            requestAnimationFrame(() => {
-                                checkAndAdjustReaderColumnOverflow();
-                            });
                         } catch (err) {
                             console.error("Regeneration failed:", err);
                         } finally {
@@ -11584,20 +11456,26 @@
                             event.stopPropagation();
                         }
                     }, {passive: false});
-                    section.parentNode.prepend(summaryElement);
+                    
+                    if (section.classList.contains("reader-body")) {
+                        section.prepend(summaryElement);
+                    } else if (section.parentNode) {
+                        section.parentNode.prepend(summaryElement);
+                    }
                 }
                 
                 quickSummary = "";
                 lessonSummary = "";
                 let cachedContextualContent = "";
-                const existingSection = readerContainer.querySelector('section');
+                const existingSection = readerContainer.querySelector('.reader-body');
                 if (existingSection) createAndPrependSummaryElement(existingSection);
                 
                 const observer = new MutationObserver((mutations) => {
                     for (const mutation of mutations) {
                         for (const node of mutation.addedNodes) {
-                            if (!(node.nodeType === Node.ELEMENT_NODE && node.matches('section'))) continue;
-                            createAndPrependSummaryElement(node);
+                            if (node.nodeType !== Node.ELEMENT_NODE) continue;
+                            const target = node.matches?.('.reader-body') ? node : node.querySelector?.('.reader-body');
+                            if (target) createAndPrependSummaryElement(target);
                         }
                     }
                 });
@@ -11637,9 +11515,6 @@
 
                 if (settings.prependSummary[language]) {
                     await getQuickSummary(llmProvider, llmApiKey, llmModel, cachedContextualContent);
-                    requestAnimationFrame(() => {
-                        checkAndAdjustReaderColumnOverflow();
-                    });
                 }
                 
                 getLessonSummary(llmProvider, llmApiKey, llmModel, cachedContextualContent)
@@ -11817,206 +11692,12 @@
                 });
             }
             
-            let hiddenReaderElements = [];
-            let isCheckingReaderOverflow = false;
-            let readerScrollRafId = null;
-
-            function restoreHiddenReaderElements(reason = "") {
-                if (hiddenReaderElements.length === 0) return;
-                const count = hiddenReaderElements.length;
-                const elementNames = hiddenReaderElements.map(({element}) => element.tagName.toLowerCase() + (element.className ? `.${element.className.replace(/\s+/g, '.')}` : "")).join(", ");
-                console.log('[ReaderOverflow]', `Restored ${count} hidden element(s) [${elementNames}]${reason ? ` (Trigger: ${reason})` : ""}.`);
-
-                const wrapper = document.querySelector(".reader-container-wrapper");
-                const container = document.querySelector(".reader-container");
-                let anchorElement = null;
-                let beforeAnchorTop = null;
-                let savedScrollTop = 0;
-
-                const shouldAnchorScroll = Boolean(wrapper && container && reason.startsWith("Scrolled to top"));
-                if (shouldAnchorScroll) {
-                    savedScrollTop = wrapper.scrollTop;
-                    const wrapperRect = wrapper.getBoundingClientRect();
-                    const visibleChildren = Array.from(container.children).filter(child => {
-                        return child.style.display !== "none" && window.getComputedStyle(child).display !== "none";
-                    });
-                    anchorElement = visibleChildren.find(child => {
-                        const rect = child.getBoundingClientRect();
-                        return rect.bottom > wrapperRect.top && rect.top < wrapperRect.bottom;
-                    }) || visibleChildren[0];
-                    if (anchorElement) {
-                        beforeAnchorTop = anchorElement.getBoundingClientRect().top;
-                    }
-                }
-
-                isCheckingReaderOverflow = true;
-                try {
-                    hiddenReaderElements.forEach(({element, previousDisplay}) => {
-                        if (previousDisplay) {
-                            element.style.display = previousDisplay;
-                        } else {
-                            element.style.removeProperty("display");
-                        }
-                    });
-
-                    if (shouldAnchorScroll && anchorElement && beforeAnchorTop !== null) {
-                        const shiftedAnchorTop = anchorElement.getBoundingClientRect().top;
-                        const deltaY = shiftedAnchorTop - beforeAnchorTop;
-                        const targetScrollTop = Math.max(0, savedScrollTop + deltaY);
-                        const newMaxScroll = wrapper.scrollHeight - wrapper.clientHeight;
-                        if (newMaxScroll > 0) {
-                            wrapper.scrollTop = Math.min(targetScrollTop, newMaxScroll);
-                        } else {
-                            wrapper.scrollTop = targetScrollTop;
-                        }
-
-                        if (activeVerticalScrollAnimation && !activeVerticalScrollAnimation.cancelled && activeVerticalScrollAnimation.element === wrapper) {
-                            activeVerticalScrollAnimation.start += deltaY;
-                            activeVerticalScrollAnimation.to += deltaY;
-                            if (newMaxScroll > 0) {
-                                activeVerticalScrollAnimation.to = Math.min(Math.max(0, activeVerticalScrollAnimation.to), newMaxScroll);
-                            }
-                        }
-                    }
-                } finally {
-                    hiddenReaderElements = [];
-                    requestAnimationFrame(() => {
-                        isCheckingReaderOverflow = false;
-                    });
-                }
-            }
-
-            function isReaderMultiColumn(container, wrapper) {
-                const thresholdWidth = wrapper.clientWidth * 1.2;
-                const containerWidth = Math.max(container.scrollWidth, container.offsetWidth);
-                return containerWidth > thresholdWidth;
-            }
-
-            function checkAndAdjustReaderColumnOverflow() {
-                if (isCheckingReaderOverflow) return;
-
-                const isPageMode = settings.usePageMode[language];
-                if (!isPageMode) {
-                    restoreHiddenReaderElements("Page mode disabled");
-                    return;
-                }
-
-                const wrapper = document.querySelector(".reader-container-wrapper");
-                const container = document.querySelector(".reader-container");
-                if (!wrapper || !container) return;
-
-                const maxScroll = wrapper.scrollHeight - wrapper.clientHeight;
-                if (maxScroll <= 50) {
-                    if (hiddenReaderElements.length > 0) {
-                        restoreHiddenReaderElements("No vertical scroll available");
-                    }
-                    return;
-                }
-
-                const scrollTop = wrapper.scrollTop;
-                const scrollRatio = maxScroll > 0 ? scrollTop / maxScroll : 0;
-                const distFromBottom = maxScroll - scrollTop;
-
-                if (scrollRatio <= 0.10 || scrollTop <= 50) {
-                    if (hiddenReaderElements.length > 0) {
-                        restoreHiddenReaderElements(`Scrolled to top (ratio: ${(scrollRatio * 100).toFixed(1)}% <= 10%)`);
-                    }
-                    return;
-                }
-
-                const isNearBottom = scrollRatio >= 0.90 || distFromBottom <= 50;
-                if (isNearBottom) {
-                    const MAX_HIDDEN = 10;
-                    if (hiddenReaderElements.length >= MAX_HIDDEN) return;
-
-                    isCheckingReaderOverflow = true;
-                    const savedScrollTop = wrapper.scrollTop;
-                    const wrapperRect = wrapper.getBoundingClientRect();
-
-                    // Find a visible element to track visual jump
-                    const candidateChildren = Array.from(container.children).filter(child => {
-                        return child.style.display !== "none" && window.getComputedStyle(child).display !== "none";
-                    });
-                    const anchorElement = candidateChildren.find(child => {
-                        const rect = child.getBoundingClientRect();
-                        return rect.bottom > wrapperRect.top && rect.top < wrapperRect.bottom;
-                    }) || candidateChildren[candidateChildren.length - 1];
-                    const beforeAnchorTop = anchorElement ? anchorElement.getBoundingClientRect().top : null;
-
-                    try {
-                        if (!isReaderMultiColumn(container, wrapper)) return;
-
-                        const children = Array.from(container.children);
-                        for (const child of children) {
-                            if (hiddenReaderElements.length >= MAX_HIDDEN) {
-                                console.warn('[ReaderOverflow]', `Reached maximum hidden elements limit (${MAX_HIDDEN}).`);
-                                break;
-                            }
-                            if (child.style.display === "none" || window.getComputedStyle(child).display === "none") continue;
-
-                            hiddenReaderElements.push({
-                                element: child,
-                                previousDisplay: child.style.display
-                            });
-                            child.style.display = "none";
-
-                            if (!isReaderMultiColumn(container, wrapper)) {
-                                break;
-                            }
-                        }
-
-                        if (hiddenReaderElements.length > 0) {
-                            const elementNames = hiddenReaderElements.map(({element}) => element.tagName.toLowerCase() + (element.className ? `.${element.className.replace(/\s+/g, '.')}` : "")).join(", ");
-                            console.log('[ReaderOverflow]', `Hidden ${hiddenReaderElements.length} element(s) [${elementNames}] to resolve multi-column layout.`);
-                        }
-
-                        const shiftedAnchorTop = anchorElement ? anchorElement.getBoundingClientRect().top : null;
-                        const deltaY = (beforeAnchorTop !== null && shiftedAnchorTop !== null) ? (shiftedAnchorTop - beforeAnchorTop) : 0;
-
-                        const targetScrollTop = Math.max(0, savedScrollTop + deltaY);
-                        const newMaxScroll = wrapper.scrollHeight - wrapper.clientHeight;
-                        wrapper.scrollTop = newMaxScroll > 0 ? Math.min(targetScrollTop, newMaxScroll) : targetScrollTop;
-
-                        if (activeVerticalScrollAnimation && !activeVerticalScrollAnimation.cancelled && activeVerticalScrollAnimation.element === wrapper) {
-                            activeVerticalScrollAnimation.start += deltaY;
-                            activeVerticalScrollAnimation.to += deltaY;
-                            if (newMaxScroll > 0) {
-                                activeVerticalScrollAnimation.to = Math.min(Math.max(0, activeVerticalScrollAnimation.to), newMaxScroll);
-                            }
-                        }
-                    } finally {
-                        requestAnimationFrame(() => {
-                            isCheckingReaderOverflow = false;
-                        });
-                    }
-                }
-            }
-
-            function handleReaderWrapperScroll() {
-                if (readerScrollRafId) return;
-                readerScrollRafId = requestAnimationFrame(() => {
-                    readerScrollRafId = null;
-                    checkAndAdjustReaderColumnOverflow();
-                });
-            }
-
             function resetScroll() {
-                restoreHiddenReaderElements("resetScroll");
-                const performReset = () => {
-                    const wrapper = document.querySelector(".reader-container-wrapper");
-                    const container = document.querySelector(".reader-container");
-                    if (wrapper) {
-                        wrapper.scrollTop = 0;
-                        wrapper.scrollLeft = 0;
-                    }
-                    if (container) {
-                        container.scrollTop = 0;
-                        container.scrollLeft = 0;
-                    }
-                };
-                performReset();
-                setTimeout(performReset, 50);
-                setTimeout(performReset, 150);
+                const scrollTarget = document.querySelector('[data-reader-mode-body="true"] > div.overflow-y-auto');
+                if (scrollTarget) {
+                    scrollTarget.scrollTop = 0;
+                    scrollTarget.scrollLeft = 0;
+                }
             }
             function getFinishPageButton(action) {
                 if (action === "back") {
@@ -12083,7 +11764,6 @@
             }
             
             async function handleLoadedContent(node) {
-                restoreHiddenReaderElements("handleLoadedContent");
                 resetScroll();
                 
                 currentGeminiCacheName = null;
@@ -12093,88 +11773,73 @@
                 
                 resetLocalVideo();
                 handleLocalVideoContainerVisibility();
-                handleYoutubeWireframeVisibility();
                 attachAudioPlayerObserver();
                 setupLessonCompletionObserver();
                 
-                const isPageMode = settings.usePageMode[language];
-                if (isPageMode) {
-                    const readerContainer = node.querySelector(".reader-container");
-                    readerContainer?.addEventListener("wheel", (event) => {
-                        const wrapper = readerContainer.closest(".reader-container-wrapper");
-                        if (wrapper) {
-                            wrapper.scrollTop += event.deltaY * 0.3;
-                            event.preventDefault();
-                            event.stopPropagation();
-                        }
-                    }, {passive: false});
-
-                    const wrapper = readerContainer?.closest(".reader-container-wrapper") || document.querySelector(".reader-container-wrapper");
-                    if (wrapper && !wrapper.hasReaderScrollListener) {
-                        wrapper.hasReaderScrollListener = true;
-                        wrapper.addEventListener("scroll", handleReaderWrapperScroll, {passive: true});
-                    }
-                }
-                
                 preventHorizontalScroll();
                 
-                const scrollTarget = isPageMode ? ".reader-container-wrapper" : ".reader-container";
-                changeScrollAmount(scrollTarget, 0.3);
+                changeScrollAmount('[data-reader-mode-body="true"] > div.overflow-y-auto', 0.3);
                 
                 setupSentenceFocus(node);
                 
                 if (settings.showTranslation) showTranslation();
                 changeTranslationColor(node);
                 
-                await waitForElement('.sentence-text p', 10000);
-                if (settings.usePageMode) {
-                    const lessonLanguage = getLessonLanguage();
-                    const lessonId = getLessonId();
-                    if (lessonLanguage && lessonId) {
-                        getLessonSentences(lessonLanguage, lessonId).catch(() => {});
-                    }
+                const lessonLanguage = getLessonLanguage();
+                const lessonId = getLessonId();
+                if (lessonLanguage && lessonId) {
+                    getLessonSentences(lessonLanguage, lessonId).catch(() => {});
                 }
                 await generateLessonSummary(node);
             }
             
             setupLessonCompletionObserver();
-
-            if (!window.hasReaderResizeListener) {
-                window.hasReaderResizeListener = true;
-                window.addEventListener("resize", handleReaderWrapperScroll, {passive: true});
-            }
             
-            const observer = new MutationObserver(function (mutations) {
-                mutations.forEach((mutation) => {
-                    if (mutation.type === "childList") {
-                        mutation.addedNodes.forEach((node) => {
-                            if (node.nodeType !== Node.ELEMENT_NODE) return;
-                            if (!node.matches(".loadedContent")) return;
-                            handleLoadedContent(node);
-                        });
-                    } else if (mutation.type === "attributes" && mutation.attributeName === "class") {
-                        const oldClass = mutation.oldValue || "";
-                        const newClass = mutation.target.className || "";
-                        const oldPage = oldClass.match(/\bis-page-(\d+)\b/)?.[1];
-                        const newPage = newClass.match(/\bis-page-(\d+)\b/)?.[1];
-                        
-                        if (newPage && oldPage !== newPage) {
-                            document.querySelector(".quick-summary")?.remove();
-                            restoreHiddenReaderElements(`Page change: ${oldPage} -> ${newPage}`);
-                            resetScroll();
+            const readerBodyContainer = await waitForElement('div[data-reader-mode-body="true"]', 10000);
+            if (readerBodyContainer) {
+                const targetNode = readerBodyContainer.querySelector('.reader-body, .poc-page') || readerBodyContainer;
+                handleLoadedContent(targetNode);
+                
+                const progressSlider = document.querySelector('input[type="range"][aria-label="Lesson progress"]');
+                if (progressSlider) {
+                    progressSlider.addEventListener('input', () => {
+                        document.querySelector(".quick-summary")?.remove();
+                        resetScroll();
+                    });
+                }
+                
+                const observer = new MutationObserver((mutations) => {
+                    for (const mutation of mutations) {
+                        if (mutation.type === "childList") {
+                            for (const node of mutation.addedNodes) {
+                                if (node.nodeType !== Node.ELEMENT_NODE) continue;
+                                if (node.matches?.('.reader-body, .poc-page')) {
+                                    handleLoadedContent(node);
+                                    return;
+                                }
+                            }
+                        } else if (mutation.type === "attributes" && mutation.attributeName === "class") {
+                            const oldClass = mutation.oldValue || "";
+                            const newClass = mutation.target.className || "";
+                            const oldPage = oldClass.match(/\bis-page-(\d+)\b/)?.[1];
+                            const newPage = newClass.match(/\bis-page-(\d+)\b/)?.[1];
+                            
+                            if (newPage && oldPage !== newPage) {
+                                document.querySelector(".quick-summary")?.remove();
+                                resetScroll();
+                            }
                         }
                     }
                 });
-            });
-            
-            const sentenceText = await waitForElement('.sentence-text', 10000);
-            sentenceText.querySelectorAll(".loadedContent").forEach(handleLoadedContent);
-            observer.observe(sentenceText, {
-                childList: true,
-                attributes: true,
-                attributeFilter: ['class'],
-                attributeOldValue: true
-            });
+                
+                observer.observe(readerBodyContainer, {
+                    childList: true,
+                    subtree: true,
+                    attributes: true,
+                    attributeFilter: ['class'],
+                    attributeOldValue: true
+                });
+            }
         }
         
         async function createGeminiCache(provider, apiKey, model, summaryHTML, sysPlain, sysWord) {
@@ -12422,7 +12087,7 @@
                     const inPageData = getInPageSelectedWithContext(targetSideWords, targetSideLength);
                     const effectiveInput = inPageData.input || rawSelectedText;
                     
-                    if (!settings.usePageMode) {
+                    if (!isNativePageMode()) {
                         return inPageData.context ? inPageData : {input: effectiveInput, context: ""};
                     }
                     
@@ -13780,24 +13445,6 @@
             observer.observe(lessonReader, {childList: true});
         }
         
-        async function AutoplayInSentenceView() {
-            const sentenceMode = await waitForElement("#lesson-reader.is-sentence-mode", 10000);
-            if (!sentenceMode) return;
-            
-            for (const selector of ['.reader-component > .nav--right > a', '.reader-component > .nav--left > a']) {
-                const button = await waitForElement(selector, 5000);
-                
-                button.addEventListener('click', function (event) {
-                    if (!settings.sentenceAutoplay) return;
-                    
-                    setTimeout(() => {
-                        document.dispatchEvent(new KeyboardEvent('keydown', {key: 'a'}));
-                        document.dispatchEvent(new KeyboardEvent('keydown', {key: 'T', shiftKey: true}));
-                    }, 1500);
-                }, true);
-            }
-        }
-        
         let styleElement = null;
         let lessonSummary = "";
         let quickSummary = "";
@@ -14285,9 +13932,7 @@
         setupYoutubePlayerCustomization();
         setupReaderContainer();
         setupLLMs();
-        AutoplayInSentenceView();
         handleLocalVideoContainerVisibility();
-        handleYoutubeWireframeVisibility();
     }
     
     async function setupCourse() {
