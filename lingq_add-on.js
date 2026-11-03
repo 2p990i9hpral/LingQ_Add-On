@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      19.0.4
+// @version      19.0.5
 // @license      GPL-3.0-or-later
 // @grant       GM_setValue
 // @grant       GM_getValue
@@ -65,6 +65,11 @@
         captionFontsize: 1.1,
         widgetVerticalAlign: 'flex-start',
         showMemoWidget: false,
+        hidePopularMeanings: false,
+        hideDictionaries: false,
+        hideSentenceSection: false,
+        hideReaderPopup: false,
+        hideLynxUI: false,
         
         keyboardShortcut: false,
         skipDuration: 5,
@@ -3182,7 +3187,7 @@
             const popupLayout = createElement("div");
             const columns = createElement("div", {style: "display: flex; flex-direction: row;"});
             
-            const container1 = createElement("div", {style: "padding: 5px; width: 350px;"});
+            const container1 = createElement("div", {style: "padding: 5px; width: 375px;"});
             
             const rawBaseType = settings.styleType[language];
             const baseType = (rawBaseType === "audio" || rawBaseType === "video" || !rawBaseType) ? "default" : rawBaseType;
@@ -3283,22 +3288,61 @@
             ], settings.relocateCaption);
             container1.appendChild(videoCaptionSection);
             
+            const widgetTitleRow = createElement("div", {className: "popup-row"});
+            widgetTitleRow.appendChild(createElement("label", {textContent: "Widget"}));
+            container1.appendChild(widgetTitleRow);
+
             const widgetSection = createElement("div", {className: "popup-section"});
-            const widgetRadioGroup = addRadioGroup(widgetSection, "widgetVerticalAlign", "Widget:", [
+
+            const widgetRadioGroup = addRadioGroup(widgetSection, "widgetVerticalAlign", "Align:", [
                 {value: "flex-start", text: "Top"},
                 {value: "center", text: "Center"},
                 {value: "flex-end", text: "Bottom"}
             ], settings.widgetVerticalAlign);
             widgetRadioGroup.style.whiteSpace = "nowrap";
+
+            const widgetHideRow = createElement("div", {
+                className: "popup-row",
+                style: "display: flex; align-items: center; justify-content: space-between; margin-top: 6px; white-space: nowrap;"
+            });
+
+            widgetHideRow.appendChild(createElement("label", {
+                textContent: "Hide:",
+                style: "margin-right: 10px;"
+            }));
+
+            const widgetCheckboxesGroup = createElement("div", {
+                style: "display: flex; flex-grow: 1; justify-content: space-between; align-items: center;"
+            });
+
+            [
+                {id: "hidePopularMeaningsCheckbox", text: "Meanings", checked: settings.hidePopularMeanings},
+                {id: "hideDictionariesCheckbox", text: "Dictionaries", checked: settings.hideDictionaries},
+                {id: "hideSentenceSectionCheckbox", text: "Sentence", checked: settings.hideSentenceSection}
+            ].forEach(({id, text, checked}) => {
+                const itemLabel = createElement("label", {
+                    htmlFor: id,
+                    style: "display: inline-flex; align-items: center; gap: 4px; cursor: pointer;"
+                });
+                const cb = createElement("input", {type: "checkbox", id, checked});
+                itemLabel.appendChild(document.createTextNode(text));
+                itemLabel.appendChild(cb);
+                widgetCheckboxesGroup.appendChild(itemLabel);
+            });
+
+            widgetHideRow.appendChild(widgetCheckboxesGroup);
+            widgetSection.appendChild(widgetHideRow);
             container1.appendChild(widgetSection);
-            
+
+            addCheckbox(container1, "hideReaderPopupCheckbox", "Hide Meaning Popup", settings.hideReaderPopup);
+            addCheckbox(container1, "hideLynxUICheckbox", "Hide Lynx AI UI", settings.hideLynxUI);
             addCheckbox(container1, "focusSelectedTextCheckbox", "Focus on Selected Text", settings.focusSelectedText);
             addCheckbox(container1, "showMemoWidgetCheckbox", "Show Memo Widget", settings.showMemoWidget);
             addCheckbox(container1, "skipEndPageCheckbox", "Skip End Page", settings.skipEndPage);
             
             columns.appendChild(container1);
             
-            const container2 = createElement("div", {style: "padding: 10px; width: 350px;"});
+            const container2 = createElement("div", {style: "padding: 10px; width: 375px;"});
             
             addCheckbox(container2, "keyboardShortcutCheckbox", "Enable the Keyboard Shortcuts", settings.keyboardShortcut);
             
@@ -4488,6 +4532,18 @@
             const showMemoWidgetCheckbox = document.getElementById("showMemoWidgetCheckbox");
             showMemoWidgetCheckbox.addEventListener('change', (event) => {
                 settings.showMemoWidget = event.target.checked;
+            });
+
+            [
+                {id: "hidePopularMeaningsCheckbox", key: "hidePopularMeanings"},
+                {id: "hideDictionariesCheckbox", key: "hideDictionaries"},
+                {id: "hideSentenceSectionCheckbox", key: "hideSentenceSection"},
+                {id: "hideReaderPopupCheckbox", key: "hideReaderPopup"},
+                {id: "hideLynxUICheckbox", key: "hideLynxUI"}
+            ].forEach(({id, key}) => {
+                document.getElementById(id)?.addEventListener("change", (event) => {
+                    settings[key] = event.target.checked;
+                });
             });
             
             function setupShortcutInput(inputId, settingKey) {
@@ -9621,11 +9677,7 @@
             } else if (currentStyle === "localVideo") {
                 specificCSS = generateLocalVideoCSS(settings.videoPosition[language]);
             } else {
-                if (isVideoLesson()) {
-                    specificCSS = generateVideoCSS(settings.videoPosition[language]);
-                } else {
-                    specificCSS = generateAudioCSS();
-                }
+                specificCSS = generateAudioCSS() + generateVideoCSS(settings.videoPosition[language]);
             }
             
             handleLocalVideoContainerVisibility();
@@ -9637,6 +9689,49 @@
                 [id$="-content-lessonCompleted"] > div.pb-24 > div:nth-child(1) > div.gap-2,
                 [id$="-content-lessonCompleted"] > div.pb-24 > :is(div:nth-child(2), div:nth-child(3)),
                 [id$="-content-lessonCompleted"] > div.pb-24 > div:nth-child(4) > div:not(:nth-child(4)) {
+                    display: none !important;
+                }
+                `;
+            }
+            if (settings.hidePopularMeanings) {
+                baseCSS += `
+                div[data-word-widget] ul:has(button[aria-label^="Add this meaning:"]),
+                div[data-word-widget] div:has(> button[aria-label^="Add this meaning:"]),
+                div[data-word-widget] div:has(> div > button[aria-label="Report"]),
+                div[data-word-widget] div[data-slot="separator"]:has(~ div > button[aria-label^="Add this meaning:"]) {
+                    display: none !important;
+                }
+                `;
+            }
+            if (settings.hideDictionaries) {
+                baseCSS += `
+                div[data-word-widget] div:has(> button[aria-label="Edit dictionaries"]) {
+                    display: none !important;
+                }
+                `;
+            }
+            if (settings.hideSentenceSection) {
+                baseCSS += `
+                div[data-word-widget] section:has(> div > button[aria-label="Open Sentence"]) {
+                    display: none !important;
+                }
+                `;
+            }
+            if (settings.hideReaderPopup) {
+                baseCSS += `
+                div[data-reader-popup="true"] {
+                    display: none !important;
+                }
+                `;
+            }
+            if (settings.hideLynxUI) {
+                baseCSS += `
+                button[data-reader-lynx-entry="true"],
+                button[aria-label="Ask Lynx AI"],
+                button[data-reader-lynx-entry="true"] + span[class*="w-px"],
+                button[aria-label="Ask Lynx AI"] + span[class*="w-px"],
+                div[role="menuitem"]:has(> svg path[d^="M22.5.9"]),
+                li[data-slot="sidebar-menu-item"]:has(> a[href*="/lynx"]) {
                     display: none !important;
                 }
                 `;
@@ -9681,6 +9776,17 @@
             
             document.querySelectorAll('input[name="widgetVerticalAlign"]').forEach((radio) => {
                 radio.addEventListener("change", applyStyles);
+            });
+
+            [
+                "skipEndPageCheckbox",
+                "hidePopularMeaningsCheckbox",
+                "hideDictionariesCheckbox",
+                "hideSentenceSectionCheckbox",
+                "hideReaderPopupCheckbox",
+                "hideLynxUICheckbox"
+            ].forEach((id) => {
+                document.getElementById(id)?.addEventListener("change", applyStyles);
             });
         }
         
@@ -10442,7 +10548,7 @@
             
             if (position === "Top") {
                 layoutCSS += `
-                    div.relative.flex.min-h-0.flex-1.flex-col > .contents {
+                    div.relative.flex.min-h-0.flex-1.flex-col > .contents:has([data-reader-video-stage="true"]) {
                         display: flex !important;
                         flex-direction: column !important;
                         flex: 1 1 0% !important;
@@ -10466,21 +10572,21 @@
                         background: #000 !important;
                         border-radius: 0.75rem !important;
                     }
-                    div[data-reader-mode-body="true"] {
+                    div.contents:has([data-reader-video-stage="true"]) > div[data-reader-mode-body="true"] {
                         order: 2 !important;
                         flex: 1 1 0% !important;
                         min-height: 0 !important;
                         height: 100% !important;
                         overflow: hidden !important;
                     }
-                    div[data-reader-mode-body="true"] > div.overflow-y-auto {
+                    div.contents:has([data-reader-video-stage="true"]) > div[data-reader-mode-body="true"] > div.overflow-y-auto {
                         height: 100% !important;
                         overflow-y: auto !important;
                     }
                 `;
             } else if (position === "Bottom") {
                 layoutCSS += `
-                    div.relative.flex.min-h-0.flex-1.flex-col > .contents {
+                    div.relative.flex.min-h-0.flex-1.flex-col > .contents:has([data-reader-video-stage="true"]) {
                         display: flex !important;
                         flex-direction: column !important;
                         flex: 1 1 0% !important;
@@ -10488,14 +10594,14 @@
                         height: 100% !important;
                         overflow: hidden !important;
                     }
-                    div[data-reader-mode-body="true"] {
+                    div.contents:has([data-reader-video-stage="true"]) > div[data-reader-mode-body="true"] {
                         order: 1 !important;
                         flex: 1 1 0% !important;
                         min-height: 0 !important;
                         height: 100% !important;
                         overflow: hidden !important;
                     }
-                    div[data-reader-mode-body="true"] > div.overflow-y-auto {
+                    div.contents:has([data-reader-video-stage="true"]) > div[data-reader-mode-body="true"] > div.overflow-y-auto {
                         height: 100% !important;
                         overflow-y: auto !important;
                     }
@@ -10518,7 +10624,7 @@
                 `;
             } else if (position === "Left") {
                 layoutCSS += `
-                    div.relative.flex.min-h-0.flex-1.flex-col > .contents {
+                    div.relative.flex.min-h-0.flex-1.flex-col > .contents:has([data-reader-video-stage="true"]) {
                         display: grid !important;
                         grid-template-columns: 1fr 1fr !important;
                         gap: 1.5rem !important;
@@ -10546,8 +10652,8 @@
                         background: #000 !important;
                         border-radius: 0.75rem !important;
                     }
-                    div.contents > div[data-reader-mode-body="true"],
-                    .grid.grid-cols-2 > div[data-reader-mode-body="true"] {
+                    div.contents:has([data-reader-video-stage="true"]) > div[data-reader-mode-body="true"],
+                    .grid.grid-cols-2:has([data-reader-video-stage="true"]) > div[data-reader-mode-body="true"] {
                         order: 2 !important;
                         grid-column: 2 !important;
                         min-width: 0 !important;
@@ -10555,14 +10661,15 @@
                         height: 100% !important;
                         overflow: hidden !important;
                     }
-                    div[data-reader-mode-body="true"] > div.overflow-y-auto {
+                    div.contents:has([data-reader-video-stage="true"]) > div[data-reader-mode-body="true"] > div.overflow-y-auto,
+                    .grid.grid-cols-2:has([data-reader-video-stage="true"]) > div[data-reader-mode-body="true"] > div.overflow-y-auto {
                         height: 100% !important;
                         overflow-y: auto !important;
                     }
                 `;
             } else if (position === "Right") {
                 layoutCSS += `
-                    div.relative.flex.min-h-0.flex-1.flex-col > .contents {
+                    div.relative.flex.min-h-0.flex-1.flex-col > .contents:has([data-reader-video-stage="true"]) {
                         display: grid !important;
                         grid-template-columns: 1fr 1fr !important;
                         gap: 1.5rem !important;
@@ -10572,8 +10679,8 @@
                         flex: 1 1 0% !important;
                         overflow: hidden !important;
                     }
-                    div.contents > div[data-reader-mode-body="true"],
-                    .grid.grid-cols-2 > div[data-reader-mode-body="true"] {
+                    div.contents:has([data-reader-video-stage="true"]) > div[data-reader-mode-body="true"],
+                    .grid.grid-cols-2:has([data-reader-video-stage="true"]) > div[data-reader-mode-body="true"] {
                         order: 1 !important;
                         grid-column: 1 !important;
                         min-width: 0 !important;
@@ -10581,7 +10688,8 @@
                         height: 100% !important;
                         overflow: hidden !important;
                     }
-                    div[data-reader-mode-body="true"] > div.overflow-y-auto {
+                    div.contents:has([data-reader-video-stage="true"]) > div[data-reader-mode-body="true"] > div.overflow-y-auto,
+                    .grid.grid-cols-2:has([data-reader-video-stage="true"]) > div[data-reader-mode-body="true"] > div.overflow-y-auto {
                         height: 100% !important;
                         overflow-y: auto !important;
                     }
@@ -13731,6 +13839,8 @@
         });
         
         ensureLanguageSettings(language);
+        setupStyleEventListeners();
+        applyStyles();
         
         const DictionaryLocalePairs = await getDictionaryLocalePairs();
         const lessonLanguage = DictionaryLocalePairs[language];
@@ -14199,8 +14309,6 @@
         
         `;
         
-        setupStyleEventListeners();
-        applyStyles();
         setupKeyboardShortcuts();
         setupYoutubePlayerCustomization();
         setupReaderContainer();
@@ -14895,10 +15003,15 @@
         const updateAuth = (session) => {
             centralUserId = session?.user?.id ?? null;
             centralUserEmail = session?.user?.email ?? "";
+            const emailRow = document.getElementById("centralEmailRow");
+            const loggedInRow = document.getElementById("centralLoggedInRow");
+            const emailDisplay = document.getElementById("centralEmailDisplay");
+            if (emailRow) emailRow.style.display = centralUserId ? "none" : "flex";
+            if (loggedInRow) loggedInRow.style.display = centralUserId ? "flex" : "none";
+            if (emailDisplay) emailDisplay.textContent = centralUserEmail ? `Logged in: ${centralUserEmail}` : "";
         };
         centralClient.auth.onAuthStateChange((_event, session) => updateAuth(session));
-        const {data: {session}} = await centralClient.auth.getSession();
-        updateAuth(session);
+        centralClient.auth.getSession().then(({data: {session}}) => updateAuth(session));
         
         try {
             supabaseClient = createClient(settings.dbUrl, settings.dbKey);
