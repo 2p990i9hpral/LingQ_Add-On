@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      19.0.8
+// @version      19.0.9
 // @license      GPL-3.0-or-later
 // @grant       GM_setValue
 // @grant       GM_getValue
@@ -9663,6 +9663,48 @@
             };
         }
         
+        async function syncLingQTheme(colorMode = settings.colorMode) {
+            const targetTheme = colorMode === "dark" ? "dark" : "light";
+            const currentTheme = document.body.getAttribute("data-reader-theme");
+            if (currentTheme === targetTheme) return;
+
+            const themeButton = document.querySelector('button[aria-label="Theme and font"]') ||
+                                document.querySelector('button:has(> svg.lucide-case-sensitive)');
+            if (!themeButton) return;
+
+            const wasOpen = themeButton.getAttribute("data-state") === "open";
+            if (!wasOpen) {
+                themeButton.click();
+            }
+
+            const targetSelector = targetTheme === "light"
+                ? 'div[data-slot="popover-content"] button[aria-label="Light"], div[data-slot="popover-content"] fieldset button:nth-of-type(1)'
+                : 'div[data-slot="popover-content"] button[aria-label="Dark"], div[data-slot="popover-content"] fieldset button:nth-of-type(2)';
+
+            const optionButton = await waitForElement(targetSelector, 1000);
+            if (optionButton) {
+                optionButton.click();
+            }
+
+            if (!wasOpen) {
+                setTimeout(() => {
+                    if (themeButton.getAttribute("data-state") === "open") {
+                        themeButton.click();
+                    }
+                    const escEvent = new KeyboardEvent("keydown", {
+                        key: "Escape",
+                        code: "Escape",
+                        keyCode: 27,
+                        which: 27,
+                        bubbles: true,
+                        cancelable: true
+                    });
+                    window.dispatchEvent(escEvent);
+                    document.dispatchEvent(escEvent);
+                }, 50);
+            }
+        }
+        
         function applyStyles() {
             const colorSettings = getColorSettings(settings.colorMode);
             
@@ -9740,6 +9782,7 @@
             document.querySelector("head").appendChild(styleElement);
             
             applyCustomFont(settings.customFont[language]);
+            syncLingQTheme(settings.colorMode);
         }
         
         function setupStyleEventListeners() {
@@ -14233,10 +14276,28 @@
         
         `;
         
+        function setupPrintLinkHandler() {
+            const handlePrintInteraction = (event) => {
+                const printLink = event.target.closest?.('a[href*="/print/"]');
+                if (printLink) {
+                    const currentLessonId = getLessonId();
+                    if (currentLessonId) {
+                        printLink.removeAttribute('rel');
+                        const url = new URL(printLink.href, window.location.origin);
+                        url.searchParams.set('lesson_id', currentLessonId);
+                        printLink.href = url.toString();
+                    }
+                }
+            };
+            document.addEventListener('pointerdown', handlePrintInteraction, true);
+            document.addEventListener('click', handlePrintInteraction, true);
+        }
+        
         setupKeyboardShortcuts();
         setupReaderContainer();
         setupLLMs();
         handleLocalVideoContainerVisibility();
+        setupPrintLinkHandler();
     }
     
     async function setupCourse() {
@@ -14673,40 +14734,61 @@
     }
     
     async function setupPrintPage() {
+        const urlParams = new URLSearchParams(window.location.search);
         const lessonURL = document.referrer;
-        const lessonId = getLessonId(lessonURL);
-        const lessonLanguage = getLessonLanguage(lessonURL);
+        const lessonId = urlParams.get("lesson_id") ||
+                         (lessonURL.includes("/reader/") ? getLessonId(lessonURL) : null);
+        const lessonLanguage = getLessonLanguage(lessonURL) || getLessonLanguage(document.URL) || "en";
+        if (!lessonId) {
+            console.warn("[Print Page] Lesson ID could not be determined:", { lessonURL, search: window.location.search });
+            return;
+        }
+
         const wordsURL = `https://www.lingq.com/api/v3/${lessonLanguage}/lessons/${lessonId}/words`;
-        
-        const response = await fetch(wordsURL);
-        const data = await response.json();
-        
-        const cardsList = []
+        let data = null;
+        try {
+            const response = await fetch(wordsURL, { credentials: 'include' });
+            if (!response.ok) {
+                console.error("[Print Page] Failed to fetch lesson words:", response.status, response.statusText);
+                return;
+            }
+            data = await response.json();
+        } catch (err) {
+            console.error("[Print Page] Failed to fetch lesson words:", err);
+            return;
+        }
+
+        const cards = data?.cards ? Object.values(data.cards) : [];
         const seenTerms = new Set();
-        
-        Object.values(data.cards)
-            .forEach(card => {
-                if (card.status < 3) {
-                    const term = card.term;
-                    
-                    if (!seenTerms.has(term)) {
-                        seenTerms.add(term);
-                        cardsList.push({
-                            word: term,
-                            context: card.fragment.replaceAll(term, `<b>${term}</b>`),
-                            notes: card.notes,
-                            status: card.status,
-                            meaning: card.hints?.[0]?.text ?? ""
-                        });
-                    }
+        const cardsList = [];
+
+        cards.forEach((card) => {
+            if (card.status < 3) {
+                const term = card.term;
+                if (term && !seenTerms.has(term)) {
+                    seenTerms.add(term);
+                    const fragmentText = card.fragment || "";
+                    cardsList.push({
+                        word: term,
+                        context: fragmentText.replaceAll(term, `<b>${term}</b>`),
+                        notes: card.notes || "",
+                        status: card.status,
+                        meaning: card.hints?.[0]?.text ?? ""
+                    });
                 }
-            });
-        
-        cardsList.sort((a, b) => b.word.length - a.word.length);
-        const escapedWords = cardsList.map((card) => card.word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
-        const highlightRegex = new RegExp(`(?<=^|[^\\p{L}\\p{N}]|\\d)(${escapedWords.join('|')})(?=$|[^\\p{L}\\p{N}]|\\d)`, 'giu');
+            }
+        });
+
+        cardsList.sort((a, b) => a.word.localeCompare(b.word));
+        const escapedWords = [...cardsList]
+            .sort((a, b) => b.word.length - a.word.length)
+            .map((card) => card.word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+        const highlightRegex = escapedWords.length > 0
+            ? new RegExp(`(?<=^|[^\\p{L}\\p{N}]|\\d)(${escapedWords.join('|')})(?=$|[^\\p{L}\\p{N}]|\\d)`, 'giu')
+            : null;
         
         function highlightWordsInNode(node) {
+            if (!highlightRegex) return;
             if (node.nodeType === Node.TEXT_NODE) {
                 const text = node.nodeValue;
                 const parent = node.parentNode;
@@ -14774,40 +14856,49 @@
             `;
         applyCSS(css);
         
-        const printContent = document.querySelector("#print-content > .reading-block > article > div");
+        const printContent = document.querySelector("#print-content > .reading-block > article > div") ||
+                             document.querySelector("#print-content .reading-block article") ||
+                             document.querySelector("#print-content article") ||
+                             document.querySelector(".reading-block article");
         
-        const parser = new DOMParser();
-        const doc = parser.parseFromString(printContent.innerHTML, 'text/html');
-        const bodyContent = doc.body;
+        if (printContent) {
+            const parser = new DOMParser();
+            const doc = parser.parseFromString(printContent.innerHTML, 'text/html');
+            const bodyContent = doc.body;
+            
+            highlightWordsInNode(bodyContent);
+            printContent.innerHTML = bodyContent.innerHTML;
+        }
         
-        highlightWordsInNode(bodyContent);
-        printContent.innerHTML = bodyContent.innerHTML;
-        
-        const vocaTable = createElement("table", {style: "page-break-before: always;"});
-        const thead = createElement("thead");
-        const tr = createElement("tr");
-        tr.appendChild(createElement("th", {textContent: ""}));
-        tr.appendChild(createElement("th", {textContent: "word"}));
-        tr.appendChild(createElement("th", {textContent: "context"}));
-        tr.appendChild(createElement("th", {textContent: "meaning"}));
-        thead.appendChild(tr);
-        vocaTable.appendChild(thead);
-        
-        const tbody = createElement("tbody");
-        cardsList.forEach(card => {
+        if (cardsList.length > 0) {
+            const vocaTable = createElement("table", {style: "page-break-before: always;"});
+            const thead = createElement("thead");
             const tr = createElement("tr");
-            tr.appendChild(createElement("td", {className: "status", textContent: card.status}));
-            tr.appendChild(createElement("td", {className: "word", textContent: card.word}));
-            tr.appendChild(createElement("td", {className: "context", innerHTML: card.context}));
-            tr.appendChild(createElement("td", {className: "meaning", textContent: card.meaning}));
-            tbody.appendChild(tr);
-        })
-        vocaTable.appendChild(tbody);
+            tr.appendChild(createElement("th", {textContent: ""}));
+            tr.appendChild(createElement("th", {textContent: "word"}));
+            tr.appendChild(createElement("th", {textContent: "context"}));
+            tr.appendChild(createElement("th", {textContent: "meaning"}));
+            thead.appendChild(tr);
+            vocaTable.appendChild(thead);
+            
+            const tbody = createElement("tbody");
+            cardsList.forEach(card => {
+                const tr = createElement("tr");
+                tr.appendChild(createElement("td", {className: "status", textContent: card.status}));
+                tr.appendChild(createElement("td", {className: "word", textContent: card.word}));
+                tr.appendChild(createElement("td", {className: "context", innerHTML: card.context}));
+                tr.appendChild(createElement("td", {className: "meaning", textContent: card.meaning}));
+                tbody.appendChild(tr);
+            });
+            vocaTable.appendChild(tbody);
+            
+            let printPage = document.querySelector("#print-page");
+            if (printPage) {
+                printPage.appendChild(vocaTable);
+            }
+        }
         
-        let printPage = document.querySelector("#print-page");
-        printPage.appendChild(vocaTable);
-        
-        console.log(cardsList);
+        console.log('[Print Page] Cards count:', cardsList.length);
     }
     
     function setupYoutubeEmbeddedPlayer() {
