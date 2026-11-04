@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      19.1.2
+// @version      19.1.3
 // @license      GPL-3.0-or-later
 // @grant       GM_setValue
 // @grant       GM_getValue
@@ -10109,6 +10109,44 @@
                     padding-top: 8px !important;
                 }
 
+                div[data-word-widget] div[class*="group/meaning"][class*="bg-destructive"] { /* Immediately hide deleted meanings */
+                    display: none !important;
+                }
+
+                .addon-quick-meaning-form {
+                    margin-top: 6px;
+                }
+
+                .addon-quick-meaning-input {
+                    height: 40px !important;
+                    padding: 8px 12px !important;
+                    font-size: 0.875rem !important;
+                    line-height: 1.25rem !important;
+                    border-radius: 8px !important;
+                    background: var(--secondary, rgba(125, 125, 125, 0.15)) !important;
+                    border: 1px solid var(--border, rgba(125, 125, 125, 0.25)) !important;
+                    color: var(--card-foreground, inherit) !important;
+                    outline: none !important;
+                    transition: border-color 0.15s ease, box-shadow 0.15s ease, background-color 0.15s ease;
+                    box-sizing: border-box !important;
+                }
+
+                .addon-quick-meaning-input:hover {
+                    background: var(--secondary, rgba(125, 125, 125, 0.22)) !important;
+                    border-color: var(--border, rgba(125, 125, 125, 0.45)) !important;
+                }
+
+                .addon-quick-meaning-input:focus {
+                    background: var(--background, #1e1e1e) !important;
+                    border-color: var(--primary, #3b82f6) !important;
+                    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.25) !important;
+                }
+
+                .addon-quick-meaning-input::placeholder {
+                    color: var(--muted-foreground, #888) !important;
+                    opacity: 0.75;
+                }
+
                 #chat-container {
                     flex: 1;
                     margin-bottom: 8px;
@@ -13797,8 +13835,8 @@
                     
                     const meaningInput = createElement("input", {
                         type: "text",
-                        className: "addon-quick-meaning-input w-full px-3 py-1.5 text-sm rounded-md border border-input bg-background outline-none",
-                        placeholder: "Add meaning directly...",
+                        className: "addon-quick-meaning-input w-full",
+                        placeholder: "+ Add meaning directly...",
                         autocomplete: "off"
                     });
                     
