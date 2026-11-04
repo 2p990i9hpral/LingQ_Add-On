@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      19.1.1
+// @version      19.1.2
 // @license      GPL-3.0-or-later
 // @grant       GM_setValue
 // @grant       GM_getValue
@@ -603,57 +603,71 @@
         
         let input = document.querySelector('div[data-word-widget] form input[name="text"]');
         let navigatedToMeanings = false;
+        let overlay = null;
+        const wordWidget = document.querySelector('div[data-word-widget]');
         
-        if (!input) {
-            const openMeaningsBtn = document.querySelector('div[data-word-widget] button[aria-label="Open Meanings"]');
-            if (openMeaningsBtn) {
-                openMeaningsBtn.click();
-                navigatedToMeanings = true;
-                await new Promise((resolve) => setTimeout(resolve, 100));
-                
-                const addMeaningBtn = document.querySelector('div[data-word-widget] button[data-size="txt"]') ||
-                    Array.from(document.querySelectorAll('div[data-word-widget] button')).find((btn) =>
-                        btn.textContent.includes('Add Meaning') || btn.querySelector('svg.lucide-plus')
-                    );
-                if (addMeaningBtn) {
-                    addMeaningBtn.click();
-                    await new Promise((resolve) => setTimeout(resolve, 100));
-                    input = document.querySelector('div[data-word-widget] form input[name="text"]');
+        try {
+            if (!input) {
+                const openMeaningsBtn = document.querySelector('div[data-word-widget] button[aria-label="Open Meanings"]');
+                if (openMeaningsBtn && wordWidget) {
+                    const widgetParent = wordWidget.parentElement || wordWidget;
+                    overlay = wordWidget.cloneNode(true);
+                    overlay.id = "addon-meaning-transition-overlay";
+                    overlay.style.cssText = "position: absolute; inset: 0; z-index: 50; pointer-events: none; background: inherit; overflow: hidden;";
+                    widgetParent.style.position = "relative";
+                    widgetParent.appendChild(overlay);
+                    
+                    openMeaningsBtn.click();
+                    navigatedToMeanings = true;
+                    
+                    const addMeaningBtn = await waitForElement('div[data-word-widget] button:has(svg.lucide-plus)', 1000);
+                    if (addMeaningBtn) {
+                        addMeaningBtn.click();
+                    }
+                    input = await waitForElement('div[data-word-widget] form input[name="text"]', 1000);
                 }
             }
-        }
-        
-        if (!input) {
-            const editBtn = document.querySelector('div[data-word-widget] button[aria-label^="Edit this meaning"]');
-            if (editBtn) {
-                editBtn.click();
-                await new Promise((resolve) => setTimeout(resolve, 100));
-                input = document.querySelector('div[data-word-widget] form input[name="text"]');
+            
+            if (!input) {
+                const editBtn = document.querySelector('div[data-word-widget] button[aria-label^="Edit this meaning"]');
+                if (editBtn) {
+                    editBtn.click();
+                    input = await waitForElement('div[data-word-widget] form input[name="text"]', 1000);
+                }
             }
-        }
-        
-        if (!input) return;
-        
-        input.focus();
-        input.dispatchEvent(new FocusEvent("focus", {bubbles: true}));
-        
-        Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set.call(input, meaningText);
-        input.dispatchEvent(new InputEvent("input", {bubbles: true, composed: true, data: meaningText}));
-        input.dispatchEvent(new Event("change", {bubbles: true}));
-        
-        const form = input.closest('form');
-        if (form) {
-            input.dispatchEvent(new KeyboardEvent('keydown', {key: 'Enter', code: 'Enter', bubbles: true}));
-            form.dispatchEvent(new Event('submit', {bubbles: true, cancelable: true}));
-        }
-        
-        input.blur();
-        input.dispatchEvent(new FocusEvent("focusout", {bubbles: true}));
-        
-        if (navigatedToMeanings) {
-            await new Promise((resolve) => setTimeout(resolve, 150));
-            const backBtn = document.querySelector('div[data-word-widget] button[aria-label="Back to the word"]');
-            if (backBtn) backBtn.click();
+            
+            if (!input) return;
+            
+            input.focus();
+            input.dispatchEvent(new FocusEvent("focus", {bubbles: true}));
+            
+            Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set.call(input, meaningText);
+            input.dispatchEvent(new InputEvent("input", {bubbles: true, composed: true, data: meaningText}));
+            input.dispatchEvent(new Event("change", {bubbles: true}));
+            
+            const form = input.closest('form');
+            if (form) {
+                input.dispatchEvent(new KeyboardEvent('keydown', {key: 'Enter', code: 'Enter', bubbles: true}));
+                form.dispatchEvent(new Event('submit', {bubbles: true, cancelable: true}));
+            }
+            
+            input.blur();
+            input.dispatchEvent(new FocusEvent("focusout", {bubbles: true}));
+        } finally {
+            if (navigatedToMeanings) {
+                try {
+                    const backBtn = await waitForElement('div[data-word-widget] button[aria-label="Back to the word"]', 800);
+                    if (backBtn) {
+                        backBtn.click();
+                        await new Promise((resolve) => requestAnimationFrame(resolve));
+                    }
+                } catch (e) {
+                    console.error("Failed to return from meanings sub-view:", e);
+                }
+            }
+            if (overlay) {
+                overlay.remove();
+            }
         }
     }
     
@@ -9915,22 +9929,27 @@
                     font-family: var(--custom-font, inherit) !important;
                     font-size: var(--annotation-size) !important;
                     font-weight: bold !important;
-                    ${settings.hoverAnnotation === "all" ? "visibility: hidden !important;" : ""}
                 }
 
                 ${settings.hoverAnnotation === "reader" ? `
-                div[data-reader-mode-body="true"] rt {
+                .reader-body rt {
                     visibility: hidden !important;
                 }
-                div[data-reader-mode-body="true"] ruby:hover rt,
-                div[data-reader-mode-body="true"] .sentence-item:hover rt,
-                div[data-reader-mode-body="true"] .sentence-item:hover + rt {
+                .reader-body ruby:hover rt,
+                .reader-body .reader-sentence:hover rt,
+                .reader-body rt:hover {
+                    visibility: visible !important;
+                }
+                .reader-body .quick-summary rt {
                     visibility: visible !important;
                 }
                 ` : settings.hoverAnnotation === "all" ? `
+                div[data-reader-mode-body="true"] rt {
+                    visibility: hidden !important;
+                }
                 ruby:hover rt,
-                .sentence-item:hover rt,
-                .sentence-item:hover + rt {
+                .reader-sentence:hover rt,
+                rt:hover {
                     visibility: visible !important;
                 }
                 ` : ""}
@@ -9954,6 +9973,24 @@
                     text-underline-offset: .2em !important;
                     text-decoration: underline !important;
                     text-decoration-color: var(--is-playing-underline) !important;
+                }
+
+                .reader-body[data-playing="block"] .reader-sentence.playing,
+                .reader-body .poc-page .playing-run {
+                    background: transparent !important;
+                    border-inline-start: none !important;
+                    border-radius: 0 !important;
+                    padding-inline: 0 !important;
+                    padding-block: 0 !important;
+                    margin-inline: 0 !important;
+                    box-decoration-break: unset !important;
+                    -webkit-box-decoration-break: unset !important;
+                }
+
+                .reader-body[data-playing="block"] .reader-paragraph > .reader-sentence.playing:only-child {
+                    display: inline !important;
+                    padding-block: 0 !important;
+                    margin-block: 0 !important;
                 }
 
                 /*highlightings*/
@@ -10592,6 +10629,25 @@
                 width: var(--widget-width) !important;
                 min-width: var(--widget-width) !important;
                 max-width: var(--widget-width) !important;
+                display: flex !important;
+                flex-direction: column !important;
+                justify-content: ${settings.widgetVerticalAlign || "flex-start"} !important;
+                align-self: stretch !important;
+            }
+            div[data-reader-widget] { /* Widget container box */
+                flex: 0 1 auto !important;
+                height: fit-content !important;
+                max-height: calc(100% - 160px) !important;
+            }
+            div[data-word-widget] { /* Inner word widget */
+                height: fit-content !important;
+                flex: 0 1 auto !important;
+            }
+            div[data-word-widget] div[class*="overflow-y-auto"] {
+                flex: 0 1 auto !important;
+            }
+            div[data-reader-widget] ul.flex.flex-col { /* Vocabulary/terms list max height limiter */
+                max-height: 500px !important;
             }
             div[data-reader-side-column="true"].contents #memo-widget-container { /* Hidden memo container when sidebar is collapsed */
                 display: none !important;
@@ -11970,14 +12026,49 @@
                 requestAnimationFrame(() => resetScroll());
             }
             
+            let currentLessonId = getLessonId();
+            let observedBodyContainer = null;
+            let isHandlingContent = false;
+
+            async function checkAndHandleLessonContent() {
+                const newLessonId = getLessonId();
+                const bodyContainer = document.querySelector('div[data-reader-mode-body="true"]');
+                if (!bodyContainer) return;
+
+                const isNewLesson = Boolean(newLessonId && newLessonId !== currentLessonId);
+                const isNewBodyContainer = bodyContainer !== observedBodyContainer;
+
+                if ((isNewLesson || isNewBodyContainer) && !isHandlingContent) {
+                    isHandlingContent = true;
+                    try {
+                        currentLessonId = newLessonId || currentLessonId;
+                        observedBodyContainer = bodyContainer;
+                        const targetNode = bodyContainer.querySelector('.reader-body') || bodyContainer;
+                        bindReaderModeBody(bodyContainer);
+                        await handleLoadedContent(targetNode);
+                    } finally {
+                        isHandlingContent = false;
+                    }
+                }
+            }
+
             setupLessonCompletionObserver();
             
             const readerBodyContainer = await waitForElement('div[data-reader-mode-body="true"]', 10000);
             if (readerBodyContainer) {
+                observedBodyContainer = readerBodyContainer;
                 const targetNode = readerBodyContainer.querySelector('.reader-body') || readerBodyContainer;
                 bindReaderModeBody(readerBodyContainer);
-                handleLoadedContent(targetNode);
+                await handleLoadedContent(targetNode);
             }
+
+            const readerParent = document.getElementById("lesson-reader") || document.body;
+            const lessonTransitionObserver = new MutationObserver(() => {
+                checkAndHandleLessonContent();
+            });
+            lessonTransitionObserver.observe(readerParent, {childList: true, subtree: true});
+
+            window.addEventListener("popstate", () => checkAndHandleLessonContent());
         }
         
         async function createGeminiCache(provider, apiKey, model, summaryHTML, sysPlain, sysWord) {
@@ -12223,12 +12314,6 @@
             }
             
             async function updateWidget(autoplay = settings.ttsAutoplay) {
-                function getSectionHead() {
-                    return document.querySelector('div[data-word-widget] div.min-h-0.flex-1.overflow-y-auto') ||
-                           document.querySelector('div[data-word-widget]') ||
-                           document.querySelector("#lesson-reader .widget-area > .reader-widget");
-                }
-                
                 function getInPageSelectedWithContext(targetSideWords = 50, targetSideLength = 350) {
                     const isWord = Boolean(document.querySelector('div[data-word-widget]'));
                     if (!isWord) {
@@ -13004,7 +13089,7 @@
                                     const existingMeaningBadges = document.querySelectorAll('div[data-word-widget] bdi[data-slot="meaning"], .reference-input-text');
                                     const existingMeanings = Array.from(existingMeaningBadges).map((el) => el.textContent.trim()).filter(Boolean);
                                     if (currentMeaning && !existingMeanings.includes(currentMeaning)) {
-                                        setLingQMeaning(currentMeaning);
+                                        await setLingQMeaning(currentMeaning);
                                     }
                                     
                                     const {data: existing} = await getDbClient()
@@ -13475,11 +13560,17 @@
                 function updateMemoWidget() {
                     if (!settings.showMemoWidget) return;
                     
-                    const sideColumn = document.querySelector('div[data-reader-side-column="true"]') || document.querySelector("#lesson-reader .widget-area");
+                    const sideColumn = document.querySelector('div[data-reader-side-column="true"]');
                     if (!sideColumn) return;
                     
                     const existingMemoWidget = document.getElementById("memo-widget-container");
-                    if (existingMemoWidget) return;
+                    if (existingMemoWidget) {
+                        const readerWidget = sideColumn.querySelector('div[data-reader-widget]');
+                        if (readerWidget && existingMemoWidget.parentElement !== sideColumn) {
+                            readerWidget.insertAdjacentElement("afterend", existingMemoWidget);
+                        }
+                        return;
+                    }
                     
                     const lessonIdMatch = window.location.pathname.match(/\/(\d+)/);
                     const lessonId = lessonIdMatch ? lessonIdMatch[1] : "unknown";
@@ -13501,7 +13592,7 @@
                     
                     const memoContainer = createElement("div", {id: "memo-widget-container"}, memoTextarea);
                     
-                    const readerWidget = sideColumn.querySelector("[data-reader-widget], .reader-widget");
+                    const readerWidget = sideColumn.querySelector('div[data-reader-widget]');
                     if (readerWidget) readerWidget.insertAdjacentElement("afterend", memoContainer);
                     else sideColumn.appendChild(memoContainer);
                     
@@ -13532,17 +13623,20 @@
                     
                     const currentTargetText = getCurrentlyTargetedText();
                     const existingChatWidget = document.getElementById('chat-widget');
-                    const wordWidgetScrollArea = document.querySelector('div[data-word-widget] div.min-h-0.flex-1.overflow-y-auto');
-                    const sideColumnScrollArea = document.querySelector('div[data-reader-side-column="true"] div.min-h-0.flex-1.overflow-y-auto') ||
+                    const wordWidgetScrollArea = document.querySelector('div[data-word-widget] .overflow-y-auto');
+                    const sideColumnScrollArea = document.querySelector('div[data-reader-side-column="true"] .overflow-y-auto') ||
                                                  document.querySelector('div[data-reader-side-column="true"]');
                     
                     if (currentTargetText && currentTargetText === lastAskedTargetText && existingChatWidget) {
-                        if (wordWidgetScrollArea && existingChatWidget.parentElement !== wordWidgetScrollArea) {
-                            wordWidgetScrollArea.prepend(existingChatWidget);
-                        } else if (!wordWidgetScrollArea && sideColumnScrollArea && existingChatWidget.parentElement !== sideColumnScrollArea) {
-                            sideColumnScrollArea.prepend(existingChatWidget);
+                        const existingContainer = existingChatWidget.querySelector('#chat-container');
+                        if (existingContainer && existingContainer.children.length > 0) {
+                            if (wordWidgetScrollArea && existingChatWidget.parentElement !== wordWidgetScrollArea) {
+                                wordWidgetScrollArea.prepend(existingChatWidget);
+                            } else if (!wordWidgetScrollArea && sideColumnScrollArea && existingChatWidget.parentElement !== sideColumnScrollArea) {
+                                sideColumnScrollArea.prepend(existingChatWidget);
+                            }
+                            return;
                         }
-                        return;
                     }
                     
                     lastAskedTargetText = currentTargetText || "";
@@ -13626,32 +13720,44 @@
                     chatHistory = updateChatHistoryState(chatHistory, removeIndent(systemPrompt), "system-main");
                     
                     async function askSelectedText() {
-                        const selectedData = getSelectedWithContext();
-                        const initialUserMessage = isSentence
-                            ? `Input: "${selectedData.context || selectedData.input}"`
-                            : `Input: "${selectedData.input}"` + (selectedData.context ? `, Context: "${selectedData.context}"` : "");
-                        
-                        if (initialUserMessage.length > 1000) {
-                            console.log("The length of the selected text exceeds 1,000.");
-                            return;
+                        try {
+                            let selectedData = getSelectedWithContext();
+                            if (!selectedData || (!selectedData.input && !selectedData.context)) {
+                                const fallbackWord = getCurrentlyTargetedText();
+                                if (fallbackWord) {
+                                    selectedData = {input: fallbackWord, context: fallbackWord};
+                                }
+                            }
+                            if (!selectedData || (!selectedData.input && !selectedData.context)) return;
+                            
+                            const initialUserMessage = isSentence
+                                ? `Input: "${selectedData.context || selectedData.input}"`
+                                : `Input: "${selectedData.input}"` + (selectedData.context ? `, Context: "${selectedData.context}"` : "");
+                            
+                            if (initialUserMessage.length > 1000) {
+                                console.log("The length of the selected text exceeds 1,000.");
+                                return;
+                            }
+                            
+                            if (isSentence) chatHistory = updateChatHistoryState(chatHistory, removeIndent(sentencePrompt), "system-sentence");
+                            else chatHistory = updateChatHistoryState(chatHistory, removeIndent(wordPhrasePrompt), "system-word");
+                            
+                            chatHistory = updateChatHistoryState(chatHistory, initialUserMessage, "user");
+                            
+                            const messageClass = isSentence ? "sentence-message" : "word-message";
+                            const botMessageDiv = addMessageToUI("", `bot-message ${messageClass}`, chatContainer, false);
+                            
+                            await callStreamOpenAI(botMessageDiv, chatContainer, false,
+                                async (finalContent) => {
+                                    enhanceWordMessage(botMessageDiv, selectedData);
+                                },
+                                false
+                            );
+                            
+                            chatHistory = updateChatHistoryState(chatHistory, removeIndent(plainTextPrompt), "system-plain");
+                        } catch (err) {
+                            console.error("askSelectedText failed:", err);
                         }
-                        
-                        if (isSentence) chatHistory = updateChatHistoryState(chatHistory, removeIndent(sentencePrompt), "system-sentence");
-                        else chatHistory = updateChatHistoryState(chatHistory, removeIndent(wordPhrasePrompt), "system-word");
-                        
-                        chatHistory = updateChatHistoryState(chatHistory, initialUserMessage, "user");
-                        
-                        const messageClass = isSentence ? "sentence-message" : "word-message";
-                        const botMessageDiv = addMessageToUI("", `bot-message ${messageClass}`, chatContainer, false);
-                        
-                        await callStreamOpenAI(botMessageDiv, chatContainer, false,
-                            async (finalContent) => {
-                                enhanceWordMessage(botMessageDiv, selectedData);
-                            },
-                            false
-                        );
-                        
-                        chatHistory = updateChatHistoryState(chatHistory, removeIndent(plainTextPrompt), "system-plain");
                     }
                     
                     const hasWordWidget = Boolean(document.querySelector('div[data-word-widget]'));
@@ -13683,7 +13789,7 @@
                     const wordWidget = document.querySelector('div[data-word-widget]');
                     if (!wordWidget) return;
                     
-                    const scrollArea = wordWidget.querySelector('div.min-h-0.flex-1.overflow-y-auto');
+                    const scrollArea = wordWidget.querySelector('.overflow-y-auto');
                     if (!scrollArea) return;
                     
                     const meaningsSection = Array.from(scrollArea.querySelectorAll('section')).find((s) => s.querySelector('h3')?.textContent.includes('Meanings'));
@@ -13696,9 +13802,12 @@
                         autocomplete: "off"
                     });
                     
-                    async function submitMeaning() {
+                    let isSubmitting = false;
+                    async function submitMeaning(isFromBlur = false) {
+                        if (isSubmitting) return;
                         const text = meaningInput.value.trim();
                         if (!text) return;
+                        isSubmitting = true;
                         meaningInput.disabled = true;
                         try {
                             await setLingQMeaning(text);
@@ -13707,7 +13816,10 @@
                             console.error("Failed to add meaning:", err);
                         } finally {
                             meaningInput.disabled = false;
-                            meaningInput.focus();
+                            isSubmitting = false;
+                            if (!isFromBlur) {
+                                meaningInput.focus();
+                            }
                         }
                     }
                     
@@ -13718,6 +13830,10 @@
                             await submitMeaning();
                         }
                     }, meaningInput);
+                    
+                    meaningInput.addEventListener("blur", () => {
+                        submitMeaning(true);
+                    });
                     
                     meaningInput.addEventListener("keydown", async (e) => {
                         if (e.isComposing || e.keyCode === 229) return;
@@ -13753,23 +13869,18 @@
                     selectedTextObserver.disconnect();
                     selectedTextObserver = null;
                 }
-                const selectedTextElement = document.querySelector('div[data-word-widget] bdi[dir="ltr"]');
-                if (selectedTextElement) {
-                    selectedTextObserver = new MutationObserver((mutations) => {
+                const wordTitleHeader = document.querySelector('div[data-word-widget] .px-4.pt-3');
+                if (wordTitleHeader) {
+                    selectedTextObserver = new MutationObserver(() => {
                         if (isProgrammaticReferenceWordUpdate) return;
-                        for (const mutation of mutations) {
-                            if (mutation.type === 'characterData' || mutation.type === 'childList') {
-                                const currentText = getCurrentlyTargetedText();
-                                if (currentText && currentText !== lastActiveWordText) {
-                                    lastActiveWordText = currentText;
-                                    console.debug('Observer:', `Widget changed from word/sentence: ${currentText}`);
-                                    updateWidget(false);
-                                    break;
-                                }
-                            }
+                        const currentText = getCurrentlyTargetedText();
+                        if (currentText && currentText !== lastActiveWordText) {
+                            lastActiveWordText = currentText;
+                            console.debug('Observer:', `Widget changed from word/sentence: ${currentText}`);
+                            updateWidget(false);
                         }
                     });
-                    selectedTextObserver.observe(selectedTextElement, {subtree: true, characterData: true, childList: true});
+                    selectedTextObserver.observe(wordTitleHeader, {subtree: true, characterData: true, childList: true});
                 }
                 
                 const sideColumn = document.querySelector('div[data-reader-side-column="true"]');
@@ -13781,12 +13892,18 @@
                     observedSideColumn = sideColumn;
                     sideColumnObserver = new MutationObserver((mutations) => {
                         for (const mutation of mutations) {
-                            if (mutation.target.closest?.('#chat-widget, #memo-widget-container')) continue;
+                            if (mutation.target.closest?.('#chat-widget, #memo-widget-container, .addon-quick-meaning-form, #addon-meaning-transition-overlay')) continue;
+                            const currentText = getCurrentlyTargetedText();
+                            if (currentText && currentText !== lastActiveWordText) {
+                                lastActiveWordText = currentText;
+                                console.debug('Observer:', `Widget target changed in sideColumn: ${currentText}`);
+                                updateWidget(false);
+                                return;
+                            }
                             for (const node of mutation.addedNodes) {
                                 if (node.nodeType !== Node.ELEMENT_NODE) continue;
-                                if (node.matches?.('#chat-widget, #memo-widget-container, .addon-quick-meaning-form')) continue;
+                                if (node.matches?.('#chat-widget, #memo-widget-container, .addon-quick-meaning-form, #addon-meaning-transition-overlay')) continue;
                                 if (node.matches?.("[data-word-widget]") || node.querySelector?.("[data-word-widget]")) {
-                                    const currentText = getCurrentlyTargetedText();
                                     if (currentText) {
                                         lastActiveWordText = currentText;
                                     }
