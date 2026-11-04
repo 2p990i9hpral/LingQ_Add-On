@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      19.1.0
+// @version      19.1.1
 // @license      GPL-3.0-or-later
 // @grant       GM_setValue
 // @grant       GM_getValue
@@ -73,11 +73,9 @@
         
         keyboardShortcut: false,
         skipDuration: 5,
-        shortcutVideoFullscreen: 'p',
         shortcutBackward5s: 'a',
         shortcutForward5s: 's',
         shortcutTTSPlay: 'w',
-        shortcutTranslator: 'e',
         shortcutMakeKnown: 'd',
         shortcutDictionary: 'f',
         shortcutCopySelected: 'c',
@@ -738,7 +736,13 @@
         
         if (domElement.childNodes.length === 0) return null;
         
-        const isNodeSelected = (node) => Boolean(node && selectedEl && (node === selectedEl || selectedEl.contains(node)));
+        const isNodeSelected = (node) => Boolean(
+            node && (
+                (selectedEl && (node === selectedEl || selectedEl.contains(node))) ||
+                (node.nodeType === Node.TEXT_NODE && node.parentElement?.classList?.contains('selected')) ||
+                (node.nodeType === Node.ELEMENT_NODE && node.classList?.contains('selected'))
+            )
+        );
         
         sentenceElements.forEach((sentenceElement) => {
             const leaves = getAllLeafNodes(sentenceElement);
@@ -771,8 +775,8 @@
         });
         
         return textParts.slice(0, -1).join(' ')
-            .replace(/[^\S\n]?(\?|\.|\-|\n|。|、)[^\S\n]?/g, '$1')
-            .replace(/[^\S\n]?(,|、)/g, '$1');
+            .replace(/\s+([.,!?:;。、？！\p{Pe}\p{Pf}])/gu, '$1')
+            .replace(/([\p{Ps}\p{Pi}\p{Sc}])\s+/gu, '$1');
     }
     
     const toastQueue = [];
@@ -3338,12 +3342,10 @@
                 style: `${settings.keyboardShortcut ? "" : "display: none"}`
             });
             
-            addShortcutInput(shortcutSection, "shortcutVideoFullscreenInput", "Video Fullscreen Toggle:", settings.shortcutVideoFullscreen);
             addSlider(shortcutSection, "skipDurationSlider", "Skip Duration", "skipDurationValue", settings.skipDuration, " Seconds", 1, 30, 1);
             addShortcutInput(shortcutSection, "shortcutBackward5sInput", `Rewind ${settings.skipDuration} Seconds:`, settings.shortcutBackward5s);
             addShortcutInput(shortcutSection, "shortcutForward5sInput", `Fast Forward ${settings.skipDuration} Seconds:`, settings.shortcutForward5s);
             addShortcutInput(shortcutSection, "shortcutTTSPlayInput", "Play TTS Audio:", settings.shortcutTTSPlay);
-            addShortcutInput(shortcutSection, "shortcutTranslatorOpenInput", "Open Translator:", settings.shortcutTranslator);
             addShortcutInput(shortcutSection, "shortcutMakeKnownInput", "Make Word Known:", settings.shortcutMakeKnown);
             addShortcutInput(shortcutSection, "shortcutDictionaryOpenInput", "Open Dictionary:", settings.shortcutDictionary);
             addShortcutInput(shortcutSection, "shortcutCopySelectedInput", "Copy Selected Text:", settings.shortcutCopySelected);
@@ -4579,11 +4581,9 @@
                 });
             }
             
-            setupShortcutInput("shortcutVideoFullscreenInput", "shortcutVideoFullscreen");
             setupShortcutInput("shortcutBackward5sInput", "shortcutBackward5s");
             setupShortcutInput("shortcutForward5sInput", "shortcutForward5s");
             setupShortcutInput("shortcutTTSPlayInput", "shortcutTTSPlay");
-            setupShortcutInput("shortcutTranslatorOpenInput", "shortcutTranslator");
             setupShortcutInput("shortcutMakeKnownInput", "shortcutMakeKnown");
             setupShortcutInput("shortcutDictionaryOpenInput", "shortcutDictionary");
             setupShortcutInput("shortcutCopySelectedInput", "shortcutCopySelected");
@@ -4932,7 +4932,6 @@
                 document.getElementById("captionFontsizeSlider").value = defaults.captionFontsize;
                 
                 document.getElementById("keyboardShortcutCheckbox").value = defaults.keyboardShortcut;
-                document.getElementById("shortcutVideoFullscreenInput").value = defaults.shortcutVideoFullscreen;
                 const skipSlider = document.getElementById("skipDurationSlider");
                 if (skipSlider) {
                     skipSlider.value = defaults.skipDuration;
@@ -4946,7 +4945,6 @@
                 document.getElementById("shortcutBackward5sInput").value = defaults.shortcutBackward5s;
                 document.getElementById("shortcutForward5sInput").value = defaults.shortcutForward5s;
                 document.getElementById("shortcutTTSPlayInput").value = defaults.shortcutTTSPlay;
-                document.getElementById("shortcutTranslatorOpenInput").value = defaults.shortcutTranslator;
                 document.getElementById("shortcutMakeKnownInput").value = defaults.shortcutMakeKnown;
                 document.getElementById("shortcutDictionaryOpenInput").value = defaults.shortcutDictionary;
                 document.getElementById("shortcutCopySelectedInput").value = defaults.shortcutCopySelected;
@@ -9809,7 +9807,9 @@
             if (settings.hideLynxUI) {
                 baseCSS += `
                 footer button[data-reader-lynx-entry="true"],
-                footer button[data-reader-lynx-entry="true"] + span {
+                footer button[data-reader-lynx-entry="true"] + span,
+                div[data-slot="dropdown-menu-content"] > [role="menuitem"]:last-child,
+                [role="menuitem"]:has(> svg:not([class*="lucide"])) {
                     display: none !important;
                 }
                 `;
@@ -9990,9 +9990,36 @@
                     border: 1px solid var(--lingq-border-learned) !important;
                 }
 
-                .sentence-item.selected {
-                    outline: 2px solid var(--font-color) !important;
-                    border-radius: .25rem;
+                .reader-body .sentence-item.selected,
+                .reader-body .sentence-item.selected:hover,
+                .reader-body .selected-space.selected { /* Selection state: top/bottom connected border for words and spaces */
+                    box-shadow: inset 0 2px 0 0 var(--font-color), inset 0 -2px 0 0 var(--font-color) !important;
+                    --sel-ring: transparent !important;
+                    border-radius: 0 !important;
+                    outline: none !important;
+                }
+
+                .reader-body .sentence-item.selected:not(.ar-lingq):not(.ar-new),
+                .reader-body .selected-space.selected { /* Selection state: transparent background for regular words and spaces */
+                    background: transparent !important;
+                }
+
+                .reader-body .sentence-item.selected.run-start { /* Selection state: closed left edge with rounded corners */
+                    box-shadow: inset 2px 0 0 0 var(--font-color), inset 0 2px 0 0 var(--font-color), inset 0 -2px 0 0 var(--font-color) !important;
+                    border-top-left-radius: 4px !important;
+                    border-bottom-left-radius: 4px !important;
+                }
+
+                .reader-body .sentence-item.selected.run-end { /* Selection state: closed right edge with rounded corners */
+                    box-shadow: inset -2px 0 0 0 var(--font-color), inset 0 2px 0 0 var(--font-color), inset 0 -2px 0 0 var(--font-color) !important;
+                    border-top-right-radius: 4px !important;
+                    border-bottom-right-radius: 4px !important;
+                }
+
+                .reader-body .sentence-item.selected:not(.sel-drag),
+                .reader-body .sentence-item.selected.run-start.run-end { /* Selection state: single word complete box */
+                    box-shadow: inset 0 0 0 2px var(--font-color) !important;
+                    border-radius: 4px !important;
                 }
 
                 .sentence-item:hover {
@@ -10033,10 +10060,11 @@
                     margin-top: 8px !important;
                 }
 
-                div[data-word-widget] div:has(> * > bdi) { /* Word widget header container wrapping the word title */
+                div[data-word-widget] .px-4.pt-3 div.items-start:has(> bdi),
+                div[data-word-widget] .px-4.pt-3 .flex.min-w-0 { /* Word widget header row: vertically center word title and action buttons */
                     align-items: center !important;
                 }
-                div[data-word-widget] bdi { /* Word title term in word widget header */
+                div[data-word-widget] .px-4.pt-3 bdi { /* Word title term in word widget header */
                     align-self: center !important;
                 }
                 div[data-word-widget] div[class*="overflow-y-auto"] { /* Scrollable sections container inside word widget */
@@ -10354,6 +10382,11 @@
                     padding: 10px 0;
                 }
 
+                .quick-summary ruby,
+                .quick-summary rt {
+                    ruby-align: center;
+                }
+
                 .quick-summary rt {
                     user-select: none;
                     -webkit-user-select: none;
@@ -10377,6 +10410,8 @@
                     font-size: 1.5rem;
                 }
 
+                .regenerate-summary-btn,
+                .tts-summary-btn,
                 .close-summary-btn {
                     display: inline-flex;
                     align-items: center;
@@ -10385,7 +10420,6 @@
                     border: 1px solid rgb(125, 125, 125, 50%);
                     border-radius: 5px;
                     cursor: pointer;
-                    margin: 0 10px 0 auto;
                 }
 
                 .userToast {
@@ -10471,8 +10505,7 @@
                 width: 20px !important;
                 height: 20px !important;
             }` : ""}
-            footer div.rounded-full:has(button[aria-label="More player options"]),
-            footer .rounded-full.bg-surface-default { /* Right-side playback pill container (speed, volume, more options) */
+            footer div.rounded-full.bg-surface-default { /* Right-side playback pill container (speed, volume, more options) */
                 display: inline-flex !important;
                 align-items: center !important;
                 justify-content: center !important;
@@ -10480,17 +10513,14 @@
                 padding: 1px 8px !important;
                 line-height: normal !important;
             }
-            footer div.rounded-full:has(button[aria-label="More player options"]) button,
-            footer div.rounded-full:has(button[aria-label="More player options"]) a,
-            footer .rounded-full.bg-surface-default button,
-            footer .rounded-full.bg-surface-default a { /* Action buttons inside the right-side playback pill */
+            footer div.rounded-full.bg-surface-default button,
+            footer div.rounded-full.bg-surface-default a { /* Action buttons inside the right-side playback pill */
                 height: 28px !important;
                 padding: 1px 0 !important;
                 display: inline-flex !important;
                 align-items: center !important;
             }
-            footer div.rounded-full:has(button[aria-label="More player options"]) svg,
-            footer .rounded-full.bg-surface-default svg { /* Icons inside the right-side playback pill */
+            footer div.rounded-full.bg-surface-default svg { /* Icons inside the right-side playback pill */
                 width: 16px !important;
                 height: 16px !important;
             }
@@ -10609,7 +10639,7 @@
 
             .memo-textarea { /* Textarea input for writing and saving lesson notes */
                 width: 100%;
-                min-height: 2.5em;
+                min-height: 75px;
                 max-height: 150px;
                 padding: 5px 10px;
                 border-radius: 5px;
@@ -11100,21 +11130,25 @@
                 
                 if (eventKey === ' ' && withoutModifierKeys && !isTextInput) {
                     preventPropagation(event);
-                    const playButtonSelector = ".section--player > div:nth-child(1) > button";
-                    const svgEl = document.querySelector(`${playButtonSelector} > span > svg`);
-                    const getState = (el) => el?.classList.contains('svg-icon--pause') ? 'playing' : 'pause';
-                    const stateBefore = getState(svgEl);
+                    const playButtonSelector = 'footer button[aria-label="Play"], footer button[aria-label="Pause"], .section--player > div:nth-child(1) > button';
+                    const playBtn = document.querySelector(playButtonSelector);
+                    const getState = (el) => {
+                        if (!el) return 'pause';
+                        if (el.getAttribute('aria-label') === 'Pause') return 'playing';
+                        const svg = el.querySelector('svg');
+                        return (svg?.classList.contains('svg-icon--pause') || svg?.classList.contains('lucide-pause')) ? 'playing' : 'pause';
+                    };
+                    const stateBefore = getState(playBtn);
                     
                     setTimeout(() => {
-                        const svgElAfter = document.querySelector(`${playButtonSelector} > span > svg`);
-                        const stateAfter = getState(svgElAfter);
+                        const playBtnAfter = document.querySelector(playButtonSelector);
+                        const stateAfter = getState(playBtnAfter);
                         
-                        if (stateAfter === stateBefore) clickElement(playButtonSelector);
+                        if (stateAfter === stateBefore && playBtnAfter) playBtnAfter.click();
                     }, 100);
                 }
                 
                 const shortcuts = {
-                    [settings.shortcutVideoFullscreen]: () => clickElement(".modal-section > div > button:nth-child(2)"), // video full screen toggle
                     [settings.shortcutMeaningInput]: () => {
                         focusElement("input.addon-quick-meaning-input");
                     },
@@ -11126,11 +11160,10 @@
                         lastWordMessage.querySelector(".save-flashcard-button")?.click();
                     }, // Make a flashcard
                     [settings.shortcutTTSPlay]: () => clickElement('div[data-word-widget] button[aria-label="Listen"], #addon-sentence-header button.addon-sentence-tts-btn, div[data-reader-popup="true"] button[aria-label="Listen"]'), // Play tts audio
-                    [settings.shortcutTranslator]: () => clickElement(".dictionary-resources > a:nth-last-child(1)"), // Open Translator
                     [settings.shortcutBackward5s]: () => triggerThrottledSkip(-settings.skipDuration), // Rewind
                     [settings.shortcutForward5s]: () => triggerThrottledSkip(settings.skipDuration), // Fast Forward
                     [settings.shortcutMakeKnown]: () => document.dispatchEvent(new KeyboardEvent("keydown", {key: "k"})), // Simulate original 'k' for Make Word Known
-                    [settings.shortcutDictionary]: () => clickElement(".dictionary-resources > a:nth-child(1)"), // Open Dictionary
+                    [settings.shortcutDictionary]: () => clickElement('div[data-word-widget] a[href*="dict"], div[data-word-widget] a[target="_blank"], .dictionary-resources > a:nth-child(1)'), // Open Dictionary
                     [settings.shortcutCopySelected]: () => copySelectedText() // Copy selected text
                 };
                 
@@ -11428,14 +11461,14 @@
                         className: "regenerate-summary-btn",
                         title: "Regenerate Quick Summary\n(Ctrl/Shift+Click to regenerate from full text)",
                         innerHTML: `<svg style="width: 15px; height: 15px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-rotate-cw" aria-hidden="true"><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/></svg>`,
-                        style: `padding: 10px 10px; border: 1px solid rgb(125, 125, 125, 50%); border-radius: 5px; cursor: pointer; display: ${hasSummary ? "flex" : "none"}; opacity: 1; align-items: center; justify-content: center;`
+                        style: hasSummary ? "" : "display: none;"
                     });
 
                     const ttsButton = createElement("button", {
                         className: "tts-summary-btn",
                         title: "Read Quick Summary",
                         innerHTML: `<svg style="width: 15px; height: 15px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-play" aria-hidden="true"><path d="m6 3 14 9-14 9z"/></svg>`,
-                        style: `padding: 10px 10px; border: 1px solid rgb(125, 125, 125, 50%); border-radius: 5px; cursor: pointer; display: ${hasSummary ? "flex" : "none"}; opacity: 1;`
+                        style: hasSummary ? "" : "display: none;"
                     });
                     
                     regenerateButton.addEventListener("click", async (event) => {
@@ -11481,7 +11514,7 @@
                         className: "close-summary-btn",
                         title: "Close Quick Summary",
                         innerHTML: `<svg style="width: 15px; height: 15px;" viewBox="6 6 12 12" stroke="currentColor"><path d="M17 17L7 7M17 7L7 17" stroke-width="1" stroke-linecap="round"/></svg>`,
-                        style: `padding: 10px 10px; border: 1px solid rgb(125, 125, 125, 50%); border-radius: 5px; cursor: pointer; display: ${hasSummary ? "flex" : "none"}; opacity: 1; align-items: center; justify-content: center;`
+                        style: hasSummary ? "" : "display: none;"
                     });
                     closeButton.addEventListener("click", () => summaryElement.remove());
                     
@@ -11507,6 +11540,8 @@
                     } else if (section.parentNode) {
                         section.parentNode.prepend(summaryElement);
                     }
+                    resetScroll();
+                    requestAnimationFrame(() => resetScroll());
                 }
                 
                 mountSummaryToReaderBody = createAndPrependSummaryElement;
@@ -11767,10 +11802,19 @@
             }
 
             function resetScroll() {
-                const scrollTargets = document.querySelectorAll('[data-reader-mode-body="true"] > div.overflow-y-auto, .reader-body');
+                const scrollTargets = document.querySelectorAll('[data-reader-mode-body="true"] > div.overflow-y-auto, [data-reader-mode-body="true"] .overflow-y-auto, .reader-body');
                 scrollTargets.forEach((target) => {
-                    target.scrollTop = 0;
-                    target.scrollLeft = 0;
+                    if (typeof target.scrollTo === "function") {
+                        try {
+                            target.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+                        } catch {
+                            target.scrollTop = 0;
+                            target.scrollLeft = 0;
+                        }
+                    } else {
+                        target.scrollTop = 0;
+                        target.scrollLeft = 0;
+                    }
                 });
             }
             function getFinishPageButton(action) {
@@ -11899,6 +11943,7 @@
 
             async function handleLoadedContent(node) {
                 resetScroll();
+                requestAnimationFrame(() => resetScroll());
                 updateQuickSummaryPageVisibility();
                 
                 currentGeminiCacheName = null;
@@ -11921,6 +11966,8 @@
                     getLessonSentences(lessonLanguage, lessonId).catch(() => {});
                 }
                 await generateLessonSummary(node);
+                resetScroll();
+                requestAnimationFrame(() => resetScroll());
             }
             
             setupLessonCompletionObserver();
@@ -12195,50 +12242,13 @@
                     const selectedText = selectedTextElement ? extractTextFromDOM(selectedTextElement).trim() : "";
                     if (!selectedText) return {input: "", context: ""};
                     
-                    // Extract sentence and surrounding context using LingQ redesign data-sentence-index
+                    // Extract sentence and surrounding context using DOM sentence hierarchy and extractTextFromDOM
                     const allWordItems = Array.from(document.querySelectorAll('.sentence-item'));
                     const selectedEl = document.querySelector('.sentence-item.is-selected, .sentence-item.selected, .sentence-item[data-selected="true"], [data-is-active="true"]') ||
                                        allWordItems.find(el => el.textContent.trim() === selectedText);
                     
-                    if (selectedEl?.dataset?.sentenceIndex) {
-                        const sentenceIdxNum = Number(selectedEl.dataset.sentenceIndex);
-                        if (!isNaN(sentenceIdxNum)) {
-                            const prevText = allWordItems.filter(el => Number(el.dataset.sentenceIndex) === sentenceIdxNum - 1).map(el => el.textContent).join('');
-                            const currentWords = allWordItems.filter(el => Number(el.dataset.sentenceIndex) === sentenceIdxNum);
-                            const nextText = allWordItems.filter(el => Number(el.dataset.sentenceIndex) === sentenceIdxNum + 1).map(el => el.textContent).join('');
-                            
-                            let tagged = false;
-                            const currentText = currentWords.map(el => {
-                                const t = el.textContent;
-                                if (!tagged && (el === selectedEl || t.trim() === selectedText)) {
-                                    tagged = true;
-                                    return `<selected>${t}</selected>`;
-                                }
-                                return t;
-                            }).join('');
-                            
-                            const contextCombined = [prevText, currentText, nextText].filter(Boolean).join(' ').trim();
-                            if (contextCombined) {
-                                return {input: selectedText, context: contextCombined};
-                            }
-                        }
-                    }
-                    
-                    // Fallback to word widget Sentence section
-                    const sentenceSection = Array.from(document.querySelectorAll('div[data-word-widget] section')).find(s => s.querySelector('h3')?.textContent.includes('Sentence'));
-                    if (sentenceSection) {
-                        const sentenceBody = sentenceSection.querySelector('p, div:not(:has(h3)), [data-reader-sentence="true"]');
-                        const sentenceRaw = (sentenceBody || sentenceSection).textContent.replace(/^Sentence\s*/i, '').trim();
-                        if (sentenceRaw) {
-                            const tagged = sentenceRaw.includes(selectedText)
-                                ? sentenceRaw.replace(selectedText, `<selected>${selectedText}</selected>`)
-                                : `<selected>${selectedText}</selected> ${sentenceRaw}`;
-                            return {input: selectedText, context: tagged};
-                        }
-                    }
-                    
-                    // Fallback to legacy sentence container
-                    let currentSentenceEl = selectedEl?.closest(".reader-sentence, .sentence");
+                    let currentSentenceEl = selectedEl?.closest(".reader-sentence, .sentence") ||
+                                            (selectedEl?.dataset?.sentenceIndex ? document.querySelector(`.reader-sentence[data-s="${selectedEl.dataset.sentenceIndex}"]`) : null);
                     const allSentences = [...document.querySelectorAll(".reader-sentence, .sentence")];
                     if (currentSentenceEl && allSentences.length > 0) {
                         const currentIndex = allSentences.indexOf(currentSentenceEl);
@@ -12268,6 +12278,19 @@
                         const rawCombined = [...prefixTexts, currentText, ...suffixTexts].filter(Boolean).join(" ");
                         if (rawCombined) {
                             return {input: selectedText, context: rawCombined};
+                        }
+                    }
+                    
+                    // Fallback to word widget Sentence section
+                    const sentenceSection = Array.from(document.querySelectorAll('div[data-word-widget] section')).find(s => s.querySelector('h3')?.textContent.includes('Sentence'));
+                    if (sentenceSection) {
+                        const sentenceBody = sentenceSection.querySelector('p, div:not(:has(h3)), [data-reader-sentence="true"]');
+                        const sentenceRaw = (sentenceBody || sentenceSection).textContent.replace(/^Sentence\s*/i, '').trim();
+                        if (sentenceRaw) {
+                            const tagged = sentenceRaw.includes(selectedText)
+                                ? sentenceRaw.replace(selectedText, `<selected>${selectedText}</selected>`)
+                                : `<selected>${selectedText}</selected> ${sentenceRaw}`;
+                            return {input: selectedText, context: tagged};
                         }
                     }
                     

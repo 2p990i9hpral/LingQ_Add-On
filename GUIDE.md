@@ -178,11 +178,9 @@ Check **Enable the Keyboard Shortcuts** to activate single-key navigation withou
 
 | Setting Name | Default Key | Action Description |
 | :--- | :---: | :--- |
-| **Video Fullscreen Toggle** | `p` | Toggles fullscreen on the active video player. |
 | **Rewind (Skip Backward)** | `a` | Jumps playback backward by the configured skip duration. |
 | **Fast Forward (Skip Forward)** | `s` | Jumps playback forward by the configured skip duration. |
 | **Play TTS Audio** | `w` | Triggers AI TTS narration for the selected word or active sentence. |
-| **Open Translator** | `e` | Opens LingQ's default external translation popup. |
 | **Make Word Known** | `d` | Instantly advances the selected word to "Known" status. |
 | **Open Dictionary** | `f` | Opens the configured external dictionary. |
 | **Copy Selected Text** | `c` | Copies selected word or phrase to the clipboard. |
