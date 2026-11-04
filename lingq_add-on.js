@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      19.1.4
+// @version      19.1.5
 // @license      GPL-3.0-or-later
 // @grant       GM_setValue
 // @grant       GM_getValue
@@ -596,35 +596,52 @@
         }
     }
     
+    let isSettingMeaning = false;
+    
     async function setLingQMeaning(newMeaning) {
         if (!newMeaning) return;
         const meaningText = String(newMeaning).trim();
         if (!meaningText) return;
         
-        let input = document.querySelector('div[data-word-widget] form input[name="text"]');
+        let input = document.querySelector('div[data-word-widget] form input[name="text"], div[data-word-widget] input[name="text"]');
         let navigatedToMeanings = false;
-        let overlay = null;
         const wordWidget = document.querySelector('div[data-word-widget]');
+        const initialHeight = wordWidget?.offsetHeight;
         
+        isSettingMeaning = true;
         try {
+            if (initialHeight && wordWidget) {
+                wordWidget.style.minHeight = `${initialHeight}px`;
+            }
+            
             if (!input) {
-                const openMeaningsBtn = document.querySelector('div[data-word-widget] button[aria-label="Open Meanings"]');
-                if (openMeaningsBtn && wordWidget) {
-                    const widgetParent = wordWidget.parentElement || wordWidget;
-                    overlay = wordWidget.cloneNode(true);
-                    overlay.id = "addon-meaning-transition-overlay";
-                    overlay.style.cssText = "position: absolute; inset: 0; z-index: 50; pointer-events: none; background: inherit; overflow: hidden;";
-                    widgetParent.style.position = "relative";
-                    widgetParent.appendChild(overlay);
-                    
-                    openMeaningsBtn.click();
-                    navigatedToMeanings = true;
-                    
-                    const addMeaningBtn = await waitForElement('div[data-word-widget] button:has(svg.lucide-plus)', 1000);
-                    if (addMeaningBtn) {
-                        addMeaningBtn.click();
+                const directAddBtn = Array.from(document.querySelectorAll('div[data-word-widget] button')).find((btn) =>
+                    btn.textContent.includes('Add Meaning') || btn.querySelector('svg.lucide-plus')
+                );
+                
+                if (directAddBtn && !document.querySelector('div[data-word-widget] button[aria-label="Open Meanings"]')) {
+                    directAddBtn.click();
+                    input = await waitForElement('div[data-word-widget] form input[name="text"], div[data-word-widget] input[name="text"]', 500);
+                } else {
+                    const openMeaningsBtn = document.querySelector('div[data-word-widget] button[aria-label="Open Meanings"]') ||
+                        Array.from(document.querySelectorAll('div[data-word-widget] button')).find((btn) =>
+                            btn.textContent.includes('Meanings') || btn.getAttribute('aria-label')?.includes('Meanings')
+                        );
+                    if (openMeaningsBtn && wordWidget) {
+                        openMeaningsBtn.click();
+                        navigatedToMeanings = true;
+                        
+                        let addMeaningBtn = await waitForElement('div[data-word-widget] button:has(svg.lucide-plus)', 300);
+                        if (!addMeaningBtn) {
+                            addMeaningBtn = Array.from(document.querySelectorAll('div[data-word-widget] button')).find((btn) =>
+                                btn.textContent.includes('Add Meaning') || btn.querySelector('svg.lucide-plus')
+                            );
+                        }
+                        if (addMeaningBtn) {
+                            addMeaningBtn.click();
+                        }
+                        input = await waitForElement('div[data-word-widget] form input[name="text"], div[data-word-widget] input[name="text"]', 500);
                     }
-                    input = await waitForElement('div[data-word-widget] form input[name="text"]', 1000);
                 }
             }
             
@@ -632,7 +649,7 @@
                 const editBtn = document.querySelector('div[data-word-widget] button[aria-label^="Edit this meaning"]');
                 if (editBtn) {
                     editBtn.click();
-                    input = await waitForElement('div[data-word-widget] form input[name="text"]', 1000);
+                    input = await waitForElement('div[data-word-widget] form input[name="text"], div[data-word-widget] input[name="text"]', 500);
                 }
             }
             
@@ -649,6 +666,8 @@
             if (form) {
                 input.dispatchEvent(new KeyboardEvent('keydown', {key: 'Enter', code: 'Enter', bubbles: true}));
                 form.dispatchEvent(new Event('submit', {bubbles: true, cancelable: true}));
+                const submitBtn = form.querySelector('button[type="submit"]');
+                if (submitBtn) submitBtn.click();
             }
             
             input.blur();
@@ -656,54 +675,56 @@
         } finally {
             if (navigatedToMeanings) {
                 try {
-                    const backBtn = await waitForElement('div[data-word-widget] button[aria-label="Back to the word"]', 800);
+                    let backBtn = document.querySelector('div[data-word-widget] button[aria-label="Back to the word"], div[data-word-widget] button[aria-label="Back"], div[data-word-widget] button[aria-label*="Back"]');
+                    if (!backBtn) {
+                        backBtn = Array.from(document.querySelectorAll('div[data-word-widget] button')).find((btn) =>
+                            btn.querySelector('svg.lucide-chevron-left, svg.lucide-arrow-left') ||
+                            btn.textContent.trim().startsWith('<') ||
+                            btn.textContent.includes('Meanings')
+                        );
+                    }
                     if (backBtn) {
                         backBtn.click();
-                        await new Promise((resolve) => requestAnimationFrame(resolve));
                     }
                 } catch (e) {
                     console.error("Failed to return from meanings sub-view:", e);
                 }
             }
-            if (overlay) {
-                overlay.remove();
+            if (wordWidget) {
+                wordWidget.style.minHeight = "";
             }
+            isSettingMeaning = false;
         }
     }
     
     function waitForElement(selector, timeout = 1000) {
-        return new Promise((resolve, reject) => {
-            const element = document.querySelector(selector);
-            if (element) return resolve(element);
+        return new Promise((resolve) => {
+            const initialElement = document.querySelector(selector);
+            if (initialElement) return resolve(initialElement);
             
             let timeoutId;
-            const observer = new MutationObserver((mutations) => {
-                mutations.forEach((mutation) => {
-                    for (const node of mutation.addedNodes) {
-                        if (node.nodeType !== Node.ELEMENT_NODE) continue;
-                        
-                        if (node.matches(selector)) {
-                            clearTimeout(timeoutId);
-                            resolve(node);
-                            observer.disconnect();
-                        } else {
-                            const foundElement = node.querySelector(selector);
-                            if (foundElement) {
-                                clearTimeout(timeoutId);
-                                resolve(foundElement);
-                                observer.disconnect();
-                            }
-                        }
-                    }
-                });
+            const observer = new MutationObserver(() => {
+                const foundElement = document.querySelector(selector);
+                if (foundElement) {
+                    clearTimeout(timeoutId);
+                    observer.disconnect();
+                    resolve(foundElement);
+                }
             });
             
-            observer.observe(document.documentElement, {childList: true, subtree: true});
+            observer.observe(document.documentElement, {
+                childList: true,
+                subtree: true,
+                attributes: true
+            });
             
             timeoutId = setTimeout(() => {
-                resolve(null);
                 observer.disconnect();
-                console.log('Wait', `"${selector}" not found`);
+                const fallbackElement = document.querySelector(selector);
+                resolve(fallbackElement || null);
+                if (!fallbackElement) {
+                    console.log('Wait', `"${selector}" not found`);
+                }
             }, timeout);
         });
     }
@@ -8197,6 +8218,7 @@
     
     async function setupReader() {
         const language = getLessonLanguage();
+        let refreshReaderWidget = null;
 
         function isNativePageMode() {
             return Boolean(document.querySelector(".poc-page"));
@@ -8287,6 +8309,9 @@
             if (!isVideoEnded) return;
             isVideoEnded = false;
         }
+
+        let localVideoPlayerObserver = null;
+        let localVideoSpeedObserver = null;
 
         function handleLocalVideoContainerVisibility() {
             async function bindLingQPlayerControls(videoElement) {
@@ -8394,7 +8419,16 @@
                     }
                 }, true);
 
-                const playerObserver = new MutationObserver(() => {
+                if (localVideoPlayerObserver) {
+                    localVideoPlayerObserver.disconnect();
+                    localVideoPlayerObserver = null;
+                }
+                if (localVideoSpeedObserver) {
+                    localVideoSpeedObserver.disconnect();
+                    localVideoSpeedObserver = null;
+                }
+
+                localVideoPlayerObserver = new MutationObserver(() => {
                     const duration = videoElement.duration || 0;
                     let preciseTargetTime = parseFloat(sliderHandle.getAttribute("aria-valuenow"));
                     if (isNaN(preciseTargetTime) || preciseTargetTime === 0) {
@@ -8482,15 +8516,15 @@
                     }
                 });
                 
-                const speedObserver = new MutationObserver(() => {
+                localVideoSpeedObserver = new MutationObserver(() => {
                     syncPlaybackRate();
                 });
                 
-                playerObserver.observe(sliderHandle, {attributes: true, attributeFilter: ["aria-valuenow", "style"]});
-                playerObserver.observe(playButton, {childList: true, subtree: true, attributes: true, attributeFilter: ["class"]});
+                localVideoPlayerObserver.observe(sliderHandle, {attributes: true, attributeFilter: ["aria-valuenow", "style"]});
+                localVideoPlayerObserver.observe(playButton, {childList: true, subtree: true, attributes: true, attributeFilter: ["class"]});
                 
                 if (speedLabel) {
-                    speedObserver.observe(speedLabel, {childList: true, characterData: true, subtree: true});
+                    localVideoSpeedObserver.observe(speedLabel, {childList: true, characterData: true, subtree: true});
                 }
                 
                 videoElement.addEventListener("play", () => {
@@ -8787,11 +8821,14 @@
                 attemptAutoMatch = async function attemptAutoMatch() {
                     if (!cachedLocalVideoFiles) return false;
                     
-                    const titleElement = await waitForElement('header[data-site-header="true"] .truncate, h1.reader-heading', 3000);
-                    if (!titleElement) return false;
-                    
-                    const title = titleElement.textContent.trim();
+                    let title = getLessonTitle();
+                    if (!title) {
+                        const titleElement = await waitForElement('header[data-site-header="true"] .truncate, h1.reader-heading', 1000);
+                        title = titleElement?.textContent?.trim() || "";
+                    }
                     if (!title) return false;
+                    
+                    updateDocumentTitle(title);
                     
                     const match = findBestMatchingFiles(cachedLocalVideoFiles, title);
                     if (match.video) {
@@ -8893,42 +8930,75 @@
                         titleBar.style.display = "flex";
                     }
                     
-                    let initialTime = 0;
-                    const sliderHandle = document.querySelector('footer [data-slot="slider-thumb"], footer [role="slider"], .audio-player--progress .rc-slider-handle');
-                    if (sliderHandle) {
-                        let currentProgress = parseFloat(sliderHandle.getAttribute("aria-valuenow"));
-                        if (isNaN(currentProgress)) {
-                            const valueText = sliderHandle.getAttribute("aria-valuetext");
-                            if (valueText && valueText.includes("/")) {
-                                const currentStr = valueText.split("/")[0].trim();
-                                const parts = currentStr.split(":").map(Number);
-                                if (parts.length === 2) currentProgress = parts[0] * 60 + parts[1];
-                                else if (parts.length === 3) currentProgress = parts[0] * 3600 + parts[1] * 60 + parts[2];
-                            }
-                        }
-                        currentProgress = currentProgress || 0;
-                        const maxProgress = parseFloat(sliderHandle.getAttribute("aria-valuemax")) || 0;
-                        const isCompleted = maxProgress > 0 && currentProgress >= maxProgress - 0.5;
-
-                        if (!isCompleted && currentProgress > 0) {
-                            initialTime = currentProgress;
-                        }
-                    } else if (typeof mediaInstances !== "undefined") {
-                        mediaInstances.forEach((media) => {
-                            if (media && document.body.contains(media) && media.currentTime > 0) {
-                                const isCompleted = media.duration > 0 && media.currentTime >= media.duration - 0.5;
-                                if (!isCompleted) {
-                                    initialTime = media.currentTime;
+                    function getLingQAudioProgress() {
+                        if (typeof mediaInstances !== "undefined") {
+                            for (const media of mediaInstances) {
+                                if (media && media.id !== "addonLocalVideo" && !media.src?.includes('/tts/')) {
+                                    const cur = media.currentTime;
+                                    const dur = media.duration;
+                                    if (!isNaN(cur) && cur > 0) {
+                                        const isCompleted = !isNaN(dur) && dur > 0 && cur >= dur - 0.5;
+                                        if (!isCompleted) return cur;
+                                    }
                                 }
                             }
-                        });
+                        }
+                        
+                        const audioElements = document.querySelectorAll('audio');
+                        for (const audio of audioElements) {
+                            if (audio && audio.id !== "addonLocalVideo" && !audio.src?.includes('/tts/')) {
+                                const cur = audio.currentTime;
+                                const dur = audio.duration;
+                                if (!isNaN(cur) && cur > 0) {
+                                    const isCompleted = !isNaN(dur) && dur > 0 && cur >= dur - 0.5;
+                                    if (!isCompleted) return cur;
+                                }
+                            }
+                        }
+
+                        const sliderHandle = document.querySelector('footer [data-slot="slider-thumb"], footer [role="slider"], .audio-player--progress .rc-slider-handle');
+                        if (sliderHandle) {
+                            let preciseTargetTime = parseFloat(sliderHandle.getAttribute("aria-valuenow"));
+                            if (isNaN(preciseTargetTime) || preciseTargetTime === 0) {
+                                const ariaText = sliderHandle.getAttribute("aria-valuetext");
+                                if (ariaText) {
+                                    const timeParts = ariaText.split('/')[0].trim().split(':');
+                                    if (timeParts.length === 2) {
+                                        preciseTargetTime = parseInt(timeParts[0], 10) * 60 + parseFloat(timeParts[1]);
+                                    } else if (timeParts.length === 3) {
+                                        preciseTargetTime = parseInt(timeParts[0], 10) * 3600 + parseInt(timeParts[1], 10) * 60 + parseFloat(timeParts[2]);
+                                    }
+                                }
+                            }
+                            if (!isNaN(preciseTargetTime) && preciseTargetTime > 0) {
+                                const maxVal = parseFloat(sliderHandle.getAttribute("aria-valuemax")) || 0;
+                                const isCompleted = maxVal > 0 && preciseTargetTime >= maxVal - 0.5;
+                                if (!isCompleted) return preciseTargetTime;
+                            }
+                        }
+
+                        return 0;
                     }
 
+                    let initialTime = getLingQAudioProgress();
+
                     const startPlayback = () => {
-                        videoElement.currentTime = initialTime;
-                        if (typeof mediaInstances !== "undefined") {
-                            mediaInstances.forEach(media => {
-                                if (media) media.currentTime = initialTime;
+                        let targetTime = initialTime;
+                        if (targetTime <= 0) {
+                            targetTime = getLingQAudioProgress();
+                        }
+                        
+                        if (targetTime > 0) {
+                            videoElement.currentTime = targetTime;
+                            if (typeof mediaInstances !== "undefined") {
+                                mediaInstances.forEach(media => {
+                                    if (media) media.currentTime = targetTime;
+                                });
+                            }
+                            document.querySelectorAll('audio').forEach(audio => {
+                                if (audio && audio.id !== "addonLocalVideo" && !audio.src?.includes('/tts/')) {
+                                    audio.currentTime = targetTime;
+                                }
                             });
                         }
                         
@@ -8963,6 +9033,37 @@
             if (!PageMediaElement || window.__lingqAddonMediaHooked) return;
             window.__lingqAddonMediaHooked = true;
 
+            const srcDescriptor = Object.getOwnPropertyDescriptor(PageMediaElement.prototype, 'src');
+            if (srcDescriptor && srcDescriptor.set) {
+                const originalSrcSetter = srcDescriptor.set;
+                Object.defineProperty(PageMediaElement.prototype, 'src', {
+                    get: srcDescriptor.get,
+                    set: function (val) {
+                        if (this.id !== "addonLocalVideo" && typeof val === "string" && !val.startsWith('data:') && !val.includes('/tts/')) {
+                            if (!mediaInstances.has(this)) {
+                                mediaInstances.forEach((oldMedia) => {
+                                    if (oldMedia && oldMedia !== this && oldMedia.id !== "addonLocalVideo") {
+                                        try {
+                                            oldMedia.pause();
+                                            oldMedia.src = "";
+                                        } catch (e) {}
+                                    }
+                                });
+                                mediaInstances.clear();
+                                mediaInstances.add(this);
+                            }
+                        }
+                        return originalSrcSetter.call(this, val);
+                    }
+                });
+            }
+            
+            document.querySelectorAll('audio').forEach((a) => {
+                if (a.id !== "addonLocalVideo" && !a.src?.includes('/tts/')) {
+                    mediaInstances.add(a);
+                }
+            });
+
             const volumeDescriptor = Object.getOwnPropertyDescriptor(PageMediaElement.prototype, 'volume');
             const originalVolumeSetter = volumeDescriptor.set;
             const originalVolumeGetter = volumeDescriptor.get;
@@ -8991,6 +9092,12 @@
             
             const originalPlay = PageMediaElement.prototype.play;
             PageMediaElement.prototype.play = function () {
+                if (this.id === "addonLocalVideo" && !this.isConnected) {
+                    this.pause();
+                    this.removeAttribute("src");
+                    return Promise.resolve();
+                }
+
                 const lessonLang = getLessonLanguage();
                 const isLocalVideoActive = lessonLang && settings.styleType[lessonLang] === "localVideo";
 
@@ -9002,9 +9109,22 @@
                 const src = this.src || '';
                 if (this.id !== "addonLocalVideo" && !src.startsWith('data:') && !src.includes('/tts/')) {
                     if (!mediaInstances.has(this)) {
+                        mediaInstances.forEach((oldMedia) => {
+                            if (oldMedia && oldMedia !== this && oldMedia.id !== "addonLocalVideo") {
+                                try {
+                                    oldMedia.pause();
+                                    oldMedia.src = "";
+                                } catch (e) {}
+                            }
+                        });
+                        mediaInstances.clear();
                         mediaInstances.add(this);
                     }
-                    this.volume = 1.0;
+                    if (isLocalVideoActive) {
+                        this.volume = 0;
+                    } else {
+                        this.volume = 1.0;
+                    }
                     if (isCustomSpeedActive()) this.playbackRate = settings.lingqSpeed[getLessonLanguage()];
                 }
                 return originalPlay.apply(this, arguments);
@@ -9241,7 +9361,18 @@
 
         function getLessonTitle() {
             const titleElement = document.querySelector('header[data-site-header="true"] .truncate') || document.querySelector("h1.reader-heading");
-            return titleElement?.textContent.trim() || "";
+            const title = titleElement?.textContent.trim() || "";
+            if (title) updateDocumentTitle(title);
+            return title;
+        }
+
+        function updateDocumentTitle(lessonTitle = null) {
+            const title = (lessonTitle || getLessonTitle())?.trim();
+            if (!title) return;
+            const targetTitle = `${title} | LingQ`;
+            if (document.title !== targetTitle) {
+                document.title = targetTitle;
+            }
         }
 
         let isReaderMouseDown = false;
@@ -9678,24 +9809,64 @@
         
         function resetLocalVideo() {
             isVideoEnded = false;
+            if (localVideoPlayerObserver) {
+                localVideoPlayerObserver.disconnect();
+                localVideoPlayerObserver = null;
+            }
+            if (localVideoSpeedObserver) {
+                localVideoSpeedObserver.disconnect();
+                localVideoSpeedObserver = null;
+            }
             const container = document.getElementById("local-video-container");
             if (container) {
                 const video = container.querySelector("#addonLocalVideo");
-                if (video && video.src) {
-                    URL.revokeObjectURL(video.src);
-                    video.src = "";
-                    video.load();
+                if (video) {
+                    try {
+                        video.pause();
+                        if (video.src) URL.revokeObjectURL(video.src);
+                        video.removeAttribute("src");
+                        video.load();
+                    } catch (e) {}
                 }
                 const track = container.querySelector("#addonLocalVideoTrack");
                 if (track && track.src) {
-                    URL.revokeObjectURL(track.src);
-                    track.src = "";
+                    try {
+                        URL.revokeObjectURL(track.src);
+                        track.removeAttribute("src");
+                    } catch (e) {}
                 }
                 container.remove();
             }
+            document.querySelectorAll('#addonLocalVideo').forEach((video) => {
+                try {
+                    video.pause();
+                    if (video.src) URL.revokeObjectURL(video.src);
+                    video.removeAttribute("src");
+                    video.load();
+                    video.remove();
+                } catch (e) {}
+            });
             if (typeof mediaInstances !== "undefined") {
+                mediaInstances.forEach((media) => {
+                    if (media && media.id !== "addonLocalVideo") {
+                        try {
+                            media.pause();
+                            media.currentTime = 0;
+                            media.src = "";
+                        } catch (e) {}
+                    }
+                });
                 mediaInstances.clear();
             }
+            document.querySelectorAll('audio').forEach((audio) => {
+                if (audio && audio.id !== "addonLocalVideo" && !audio.src?.includes('/tts/')) {
+                    try {
+                        audio.pause();
+                        audio.currentTime = 0;
+                        audio.src = "";
+                    } catch (e) {}
+                }
+            });
         }
         
         function getColorSettings(colorMode) {
@@ -9936,7 +10107,8 @@
                     visibility: hidden !important;
                 }
                 .reader-body ruby:hover rt,
-                .reader-body .reader-sentence:hover rt,
+                .reader-body .sentence-item--ruby:hover rt,
+                .reader-body .sentence-item:hover + rt,
                 .reader-body rt:hover {
                     visibility: visible !important;
                 }
@@ -9948,7 +10120,8 @@
                     visibility: hidden !important;
                 }
                 ruby:hover rt,
-                .reader-sentence:hover rt,
+                .sentence-item--ruby:hover rt,
+                .sentence-item:hover + rt,
                 rt:hover {
                     visibility: visible !important;
                 }
@@ -9994,6 +10167,10 @@
                 }
 
                 /*highlightings*/
+
+                .sentence-item {
+                    padding: 0 !important;
+                }
 
                 .sentence-item.ar-new {
                     background-color: var(--unknown-background) !important;
@@ -10091,6 +10268,7 @@
                 div[data-word-widget] #chat-widget { /* AI chat widget embedded inside right word widget */
                     padding: 0 !important;
                     margin: 0 !important;
+                    background: var(--card, #18181b) !important;
                 }
 
                 #addon-sentence-header + #chat-widget { /* Chat widget positioned directly below custom sentence header */
@@ -10114,6 +10292,7 @@
                 }
 
                 .addon-quick-meaning-form {
+                    order: 999 !important;
                     margin-top: 6px;
                 }
 
@@ -10121,9 +10300,7 @@
                     height: 40px !important;
                     padding: 8px 12px !important;
                     font-size: 0.875rem !important;
-                    line-height: 1.25rem !important;
                     border-radius: 8px !important;
-                    background: var(--secondary, rgba(125, 125, 125, 0.15)) !important;
                     border: 1px solid var(--border, rgba(125, 125, 125, 0.25)) !important;
                     color: var(--card-foreground, inherit) !important;
                     outline: none !important;
@@ -10132,14 +10309,11 @@
                 }
 
                 .addon-quick-meaning-input:hover {
-                    background: var(--secondary, rgba(125, 125, 125, 0.22)) !important;
                     border-color: var(--border, rgba(125, 125, 125, 0.45)) !important;
                 }
 
                 .addon-quick-meaning-input:focus {
                     background: var(--background, #1e1e1e) !important;
-                    border-color: var(--primary, #3b82f6) !important;
-                    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.25) !important;
                 }
 
                 .addon-quick-meaning-input::placeholder {
@@ -11337,6 +11511,12 @@
                     : (readerContainer?.querySelector?.('.reader-body') || readerContainer);
                 if (!targetContainer) return;
 
+                function isAudioPlaying() {
+                    return Boolean(
+                        document.querySelector('.reader-sentence.playing, .sentence-item.playing, footer button[aria-label="Pause"], footer button svg.lucide-pause')
+                    );
+                }
+
                 let selectedFocusRafId = null;
                 
                 sentenceFocusObserver = new MutationObserver((mutations) => {
@@ -11348,9 +11528,11 @@
                         const hasIsSelected = target.classList.contains('selected');
                         
                         if (hasIsSelected && !hadIsSelected) {
+                            if (isAudioPlaying()) return;
                             if (selectedFocusRafId) cancelAnimationFrame(selectedFocusRafId);
                             selectedFocusRafId = requestAnimationFrame(() => {
                                 selectedFocusRafId = null;
+                                if (isAudioPlaying()) return;
                                 focusReaderElement(target);
                             });
                         }
@@ -12087,6 +12269,7 @@
                 resetScroll();
                 requestAnimationFrame(() => resetScroll());
                 updateQuickSummaryPageVisibility();
+                updateDocumentTitle();
                 
                 currentGeminiCacheName = null;
                 geminiCachePromise = null;
@@ -12108,7 +12291,12 @@
                 if (lessonLanguage && lessonId) {
                     getLessonSentences(lessonLanguage, lessonId).catch(() => {});
                 }
-                await generateLessonSummary(node);
+                generateLessonSummary(node).catch((error) => {
+                    console.error("Failed to generate lesson summary:", error);
+                });
+                if (typeof refreshReaderWidget === "function") {
+                    refreshReaderWidget();
+                }
                 resetScroll();
                 requestAnimationFrame(() => resetScroll());
             }
@@ -12119,6 +12307,7 @@
 
             async function checkAndHandleLessonContent() {
                 const newLessonId = getLessonId();
+                updateDocumentTitle();
                 const bodyContainer = document.querySelector('div[data-reader-mode-body="true"]');
                 if (!bodyContainer) return;
 
@@ -12152,6 +12341,12 @@
             const readerParent = document.getElementById("lesson-reader") || document.body;
             const lessonTransitionObserver = new MutationObserver(() => {
                 checkAndHandleLessonContent();
+                const currentSideCol = document.querySelector('div[data-reader-side-column="true"]');
+                if (currentSideCol && (!observedSideColumn || observedSideColumn !== currentSideCol)) {
+                    if (typeof refreshReaderWidget === "function") {
+                        refreshReaderWidget();
+                    }
+                }
             });
             lessonTransitionObserver.observe(readerParent, {childList: true, subtree: true});
 
@@ -13173,10 +13368,23 @@
                                     const currentExampleSentence = exampleSentenceElem?.textContent?.trim() || "";
                                     const currentExampleTranslation = exampleTranslationElem?.textContent?.trim() || "";
                                     
-                                    const existingMeaningBadges = document.querySelectorAll('div[data-word-widget] bdi[data-slot="meaning"], .reference-input-text');
-                                    const existingMeanings = Array.from(existingMeaningBadges).map((el) => el.textContent.trim()).filter(Boolean);
-                                    if (currentMeaning && !existingMeanings.includes(currentMeaning)) {
-                                        await setLingQMeaning(currentMeaning);
+                                    if (currentMeaning) {
+                                        const quickMeaningInput = document.querySelector('input.addon-quick-meaning-input');
+                                        if (quickMeaningInput) {
+                                            quickMeaningInput.value = currentMeaning;
+                                            const quickForm = quickMeaningInput.closest('form');
+                                            if (quickForm) {
+                                                if (quickForm.requestSubmit) {
+                                                    quickForm.requestSubmit();
+                                                } else {
+                                                    quickForm.dispatchEvent(new Event('submit', {bubbles: true, cancelable: true}));
+                                                }
+                                            } else {
+                                                await setLingQMeaning(currentMeaning);
+                                            }
+                                        } else {
+                                            await setLingQMeaning(currentMeaning);
+                                        }
                                     }
                                     
                                     const {data: existing} = await getDbClient()
@@ -13307,6 +13515,14 @@
                     const sendButton = document.getElementById("send-button");
                     
                     sendButton.disabled = true;
+                    
+                    let userClickedAway = false;
+                    const handlePointerDown = (event) => {
+                        if (event.target !== userInput && event.target !== sendButton) {
+                            userClickedAway = true;
+                        }
+                    };
+                    window.addEventListener("pointerdown", handlePointerDown, true);
                     
                     let fullBotResponse = '';
                     
@@ -13488,11 +13704,12 @@
                                 if (details) details.open = true;
                             }
                             
+                            window.removeEventListener("pointerdown", handlePointerDown, true);
                             const botMessageId = generateUniqueId();
                             botMessageDiv.dataset.messageId = botMessageId;
                             chatHistory = updateChatHistoryState(chatHistory, cleanedContent, "assistant", botMessageId);
                             sendButton.disabled = false;
-                            if (focus) userInput.focus();
+                            if (focus && !userClickedAway) userInput.focus();
                             
                             const existingRegenerateButton = document.querySelector('.regenerate-button');
                             if (existingRegenerateButton) existingRegenerateButton.remove();
@@ -13590,6 +13807,7 @@
                             onStreamCompleted(cleanedContent);
                         },
                         (error) => {
+                            window.removeEventListener("pointerdown", handlePointerDown, true);
                             if (chatRafId) {
                                 cancelAnimationFrame(chatRafId);
                                 chatRafId = null;
@@ -13880,7 +14098,15 @@
                     if (!scrollArea) return;
                     
                     const meaningsSection = Array.from(scrollArea.querySelectorAll('section')).find((s) => s.querySelector('h3')?.textContent.includes('Meanings'));
-                    if (!meaningsSection || meaningsSection.querySelector('.addon-quick-meaning-form')) return;
+                    if (!meaningsSection) return;
+                    
+                    const existingForm = meaningsSection.querySelector('.addon-quick-meaning-form');
+                    if (existingForm) {
+                        if (meaningsSection.lastElementChild !== existingForm) {
+                            meaningsSection.appendChild(existingForm);
+                        }
+                        return;
+                    }
                     
                     const meaningInput = createElement("input", {
                         type: "text",
@@ -13904,9 +14130,7 @@
                         } finally {
                             meaningInput.disabled = false;
                             isSubmitting = false;
-                            if (!isFromBlur) {
-                                meaningInput.focus();
-                            }
+                            meaningInput.blur();
                         }
                     }
                     
@@ -13959,7 +14183,7 @@
                 const wordTitleHeader = document.querySelector('div[data-word-widget] .px-4.pt-3');
                 if (wordTitleHeader) {
                     selectedTextObserver = new MutationObserver(() => {
-                        if (isProgrammaticReferenceWordUpdate) return;
+                        if (isProgrammaticReferenceWordUpdate || isSettingMeaning) return;
                         const currentText = getCurrentlyTargetedText();
                         if (currentText && currentText !== lastActiveWordText) {
                             lastActiveWordText = currentText;
@@ -13978,8 +14202,9 @@
                     }
                     observedSideColumn = sideColumn;
                     sideColumnObserver = new MutationObserver((mutations) => {
+                        if (isSettingMeaning) return;
                         for (const mutation of mutations) {
-                            if (mutation.target.closest?.('#chat-widget, #memo-widget-container, .addon-quick-meaning-form, #addon-meaning-transition-overlay')) continue;
+                            if (mutation.target.closest?.('#chat-widget, #memo-widget-container, .addon-quick-meaning-form')) continue;
                             const currentText = getCurrentlyTargetedText();
                             if (currentText && currentText !== lastActiveWordText) {
                                 lastActiveWordText = currentText;
@@ -13989,7 +14214,7 @@
                             }
                             for (const node of mutation.addedNodes) {
                                 if (node.nodeType !== Node.ELEMENT_NODE) continue;
-                                if (node.matches?.('#chat-widget, #memo-widget-container, .addon-quick-meaning-form, #addon-meaning-transition-overlay')) continue;
+                                if (node.matches?.('#chat-widget, #memo-widget-container, .addon-quick-meaning-form')) continue;
                                 if (node.matches?.("[data-word-widget]") || node.querySelector?.("[data-word-widget]")) {
                                     if (currentText) {
                                         lastActiveWordText = currentText;
@@ -14011,6 +14236,21 @@
             let lastActiveWordText = "";
             let lastActiveSentenceText = "";
             let lastAskedTargetText = "";
+            
+            refreshReaderWidget = function refreshReaderWidget() {
+                observedSideColumn = null;
+                lastActiveWordText = "";
+                lastActiveSentenceText = "";
+                if (sideColumnObserver) {
+                    sideColumnObserver.disconnect();
+                    sideColumnObserver = null;
+                }
+                if (selectedTextObserver) {
+                    selectedTextObserver.disconnect();
+                    selectedTextObserver = null;
+                }
+                updateWidget(false);
+            };
             
             updateWidget();
             if (!document.querySelector('div[data-reader-side-column="true"]')) {
