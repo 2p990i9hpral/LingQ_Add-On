@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      19.1.5
+// @version      19.2.0
 // @license      GPL-3.0-or-later
 // @grant       GM_setValue
 // @grant       GM_getValue
@@ -454,6 +454,9 @@
     }
     
     const lessonSentencesCache = new Map();
+    const lessonSimpleCache = new Map();
+    const lessonWordsCache = new Map();
+
     async function getLessonSentences(lessonLanguage, lessonId) {
         const cacheKey = `${lessonLanguage}_${lessonId}`;
         if (lessonSentencesCache.has(cacheKey)) {
@@ -466,6 +469,102 @@
         const data = await response.json();
         lessonSentencesCache.set(cacheKey, data);
         return data;
+    }
+
+    async function getLessonSimpleData(lessonLanguage, lessonId) {
+        const cacheKey = `${lessonLanguage}_${lessonId}`;
+        if (lessonSimpleCache.has(cacheKey)) {
+            return lessonSimpleCache.get(cacheKey);
+        }
+        try {
+            const url = `https://www.lingq.com/api/v3/${lessonLanguage}/lessons/${lessonId}/simple/?cardsTranslitFormat=list`;
+            const response = await fetch(url);
+            const data = await response.json();
+            lessonSimpleCache.set(cacheKey, data);
+            return data;
+        } catch (error) {
+            return null;
+        }
+    }
+
+    async function getLessonWordsData(lessonLanguage, lessonId) {
+        const cacheKey = `${lessonLanguage}_${lessonId}`;
+        if (lessonWordsCache.has(cacheKey)) {
+            return lessonWordsCache.get(cacheKey);
+        }
+        try {
+            const url = `https://www.lingq.com/api/v3/${lessonLanguage}/lessons/${lessonId}/words/?cardsTranslitFormat=list&init=1&chunk_size=10000`;
+            const response = await fetch(url);
+            const data = await response.json();
+            lessonWordsCache.set(cacheKey, data);
+            return data;
+        } catch (error) {
+            return null;
+        }
+    }
+
+    function getNewWordsSetFromDOM() {
+        const newWordsSet = new Set();
+        document.querySelectorAll('.sentence-item.ar-new').forEach((element) => {
+            const word = element.textContent?.trim();
+            if (word) newWordsSet.add(word);
+        });
+        return newWordsSet;
+    }
+
+    function buildLessonTokenStream(simpleData, wordsData, newWordsSet = new Set()) {
+        if (!simpleData?.tokenizedText) return [];
+
+        const cardMap = new Map();
+        if (wordsData?.cards) {
+            Object.values(wordsData.cards).forEach((card) => {
+                if (card?.term) cardMap.set(card.term, card);
+            });
+        }
+
+        const wordsMap = wordsData?.words || {};
+
+        const tokens = [];
+        simpleData.tokenizedText.forEach((paragraph) => {
+            if (!Array.isArray(paragraph)) return;
+            paragraph.forEach((sentence) => {
+                if (!Array.isArray(sentence?.tokens)) return;
+                sentence.tokens.forEach((token) => {
+                    if (!token?.text || token.punct || token.whitespace) return;
+                    
+                    const word = token.text;
+                    let className = null;
+                    let isHighlight = false;
+
+                    const wordInfo = token.wordId ? wordsMap[token.wordId] : null;
+                    const cardInfo = (wordInfo?.cardId && wordsData?.cards)
+                        ? wordsData.cards[wordInfo.cardId]
+                        : (cardMap.get(word) || null);
+
+                    if (cardInfo) {
+                        const status = cardInfo.status ?? 0;
+                        if (status >= 0 && status <= 2) {
+                            className = `ar-lingq-${status}`;
+                            isHighlight = true;
+                        } else if (status === 3) {
+                            className = "ar-lingq-learned";
+                            isHighlight = true;
+                        }
+                    } else if (wordInfo?.status === "new" || newWordsSet.has(word)) {
+                        className = "ar-new";
+                        isHighlight = true;
+                    }
+
+                    tokens.push({
+                        text: word,
+                        className: className,
+                        isHighlight: isHighlight
+                    });
+                });
+            });
+        });
+
+        return tokens;
     }
     
     async function uploadAudioToLesson(lessonLanguage, lessonId, audioData, duration) {
@@ -2980,14 +3079,92 @@
         document.head.appendChild(link);
     }
     
-    function convertSrtToVttBlobUrl(srtText, cueSettings = "") {
-        const cueSuffix = cueSettings ? ` ${cueSettings}` : "";
-        let vttText = srtText.startsWith("WEBVTT")
-            ? srtText
-            : ("WEBVTT\n\n" + srtText.replace(/(\d{2}:\d{2}:\d{2}),(\d{3})/g, "$1.$2"));
-        if (cueSuffix) {
-            vttText = vttText.replace(/(--> \d{2}:\d{2}:\d{2}\.\d{3})(?:[^\r\n]*)/g, `$1${cueSuffix}`);
+    function highlightTextWithTokens(text, tokenStream, getTokenIndex, setTokenIndex) {
+        if (!tokenStream || tokenStream.length === 0) return text;
+        
+        let tokenIdx = getTokenIndex();
+        let cursor = 0;
+        let result = "";
+        
+        while (tokenIdx < tokenStream.length) {
+            const token = tokenStream[tokenIdx];
+            if (!token?.text) {
+                tokenIdx++;
+                continue;
+            }
+            
+            const matchPos = text.indexOf(token.text, cursor);
+            if (matchPos === -1) {
+                let foundAhead = false;
+                for (let look = 1; look <= 2 && (tokenIdx + look) < tokenStream.length; look++) {
+                    const aheadToken = tokenStream[tokenIdx + look];
+                    if (aheadToken?.text && text.indexOf(aheadToken.text, cursor) !== -1) {
+                        tokenIdx += look;
+                        foundAhead = true;
+                        break;
+                    }
+                }
+                if (!foundAhead) break;
+                continue;
+            }
+            
+            result += text.slice(cursor, matchPos);
+            
+            if (token.isHighlight && token.className) {
+                result += `<c.${token.className}>${token.text}</c>`;
+            } else {
+                result += token.text;
+            }
+            
+            cursor = matchPos + token.text.length;
+            tokenIdx++;
         }
+        
+        result += text.slice(cursor);
+        setTokenIndex(tokenIdx);
+        return result;
+    }
+
+    function convertSrtToVttBlobUrl(srtText, cueSettings = "", tokenStream = null) {
+        const cueSuffix = cueSettings ? ` ${cueSettings}` : "";
+        const normalized = srtText.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+        const blocks = normalized.split(/\n\n+/);
+        
+        let tokenIndex = 0;
+        const processedBlocks = blocks.map((block) => {
+            const trimmed = block.trim();
+            if (!trimmed || trimmed === "WEBVTT") return trimmed;
+            
+            const lines = trimmed.split("\n");
+            const timeIndex = lines.findIndex(line => line.includes("-->"));
+            if (timeIndex === -1) return trimmed;
+            
+            lines[timeIndex] = lines[timeIndex]
+                .replace(/(\d{2}:\d{2}:\d{2}),(\d{3})/g, "$1.$2")
+                .replace(/(--> \d{2}:\d{2}:\d{2}\.\d{3})(?:[^\n]*)/, `$1${cueSuffix}`);
+                
+            const textLines = lines.slice(timeIndex + 1);
+            if (textLines.length === 0) return lines.join("\n");
+            
+            if (tokenStream && tokenStream.length > 0) {
+                const originalText = textLines.join("\n");
+                const highlighted = highlightTextWithTokens(
+                    originalText,
+                    tokenStream,
+                    () => tokenIndex,
+                    (newIdx) => { tokenIndex = newIdx; }
+                );
+                return [...lines.slice(0, timeIndex + 1), highlighted].join("\n");
+            }
+            
+            return lines.join("\n");
+        });
+        
+        let vttText = processedBlocks.filter(Boolean).join("\n\n");
+        if (!vttText.startsWith("WEBVTT")) {
+            vttText = "WEBVTT\n\n" + vttText;
+        }
+        
         const blob = new Blob([vttText], {type: "text/vtt"});
         return URL.createObjectURL(blob);
     }
@@ -8276,6 +8453,76 @@
             return URL.createObjectURL(blob);
         }
 
+        function convertSimpleDataToVttBlobUrl(simpleData, wordsData, newWordsSet = new Set()) {
+            function formatTime(seconds) {
+                const date = new Date(0);
+                date.setSeconds(seconds);
+                const match = date.toISOString().match(/T(\d{2}:\d{2}:\d{2})\.(\d{3})/);
+                return `${match[1]}.${match[2]}`;
+            }
+
+            const cueSettings = getCalculatedVttCueSettings();
+            const vttLines = ["WEBVTT\n"];
+
+            const cardMap = new Map();
+            if (wordsData?.cards) {
+                Object.values(wordsData.cards).forEach((card) => {
+                    if (card?.term) cardMap.set(card.term, card);
+                });
+            }
+
+            const wordsMap = wordsData?.words || {};
+
+            simpleData.tokenizedText.forEach((paragraph) => {
+                if (!Array.isArray(paragraph)) return;
+                paragraph.forEach((sentence) => {
+                    if (!sentence?.timestamp || sentence.timestamp.length < 2) return;
+                    const startTime = formatTime(sentence.timestamp[0]);
+                    const endTime = formatTime(sentence.timestamp[1]);
+
+                    let sentenceText = "";
+                    if (Array.isArray(sentence.tokens)) {
+                        sentence.tokens.forEach((token) => {
+                            if (!token) return;
+                            if (token.whitespace) {
+                                sentenceText += token.whitespace;
+                            } else if (token.punct) {
+                                sentenceText += token.punct;
+                            } else if (token.text) {
+                                const word = token.text;
+                                const wordInfo = token.wordId ? wordsMap[token.wordId] : null;
+                                const cardInfo = (wordInfo?.cardId && wordsData?.cards)
+                                    ? wordsData.cards[wordInfo.cardId]
+                                    : (cardMap.get(word) || null);
+
+                                if (cardInfo) {
+                                    const status = cardInfo.status ?? 0;
+                                    if (status >= 0 && status <= 2) {
+                                        sentenceText += `<c.ar-lingq-${status}>${word}</c>`;
+                                    } else if (status === 3) {
+                                        sentenceText += `<c.ar-lingq-learned>${word}</c>`;
+                                    } else {
+                                        sentenceText += word;
+                                    }
+                                } else if (wordInfo?.status === "new" || newWordsSet.has(word)) {
+                                    sentenceText += `<c.ar-new>${word}</c>`;
+                                } else {
+                                    sentenceText += word;
+                                }
+                            }
+                        });
+                    } else {
+                        sentenceText = sentence.text || "";
+                    }
+
+                    vttLines.push(`${startTime} --> ${endTime} ${cueSettings}\n${sentenceText}\n`);
+                });
+            });
+
+            const blob = new Blob([vttLines.join("\n")], {type: "text/vtt"});
+            return URL.createObjectURL(blob);
+        }
+
         let cachedLocalVideoFiles, attemptAutoMatch;
         const mediaInstances = new Set();
         let isVideoEnded = false;
@@ -8893,9 +9140,22 @@
                     
                     if (selectedSubtitleFile) {
                         const reader = new FileReader();
-                        reader.onload = (e) => {
+                        reader.onload = async (e) => {
                             const text = e.target.result;
-                            const vttUrl = convertSrtToVttBlobUrl(text, getCalculatedVttCueSettings());
+                            const lessonLanguage = getLessonLanguage();
+                            const lessonId = getLessonId();
+                            let tokenStream = null;
+                            if (lessonLanguage && lessonId) {
+                                try {
+                                    const [simpleData, wordsData] = await Promise.all([
+                                        getLessonSimpleData(lessonLanguage, lessonId),
+                                        getLessonWordsData(lessonLanguage, lessonId)
+                                    ]);
+                                    const newWordsSet = getNewWordsSetFromDOM();
+                                    tokenStream = buildLessonTokenStream(simpleData, wordsData, newWordsSet);
+                                } catch (error) {}
+                            }
+                            const vttUrl = convertSrtToVttBlobUrl(text, getCalculatedVttCueSettings(), tokenStream);
                             
                             trackElement.src = vttUrl;
                             trackElement.track.mode = "showing";
@@ -8905,16 +9165,32 @@
                         const lessonLanguage = getLessonLanguage();
                         const lessonId = getLessonId();
                         
-                        getLessonSentences(lessonLanguage, lessonId)
-                            .then((sentences) => {
-                                if (sentences && sentences.length > 0) {
-                                    trackElement.src = convertSentencesToVttBlobUrl(sentences);
-                                    trackElement.track.mode = "showing";
-                                }
-                            })
-                            .catch((error) => {
-                                console.error("Failed to fetch default subtitles:", error);
-                            });
+                        Promise.all([
+                            getLessonSimpleData(lessonLanguage, lessonId),
+                            getLessonWordsData(lessonLanguage, lessonId)
+                        ]).then(([simpleData, wordsData]) => {
+                            if (simpleData?.tokenizedText) {
+                                const newWordsSet = getNewWordsSetFromDOM();
+                                trackElement.src = convertSimpleDataToVttBlobUrl(simpleData, wordsData, newWordsSet);
+                                trackElement.track.mode = "showing";
+                            } else {
+                                getLessonSentences(lessonLanguage, lessonId)
+                                    .then((sentences) => {
+                                        if (sentences && sentences.length > 0) {
+                                            trackElement.src = convertSentencesToVttBlobUrl(sentences);
+                                            trackElement.track.mode = "showing";
+                                        }
+                                    });
+                            }
+                        }).catch(() => {
+                            getLessonSentences(lessonLanguage, lessonId)
+                                .then((sentences) => {
+                                    if (sentences && sentences.length > 0) {
+                                        trackElement.src = convertSentencesToVttBlobUrl(sentences);
+                                        trackElement.track.mode = "showing";
+                                    }
+                                });
+                        });
                     }
                     
                     setupBox.style.display = "none";
@@ -11100,7 +11376,8 @@
             }
             #local-video-container {
                 display: flex;
-                align-items: center;
+                flex-direction: column !important;
+                align-items: stretch !important;
                 justify-content: center;
                 border-radius: 0.75rem;
                 background-color: #000000;
@@ -11307,14 +11584,13 @@
                 display: none !important;
             }
             .local-video-progress-wrapper {
-                position: absolute !important;
-                bottom: 0;
-                left: 0;
-                z-index: 10;
+                position: relative !important;
+                flex-shrink: 0 !important;
                 margin-top: 0 !important;
                 width: 100%;
                 height: 5px;
                 background-color: rgba(255, 255, 255, 0.2);
+                z-index: 10;
             }
             #local-video-mini-progress {
                 height: 100%;
@@ -11323,12 +11599,15 @@
                 transition: width 0.1s linear;
             }
             #addonLocalVideo {
-                width: auto !important;
-                height: auto !important;
+                flex: 1 1 0% !important;
+                min-height: 0 !important;
+                width: 100% !important;
+                height: 100% !important;
                 max-width: 100% !important;
-                max-height: calc(100% - 5px) !important;
+                max-height: 100% !important;
+                object-fit: contain !important;
                 align-self: center !important;
-                margin: auto !important;
+                margin: 0 !important;
             }
             video::-webkit-media-text-track-container {
                 font-size: var(--caption-font-size) !important;
@@ -11336,8 +11615,29 @@
             ::cue, video::cue {
                 background-color: rgba(0, 0, 0, 0.75) !important;
                 color: #ffffff !important;
-                font-family: sans-serif !important;
+                font-family: var(--custom-font, sans-serif) !important;
                 line-height: 1.2 !important;
+            }
+            ::cue(.ar-new), video::cue(.ar-new), ::cue(c.ar-new), video::cue(c.ar-new) {
+                background-color: rgba(37, 75, 160, 0.88) !important;
+                color: #ffffff !important;
+            }
+            ::cue(.ar-lingq-0), video::cue(.ar-lingq-0), ::cue(c.ar-lingq-0), video::cue(c.ar-lingq-0) {
+                background-color: rgba(175, 130, 35, 0.88) !important;
+                color: #ffffff !important;
+            }
+            ::cue(.ar-lingq-1), video::cue(.ar-lingq-1), ::cue(c.ar-lingq-1), video::cue(c.ar-lingq-1) {
+                background-color: rgba(175, 130, 35, 0.58) !important;
+                color: #ffffff !important;
+            }
+            ::cue(.ar-lingq-2), video::cue(.ar-lingq-2), ::cue(c.ar-lingq-2), video::cue(c.ar-lingq-2) {
+                background-color: rgba(175, 130, 35, 0.32) !important;
+                color: #ffffff !important;
+            }
+            ::cue(.ar-lingq-learned), video::cue(.ar-lingq-learned), ::cue(c.ar-lingq-learned), video::cue(c.ar-lingq-learned) {
+                background-color: transparent !important;
+                color: #ffffff !important;
+                text-decoration: underline dotted 1px rgba(255, 255, 255, 0.95) !important;
             }
             `;
         }
