@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      19.1.3
+// @version      19.1.4
 // @license      GPL-3.0-or-later
 // @grant       GM_setValue
 // @grant       GM_getValue
@@ -11176,6 +11176,54 @@
             `;
         }
         
+        function setupYoutubePlayerCustomization() {
+            function customizeIframe(iframe) {
+                if (!iframe || iframe.dataset.addonCustomized) return;
+                const src = iframe.getAttribute("src");
+                if (!src || !src.includes("youtube")) return;
+
+                let newSrc = src;
+                if (newSrc.includes("disablekb=1")) {
+                    newSrc = newSrc.replace("disablekb=1", "disablekb=0");
+                }
+                if (!newSrc.includes("cc_load_policy=")) {
+                    newSrc += "&cc_load_policy=1";
+                }
+                if (newSrc !== src) {
+                    iframe.dataset.addonCustomized = "true";
+                    iframe.setAttribute("src", newSrc);
+                }
+            }
+
+            const videoStage = document.querySelector('div[data-reader-video-stage="true"]');
+            if (videoStage) {
+                const existingIframe = videoStage.querySelector('iframe[src*="youtube"]');
+                if (existingIframe) customizeIframe(existingIframe);
+
+                if (!videoStage.dataset.addonObserverAttached) {
+                    videoStage.dataset.addonObserverAttached = "true";
+                    const stageObserver = new MutationObserver((mutations) => {
+                        for (const mutation of mutations) {
+                            for (const node of mutation.addedNodes) {
+                                if (node.nodeType !== Node.ELEMENT_NODE) continue;
+                                if (node.matches?.('iframe[src*="youtube"]')) {
+                                    customizeIframe(node);
+                                } else if (node.querySelector) {
+                                    const iframe = node.querySelector('iframe[src*="youtube"]');
+                                    if (iframe) customizeIframe(iframe);
+                                }
+                            }
+                        }
+                    });
+                    stageObserver.observe(videoStage, { childList: true, subtree: true });
+                }
+            } else {
+                waitForElement('div[data-reader-video-stage="true"]', 3000).then((stage) => {
+                    if (stage) setupYoutubePlayerCustomization();
+                });
+            }
+        }
+        
         function setupKeyboardShortcuts() {
             let lastSkipTime = 0;
 
@@ -12049,6 +12097,7 @@
                 handleLocalVideoContainerVisibility();
                 attachAudioPlayerObserver();
                 setupLessonCompletionObserver();
+                setupYoutubePlayerCustomization();
                 
                 preventHorizontalScroll();
                 
@@ -14503,6 +14552,7 @@
         }
         
         setupKeyboardShortcuts();
+        setupYoutubePlayerCustomization();
         setupReaderContainer();
         setupLLMs();
         handleLocalVideoContainerVisibility();
