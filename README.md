@@ -26,7 +26,7 @@ Customizable layouts, AI-powered chat & TTS, flashcard system, local video playe
 
 ## Features
 -   **Reader Layouts:**
-    Preset layouts optimized for video, audio, or text-focused study. Includes a resizable video option.
+    Adaptive layout automatically optimized for video and audio lessons, with adjustable video placement.
 
 -   **Local Video Player:**
     Load local video files and sync them with your lesson.
@@ -50,7 +50,7 @@ Customizable layouts, AI-powered chat & TTS, flashcard system, local video playe
 -   **Appearance Customization:**
     Dark/Light themes, custom color palette, adjustable font size and line height, and custom font support.
 
-    <img src="images/styles.png" width=400></br>
+    <img src="images/styles.png" width=300></br>
 
 -   **Customizable Keyboard Shortcuts:**
     Streamline your study workflow with fully configurable hotkeys.
@@ -60,12 +60,17 @@ Customizable layouts, AI-powered chat & TTS, flashcard system, local video playe
 -   **Vocabulary Tools:**
     Download Entire known/unknown words and phrases as CSV.
 
-    <img src="images/download_popup.png"></br>
+    <img src="images/download_popup.png" width=300></br>
 
 -   **Print a Lesson:**
     Print lessons with word highlighting and vocabulary list.
 
     <img src="images/print.jpeg" width=800></br>
+
+-   **Course View Enhancements:**
+    Vocabulary distribution percentages on course and lesson cards, batch lesson reset, and persistent sorting.
+
+    <img src="images/course_view.png" width=800></br>
 
 ## Supported AI Providers
 
