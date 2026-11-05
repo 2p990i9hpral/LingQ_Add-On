@@ -51,7 +51,7 @@ This guide is structured around the **Settings Popup** (where the majority of fe
 
 # Part I: Settings & Reader Experience
 
-<img src="images/settings.png" width=500></br>
+The addon provides a modular **Settings Popup** organized into dedicated tabs (`Layout`, `Style`, `Reader`, `Shortcuts`, `Chat`, and `TTS`). Each section below outlines the corresponding settings and reader capabilities.
 
 ---
 
@@ -67,6 +67,9 @@ This guide is structured around the **Settings Popup** (where the majority of fe
 - **Auto-Dismiss Promo Banners**: Automatically detects and closes LingQ's promotional banners and marketing popups in the background.
 
 ### 1.2 Layout Styles
+
+<img src="images/settings-layout.png" width=450></br>
+
 Customize the reader layout based on the media format of your lesson:
 - **Default (Auto)**: Automatically adapts the reader layout to the lesson's media format. Integrates YouTube video players into the reader grid for video lessons, while maximizing text space for audio-only lessons.
 
@@ -124,6 +127,9 @@ Play your own downloaded movies, anime, or video lessons directly within LingQ, 
 - **Silent Audio Generator Tool**: A standalone tool is provided ([`tools/LingQ_Silent_Audio_Generator.exe`](tools/LingQ_Silent_Audio_Generator.exe)). You can drag and drop `.mp4` files onto the executable (or double-click to open the file selector) to automatically generate matching silent `.mp3` audio files in the video's directory without needing to install Python or FFmpeg.
 
 ### 1.6 Typography, Sizing & Memo Widget
+
+<img src="images/settings-style.png" width=450></br>
+
 - **Font Size**: Slider for lesson body text.
 - **Annotation Size**: Slider (`40%`–`80%`) to adjust the size of ruby annotations (e.g., furigana).
 - **Hover Annotation**: Controls when annotations are displayed:
@@ -137,8 +143,6 @@ Play your own downloaded movies, anime, or video lessons directly within LingQ, 
 - **Show Memo Widget**: Enables a persistent notepad docked beside the reader. Notes are preserved in local storage across browser refreshes and lesson transitions.
 
 ### 1.7 Color Themes & Palette
-<img src="images/color theme.png" width=300></br>
-
 - **Color Mode**: Switch between `White` and `Dark`. Changing this option automatically switches LingQ's native site theme to match.
 - **Custom Color Pickers**:
   - **Font Color**: Base reading text color.
@@ -157,6 +161,9 @@ Play your own downloaded movies, anime, or video lessons directly within LingQ, 
 - **YouTube Simplification**: The addon automatically suppresses the intrusive "More videos" overlay when pausing embedded YouTube videos.
 
 ### 1.9 Selective UI Hiding
+
+<img src="images/settings-reader.png" width=450></br>
+
 Clean up and customize your reading view by selectively hiding default LingQ interface elements:
 - **Hide Meanings**: Hides the community/popular meanings list in the word widget.
 - **Hide Dictionaries**: Hides the external dictionary section in the word widget.
@@ -168,7 +175,7 @@ Clean up and customize your reading view by selectively hiding default LingQ int
 
 ## 2. Keyboard Shortcuts
 
-<img src="images/hotkeys.png" width=300></br>
+<img src="images/settings-shortcut.png" width=450></br>
 
 ### 2.1 Configuration & Hotkeys Table
 Check **Enable the Keyboard Shortcuts** to activate single-key navigation without touching the mouse. Each shortcut can be customized to any single character.
@@ -193,6 +200,9 @@ Check **Enable the Keyboard Shortcuts** to activate single-key navigation withou
 <img src="images/ai dictionary.png" width=350></br>
 
 ### 3.1 Chat Widget Dimensions & Behavior
+
+<img src="images/settings-chat.png" width=450></br>
+
 - **Enable the Chat Widget**: Toggles the interactive AI sidebar on or off.
 - **Response Language**: Choose `Auto` or specify a target language for AI responses.
 - **Chat Widget Height**: Slider to adjust docked AI chat widget height.
@@ -267,6 +277,9 @@ Click the **Usage Log** button to open the token monitoring popup:
 ## 5. AI Text-to-Speech (TTS) Settings
 
 ### 5.1 Providers, Voices & Autoplay
+
+<img src="images/settings-tts.png" width=450></br>
+
 - **Autoplay TTS voice**: Automatically pronounces the target word upon selection.
 - **TTS API Key**: Enter your API key for the chosen voice provider.
 - **TTS Provider**:

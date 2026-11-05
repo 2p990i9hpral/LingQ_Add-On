@@ -3281,7 +3281,11 @@
         }
         
         function createSettingsPopup() {
-            const popup = createElement("div", {id: "lingqAddonSettingsPopup", className: "popup"});
+            const popup = createElement("div", {
+                id: "lingqAddonSettingsPopup",
+                className: "popup",
+                style: "width: 530px; box-sizing: border-box; overflow-x: hidden;"
+            });
             
             const dragHandle = createElement("div", {
                 id: "lingqAddonSettingsDragHandle",
@@ -3291,7 +3295,7 @@
             const dragHandleTitle = createElement("h3", {textContent: "LingQ Addon Settings"});
             dragHandle.appendChild(dragHandleTitle);
             
-            const content = createElement("div", {style: `padding: 0 5px;`});
+            const content = createElement("div", {style: "padding: 0 5px; box-sizing: border-box;"});
             const popupContentElement = generatePopupContent();
             content.appendChild(popupContentElement);
             
@@ -3311,11 +3315,18 @@
         }
         
         function generatePopupContent() {
-            function addSelect(parent, id, labelText, options, selectedValue) {
-                const container = createElement("div", {className: "popup-row"});
-                container.appendChild(createElement("label", {htmlFor: id, textContent: labelText}));
+            function addSelect(parent, id, labelText, options, selectedValue, controlWidth = "230px") {
+                const container = createElement("div", {className: "popup-row", style: "margin: 9px 0;"});
+                const inner = createElement("div", {
+                    style: "display: flex; align-items: center; justify-content: space-between;"
+                });
+                inner.appendChild(createElement("label", {
+                    htmlFor: id,
+                    textContent: labelText,
+                    style: "flex: 0 0 185px; white-space: nowrap;"
+                }));
                 
-                const select = createElement("select", {id});
+                const select = createElement("select", {id, style: `width: ${controlWidth}; box-sizing: border-box;`});
                 options.forEach(option => {
                     select.appendChild(createElement("option", {
                         value: option.value,
@@ -3324,45 +3335,69 @@
                     }));
                 });
                 
-                container.appendChild(select);
+                inner.appendChild(select);
+                container.appendChild(inner);
                 parent.appendChild(container);
                 return container;
             }
             
-            function addSlider(parent, id, labelText, valueId, value, unit, min, max, step) {
-                const container = createElement("div", {className: "popup-row"});
+            function addSlider(parent, id, labelText, valueId, value, unit, min, max, step, controlWidth = "230px") {
+                const container = createElement("div", {
+                    className: "popup-row",
+                    style: "display: flex; align-items: center; justify-content: space-between; margin: 9px 0;"
+                });
                 
-                const label = createElement("label", {htmlFor: id});
+                const label = createElement("label", {htmlFor: id, style: "flex: 0 0 185px; white-space: nowrap;"});
                 label.appendChild(document.createTextNode(labelText + " "));
-                label.appendChild(createElement("span", {id: valueId, textContent: value}));
-                if (unit) label.appendChild(document.createTextNode(unit));
                 
-                container.appendChild(label);
-                container.appendChild(createElement("input", {
+                const controlGroup = createElement("div", {
+                    style: `display: flex; align-items: center; gap: 10px; width: ${controlWidth}; justify-content: flex-end; box-sizing: border-box;`
+                });
+                
+                const slider = createElement("input", {
                     type: "range",
                     id,
                     min,
                     max,
                     step,
                     value,
-                    style: "width: 100%;"
-                }));
+                    style: "flex: 1; min-width: 0;"
+                });
+                
+                const valDisplay = createElement("span", {
+                    style: "font-size: 0.9em; white-space: nowrap; width: 50px; text-align: right; flex-shrink: 0;"
+                });
+                valDisplay.appendChild(createElement("span", {id: valueId, textContent: value}));
+                if (unit) valDisplay.appendChild(document.createTextNode(unit));
+                
+                controlGroup.appendChild(slider);
+                controlGroup.appendChild(valDisplay);
+                
+                container.appendChild(label);
+                container.appendChild(controlGroup);
                 
                 parent.appendChild(container);
                 return container;
             }
             
-            function addColorPicker(parent, id, labelText, value) {
-                const container = createElement("div", {className: "popup-row"});
-                container.appendChild(createElement("label", {htmlFor: id + "Text", textContent: labelText}));
+            function addColorPicker(parent, id, labelText, value, controlWidth = "230px") {
+                const container = createElement("div", {
+                    className: "popup-row",
+                    style: "display: flex; align-items: center; justify-content: space-between; margin: 9px 0;"
+                });
+                container.appendChild(createElement("label", {
+                    htmlFor: id + "Text",
+                    textContent: labelText,
+                    style: "flex: 0 0 185px; white-space: nowrap;"
+                }));
                 
-                const flexContainer = createElement("div", {style: "display: flex; align-items: center;"});
+                const flexContainer = createElement("div", {style: `display: flex; align-items: center; width: ${controlWidth}; box-sizing: border-box;`});
                 flexContainer.appendChild(createElement("div", {id: id + "Picker", className: "color-picker"}));
                 flexContainer.appendChild(createElement("input", {
                     type: "text",
                     id: id + "Text",
                     value,
-                    style: "margin-left: 10px;",
+                    style: "margin-left: 10px; flex: 1; min-width: 0; box-sizing: border-box;",
                     className: "popup-input"
                 }));
                 
@@ -3372,12 +3407,14 @@
             }
             
             function addCheckbox(parent, id, labelText, checked) {
-                const container = createElement("div", {className: "popup-row"});
+                const container = createElement("div", {className: "popup-row", style: "margin: 9px 0;"});
                 const label = createElement("label", {htmlFor: id, textContent: labelText});
                 const checkbox = createElement("input", {type: "checkbox", id, checked, style: "margin-left: 10px;"});
                 
                 label.style.display = "flex";
                 label.style.alignItems = "center";
+                label.style.justifyContent = "space-between";
+                label.style.cursor = "pointer";
                 container.appendChild(label);
                 label.appendChild(checkbox);
                 parent.appendChild(container);
@@ -3385,13 +3422,34 @@
                 return container;
             }
             
+            function addTabHeaderCheckbox(parent, id, labelText, checked) {
+                const container = createElement("div", {
+                    className: "popup-row",
+                    style: "margin: 2px 0 10px 0; padding-bottom: 5px; border-bottom: 1px solid rgba(125, 125, 125, 0.25);"
+                });
+                const label = createElement("label", {
+                    htmlFor: id,
+                    style: "display: inline-flex; align-items: center; gap: 8px; cursor: pointer; font-weight: 600; font-size: 0.95em; color: var(--font-color);"
+                });
+                const checkbox = createElement("input", {type: "checkbox", id, checked});
+                label.appendChild(checkbox);
+                label.appendChild(document.createTextNode(labelText));
+                container.appendChild(label);
+                parent.appendChild(container);
+                return container;
+            }
+            
             function addShortcutInput(parent, id, labelText, value) {
                 const container = createElement("div", {
                     className: "popup-row",
-                    style: "display: flex; justify-content: space-between;"
+                    style: "display: flex; justify-content: space-between; align-items: center; margin: 4px 0; min-width: 0;"
                 });
                 
-                container.appendChild(createElement("label", {htmlFor: id, textContent: labelText}));
+                container.appendChild(createElement("label", {
+                    htmlFor: id,
+                    textContent: labelText,
+                    style: "font-size: 0.88em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; flex: 1;"
+                }));
                 
                 const input = createElement("input", {
                     type: "text",
@@ -3399,28 +3457,31 @@
                     value,
                     maxLength: 1, // Restrict to single character
                     className: "popup-input",
-                    style: "width: 30px; text-transform: lowercase; flex-grow: unset; text-align: center;"
+                    style: "width: 28px; height: 26px; text-transform: lowercase; flex: 0 0 28px; text-align: center; margin-left: 8px; box-sizing: border-box;"
                 });
                 container.appendChild(input);
                 parent.appendChild(container);
                 return container;
             }
             
-            function addRadioGroup(parent, groupName, labelText, options, selectedValue) {
+            function addRadioGroup(parent, groupName, labelText, options, selectedValue, controlWidth = "230px", gap = "24px") {
                 const container = createElement("div", {
                     className: "popup-row",
-                    style: "display: flex; align-items: center; gap: 15px;"
+                    style: "display: flex; align-items: center; justify-content: space-between; margin: 9px 0;"
                 });
                 
-                container.appendChild(createElement("label", {textContent: labelText}));
+                container.appendChild(createElement("label", {
+                    textContent: labelText,
+                    style: "flex: 0 0 185px; white-space: nowrap;"
+                }));
                 
                 const optionsContainer = createElement("div", {
-                    style: "flex-grow: 1; display: flex; justify-content: space-around;"
+                    style: `display: flex; gap: ${gap}; justify-content: flex-end; width: ${controlWidth}; box-sizing: border-box;`
                 });
                 
                 options.forEach(({value, text}) => {
                     const optionLabel = createElement("label", {
-                        style: "display: flex; gap: 5px; cursor: pointer;"
+                        style: "display: flex; gap: 5px; cursor: pointer; align-items: center; white-space: nowrap;"
                     });
                     
                     const input = createElement("input", {
@@ -3442,16 +3503,63 @@
                 return container;
             }
             
-            const popupLayout = createElement("div");
-            const columns = createElement("div", {style: "display: flex; flex-direction: row;"});
+            function addSectionTitle(parent, title, isFirst = false) {
+                const header = createElement("div", {
+                    style: `font-weight: 600; font-size: 0.88em; color: var(--font-color); margin: ${isFirst ? "2px" : "16px"} 0 8px 0; padding-bottom: 4px; border-bottom: 1px solid rgba(125, 125, 125, 0.2); letter-spacing: 0.02em;`
+                }, title);
+                parent.appendChild(header);
+                return header;
+            }
             
-            const container1 = createElement("div", {style: "padding: 5px; width: 375px;"});
+            const popupLayout = createElement("div", {style: "width: 100%; box-sizing: border-box; padding: 4px;"});
+            
+            const tabs = [
+                {id: "layout", label: "Layout"},
+                {id: "style", label: "Style"},
+                {id: "reader", label: "Reader"},
+                {id: "shortcuts", label: "Shortcuts"},
+                {id: "chat", label: "Chat"},
+                {id: "tts", label: "TTS"}
+            ];
+            
+            const tabsContainer = createElement("div", {
+                className: "flashcard-period-tabs",
+                style: "margin-bottom: 12px; gap: 4px;"
+            });
+            
+            const panels = {
+                layout: createElement("div", {id: "tabPanelLayout"}),
+                style: createElement("div", {id: "tabPanelStyle", style: "display: none;"}),
+                reader: createElement("div", {id: "tabPanelReader", style: "display: none;"}),
+                shortcuts: createElement("div", {id: "tabPanelShortcuts", style: "display: none;"}),
+                chat: createElement("div", {id: "tabPanelChat", style: "display: none;"}),
+                tts: createElement("div", {id: "tabPanelTTS", style: "display: none;"})
+            };
+            
+            const tabButtons = tabs.map((tab, index) => {
+                const btn = createElement("button", {
+                    type: "button",
+                    className: `btn-ghost ${index === 0 ? "active" : ""}`,
+                    textContent: tab.label,
+                    style: "flex: 1 1 auto; padding: 5px 8px; cursor: pointer; text-align: center; white-space: nowrap; font-size: 0.9em;"
+                });
+                btn.addEventListener("click", () => {
+                    tabButtons.forEach(b => b.classList.remove("active"));
+                    Object.values(panels).forEach(p => { p.style.display = "none"; });
+                    btn.classList.add("active");
+                    panels[tab.id].style.display = "block";
+                });
+                tabsContainer.appendChild(btn);
+                return btn;
+            });
+            
+            addSectionTitle(panels.layout, "Screen & Video", true);
             
             const rawBaseType = settings.styleType[language];
             const baseType = (rawBaseType === "audio" || rawBaseType === "video" || !rawBaseType) ? "default" : rawBaseType;
             const position = settings.videoPosition[language];
             
-            addSelect(container1, "styleTypeSelector", "Layout Style:", [
+            addSelect(panels.layout, "styleTypeSelector", "Layout Style:", [
                 {value: "default", text: "Default (Auto)"},
                 {value: "localVideo", text: "Local Video"},
                 {value: "off", text: "Layout Off"}
@@ -3468,7 +3576,7 @@
                 {value: "Top", text: "Top"},
                 {value: "Bottom", text: "Bottom"}
             ], position);
-            container1.appendChild(positionSettingsContainer);
+            panels.layout.appendChild(positionSettingsContainer);
             
             const hasHeightSettings = hasPositionSettings && ["Top", "Bottom"].includes(position);
             const videoSettings = createElement("div", {
@@ -3476,49 +3584,66 @@
                 style: `${hasHeightSettings ? "" : "display: none;"}`
             });
             addSlider(videoSettings, "heightBigSlider", "Video Height:", "heightBigValue", settings.heightBig, "px", 300, 1200, 10);
-            container1.appendChild(videoSettings);
+            panels.layout.appendChild(videoSettings);
             
-            addSlider(container1, "widgetWidthSlider", "Widget Width:", "widgetWidthValue", settings.widgetWidth, "px", 330, 500, 10);
+            addSlider(panels.layout, "widgetWidthSlider", "Widget Width:", "widgetWidthValue", settings.widgetWidth, "px", 330, 500, 10);
             
-            addSlider(container1, "fontSizeSlider", "Font Size:", "fontSizeValue", settings.fontSize[language], "rem", 0.8, 1.8, 0.05);
-            addSlider(container1, "annotationScaleSlider", "Annotation Size:", "annotationScaleValue", settings.annotationScale[language], "%", 40, 80, 5);
-            addRadioGroup(container1, "hoverAnnotation", "Hover Annotation:", [
-                {value: "off", text: "Off"},
-                {value: "reader", text: "Reader"},
-                {value: "all", text: "All"}
-            ], settings.hoverAnnotation);
-            addSlider(container1, "lineHeightSlider", "Line Height:", "lineHeightValue", settings.lineHeight[language], "", 1.2, 3.0, 0.05);
+            addSectionTitle(panels.layout, "Video Captions");
+            const videoCaptionSection = createElement("div");
+            addSlider(videoCaptionSection, "captionFontsizeSlider", "Caption Font Size:", "captionFontsizeValue", settings.captionFontsize, "px", 10, 30, 1);
+            addRadioGroup(videoCaptionSection, "relocateCaption", "Location:", [
+                {value: "default", text: "Default"},
+                {value: "inside", text: "Inside"},
+                {value: "below", text: "Below"}
+            ], settings.relocateCaption);
+            panels.layout.appendChild(videoCaptionSection);
             
-            const customFontContainer = createElement("div", {className: "popup-row"});
+            addSectionTitle(panels.style, "Typography", true);
+            addSlider(panels.style, "fontSizeSlider", "Font Size:", "fontSizeValue", settings.fontSize[language], "rem", 0.8, 1.8, 0.05);
+            
+            const customFontContainer = createElement("div", {
+                className: "popup-row",
+                style: "display: flex; align-items: center; justify-content: space-between; margin: 9px 0;"
+            });
             customFontContainer.appendChild(createElement("label", {
                 htmlFor: "customFontInput",
-                textContent: "Google Web Font Name:"
+                textContent: "Google Web Font Name:",
+                style: "flex: 0 0 185px; white-space: nowrap;"
             }));
             const customFontInputGroup = createElement("div", {
-                style: "display: flex; align-items: center; gap: 5px; flex: 1;"
+                style: "display: flex; align-items: center; gap: 8px; width: 230px; box-sizing: border-box;"
             });
             const customFontInput = createElement("input", {
                 type: "text",
                 id: "customFontInput",
                 value: settings.customFont[language],
                 className: "popup-input",
-                style: "width: 70%; flex-grow: unset;"
+                style: "flex: 1; min-width: 0; box-sizing: border-box;"
             });
             const customFontLibrary = createElement("a", {
                 href: "https://fonts.google.com",
                 target: "_blank", textContent: "Font Library",
-                style: "font-size: 0.9em; color: var(--blue-500); margin: 0 auto;"
+                style: "font-size: 0.9em; color: var(--blue-500); white-space: nowrap; flex-shrink: 0;"
             });
-            customFontInputGroup.append(customFontInput, customFontLibrary);
+            customFontInputGroup.append(customFontLibrary, customFontInput);
             customFontContainer.appendChild(customFontInputGroup);
-            container1.appendChild(customFontContainer);
+            panels.style.appendChild(customFontContainer);
             
-            const colorSection = createElement("div", {className: "popup-section"});
+            addSlider(panels.style, "lineHeightSlider", "Line Height:", "lineHeightValue", settings.lineHeight[language], "", 1.2, 3.0, 0.05);
+            addRadioGroup(panels.style, "hoverAnnotation", "Hover Annotation:", [
+                {value: "off", text: "Off"},
+                {value: "reader", text: "Reader"},
+                {value: "all", text: "All"}
+            ], settings.hoverAnnotation);
+            addSlider(panels.style, "annotationScaleSlider", "Annotation Size:", "annotationScaleValue", settings.annotationScale[language], "%", 40, 80, 5);
+            
+            addSectionTitle(panels.style, "Theme & Colors");
+            const colorSection = createElement("div");
             
             addRadioGroup(colorSection, "colorMode", "Color Mode:", [
                 {value: "white", text: "White"},
                 {value: "dark", text: "Dark"}
-            ], settings.colorMode);
+            ], settings.colorMode, "230px", "32px");
             
             [
                 {id: "fontColor", label: "Font Color:", value: colorSettings.fontColor},
@@ -3535,44 +3660,31 @@
                 {id: "playingUnderline", label: "Playing Underline:", value: colorSettings.playingUnderline}
             ].forEach(config => addColorPicker(colorSection, config.id, config.label, config.value));
             
-            container1.appendChild(colorSection);
+            panels.style.appendChild(colorSection);
             
-            const videoCaptionSection = createElement("div", {className: "popup-section"});
-            addSlider(videoCaptionSection, "captionFontsizeSlider", "Video Caption Font Size", "captionFontsizeValue", settings.captionFontsize, "px", 10, 30, 1);
-            addRadioGroup(videoCaptionSection, "relocateCaption", "Location:", [
-                {value: "default", text: "Default"},
-                {value: "inside", text: "Inside"},
-                {value: "below", text: "Below"}
-            ], settings.relocateCaption);
-            container1.appendChild(videoCaptionSection);
+            addSectionTitle(panels.reader, "Widget Settings", true);
+            const widgetSection = createElement("div");
             
-            const widgetTitleRow = createElement("div", {className: "popup-row"});
-            widgetTitleRow.appendChild(createElement("label", {textContent: "Widget"}));
-            container1.appendChild(widgetTitleRow);
-
-            const widgetSection = createElement("div", {className: "popup-section"});
-
             const widgetRadioGroup = addRadioGroup(widgetSection, "widgetVerticalAlign", "Align:", [
                 {value: "flex-start", text: "Top"},
                 {value: "center", text: "Center"},
                 {value: "flex-end", text: "Bottom"}
             ], settings.widgetVerticalAlign);
-            widgetRadioGroup.style.whiteSpace = "nowrap";
-
+            
             const widgetHideRow = createElement("div", {
                 className: "popup-row",
-                style: "display: flex; align-items: center; justify-content: space-between; margin-top: 6px; white-space: nowrap;"
+                style: "display: flex; align-items: center; justify-content: space-between; margin: 9px 0; white-space: nowrap;"
             });
-
+            
             widgetHideRow.appendChild(createElement("label", {
                 textContent: "Hide:",
-                style: "margin-right: 10px;"
+                style: "flex: 0 0 195px; white-space: nowrap;"
             }));
-
+            
             const widgetCheckboxesGroup = createElement("div", {
-                style: "display: flex; flex-grow: 1; justify-content: space-between; align-items: center;"
+                style: "display: flex; gap: 16px; justify-content: flex-end; width: 230px;"
             });
-
+            
             [
                 {id: "hidePopularMeaningsCheckbox", text: "Meanings", checked: settings.hidePopularMeanings},
                 {id: "hideDictionariesCheckbox", text: "Dictionaries", checked: settings.hideDictionaries},
@@ -3587,48 +3699,51 @@
                 itemLabel.appendChild(cb);
                 widgetCheckboxesGroup.appendChild(itemLabel);
             });
-
+            
             widgetHideRow.appendChild(widgetCheckboxesGroup);
             widgetSection.appendChild(widgetHideRow);
-            container1.appendChild(widgetSection);
-
-            addCheckbox(container1, "hideReaderPopupCheckbox", "Hide Meaning Popup", settings.hideReaderPopup);
-            addCheckbox(container1, "hideLynxUICheckbox", "Hide Lynx AI UI", settings.hideLynxUI);
-            addCheckbox(container1, "focusSelectedTextCheckbox", "Focus on Selected Text", settings.focusSelectedText);
-            addCheckbox(container1, "showMemoWidgetCheckbox", "Show Memo Widget", settings.showMemoWidget);
-            addCheckbox(container1, "skipEndPageCheckbox", "Skip End Page", settings.skipEndPage);
+            addCheckbox(widgetSection, "showMemoWidgetCheckbox", "Show Memo Widget", settings.showMemoWidget);
+            panels.reader.appendChild(widgetSection);
             
-            columns.appendChild(container1);
+            addSectionTitle(panels.reader, "Reader Behavior");
+            const readerBehaviorSection = createElement("div");
+            addCheckbox(readerBehaviorSection, "hideReaderPopupCheckbox", "Hide Meaning Popup", settings.hideReaderPopup);
+            addCheckbox(readerBehaviorSection, "hideLynxUICheckbox", "Hide Lynx AI UI", settings.hideLynxUI);
+            addCheckbox(readerBehaviorSection, "focusSelectedTextCheckbox", "Focus on Selected Text", settings.focusSelectedText);
+            addCheckbox(readerBehaviorSection, "skipEndPageCheckbox", "Skip End Page", settings.skipEndPage);
+            panels.reader.appendChild(readerBehaviorSection);
             
-            const container2 = createElement("div", {style: "padding: 10px; width: 375px;"});
-            
-            addCheckbox(container2, "keyboardShortcutCheckbox", "Enable the Keyboard Shortcuts", settings.keyboardShortcut);
+            addTabHeaderCheckbox(panels.shortcuts, "keyboardShortcutCheckbox", "Enable the Keyboard Shortcuts", settings.keyboardShortcut);
             
             const shortcutSection = createElement("div", {
                 id: "keyboardShortcutSection",
-                className: "popup-section",
-                style: `${settings.keyboardShortcut ? "" : "display: none"}`
+                style: `${settings.keyboardShortcut ? "" : "display: none;"} margin-top: 8px;`
             });
             
-            addSlider(shortcutSection, "skipDurationSlider", "Skip Duration", "skipDurationValue", settings.skipDuration, " Seconds", 1, 30, 1);
-            addShortcutInput(shortcutSection, "shortcutBackward5sInput", `Rewind ${settings.skipDuration} Seconds:`, settings.shortcutBackward5s);
-            addShortcutInput(shortcutSection, "shortcutForward5sInput", `Fast Forward ${settings.skipDuration} Seconds:`, settings.shortcutForward5s);
-            addShortcutInput(shortcutSection, "shortcutTTSPlayInput", "Play TTS Audio:", settings.shortcutTTSPlay);
-            addShortcutInput(shortcutSection, "shortcutMakeKnownInput", "Make Word Known:", settings.shortcutMakeKnown);
-            addShortcutInput(shortcutSection, "shortcutDictionaryOpenInput", "Open Dictionary:", settings.shortcutDictionary);
-            addShortcutInput(shortcutSection, "shortcutCopySelectedInput", "Copy Selected Text:", settings.shortcutCopySelected);
-            addShortcutInput(shortcutSection, "shortcutMeaningInput", "Meaning Input Focus:", settings.shortcutMeaningInput);
-            addShortcutInput(shortcutSection, "shortcutChatInput", "Chat Input Focus:", settings.shortcutChatInput);
-            addShortcutInput(shortcutSection, "shortcutFlashcard", "Make a flashcard:", settings.shortcutFlashcard);
+            addSlider(shortcutSection, "skipDurationSlider", "Skip Duration:", "skipDurationValue", settings.skipDuration, "s", 1, 30, 1);
             
-            container2.appendChild(shortcutSection);
+            const shortcutGrid = createElement("div", {
+                style: "display: grid; grid-template-columns: 1fr 1fr; column-gap: 50px; row-gap: 8px; margin-top: 10px;"
+            });
             
-            addCheckbox(container2, "chatWidgetCheckbox", "Enable the Chat Widget", settings.chatWidget);
+            addShortcutInput(shortcutGrid, "shortcutBackward5sInput", `Rewind ${settings.skipDuration}s:`, settings.shortcutBackward5s);
+            addShortcutInput(shortcutGrid, "shortcutForward5sInput", `Fast Forward ${settings.skipDuration}s:`, settings.shortcutForward5s);
+            addShortcutInput(shortcutGrid, "shortcutTTSPlayInput", "Play TTS Audio:", settings.shortcutTTSPlay);
+            addShortcutInput(shortcutGrid, "shortcutMakeKnownInput", "Make Word Known:", settings.shortcutMakeKnown);
+            addShortcutInput(shortcutGrid, "shortcutDictionaryOpenInput", "Open Dictionary:", settings.shortcutDictionary);
+            addShortcutInput(shortcutGrid, "shortcutCopySelectedInput", "Copy Selected Text:", settings.shortcutCopySelected);
+            addShortcutInput(shortcutGrid, "shortcutMeaningInput", "Meaning Input Focus:", settings.shortcutMeaningInput);
+            addShortcutInput(shortcutGrid, "shortcutChatInput", "Chat Input Focus:", settings.shortcutChatInput);
+            addShortcutInput(shortcutGrid, "shortcutFlashcard", "Make a flashcard:", settings.shortcutFlashcard);
+            
+            shortcutSection.appendChild(shortcutGrid);
+            panels.shortcuts.appendChild(shortcutSection);
+            
+            addTabHeaderCheckbox(panels.chat, "chatWidgetCheckbox", "Enable the Chat Widget", settings.chatWidget);
             
             const chatWidgetSection = createElement("div", {
                 id: "chatWidgetSection",
-                className: "popup-section",
-                style: `${settings.chatWidget ? "" : "display: none"}`
+                style: `${settings.chatWidget ? "" : "display: none;"} margin-top: 8px;`
             });
             
             addSelect(chatWidgetSection, "llmResponseLanguageSelector", "Response Language:",
@@ -3636,7 +3751,7 @@
                 settings.llmResponseLanguage
             );
             
-            addSlider(chatWidgetSection, "chatWidgetHeightSlider", "Chat Widget Height", "chatWidgetHeightValue", settings.chatWidgetHeight, "", 150, 700, 10);
+            addSlider(chatWidgetSection, "chatWidgetHeightSlider", "Chat Widget Height:", "chatWidgetHeightValue", settings.chatWidgetHeight, "", 150, 700, 10);
             
             addSelect(chatWidgetSection, "llmProviderSelector", "Chat Provider:", [
                 {value: "openai", text: "OpenAI"},
@@ -3653,24 +3768,36 @@
             
             const apiKeyContainer = createElement("div", {
                 className: "popup-row",
-                style: "display: flex; justify-content: space-between; align-items: center;"
+                style: "display: flex; align-items: center; justify-content: space-between; margin: 9px 0;"
             });
             apiKeyContainer.appendChild(createElement("label", {
                 htmlFor: "llmApiKeyInput",
-                textContent: "Chat API Key:"
+                textContent: "Chat API Key:",
+                style: "flex: 0 0 185px; white-space: nowrap;"
             }));
             
             const savedKeys = settings.llmApiKeys;
             
-            const apiKeyFlexContainer = createElement("div", {style: "display: flex; align-items: center; width: 65%;"});
+            const apiKeyControlGroup = createElement("div", {
+                style: "display: flex; align-items: center; gap: 8px; width: 230px; box-sizing: border-box;"
+            });
             const apiKeyInput = createElement("input", {
                 type: "password",
                 id: "llmApiKeyInput",
                 value: savedKeys[settings.llmProvider] || "",
-                className: "popup-input"
+                className: "popup-input",
+                style: "flex: 1 1 0; min-width: 0; box-sizing: border-box;"
             });
-            apiKeyFlexContainer.appendChild(apiKeyInput);
-            apiKeyContainer.appendChild(apiKeyFlexContainer);
+            const usageLogButton = createElement("button", {
+                id: "llmUsageLogBtn",
+                className: "popup-button",
+                textContent: "Usage Log",
+                type: "button",
+                style: "margin: 0; padding: 3px 8px; font-size: 0.85em; white-space: nowrap; flex-shrink: 0;"
+            });
+            apiKeyControlGroup.appendChild(apiKeyInput);
+            apiKeyControlGroup.appendChild(usageLogButton);
+            apiKeyContainer.appendChild(apiKeyControlGroup);
             chatWidgetSection.appendChild(apiKeyContainer);
             
             const vertexCreds = settings.vertexCredential;
@@ -3681,20 +3808,22 @@
             const addVertexField = (id, label, value, isPassword) => {
                 const row = createElement("div", {
                     className: "popup-row",
-                    style: "display: flex; justify-content: space-between; align-items: center;"
+                    style: "display: flex; align-items: center; justify-content: space-between; margin: 9px 0;"
                 });
-                row.appendChild(createElement("label", {htmlFor: id, textContent: label}));
+                row.appendChild(createElement("label", {
+                    htmlFor: id,
+                    textContent: label,
+                    style: "flex: 0 0 195px; white-space: nowrap;"
+                }));
                 
-                const flexContainer = createElement("div", {style: "display: flex; align-items: center; width: 65%;"});
                 const input = createElement("input", {
                     type: isPassword ? "password" : "text",
                     id: id,
                     value: value || "",
-                    className: "popup-input"
+                    className: "popup-input",
+                    style: "width: 230px;"
                 });
-                flexContainer.appendChild(input);
-                row.appendChild(flexContainer);
-                
+                row.appendChild(input);
                 vertexCredentialsContainer.appendChild(row);
                 return input;
             };
@@ -3723,19 +3852,6 @@
             vertexCredentialsContainer.appendChild(jsonUploadRow);
             
             chatWidgetSection.appendChild(vertexCredentialsContainer);
-            
-            const usageLogRow = createElement("div", {
-                className: "popup-row",
-                style: "display: flex; justify-content: flex-end;"
-            });
-            const usageLogButton = createElement("button", {
-                id: "llmUsageLogBtn",
-                className: "popup-button",
-                textContent: "Usage Log",
-                type: "button"
-            });
-            usageLogRow.appendChild(usageLogButton);
-            chatWidgetSection.appendChild(usageLogRow);
             
             addCheckbox(chatWidgetSection, "askSelectedCheckbox", "Enable asking with selected text", settings.askSelected);
             addCheckbox(chatWidgetSection, "prependSummaryCheckbox", "Prepend a quick Summary", settings.prependSummary[language]);
@@ -3872,37 +3988,36 @@
             centralDbSection.append(centralEmailRow, centralOtpRow, centralLoggedInRow);
             chatWidgetSection.appendChild(centralDbSection);
             
-            container2.appendChild(chatWidgetSection);
+            panels.chat.appendChild(chatWidgetSection);
             
-            addCheckbox(container2, "ttsCheckbox", "Enable AI-TTS", settings.tts);
+            addTabHeaderCheckbox(panels.tts, "ttsCheckbox", "Enable AI-TTS", settings.tts);
             
             const ttsSection = createElement("div", {
                 id: "ttsSection",
-                className: "popup-section",
-                style: `${settings.tts ? "" : "display: none"}`
+                style: `${settings.tts ? "" : "display: none;"} margin-top: 8px;`
             });
             
             addCheckbox(ttsSection, "ttsAutoplayCheckbox", "Autoplay TTS voice", settings.ttsAutoplay);
             
             const ttsApiKeyContainer = createElement("div", {
                 className: "popup-row",
-                style: "display: flex; justify-content: space-between; align-items: center;"
+                style: "display: flex; align-items: center; justify-content: space-between; margin: 9px 0;"
             });
             ttsApiKeyContainer.appendChild(createElement("label", {
                 htmlFor: "ttsApiKeyInput",
-                textContent: "TTS API Key:"
+                textContent: "TTS API Key:",
+                style: "flex: 0 0 185px; white-space: nowrap;"
             }));
             
             const savedTtsKeys = settings.ttsApiKeys;
-            const ttsApiKeyFlexContainer = createElement("div", {style: "display: flex; align-items: center; width: 65%;"});
             const ttsApiKeyInput = createElement("input", {
                 type: "password",
                 id: "ttsApiKeyInput",
                 value: savedTtsKeys[settings.ttsProvider] || "",
-                className: "popup-input"
+                className: "popup-input",
+                style: "flex: 0 0 230px; width: 230px; box-sizing: border-box;"
             });
-            ttsApiKeyFlexContainer.appendChild(ttsApiKeyInput)
-            ttsApiKeyContainer.appendChild(ttsApiKeyFlexContainer);
+            ttsApiKeyContainer.appendChild(ttsApiKeyInput);
             ttsSection.appendChild(ttsApiKeyContainer);
             
             addSelect(ttsSection, "ttsProviderSelector", "TTS Provider:", [
@@ -3933,12 +4048,16 @@
             
             addCheckbox(ttsSection, "ttsWordCheckbox", "Enable AI-TTS for words", settings.ttsWord);
             addCheckbox(ttsSection, "ttsSentenceCheckbox", "Enable AI-TTS for sentences", settings.ttsSentence);
-            container2.appendChild(ttsSection);
+            panels.tts.appendChild(ttsSection);
             
-            columns.appendChild(container2);
+            const panelsContainer = createElement("div", {
+                id: "settingsTabPanelsContainer",
+                style: "min-height: 550px; box-sizing: border-box;"
+            });
+            Object.values(panels).forEach(panel => panelsContainer.appendChild(panel));
             
             const buttonContainer = createElement("div", {
-                style: "display: flex; justify-content: space-between; align-items: center;",
+                style: "display: flex; justify-content: space-between; align-items: center; margin-top: 10px;",
                 className: "popup-row"
             });
             
@@ -3961,7 +4080,8 @@
                 className: "popup-button"
             }));
             
-            popupLayout.appendChild(columns)
+            popupLayout.appendChild(tabsContainer);
+            popupLayout.appendChild(panelsContainer);
             popupLayout.appendChild(buttonContainer);
             return popupLayout;
         }
