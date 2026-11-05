@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      19.2.0
+// @version      19.2.1
 // @license      GPL-3.0-or-later
 // @grant       GM_setValue
 // @grant       GM_getValue
@@ -516,51 +516,107 @@
         if (!simpleData?.tokenizedText) return [];
 
         const cardMap = new Map();
+        const phraseCards = [];
         if (wordsData?.cards) {
             Object.values(wordsData.cards).forEach((card) => {
-                if (card?.term) cardMap.set(card.term, card);
+                if (!card?.term) return;
+                cardMap.set(card.term, card);
+                if (card.term.includes(" ") || card.term.length > 1) {
+                    phraseCards.push(card);
+                }
             });
+            phraseCards.sort((a, b) => b.term.length - a.term.length);
         }
 
         const wordsMap = wordsData?.words || {};
-
         const tokens = [];
+
         simpleData.tokenizedText.forEach((paragraph) => {
             if (!Array.isArray(paragraph)) return;
             paragraph.forEach((sentence) => {
                 if (!Array.isArray(sentence?.tokens)) return;
-                sentence.tokens.forEach((token) => {
-                    if (!token?.text || token.punct || token.whitespace) return;
-                    
-                    const word = token.text;
-                    let className = null;
-                    let isHighlight = false;
 
-                    const wordInfo = token.wordId ? wordsMap[token.wordId] : null;
-                    const cardInfo = (wordInfo?.cardId && wordsData?.cards)
-                        ? wordsData.cards[wordInfo.cardId]
-                        : (cardMap.get(word) || null);
+                const wordTokens = sentence.tokens.filter(token => token?.text && !token.punct && !token.whitespace);
+                const sentenceRawText = sentence.text || wordTokens.map(t => t.text).join("");
+                const activePhrases = phraseCards.filter(card => sentenceRawText.includes(card.term));
 
-                    if (cardInfo) {
-                        const status = cardInfo.status ?? 0;
-                        if (status >= 0 && status <= 2) {
-                            className = `ar-lingq-${status}`;
-                            isHighlight = true;
-                        } else if (status === 3) {
-                            className = "ar-lingq-learned";
-                            isHighlight = true;
+                let i = 0;
+                while (i < wordTokens.length) {
+                    let matchedCard = null;
+                    let matchedLen = 1;
+
+                    for (const phraseCard of activePhrases) {
+                        const targetTerm = phraseCard.term;
+                        let accumulatedTextNoSpace = "";
+                        let accumulatedTextWithSpace = "";
+
+                        for (let j = i; j < wordTokens.length; j++) {
+                            const wordText = wordTokens[j].text;
+                            accumulatedTextNoSpace += wordText;
+                            accumulatedTextWithSpace += (accumulatedTextWithSpace ? " " : "") + wordText;
+
+                            if (accumulatedTextNoSpace === targetTerm || accumulatedTextWithSpace === targetTerm) {
+                                matchedCard = phraseCard;
+                                matchedLen = j - i + 1;
+                                break;
+                            }
+
+                            if (accumulatedTextNoSpace.length > targetTerm.length && accumulatedTextWithSpace.length > targetTerm.length) {
+                                break;
+                            }
                         }
-                    } else if (wordInfo?.status === "new" || newWordsSet.has(word)) {
-                        className = "ar-new";
-                        isHighlight = true;
+
+                        if (matchedCard) break;
                     }
 
-                    tokens.push({
-                        text: word,
-                        className: className,
-                        isHighlight: isHighlight
-                    });
-                });
+                    if (matchedCard) {
+                        const status = matchedCard.status ?? 0;
+                        const className = (status >= 0 && status <= 2)
+                            ? `ar-lingq-${status}`
+                            : (status === 3 ? "ar-lingq-learned" : null);
+                        const isHighlight = Boolean(className);
+
+                        for (let k = 0; k < matchedLen; k++) {
+                            tokens.push({
+                                text: wordTokens[i + k].text,
+                                className: className,
+                                isHighlight: isHighlight
+                            });
+                        }
+                        i += matchedLen;
+                    } else {
+                        const token = wordTokens[i];
+                        const word = token.text;
+                        let className = null;
+                        let isHighlight = false;
+
+                        const wordInfo = token.wordId ? wordsMap[token.wordId] : null;
+                        const cardInfo = (wordInfo?.cardId && wordsData?.cards)
+                            ? wordsData.cards[wordInfo.cardId]
+                            : (cardMap.get(word) || null);
+
+                        if (cardInfo) {
+                            const status = cardInfo.status ?? 0;
+                            if (status >= 0 && status <= 2) {
+                                className = `ar-lingq-${status}`;
+                                isHighlight = true;
+                            } else if (status === 3) {
+                                className = "ar-lingq-learned";
+                                isHighlight = true;
+                            }
+                        } else if (wordInfo?.status === "new" || newWordsSet.has(word)) {
+                            className = "ar-new";
+                            isHighlight = true;
+                        }
+
+                        tokens.push({
+                            text: word,
+                            className: className,
+                            isHighlight: isHighlight
+                        });
+                        i++;
+                    }
+                }
             });
         });
 
@@ -8465,10 +8521,16 @@
             const vttLines = ["WEBVTT\n"];
 
             const cardMap = new Map();
+            const phraseCards = [];
             if (wordsData?.cards) {
                 Object.values(wordsData.cards).forEach((card) => {
-                    if (card?.term) cardMap.set(card.term, card);
+                    if (!card?.term) return;
+                    cardMap.set(card.term, card);
+                    if (card.term.includes(" ") || card.term.length > 1) {
+                        phraseCards.push(card);
+                    }
                 });
+                phraseCards.sort((a, b) => b.term.length - a.term.length);
             }
 
             const wordsMap = wordsData?.words || {};
@@ -8482,13 +8544,78 @@
 
                     let sentenceText = "";
                     if (Array.isArray(sentence.tokens)) {
-                        sentence.tokens.forEach((token) => {
-                            if (!token) return;
+                        const sTokens = sentence.tokens;
+                        const sentenceRawText = sentence.text || sTokens.map(t => t?.text || t?.whitespace || t?.punct || "").join("");
+                        const activePhrases = phraseCards.filter(card => sentenceRawText.includes(card.term));
+
+                        let i = 0;
+                        while (i < sTokens.length) {
+                            const token = sTokens[i];
+                            if (!token) {
+                                i++;
+                                continue;
+                            }
                             if (token.whitespace) {
                                 sentenceText += token.whitespace;
-                            } else if (token.punct) {
+                                i++;
+                                continue;
+                            }
+                            if (token.punct) {
                                 sentenceText += token.punct;
-                            } else if (token.text) {
+                                i++;
+                                continue;
+                            }
+
+                            let matchedCard = null;
+                            let matchedTokenSpan = 1;
+
+                            for (const phraseCard of activePhrases) {
+                                const targetTerm = phraseCard.term;
+                                let accumulatedTextNoSpace = "";
+                                let accumulatedTextWithSpace = "";
+
+                                for (let j = i; j < sTokens.length; j++) {
+                                    const t = sTokens[j];
+                                    if (t.punct) break;
+                                    if (!t.text) continue;
+
+                                    accumulatedTextNoSpace += t.text;
+                                    accumulatedTextWithSpace += (accumulatedTextWithSpace ? " " : "") + t.text;
+
+                                    if (accumulatedTextNoSpace === targetTerm || accumulatedTextWithSpace === targetTerm) {
+                                        matchedCard = phraseCard;
+                                        matchedTokenSpan = j - i + 1;
+                                        break;
+                                    }
+
+                                    if (accumulatedTextNoSpace.length > targetTerm.length && accumulatedTextWithSpace.length > targetTerm.length) {
+                                        break;
+                                    }
+                                }
+
+                                if (matchedCard) break;
+                            }
+
+                            if (matchedCard) {
+                                const status = matchedCard.status ?? 0;
+                                const tag = (status >= 0 && status <= 2)
+                                    ? `ar-lingq-${status}`
+                                    : (status === 3 ? "ar-lingq-learned" : null);
+
+                                let phraseText = "";
+                                for (let k = 0; k < matchedTokenSpan; k++) {
+                                    const t = sTokens[i + k];
+                                    if (t.text) phraseText += t.text;
+                                    else if (t.whitespace) phraseText += t.whitespace;
+                                }
+
+                                if (tag) {
+                                    sentenceText += `<c.${tag}>${phraseText}</c>`;
+                                } else {
+                                    sentenceText += phraseText;
+                                }
+                                i += matchedTokenSpan;
+                            } else {
                                 const word = token.text;
                                 const wordInfo = token.wordId ? wordsMap[token.wordId] : null;
                                 const cardInfo = (wordInfo?.cardId && wordsData?.cards)
@@ -8509,8 +8636,9 @@
                                 } else {
                                     sentenceText += word;
                                 }
+                                i++;
                             }
-                        });
+                        }
                     } else {
                         sentenceText = sentence.text || "";
                     }
@@ -9259,12 +9387,9 @@
                     let initialTime = getLingQAudioProgress();
 
                     const startPlayback = () => {
-                        let targetTime = initialTime;
-                        if (targetTime <= 0) {
-                            targetTime = getLingQAudioProgress();
-                        }
+                        const targetTime = initialTime;
                         
-                        if (targetTime > 0) {
+                        if (typeof targetTime === "number" && !isNaN(targetTime)) {
                             videoElement.currentTime = targetTime;
                             if (typeof mediaInstances !== "undefined") {
                                 mediaInstances.forEach(media => {
@@ -9288,6 +9413,18 @@
                     if (pauseButton) {
                         pauseButton.click();
                     }
+                    if (typeof mediaInstances !== "undefined") {
+                        mediaInstances.forEach(media => {
+                            if (media && media.id !== "addonLocalVideo") {
+                                try { media.pause(); } catch (e) {}
+                            }
+                        });
+                    }
+                    document.querySelectorAll('audio').forEach(audio => {
+                        if (audio && audio.id !== "addonLocalVideo" && !audio.src?.includes('/tts/')) {
+                            try { audio.pause(); } catch (e) {}
+                        }
+                    });
 
                     if (videoElement.readyState >= 3) {
                         startPlayback();
@@ -10459,21 +10596,35 @@
                     border-radius: .25rem;
                 }
 
-                .sentence-item.ar-lingq.ar-lingq-0 {
+                .sentence-item.band,
+                .sentence-item.band-revealed {
+                    border-color: var(--lingq-border) !important;
+                }
+
+                .sentence-item.band-revealed {
+                    box-shadow: none !important;
                     background-color: color-mix(in srgb, var(--lingq-background) 65%, transparent) !important;
                 }
 
-                .sentence-item.ar-lingq.ar-lingq-1 {
+                .sentence-item.ar-lingq.ar-lingq-0,
+                .sentence-item.band.band-0 {
+                    background-color: color-mix(in srgb, var(--lingq-background) 65%, transparent) !important;
+                }
+
+                .sentence-item.ar-lingq.ar-lingq-1,
+                .sentence-item.band.band-1 {
                     background-color: color-mix(in srgb, var(--lingq-background) 35%, transparent) !important;
                 }
 
-                .sentence-item.ar-lingq.ar-lingq-2 {
+                .sentence-item.ar-lingq.ar-lingq-2,
+                .sentence-item.band.band-2 {
                     background-color: color-mix(in srgb, var(--lingq-background) 15%, transparent) !important;
                 }
 
-                .sentence-item.ar-lingq.ar-lingq-3 {
+                .sentence-item.ar-lingq.ar-lingq-3,
+                .sentence-item.band.band-3 {
                     background-color: rgba(0, 0, 0, 0) !important;
-                    border: 1px solid var(--lingq-border-learned) !important;
+                    border-color: var(--lingq-border-learned) !important;
                 }
 
                 .sentence-item.ar-learned {
@@ -10489,7 +10640,7 @@
                     outline: none !important;
                 }
 
-                .reader-body .sentence-item.selected:not(.ar-lingq):not(.ar-new),
+                .reader-body .sentence-item.selected:not(.ar-lingq):not(.ar-new):not(.band):not(.band-revealed),
                 .reader-body .selected-space.selected { /* Selection state: transparent background for regular words and spaces */
                     background: transparent !important;
                 }
@@ -10506,8 +10657,8 @@
                     border-bottom-right-radius: 4px !important;
                 }
 
-                .reader-body .sentence-item.selected:not(.sel-drag),
-                .reader-body .sentence-item.selected.run-start.run-end { /* Selection state: single word complete box */
+                .reader-body .sentence-item.selected.run-start.run-end,
+                .reader-body .sentence-item.selected.sel-word:not(.sel-phrase) { /* Selection state: single word complete box */
                     box-shadow: inset 0 0 0 2px var(--font-color) !important;
                     border-radius: 4px !important;
                 }
@@ -10521,7 +10672,9 @@
                     box-shadow: inset 0 0 0 1px var(--unknown-border) !important;
                 }
 
-                .sentence-item.ar-lingq:hover {
+                .sentence-item.ar-lingq:hover,
+                .sentence-item.band:hover,
+                .sentence-item.band-revealed:hover {
                     box-shadow: inset 0 0 0 1px var(--lingq-border) !important;
                 }
 
@@ -12441,6 +12594,13 @@
                     }
                 });
             }
+            function getFinishLessonButton() {
+                const iconBtn = document.querySelector('button svg.lucide-circle-check-big')?.closest('button');
+                if (iconBtn) return iconBtn;
+                const buttons = Array.from(document.querySelectorAll('button'));
+                return buttons.find(btn => btn.textContent?.trim().includes("Finish Lesson")) || null;
+            }
+
             function getFinishPageButton(action) {
                 if (action === "back") {
                     return document.querySelector('[data-slot="tabs"] > header button[data-variant="link"]') ||
@@ -12451,8 +12611,9 @@
                 
                 if (action === "next") {
                     const completionPanel = document.querySelector('[id$="-content-lessonCompleted"]');
-                    return completionPanel?.querySelector('button[data-variant="primary"]') ||
-                        document.querySelector('[data-slot="tabs"] > header button[data-variant="primary"]');
+                    return completionPanel?.querySelector('button[data-variant="primary"], button[data-variant="primarySubtle"]') ||
+                        document.querySelector('[data-slot="tabs"] > header button[data-variant="primary"], [data-slot="tabs"] > header button[data-variant="primarySubtle"]') ||
+                        getFinishLessonButton();
                 }
                 
                 return null;
@@ -12479,22 +12640,34 @@
                         
                         if (isTextInput) return;
 
-                        if (event.shiftKey && isFinishPageActive()) {
+                        if (event.shiftKey) {
                             if (event.key === "ArrowLeft") {
-                                const backBtn = getFinishPageButton("back");
-                                if (backBtn) {
-                                    event.preventDefault();
-                                    event.stopImmediatePropagation();
-                                    backBtn.click();
-                                    return;
+                                if (isFinishPageActive()) {
+                                    const backBtn = getFinishPageButton("back");
+                                    if (backBtn) {
+                                        event.preventDefault();
+                                        event.stopImmediatePropagation();
+                                        backBtn.click();
+                                        return;
+                                    }
                                 }
                             } else if (event.key === "ArrowRight") {
-                                const nextBtn = getFinishPageButton("next");
-                                if (nextBtn) {
-                                    event.preventDefault();
-                                    event.stopImmediatePropagation();
-                                    nextBtn.click();
-                                    return;
+                                if (isFinishPageActive()) {
+                                    const nextBtn = getFinishPageButton("next");
+                                    if (nextBtn) {
+                                        event.preventDefault();
+                                        event.stopImmediatePropagation();
+                                        nextBtn.click();
+                                        return;
+                                    }
+                                } else {
+                                    const finishBtn = getFinishLessonButton();
+                                    if (finishBtn) {
+                                        event.preventDefault();
+                                        event.stopImmediatePropagation();
+                                        finishBtn.click();
+                                        return;
+                                    }
                                 }
                             }
                         }
@@ -12832,9 +13005,16 @@
             
             let isProgrammaticNativeTTS = false;
             
+            function isLessonAudioPlaying() {
+                return Boolean(document.querySelector('footer button[aria-label="Pause"], .section--player button.lingq-audio-player .svg-icon--pause, .section--player .svg-icon--pause'));
+            }
+
             function playNativeTTS() {
                 const ttsBtn = document.querySelector('div[data-word-widget] button[aria-label="Listen"], div[data-reader-popup="true"] button[aria-label="Listen"]');
                 if (ttsBtn) {
+                    if (!isLessonAudioPlaying()) {
+                        ttsBtn.dataset.addonNativePlayed = "true";
+                    }
                     isProgrammaticNativeTTS = true;
                     try {
                         ttsBtn.click();
@@ -12845,6 +13025,9 @@
                     setTimeout(() => {
                         const retryBtn = document.querySelector('div[data-word-widget] button[aria-label="Listen"], div[data-reader-popup="true"] button[aria-label="Listen"]');
                         if (retryBtn) {
+                            if (!isLessonAudioPlaying()) {
+                                retryBtn.dataset.addonNativePlayed = "true";
+                            }
                             isProgrammaticNativeTTS = true;
                             try {
                                 retryBtn.click();
@@ -12866,11 +13049,26 @@
                     if (isProgrammaticNativeTTS) return;
                     if (!settings.tts) return;
                     
+                    const targetText = getCurrentlyTargetedText();
+                    if (!targetText) return;
+
+                    if (ttsBtn.dataset.addonTtsTarget !== targetText) {
+                        ttsBtn.dataset.addonTtsTarget = targetText;
+                        delete ttsBtn.dataset.addonNativePlayed;
+                    }
+
+                    const isSentence = Boolean(getPopupSentenceText());
+                    const useAiTTS = settings.tts && (isSentence ? settings.ttsSentence : settings.ttsWord);
+                    if (!useAiTTS && ttsBtn.dataset.addonNativePlayed !== "true") {
+                        if (!isLessonAudioPlaying()) {
+                            ttsBtn.dataset.addonNativePlayed = "true";
+                        }
+                        return;
+                    }
+
                     event.preventDefault();
                     event.stopImmediatePropagation();
                     
-                    const targetText = getCurrentlyTargetedText();
-                    if (!targetText) return;
                     await playCustomTTSForText(targetText, false, true);
                 }, true);
             }
@@ -12880,6 +13078,12 @@
                 
                 const targetText = getCurrentlyTargetedText();
                 if (!targetText) return;
+
+                const ttsBtn = document.querySelector('div[data-word-widget] button[aria-label="Listen"], div[data-reader-popup="true"] button[aria-label="Listen"]');
+                if (ttsBtn && ttsBtn.dataset.addonTtsTarget !== targetText) {
+                    ttsBtn.dataset.addonTtsTarget = targetText;
+                    delete ttsBtn.dataset.addonNativePlayed;
+                }
                 
                 if (autoplay && settings.ttsAutoplay) {
                     if (targetText === lastAutoplayText) return;
