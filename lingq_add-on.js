@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      19.2.1
+// @version      19.3.0
 // @license      GPL-3.0-or-later
 // @grant       GM_setValue
 // @grant       GM_getValue
@@ -15415,12 +15415,75 @@
             document.addEventListener('click', handlePrintInteraction, true);
         }
         
+        function setupReaderHeaderControls() {
+            function relocateControls() {
+                const exitBtn = document.querySelector('button[aria-label="Exit lesson"]');
+                const themeBtn = document.querySelector('button[aria-label="Theme and font"]') ||
+                                 document.querySelector('button:has(> svg.lucide-case-sensitive)');
+                const optionsBtn = document.querySelector('button[aria-label="Reader options"]') ||
+                                   document.querySelector('button:has(> svg.lucide-ellipsis-vertical)');
+
+                if (!exitBtn && !themeBtn && !optionsBtn) return;
+
+                const headerBar = document.querySelector('header[data-site-header="true"] > div') ||
+                                  document.querySelector('#app > div > div > header > div');
+                if (!headerBar) return;
+
+                const statusBadgesContainer = headerBar.querySelector('.ml-4.flex.shrink-0.items-center.gap-2') ||
+                                              headerBar.querySelector('button[data-variant="statusPill"]')?.parentElement;
+                if (!statusBadgesContainer) return;
+
+                let controlsWrapper = document.getElementById("lingqAddonLessonNavControls");
+                if (!controlsWrapper) {
+                    controlsWrapper = createElement("div", {
+                        id: "lingqAddonLessonNavControls",
+                        className: "flex items-center gap-1 shrink-0 ml-auto"
+                    });
+                }
+
+                if (controlsWrapper.parentElement !== statusBadgesContainer.parentElement ||
+                    controlsWrapper.nextElementSibling !== statusBadgesContainer) {
+                    statusBadgesContainer.parentElement.insertBefore(controlsWrapper, statusBadgesContainer);
+                }
+
+                const buttons = [exitBtn, themeBtn, optionsBtn].filter(Boolean);
+                buttons.forEach((btn) => {
+                    const originalBar = btn.closest('.relative.flex.min-h-\\[53px\\]') ||
+                                        btn.closest('.relative.z-40.shrink-0');
+                    if (originalBar && originalBar !== controlsWrapper) {
+                        originalBar.style.display = "none";
+                        const outerContainer = originalBar.parentElement?.classList?.contains('z-40') ? originalBar.parentElement : null;
+                        if (outerContainer) {
+                            outerContainer.style.display = "none";
+                        }
+                    }
+
+                    if (btn.classList.contains("me-auto")) {
+                        btn.classList.remove("me-auto");
+                    }
+
+                    if (btn.parentElement !== controlsWrapper) {
+                        controlsWrapper.appendChild(btn);
+                    }
+                });
+            }
+
+            relocateControls();
+
+            const headerObserver = new MutationObserver(() => {
+                relocateControls();
+            });
+
+            headerObserver.observe(document.body, { childList: true, subtree: true });
+        }
+        
         setupKeyboardShortcuts();
         setupYoutubePlayerCustomization();
         setupReaderContainer();
         setupLLMs();
         handleLocalVideoContainerVisibility();
         setupPrintLinkHandler();
+        setupReaderHeaderControls();
     }
     
     async function setupCourse() {
