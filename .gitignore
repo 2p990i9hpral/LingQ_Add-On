@@ -1,5 +1,7 @@
 /.idea/
 /.agents/
+/.claude/
 __pycache__/
 *.pyc
 /web-reader-lingq/
+/CLAUDE.md

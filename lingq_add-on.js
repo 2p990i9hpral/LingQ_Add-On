@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      19.3.0
+// @version      19.3.1
 // @license      GPL-3.0-or-later
 // @grant       GM_setValue
 // @grant       GM_getValue
@@ -8572,6 +8572,7 @@
     async function setupReader() {
         const language = getLessonLanguage();
         let refreshReaderWidget = null;
+        let observedSideColumn = null;
 
         function isNativePageMode() {
             return Boolean(document.querySelector(".poc-page"));
@@ -9228,7 +9229,7 @@
                 });
                 const fileLabel = createElement("label", {
                     className: "local-video-button",
-                    style: "flex: 1; min-width: 0; box-sizing: border-box; text-align: center;",
+                    style: "flex: 1;",
                     textContent: "Choose Files",
                     title: "Choose Files"
                 });
@@ -9243,7 +9244,7 @@
                 });
                 const folderLabel = createElement("label", {
                     className: "local-video-button",
-                    style: "flex: 1; min-width: 0; box-sizing: border-box; text-align: center;",
+                    style: "flex: 1;",
                     textContent: "Select Folder (Auto-match)",
                     title: "Select Folder (Auto-match)"
                 });
@@ -9285,7 +9286,7 @@
                 const videoElement = createElement("video", {
                     id: "addonLocalVideo",
                     muted: false,
-                    style: "width: 100%; height: 100%; flex-grow: 1; object-fit: contain; display: none; cursor: pointer;"
+                    style: "display: none; cursor: pointer;"
                 });
                 
                 container.addEventListener("click", (event) => {
@@ -10195,11 +10196,9 @@
             const speedText = createElement("span", {className: "addon-speed-text"});
             
             const speedBtn = createElement("a", {
-                className: "controller-item button is-white",
-                style: "cursor: pointer; position: relative; display: inline-flex; align-items: center; justify-content: center;"
+                className: "controller-item button is-white cursor-pointer relative inline-flex items-center justify-center"
             }, createElement("span", {
-                className: "icon-wrapper icon t-btn-text-player hover:t-btn-text-hover-player",
-                style: "display: flex; align-items: center; justify-content: center;"
+                className: "icon-wrapper icon t-btn-text-player hover:t-btn-text-hover-player flex items-center justify-center"
             }, speedText));
             
             function updateLabel() {
@@ -11354,6 +11353,10 @@
                 font-size: 9.5px !important;
             }
 
+            body {
+                overflow-x: hidden !important;
+            }
+
             .reader-body { /* Main reader content area container */
                 max-width: 100% !important;
                 font-family: var(--custom-font, inherit) !important;
@@ -11375,7 +11378,7 @@
                 flex: 1 1 0% !important;
             }
             .reader-paragraph { /* Individual paragraph block in Scroll Mode */
-                margin-bottom: 0.75em !important;
+                margin-bottom: 0 !important;
             }
 
             button[aria-label="Previous page"],
@@ -11394,6 +11397,7 @@
                 flex-direction: column !important;
                 justify-content: ${settings.widgetVerticalAlign || "flex-start"} !important;
                 align-self: stretch !important;
+                margin-left: 0 !important;
             }
             div[data-reader-widget] { /* Widget container box */
                 flex: 0 1 auto !important;
@@ -11492,8 +11496,7 @@
                         order: 1 !important;
                         width: 100% !important;
                         flex-shrink: 0 !important;
-                        padding-top: 0.5rem !important;
-                        padding-bottom: 0.5rem !important;
+                        padding: 0 0 0.5rem 0.5rem !important;
                     }
                     div[data-reader-video-stage="true"] {
                         width: 100% !important;
@@ -11559,8 +11562,7 @@
                     div.relative.flex.min-h-0.flex-1.flex-col > .contents:has([data-reader-video-stage="true"]) {
                         display: grid !important;
                         grid-template-columns: 1fr 1fr !important;
-                        gap: 1.5rem !important;
-                        padding-left: 1.5rem !important;
+                        gap: 0.5rem !important;
                         min-height: 0 !important;
                         height: 100% !important;
                         flex: 1 1 0% !important;
@@ -11572,7 +11574,7 @@
                         align-self: stretch !important;
                         min-height: 0 !important;
                         height: 100% !important;
-                        padding: 0 !important;
+                        padding: 0 0 0.5rem 0.5rem !important;
                     }
                     div.contents > div:has(> [data-reader-video-stage="true"]) [data-reader-video-stage="true"] {
                         max-width: none !important;
@@ -11593,6 +11595,7 @@
                     div.contents:has([data-reader-video-stage="true"]) > div[data-reader-mode-body="true"] > div.overflow-y-auto {
                         height: 100% !important;
                         overflow-y: auto !important;
+                        padding-left: 1rem !important;
                     }
                 `;
             } else if (position === "Right") {
@@ -11600,8 +11603,7 @@
                     div.relative.flex.min-h-0.flex-1.flex-col > .contents:has([data-reader-video-stage="true"]) {
                         display: grid !important;
                         grid-template-columns: 1fr 1fr !important;
-                        gap: 1.5rem !important;
-                        padding-left: 1.5rem !important;
+                        gap: 0.5rem !important;
                         min-height: 0 !important;
                         height: 100% !important;
                         flex: 1 1 0% !important;
@@ -11618,6 +11620,7 @@
                     div.contents:has([data-reader-video-stage="true"]) > div[data-reader-mode-body="true"] > div.overflow-y-auto {
                         height: 100% !important;
                         overflow-y: auto !important;
+                        padding-right: 1rem !important;
                     }
                     div.contents > div:has(> [data-reader-video-stage="true"]) {
                         order: 2 !important;
@@ -11625,7 +11628,7 @@
                         align-self: stretch !important;
                         min-height: 0 !important;
                         height: 100% !important;
-                        padding: 0 !important;
+                        padding: 0 0 0.5rem 0 !important;
                     }
                     div.contents > div:has(> [data-reader-video-stage="true"]) [data-reader-video-stage="true"] {
                         max-width: none !important;
@@ -11677,7 +11680,7 @@
                         height: var(--height-big) !important;
                         max-height: var(--height-big) !important;
                         flex-shrink: 0 !important;
-                        margin-bottom: 0.5rem !important;
+                        margin: 0 0 0.5rem 0.5rem !important;
                     }
                     div[data-reader-mode-body="true"] {
                         order: 2 !important;
@@ -11730,15 +11733,15 @@
                         min-height: 0 !important;
                         height: 100% !important;
                         overflow: hidden !important;
-                        gap: 1.5rem !important;
+                        gap: 0.5rem !important;
                     }
                     #local-video-container {
                         order: 1 !important;
                         flex: 1 1 0% !important;
                         min-width: 0 !important;
-                        height: 100% !important;
-                        max-height: 100% !important;
+                        height: auto !important;
                         align-self: stretch !important;
+                        margin: 0 0 0.5rem 0.5rem !important;
                     }
                     div[data-reader-mode-body="true"] {
                         order: 2 !important;
@@ -11751,6 +11754,7 @@
                     div[data-reader-mode-body="true"] > div.overflow-y-auto {
                         height: 100% !important;
                         overflow-y: auto !important;
+                        padding-left: 1rem !important;
                     }
                 `;
             } else if (position === "Right") {
@@ -11762,7 +11766,7 @@
                         min-height: 0 !important;
                         height: 100% !important;
                         overflow: hidden !important;
-                        gap: 1.5rem !important;
+                        gap: 0.5rem !important;
                     }
                     div[data-reader-mode-body="true"] {
                         order: 1 !important;
@@ -11775,14 +11779,15 @@
                     div[data-reader-mode-body="true"] > div.overflow-y-auto {
                         height: 100% !important;
                         overflow-y: auto !important;
+                        padding-right: 1rem !important;
                     }
                     #local-video-container {
                         order: 2 !important;
                         flex: 1 1 0% !important;
                         min-width: 0 !important;
-                        height: 100% !important;
-                        max-height: 100% !important;
+                        height: auto !important;
                         align-self: stretch !important;
+                        margin: 0 0 0.5rem 0 !important;
                     }
                 `;
             }
@@ -11845,6 +11850,7 @@
                 width: 100%;
                 min-width: 0;
                 box-sizing: border-box;
+                text-align: center;
                 text-overflow: ellipsis;
                 overflow: hidden;
                 white-space: nowrap;
@@ -13092,8 +13098,8 @@
             
             async function playCustomTTSForText(text, autoplay = false, forceCustom = false) {
                 if (!text || !settings.tts) return;
-                if (text.length > 1000) {
-                    console.log("The length of the selected text exceeds 1,000.");
+                if (text.length > 3000) {
+                    console.log("The length of the selected text exceeds 3,000.");
                     return;
                 }
                 
@@ -14663,8 +14669,8 @@
                                 ? `Input: "${selectedData.context || selectedData.input}"`
                                 : `Input: "${selectedData.input}"` + (selectedData.context ? `, Context: "${selectedData.context}"` : "");
                             
-                            if (initialUserMessage.length > 1000) {
-                                console.log("The length of the selected text exceeds 1,000.");
+                            if (initialUserMessage.length > 3000) {
+                                console.log("The length of the selected text exceeds 3,000.");
                                 return;
                             }
                             
@@ -14856,7 +14862,6 @@
             
             let selectedTextObserver = null;
             let sideColumnObserver = null;
-            let observedSideColumn = null;
             let lastActiveWordText = "";
             let lastActiveSentenceText = "";
             let lastAskedTargetText = "";
