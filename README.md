@@ -3,7 +3,7 @@
 A userscript for Tampermonkey that significantly enhances the LingQ language learning experience. <br>
 Customizable layouts, AI-powered chat & TTS, flashcard system, local video player, and more — all in one script.
 
-<img src="images/main.png" width=800></br>
+<img src="images/layout-video-left.jpeg" width=800></br>
 
 > 📖 **Looking for in-depth documentation?**  
 > Check out the complete **[Feature Guide](GUIDE.md)** for settings breakdown, local video setup, Supabase cloud sync, and Anki integration.
