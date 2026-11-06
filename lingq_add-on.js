@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      19.3.2
+// @version      19.3.3
 // @license      GPL-3.0-or-later
 // @grant       GM_setValue
 // @grant       GM_getValue
@@ -9305,6 +9305,10 @@
                 
                 videoElement.appendChild(trackElement);
                 container.appendChild(videoElement);
+                videoElement.addEventListener("loadedmetadata", () => {
+                    if (!videoElement.videoHeight) return;
+                    container.style.setProperty("--video-ratio", videoElement.videoWidth / videoElement.videoHeight);
+                });
                 
                 const progressWrapper = createElement("div", {
                     className: "local-video-progress-wrapper",
@@ -11713,6 +11717,7 @@
                 min-width: 0;
                 overflow: hidden;
                 cursor: pointer;
+                container-type: size;
             }
             `;
             
@@ -11932,12 +11937,10 @@
                 transition: width 0.1s linear;
             }
             #addonLocalVideo {
-                flex: 1 1 0% !important;
-                min-height: 0 !important;
-                width: 100% !important;
-                height: 100% !important;
-                max-width: 100% !important;
-                max-height: 100% !important;
+                flex: none !important;
+                width: min(100cqw, calc((100cqh - 5px) * var(--video-ratio, 1.7778))) !important;
+                height: auto !important;
+                aspect-ratio: var(--video-ratio, 1.7778) !important;
                 object-fit: contain !important;
                 align-self: center !important;
                 margin: 0 !important;
