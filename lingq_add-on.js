@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      19.3.1
+// @version      19.3.2
 // @license      GPL-3.0-or-later
 // @grant       GM_setValue
 // @grant       GM_getValue
@@ -9948,7 +9948,27 @@
         let observedFooter = null;
         let audioPlayerObserver = null;
         let updateFooterFrame = null;
-        
+        let youtubeProgressThumb = null;
+
+        function bindYoutubeProgressBar() {
+            if (youtubeProgressThumb?.isConnected) return;
+            const progressBar = document.querySelector(".addon-yt-progress-bar");
+            const sliderThumb = document.querySelector('footer [data-slot="slider-thumb"], footer [role="slider"]');
+            if (!progressBar || !sliderThumb) return;
+
+            youtubeProgressThumb = sliderThumb;
+            const updateProgress = () => {
+                const maxValue = parseFloat(sliderThumb.getAttribute("aria-valuemax")) || 1;
+                const currentValue = parseFloat(sliderThumb.getAttribute("aria-valuenow")) || 0;
+                progressBar.style.width = `${(currentValue / maxValue) * 100}%`;
+            };
+            new MutationObserver(updateProgress).observe(sliderThumb, {
+                attributes: true,
+                attributeFilter: ["aria-valuenow", "aria-valuemax"]
+            });
+            updateProgress();
+        }
+
         function updateFooterControllers() {
             const footer = document.querySelector('footer');
             if (footer) {
@@ -9987,6 +10007,7 @@
                     return;
                 }
             }
+            bindYoutubeProgressBar();
             setupSpeedController();
             setupVolumeController();
             setupCustomSkipController();
@@ -10035,8 +10056,7 @@
             audioPlayerObserver.observe(footer, {
                 attributes: true,
                 attributeFilter: ['aria-label'],
-                childList: true,
-                subtree: false
+                subtree: true
             });
             
             scheduleFooterUpdate();
@@ -11475,10 +11495,41 @@
             `;
         }
         
+        function getNativeProgressHoverCSS() {
+            return `
+                footer [data-slot="slider"] {
+                    opacity: 0 !important;
+                    transition: opacity 0.15s !important;
+                }
+                footer:hover [data-slot="slider"] {
+                    opacity: 1 !important;
+                }
+            `;
+        }
+
         function generateVideoCSS(position = "Right") {
             let layoutCSS = `
                 :root {
                     --height-big: ${settings.heightBig || 400}px;
+                }
+                div[data-reader-video-stage="true"] {
+                    position: relative !important;
+                }
+                .addon-yt-progress {
+                    position: absolute;
+                    left: 0;
+                    right: 0;
+                    bottom: 0;
+                    height: 5px;
+                    background-color: rgba(255, 255, 255, 0.2);
+                    z-index: 10;
+                    pointer-events: none;
+                }
+                .addon-yt-progress-bar {
+                    height: 100%;
+                    width: 0%;
+                    background-color: rgb(76, 175, 80);
+                    transition: width 0.1s linear;
                 }
             `;
             
@@ -11544,8 +11595,7 @@
                         order: 2 !important;
                         width: 100% !important;
                         flex-shrink: 0 !important;
-                        padding-top: 0.5rem !important;
-                        padding-bottom: 0.5rem !important;
+                        padding: 0.5rem 0 0.5rem 0.5rem !important;
                     }
                     div[data-reader-video-stage="true"] {
                         width: 100% !important;
@@ -11640,10 +11690,12 @@
                     }
                 `;
             }
-            
+
+            layoutCSS += getNativeProgressHoverCSS();
+
             return layoutCSS;
         }
-        
+
         function generateLocalVideoCSS(position = "Right") {
             let layoutCSS = `
             :root {
@@ -11721,7 +11773,7 @@
                         height: var(--height-big) !important;
                         max-height: var(--height-big) !important;
                         flex-shrink: 0 !important;
-                        margin-top: 0.5rem !important;
+                        margin: 0.5rem 0 0.5rem 0.5rem !important;
                     }
                 `;
             } else if (position === "Left") {
@@ -11791,7 +11843,9 @@
                     }
                 `;
             }
-            
+
+            layoutCSS += getNativeProgressHoverCSS();
+
             return `
             ${layoutCSS}
 
@@ -11929,6 +11983,13 @@
             `;
         }
         
+        function attachYoutubeProgressBar(videoStage) {
+            if (videoStage.querySelector(".addon-yt-progress")) return;
+            const progressBar = createElement("div", {className: "addon-yt-progress-bar"});
+            videoStage.appendChild(createElement("div", {className: "addon-yt-progress"}, progressBar));
+            bindYoutubeProgressBar();
+        }
+
         function setupYoutubePlayerCustomization() {
             function customizeIframe(iframe) {
                 if (!iframe || iframe.dataset.addonCustomized) return;
@@ -11950,6 +12011,7 @@
 
             const videoStage = document.querySelector('div[data-reader-video-stage="true"]');
             if (videoStage) {
+                attachYoutubeProgressBar(videoStage);
                 const existingIframe = videoStage.querySelector('iframe[src*="youtube"]');
                 if (existingIframe) customizeIframe(existingIframe);
 
