@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      19.3.3
+// @version      19.3.4
 // @license      GPL-3.0-or-later
 // @grant       GM_setValue
 // @grant       GM_getValue
@@ -9185,21 +9185,22 @@
             }
             
             function buildLocalVideoUI() {
-                const readerBody = document.querySelector('div[data-reader-mode-body="true"]');
-                const targetParent = readerBody?.parentElement || document.querySelector('.reader-appearance') || document.body;
-                if (!targetParent) return;
-                
                 const currentStyle = settings.styleType[getLessonLanguage()];
                 let container = document.getElementById("local-video-container");
-                
+
                 if (currentStyle !== "localVideo") {
                     if (container) container.style.display = "none";
                     return;
                 }
-                
+
+                // Built on lesson start once the reader body is mounted
+                const readerBody = document.querySelector('div[data-reader-mode-body="true"]');
+                if (!readerBody) return;
+                const targetParent = readerBody.parentElement;
+
                 if (container) {
                     container.style.display = "flex";
-                    if (readerBody && container.parentElement !== targetParent) {
+                    if (container.parentElement !== targetParent) {
                         targetParent.insertBefore(container, readerBody);
                     }
                     return;
@@ -9269,11 +9270,7 @@
                 
                 setupBox.append(title, buttonRow, startButton);
                 container.appendChild(setupBox);
-                if (readerBody && targetParent) {
-                    targetParent.insertBefore(container, readerBody);
-                } else {
-                    targetParent.appendChild(container);
-                }
+                targetParent.insertBefore(container, readerBody);
                 
                 const titleBar = createElement("div", {
                     className: "local-video-title-bar",
@@ -10514,6 +10511,11 @@
                 }
                 `;
             }
+            baseCSS += `
+            html.addon-lesson-loading div.relative.flex.min-h-0.flex-1.flex-col > .contents > * {
+                opacity: 0 !important;
+            }
+            `;
             if (settings.hidePopularMeanings) {
                 baseCSS += `
                 div[data-word-widget] ul:has(button[aria-label^="Add this meaning:"]),
@@ -12134,6 +12136,24 @@
             }, true);
         }
         
+        let revealFallbackTimer = null;
+
+        function hideLessonContent() {
+            document.documentElement.classList.add("addon-lesson-loading");
+        }
+
+        function revealLessonContent() {
+            clearTimeout(revealFallbackTimer);
+            revealFallbackTimer = null;
+            requestAnimationFrame(() => document.documentElement.classList.remove("addon-lesson-loading"));
+        }
+
+        function scheduleRevealFallback() {
+            if (revealFallbackTimer || !document.documentElement.classList.contains("addon-lesson-loading")) return;
+            if (document.querySelector('[id$="-content-lessonCompleted"][data-state="active"]')) return;
+            revealFallbackTimer = setTimeout(revealLessonContent, 3000);
+        }
+
         async function setupReaderContainer() {
             let llmProvider = settings.llmProvider;
             let llmModel = settings.llmModel;
@@ -12638,7 +12658,8 @@
                         });
 
                     resetLocalVideo();
-                    
+                    hideLessonContent();
+
                     const escEvent = new KeyboardEvent("keydown", {
                         key: "Escape",
                         code: "Escape",
@@ -12965,42 +12986,25 @@
                 requestAnimationFrame(() => resetScroll());
             }
             
-            let currentLessonId = getLessonId();
-            let observedBodyContainer = null;
-            let isHandlingContent = false;
+            let handledBodyContainer = null;
 
-            async function checkAndHandleLessonContent() {
-                const newLessonId = getLessonId();
+            function checkAndHandleLessonContent() {
                 updateDocumentTitle();
+                scheduleRevealFallback();
                 const bodyContainer = document.querySelector('div[data-reader-mode-body="true"]');
-                if (!bodyContainer) return;
+                if (!bodyContainer || bodyContainer === handledBodyContainer) return;
+                handledBodyContainer = bodyContainer;
 
-                const isNewLesson = Boolean(newLessonId && newLessonId !== currentLessonId);
-                const isNewBodyContainer = bodyContainer !== observedBodyContainer;
-
-                if ((isNewLesson || isNewBodyContainer) && !isHandlingContent) {
-                    isHandlingContent = true;
-                    try {
-                        currentLessonId = newLessonId || currentLessonId;
-                        observedBodyContainer = bodyContainer;
-                        const targetNode = bodyContainer.querySelector('.reader-body') || bodyContainer;
-                        bindReaderModeBody(bodyContainer);
-                        await handleLoadedContent(targetNode);
-                    } finally {
-                        isHandlingContent = false;
-                    }
-                }
+                bindReaderModeBody(bodyContainer);
+                const targetNode = bodyContainer.querySelector('.reader-body') || bodyContainer;
+                handleLoadedContent(targetNode);
+                revealLessonContent();
             }
 
             setupLessonCompletionObserver();
-            
-            const readerBodyContainer = await waitForElement('div[data-reader-mode-body="true"]', 10000);
-            if (readerBodyContainer) {
-                observedBodyContainer = readerBodyContainer;
-                const targetNode = readerBodyContainer.querySelector('.reader-body') || readerBodyContainer;
-                bindReaderModeBody(readerBodyContainer);
-                await handleLoadedContent(targetNode);
-            }
+
+            await waitForElement('div[data-reader-mode-body="true"]', 10000);
+            checkAndHandleLessonContent();
 
             const readerParent = document.getElementById("lesson-reader") || document.body;
             const lessonTransitionObserver = new MutationObserver(() => {
@@ -13013,8 +13017,6 @@
                 }
             });
             lessonTransitionObserver.observe(readerParent, {childList: true, subtree: true});
-
-            window.addEventListener("popstate", () => checkAndHandleLessonContent());
         }
         
         async function createGeminiCache(provider, apiKey, model, summaryHTML, sysPlain, sysWord) {
@@ -15000,7 +15002,10 @@
         ensureLanguageSettings(language);
         setupStyleEventListeners();
         applyStyles();
-        
+        hideLessonContent();
+        setupReaderContainer();
+        setupReaderHeaderControls();
+
         const DictionaryLocalePairs = await getDictionaryLocalePairs();
         const lessonLanguage = DictionaryLocalePairs[language];
         const userLanguage = (settings.llmResponseLanguage && settings.llmResponseLanguage !== "auto")
@@ -15549,11 +15554,9 @@
         
         setupKeyboardShortcuts();
         setupYoutubePlayerCustomization();
-        setupReaderContainer();
         setupLLMs();
         handleLocalVideoContainerVisibility();
         setupPrintLinkHandler();
-        setupReaderHeaderControls();
     }
     
     async function setupCourse() {
