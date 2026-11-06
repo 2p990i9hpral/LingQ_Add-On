@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      19.3.5
+// @version      19.3.6
 // @license      GPL-3.0-or-later
 // @grant       GM_setValue
 // @grant       GM_getValue
@@ -14485,7 +14485,9 @@
                                 
                                 if (botMessageDiv.relatedPrefaceNode) botMessageDiv.relatedPrefaceNode.remove();
                                 botMessageDiv.remove();
-                                chatHistory = chatHistory.slice(0, chatHistory.findLastIndex((item) => item.role === "assistant"));
+                                const lastAssistantIndex = chatHistory.findLastIndex((item) => item.role === "assistant");
+                                const trailingSystemItems = chatHistory.slice(lastAssistantIndex + 1).filter((item) => item.role.startsWith("system"));
+                                chatHistory = chatHistory.slice(0, lastAssistantIndex);
                                 
                                 const chatContainer = document.getElementById("chat-container");
                                 const newBotMessageDiv = addMessageToUI("", botMessageDiv.classList, chatContainer, false);
@@ -14497,6 +14499,7 @@
                                     },
                                     true
                                 );
+                                chatHistory = [...chatHistory, ...trailingSystemItems];
                             });
                             messageButtonContainer.appendChild(regenerateButton);
                             
@@ -15376,6 +15379,8 @@
 
         ### Condition A: Correction Request
         Trigger: Only when the user explicitly requests a fix of the previously generated word card using direct commands such as "Wrong word", "Fix the base form", "Use X instead of Y", "Correct the IPA".
+        - The message must be an imperative or request to change the card (e.g., "Fix it", "Change the definition to X", "Update the example").
+        - Questions, doubts, or confirmation requests (e.g., "Isn't it X?", "Can this word also mean X?", "Is X correct?") are NOT correction requests, even if your answer reveals that the card contains an error.
         Action: Output conversational explanation first (optional), then output the corrected word card wrapped strictly inside <div class="word-card">.
         
         Strict Separation of Roles:
