@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      19.3.4
+// @version      19.3.5
 // @license      GPL-3.0-or-later
 // @grant       GM_setValue
 // @grant       GM_getValue
@@ -11437,8 +11437,14 @@
             div[data-word-widget] div[class*="overflow-y-auto"] {
                 flex: 0 1 auto !important;
             }
-            div[data-reader-widget] ul.flex.flex-col { /* Vocabulary/terms list max height limiter */
-                max-height: 500px !important;
+            div[data-reader-widget] > [role="region"] { /* Sidebar region: stack chat widget and vocabulary panel */
+                display: flex !important;
+                flex-direction: column !important;
+            }
+            div[data-reader-widget] > [role="region"] > div.h-full { /* Vocabulary panel fills only the space left below the chat widget */
+                flex: 1 1 auto !important;
+                height: auto !important;
+                min-height: 400px !important;
             }
             div[data-reader-side-column="true"].contents #memo-widget-container { /* Hidden memo container when sidebar is collapsed */
                 display: none !important;
@@ -11486,7 +11492,7 @@
 
             .memo-textarea { /* Textarea input for writing and saving lesson notes */
                 width: 100%;
-                min-height: 75px;
+                min-height: 100px;
                 max-height: 150px;
                 padding: 5px 10px;
                 border-radius: 5px;
