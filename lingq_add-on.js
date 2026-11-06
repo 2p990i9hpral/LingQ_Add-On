@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      19.3.6
+// @version      20.0.0
 // @license      GPL-3.0-or-later
 // @grant       GM_setValue
 // @grant       GM_getValue
@@ -61,7 +61,6 @@
         focusSelectedText: false,
         hoverAnnotation: "off",
         skipEndPage: false,
-        relocateCaption: 'default',
         captionFontsize: 1.1,
         widgetVerticalAlign: 'flex-start',
         showMemoWidget: false,
@@ -530,11 +529,17 @@
 
         const wordsMap = wordsData?.words || {};
         const tokens = [];
+        let readerWordIndex = 0;
 
         simpleData.tokenizedText.forEach((paragraph) => {
             if (!Array.isArray(paragraph)) return;
             paragraph.forEach((sentence) => {
                 if (!Array.isArray(sentence?.tokens)) return;
+
+                const wordIndexByToken = new Map();
+                sentence.tokens.forEach((token) => {
+                    if (token && takesReaderWordIndex(token)) wordIndexByToken.set(token, readerWordIndex++);
+                });
 
                 const wordTokens = sentence.tokens.filter(token => token?.text && !token.punct && !token.whitespace);
                 const sentenceRawText = sentence.text || wordTokens.map(t => t.text).join("");
@@ -579,6 +584,7 @@
                         for (let k = 0; k < matchedLen; k++) {
                             tokens.push({
                                 text: wordTokens[i + k].text,
+                                wordIndex: wordIndexByToken.get(wordTokens[i + k]),
                                 className: className,
                                 isHighlight: isHighlight
                             });
@@ -611,6 +617,7 @@
 
                         tokens.push({
                             text: word,
+                            wordIndex: wordIndexByToken.get(token),
                             className: className,
                             isHighlight: isHighlight
                         });
@@ -3135,13 +3142,13 @@
         document.head.appendChild(link);
     }
     
-    function highlightTextWithTokens(text, tokenStream, getTokenIndex, setTokenIndex) {
-        if (!tokenStream || tokenStream.length === 0) return text;
-        
+    function alignTextWithTokens(text, tokenStream, getTokenIndex, setTokenIndex) {
+        if (!tokenStream || tokenStream.length === 0) return [{text, token: null}];
+
         let tokenIdx = getTokenIndex();
         let cursor = 0;
-        let result = "";
-        
+        const segments = [];
+
         while (tokenIdx < tokenStream.length) {
             const token = tokenStream[tokenIdx];
             if (!token?.text) {
@@ -3164,65 +3171,203 @@
                 continue;
             }
             
-            result += text.slice(cursor, matchPos);
-            
-            if (token.isHighlight && token.className) {
-                result += `<c.${token.className}>${token.text}</c>`;
-            } else {
-                result += token.text;
-            }
-            
+            if (matchPos > cursor) segments.push({text: text.slice(cursor, matchPos), token: null});
+            segments.push({text: token.text, token});
+
             cursor = matchPos + token.text.length;
             tokenIdx++;
         }
-        
-        result += text.slice(cursor);
+
+        if (cursor < text.length) segments.push({text: text.slice(cursor), token: null});
         setTokenIndex(tokenIdx);
-        return result;
+        return segments;
     }
 
-    function convertSrtToVttBlobUrl(srtText, cueSettings = "", tokenStream = null) {
-        const cueSuffix = cueSettings ? ` ${cueSettings}` : "";
-        const normalized = srtText.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
-        const blocks = normalized.split(/\n\n+/);
-        
-        let tokenIndex = 0;
-        const processedBlocks = blocks.map((block) => {
-            const trimmed = block.trim();
-            if (!trimmed || trimmed === "WEBVTT") return trimmed;
-            
-            const lines = trimmed.split("\n");
-            const timeIndex = lines.findIndex(line => line.includes("-->"));
-            if (timeIndex === -1) return trimmed;
-            
-            lines[timeIndex] = lines[timeIndex]
-                .replace(/(\d{2}:\d{2}:\d{2}),(\d{3})/g, "$1.$2")
-                .replace(/(--> \d{2}:\d{2}:\d{2}\.\d{3})(?:[^\n]*)/, `$1${cueSuffix}`);
-                
-            const textLines = lines.slice(timeIndex + 1);
-            if (textLines.length === 0) return lines.join("\n");
-            
-            if (tokenStream && tokenStream.length > 0) {
-                const originalText = textLines.join("\n");
-                const highlighted = highlightTextWithTokens(
-                    originalText,
-                    tokenStream,
-                    () => tokenIndex,
-                    (newIdx) => { tokenIndex = newIdx; }
-                );
-                return [...lines.slice(0, timeIndex + 1), highlighted].join("\n");
-            }
-            
-            return lines.join("\n");
+    function takesReaderWordIndex(token) {
+        if (token.text) return true;
+        return Boolean(token.punct)
+            && /[\p{L}\p{N}]/u.test(token.punct)
+            && !/[\p{L}\p{N}]-[\p{L}\p{N}]/u.test(token.punct);
+    }
+
+    // Reader numbers every word and every letter/digit punct token, in order, from 0
+    function buildSubtitleCues(simpleData) {
+        let readerWordIndex = 0;
+        return simpleData.tokenizedText.flat().flatMap((sentence) => {
+            const tokens = (sentence.tokens || []).map((token) => ({
+                text: token.text ?? token.punct ?? token.whitespace ?? "",
+                wordIndex: takesReaderWordIndex(token) ? readerWordIndex++ : null
+            }));
+            const [start, end] = sentence.timestamp || [];
+            return end === undefined ? [] : [{start, end, tokens}];
         });
-        
-        let vttText = processedBlocks.filter(Boolean).join("\n\n");
-        if (!vttText.startsWith("WEBVTT")) {
-            vttText = "WEBVTT\n\n" + vttText;
+    }
+
+    function parseSubtitleTimestamp(value) {
+        const [, hours = "0", minutes, seconds, millis] = value.match(/(?:(\d+):)?(\d{2}):(\d{2})[.,](\d{3})/);
+        return Number(hours) * 3600 + Number(minutes) * 60 + Number(seconds) + Number(millis) / 1000;
+    }
+
+    // Aligns SRT/VTT cue text with the lesson token stream; unmatched text stays unclickable
+    function buildSubtitleCuesFromSrt(srtText, tokenStream) {
+        let tokenIndex = 0;
+        return srtText.replace(/\r\n?/g, "\n").split(/\n\n+/).flatMap((block) => {
+            const lines = block.trim().split("\n");
+            const timeLineIndex = lines.findIndex((line) => line.includes("-->"));
+            if (timeLineIndex === -1) return [];
+            const [start, end] = lines[timeLineIndex].split("-->").map((part) => parseSubtitleTimestamp(part));
+            const text = lines.slice(timeLineIndex + 1).join("\n").replace(/<[^>]+>/g, "");
+            if (!text) return [];
+            const segments = alignTextWithTokens(text, tokenStream, () => tokenIndex, (index) => { tokenIndex = index; });
+            const tokens = segments.map(({text: segmentText, token}) => ({
+                text: segmentText,
+                wordIndex: token?.wordIndex ?? null
+            }));
+            return [{start, end, tokens}];
+        });
+    }
+
+    function buildSubtitleCuesFromSentences(sentences) {
+        return sentences
+            .filter((sentence) => sentence.timestamp?.length >= 2 && sentence.text)
+            .map(({timestamp: [start, end], text}) => ({start, end, tokens: [{text, wordIndex: null}]}));
+    }
+
+    function findActiveCue(cues, time) {
+        let low = 0;
+        let high = cues.length - 1;
+        while (low <= high) {
+            const mid = (low + high) >> 1;
+            if (time < cues[mid].start) high = mid - 1;
+            else if (time >= cues[mid].end) low = mid + 1;
+            else return cues[mid];
         }
-        
-        const blob = new Blob([vttText], {type: "text/vtt"});
-        return URL.createObjectURL(blob);
+        return null;
+    }
+
+    function getReaderWordElement(wordIndex) {
+        return document.querySelector(`.sentence-item[data-word-index="${wordIndex}"]`);
+    }
+
+    function getReaderWordText(element) {
+        const clone = element.cloneNode(true);
+        clone.querySelectorAll("rt").forEach((rt) => rt.remove());
+        return clone.textContent.trim();
+    }
+
+    // Skip the click when the reader word differs from the subtitle word (misaligned SRT)
+    function clickReaderWord(wordIndex, expectedText) {
+        const element = getReaderWordElement(wordIndex);
+        if (!element || getReaderWordText(element) !== expectedText.trim()) return;
+        ["mousedown", "mouseup"].forEach((type) => element.dispatchEvent(new MouseEvent(type, {bubbles: true})));
+    }
+
+    function getReaderStatusClasses(wordIndex) {
+        return [...(getReaderWordElement(wordIndex)?.classList || [])]
+            .filter((name) => /^(ar-|band|run-)/.test(name));
+    }
+
+    function getCueSignature(cue) {
+        return cue.tokens
+            .map((token) => token.wordIndex === null ? "" : getReaderStatusClasses(token.wordIndex).join("."))
+            .join("|");
+    }
+
+    function renderSubtitleCue(overlay, cue) {
+        if (!cue) {
+            overlay.replaceChildren();
+            return;
+        }
+        const line = createElement("span", {className: "addon-subtitle-line"});
+        let phrase = null;
+        cue.tokens.forEach((token) => {
+            if (token.wordIndex === null) {
+                (phrase ?? line).append(document.createTextNode(token.text));
+                return;
+            }
+            const statusClasses = getReaderStatusClasses(token.wordIndex);
+            if (statusClasses.includes("run-start")) {
+                phrase = createElement("span", {
+                    className: ["addon-sub-phrase", ...statusClasses.filter((name) => name.startsWith("band"))].join(" ")
+                });
+                line.append(phrase);
+            }
+            const word = createElement("span", {
+                className: ["addon-sub-word", ...statusClasses.filter((name) => name.startsWith("ar-"))].join(" "),
+                textContent: token.text
+            });
+            word.addEventListener("click", (event) => {
+                event.stopPropagation();
+                clickReaderWord(token.wordIndex, token.text);
+            });
+            (phrase ?? line).append(word);
+            if (statusClasses.includes("run-end")) phrase = null;
+        });
+        overlay.replaceChildren(line);
+    }
+
+    // Show the cue in the letterbox below the video when it fits, otherwise inside the video bottom
+    function placeSubtitleOverlay(overlay) {
+        const stage = overlay.parentElement;
+        const container = stage.parentElement;
+        if (!stage.clientHeight) return;
+        const progressBarHeight = 5;
+        const spaceBelow = (container.clientHeight - stage.clientHeight - progressBarHeight) / 2;
+        overlay.classList.toggle("below", overlay.scrollHeight <= spaceBelow);
+    }
+
+    function createSubtitleRenderer(overlay, cues, {onRender = null} = {}) {
+        let activeCue = null;
+        let activeSignature = "";
+        let activeWordIndexes = new Set();
+        let refreshFrameId = null;
+        const render = (cue) => {
+            activeCue = cue;
+            activeSignature = cue ? getCueSignature(cue) : "";
+            activeWordIndexes = new Set(cue ? cue.tokens.filter((token) => token.wordIndex !== null).map((token) => token.wordIndex) : []);
+            renderSubtitleCue(overlay, cue);
+            onRender?.();
+        };
+        const refreshStatus = () => {
+            if (refreshFrameId) return;
+            refreshFrameId = requestAnimationFrame(() => {
+                refreshFrameId = null;
+                if (activeCue && getCueSignature(activeCue) !== activeSignature) render(activeCue);
+            });
+        };
+        const readerRoot = document.querySelector('div[data-reader-mode-body="true"]');
+        if (readerRoot) {
+            const statusObserver = new MutationObserver((records) => {
+                if (!overlay.isConnected) {
+                    statusObserver.disconnect();
+                    return;
+                }
+                if (records.some(({target}) => activeWordIndexes.has(Number(target.dataset?.wordIndex)))) refreshStatus();
+            });
+            statusObserver.observe(readerRoot, {attributes: true, attributeFilter: ["class"], subtree: true});
+        }
+        return (time) => {
+            const cue = findActiveCue(cues, time);
+            if (cue !== activeCue) render(cue);
+        };
+    }
+
+    function attachSubtitleOverlay(video, overlay, cues) {
+        const updateCue = createSubtitleRenderer(overlay, cues, {onRender: () => placeSubtitleOverlay(overlay)});
+        const stage = overlay.parentElement;
+        new ResizeObserver(() => placeSubtitleOverlay(overlay)).observe(stage);
+        new ResizeObserver(() => placeSubtitleOverlay(overlay)).observe(stage.parentElement);
+        let frameId = null;
+        const update = () => updateCue(video.currentTime);
+        const tick = () => {
+            update();
+            frameId = video.paused ? null : requestAnimationFrame(tick);
+        };
+        video.addEventListener("play", () => {
+            if (!frameId) frameId = requestAnimationFrame(tick);
+        });
+        ["pause", "seeked"].forEach((eventName) => video.addEventListener(eventName, update));
+        tick();
     }
 
     function globalSetup() {
@@ -3591,11 +3736,6 @@
             addSectionTitle(panels.layout, "Video Captions");
             const videoCaptionSection = createElement("div");
             addSlider(videoCaptionSection, "captionFontsizeSlider", "Caption Font Size:", "captionFontsizeValue", settings.captionFontsize, "px", 10, 30, 1);
-            addRadioGroup(videoCaptionSection, "relocateCaption", "Location:", [
-                {value: "default", text: "Default"},
-                {value: "inside", text: "Inside"},
-                {value: "below", text: "Below"}
-            ], settings.relocateCaption);
             panels.layout.appendChild(videoCaptionSection);
             
             addSectionTitle(panels.style, "Typography", true);
@@ -4891,12 +5031,6 @@
                 settings.skipEndPage = event.target.checked;
             });
             
-            document.querySelectorAll('input[name="relocateCaption"]').forEach((radio) => {
-                radio.addEventListener("change", (event) => {
-                    settings.relocateCaption = event.currentTarget.value;
-                });
-            });
-            
             document.querySelectorAll('input[name="widgetVerticalAlign"]').forEach((radio) => {
                 radio.addEventListener("change", (event) => {
                     settings.widgetVerticalAlign = event.currentTarget.value;
@@ -5311,9 +5445,6 @@
                     radio.checked = radio.value === defaults.hoverAnnotation;
                 });
                 document.getElementById("skipEndPageCheckbox").checked = defaults.skipEndPage;
-                document.querySelectorAll('input[name="relocateCaption"]').forEach((radio) => {
-                    radio.checked = radio.value === defaults.relocateCaption;
-                });
                 document.querySelectorAll('input[name="widgetVerticalAlign"]').forEach((radio) => {
                     radio.checked = radio.value === defaults.widgetVerticalAlign;
                 });
@@ -8590,188 +8721,6 @@
             document.startViewTransition = undefined;
         } catch (e) {}
 
-        function getCalculatedVttCueSettings() {
-            const container = document.getElementById("local-video-container");
-            if (!container) return "size:80% align:middle line:90%";
-            
-            const containerWidth = container.clientWidth;
-            const containerHeight = container.clientHeight;
-            if (!containerWidth || !containerHeight) return "size:80% align:middle line:90%";
-            
-            const videoAspectRatio = 16 / 9;
-            const videoWidthRatio = Math.min(1.0, (containerHeight * videoAspectRatio) / containerWidth);
-            const targetSubtitlePercent = Math.max(20, Math.round(80 * videoWidthRatio));
-            
-            return `size:${targetSubtitlePercent}% align:center`;
-        }
-
-        function convertSentencesToVttBlobUrl(sentences) {
-            function formatTime(seconds) {
-                const date = new Date(0);
-                date.setSeconds(seconds);
-                const match = date.toISOString().match(/T(\d{2}:\d{2}:\d{2})\.(\d{3})/);
-                return `${match[1]}.${match[2]}`;
-            }
-            
-            const cueSettings = getCalculatedVttCueSettings();
-            const vttLines = ["WEBVTT\n"];
-            
-            sentences.forEach((sentence) => {
-                if (!sentence.timestamp || sentence.timestamp.length < 2) return;
-                
-                const startTime = formatTime(sentence.timestamp[0]);
-                const endTime = formatTime(sentence.timestamp[1]);
-                const text = sentence.text || "";
-                
-                vttLines.push(`${startTime} --> ${endTime} ${cueSettings}\n${text}\n`);
-            });
-            
-            const blob = new Blob([vttLines.join("\n")], {type: "text/vtt"});
-            return URL.createObjectURL(blob);
-        }
-
-        function convertSimpleDataToVttBlobUrl(simpleData, wordsData, newWordsSet = new Set()) {
-            function formatTime(seconds) {
-                const date = new Date(0);
-                date.setSeconds(seconds);
-                const match = date.toISOString().match(/T(\d{2}:\d{2}:\d{2})\.(\d{3})/);
-                return `${match[1]}.${match[2]}`;
-            }
-
-            const cueSettings = getCalculatedVttCueSettings();
-            const vttLines = ["WEBVTT\n"];
-
-            const cardMap = new Map();
-            const phraseCards = [];
-            if (wordsData?.cards) {
-                Object.values(wordsData.cards).forEach((card) => {
-                    if (!card?.term) return;
-                    cardMap.set(card.term, card);
-                    if (card.term.includes(" ") || card.term.length > 1) {
-                        phraseCards.push(card);
-                    }
-                });
-                phraseCards.sort((a, b) => b.term.length - a.term.length);
-            }
-
-            const wordsMap = wordsData?.words || {};
-
-            simpleData.tokenizedText.forEach((paragraph) => {
-                if (!Array.isArray(paragraph)) return;
-                paragraph.forEach((sentence) => {
-                    if (!sentence?.timestamp || sentence.timestamp.length < 2) return;
-                    const startTime = formatTime(sentence.timestamp[0]);
-                    const endTime = formatTime(sentence.timestamp[1]);
-
-                    let sentenceText = "";
-                    if (Array.isArray(sentence.tokens)) {
-                        const sTokens = sentence.tokens;
-                        const sentenceRawText = sentence.text || sTokens.map(t => t?.text || t?.whitespace || t?.punct || "").join("");
-                        const activePhrases = phraseCards.filter(card => sentenceRawText.includes(card.term));
-
-                        let i = 0;
-                        while (i < sTokens.length) {
-                            const token = sTokens[i];
-                            if (!token) {
-                                i++;
-                                continue;
-                            }
-                            if (token.whitespace) {
-                                sentenceText += token.whitespace;
-                                i++;
-                                continue;
-                            }
-                            if (token.punct) {
-                                sentenceText += token.punct;
-                                i++;
-                                continue;
-                            }
-
-                            let matchedCard = null;
-                            let matchedTokenSpan = 1;
-
-                            for (const phraseCard of activePhrases) {
-                                const targetTerm = phraseCard.term;
-                                let accumulatedTextNoSpace = "";
-                                let accumulatedTextWithSpace = "";
-
-                                for (let j = i; j < sTokens.length; j++) {
-                                    const t = sTokens[j];
-                                    if (t.punct) break;
-                                    if (!t.text) continue;
-
-                                    accumulatedTextNoSpace += t.text;
-                                    accumulatedTextWithSpace += (accumulatedTextWithSpace ? " " : "") + t.text;
-
-                                    if (accumulatedTextNoSpace === targetTerm || accumulatedTextWithSpace === targetTerm) {
-                                        matchedCard = phraseCard;
-                                        matchedTokenSpan = j - i + 1;
-                                        break;
-                                    }
-
-                                    if (accumulatedTextNoSpace.length > targetTerm.length && accumulatedTextWithSpace.length > targetTerm.length) {
-                                        break;
-                                    }
-                                }
-
-                                if (matchedCard) break;
-                            }
-
-                            if (matchedCard) {
-                                const status = matchedCard.status ?? 0;
-                                const tag = (status >= 0 && status <= 2)
-                                    ? `ar-lingq-${status}`
-                                    : (status === 3 ? "ar-lingq-learned" : null);
-
-                                let phraseText = "";
-                                for (let k = 0; k < matchedTokenSpan; k++) {
-                                    const t = sTokens[i + k];
-                                    if (t.text) phraseText += t.text;
-                                    else if (t.whitespace) phraseText += t.whitespace;
-                                }
-
-                                if (tag) {
-                                    sentenceText += `<c.${tag}>${phraseText}</c>`;
-                                } else {
-                                    sentenceText += phraseText;
-                                }
-                                i += matchedTokenSpan;
-                            } else {
-                                const word = token.text;
-                                const wordInfo = token.wordId ? wordsMap[token.wordId] : null;
-                                const cardInfo = (wordInfo?.cardId && wordsData?.cards)
-                                    ? wordsData.cards[wordInfo.cardId]
-                                    : (cardMap.get(word) || null);
-
-                                if (cardInfo) {
-                                    const status = cardInfo.status ?? 0;
-                                    if (status >= 0 && status <= 2) {
-                                        sentenceText += `<c.ar-lingq-${status}>${word}</c>`;
-                                    } else if (status === 3) {
-                                        sentenceText += `<c.ar-lingq-learned>${word}</c>`;
-                                    } else {
-                                        sentenceText += word;
-                                    }
-                                } else if (wordInfo?.status === "new" || newWordsSet.has(word)) {
-                                    sentenceText += `<c.ar-new>${word}</c>`;
-                                } else {
-                                    sentenceText += word;
-                                }
-                                i++;
-                            }
-                        }
-                    } else {
-                        sentenceText = sentence.text || "";
-                    }
-
-                    vttLines.push(`${startTime} --> ${endTime} ${cueSettings}\n${sentenceText}\n`);
-                });
-            });
-
-            const blob = new Blob([vttLines.join("\n")], {type: "text/vtt"});
-            return URL.createObjectURL(blob);
-        }
-
         let cachedLocalVideoFiles, attemptAutoMatch;
         const mediaInstances = new Set();
         let isVideoEnded = false;
@@ -9283,8 +9232,13 @@
                 const videoElement = createElement("video", {
                     id: "addonLocalVideo",
                     muted: false,
-                    style: "display: none; cursor: pointer;"
+                    style: "cursor: pointer;"
                 });
+                const subtitleOverlay = createElement("div", {className: "addon-subtitle-overlay"});
+                const videoStage = createElement("div", {
+                    className: "local-video-stage",
+                    style: "display: none;"
+                }, videoElement, subtitleOverlay);
                 
                 container.addEventListener("click", (event) => {
                     if (setupBox.style.display !== "none") return;
@@ -9293,15 +9247,7 @@
                     clickElement('footer button[aria-label="Play"], footer button[aria-label="Pause"], .section--player button.lingq-audio-player');
                 });
                 
-                const trackElement = createElement("track", {
-                    kind: "subtitles",
-                    srclang: "en",
-                    label: "Local Sub",
-                    id: "addonLocalVideoTrack"
-                });
-                
-                videoElement.appendChild(trackElement);
-                container.appendChild(videoElement);
+                container.appendChild(videoStage);
                 videoElement.addEventListener("loadedmetadata", () => {
                     if (!videoElement.videoHeight) return;
                     container.style.setProperty("--video-ratio", videoElement.videoWidth / videoElement.videoHeight);
@@ -9405,46 +9351,33 @@
                                     tokenStream = buildLessonTokenStream(simpleData, wordsData, newWordsSet);
                                 } catch (error) {}
                             }
-                            const vttUrl = convertSrtToVttBlobUrl(text, getCalculatedVttCueSettings(), tokenStream);
-                            
-                            trackElement.src = vttUrl;
-                            trackElement.track.mode = "showing";
+                            attachSubtitleOverlay(videoElement, subtitleOverlay, buildSubtitleCuesFromSrt(text, tokenStream));
                         };
                         reader.readAsText(selectedSubtitleFile);
-                    } else {
-                        const lessonLanguage = getLessonLanguage();
-                        const lessonId = getLessonId();
-                        
-                        Promise.all([
-                            getLessonSimpleData(lessonLanguage, lessonId),
-                            getLessonWordsData(lessonLanguage, lessonId)
-                        ]).then(([simpleData, wordsData]) => {
-                            if (simpleData?.tokenizedText) {
-                                const newWordsSet = getNewWordsSetFromDOM();
-                                trackElement.src = convertSimpleDataToVttBlobUrl(simpleData, wordsData, newWordsSet);
-                                trackElement.track.mode = "showing";
-                            } else {
-                                getLessonSentences(lessonLanguage, lessonId)
-                                    .then((sentences) => {
-                                        if (sentences && sentences.length > 0) {
-                                            trackElement.src = convertSentencesToVttBlobUrl(sentences);
-                                            trackElement.track.mode = "showing";
-                                        }
-                                    });
+                } else {
+                    const lessonLanguage = getLessonLanguage();
+                    const lessonId = getLessonId();
+                    const attachSentenceFallback = () => getLessonSentences(lessonLanguage, lessonId)
+                        .then((sentences) => {
+                            if (sentences?.length > 0) {
+                                attachSubtitleOverlay(videoElement, subtitleOverlay, buildSubtitleCuesFromSentences(sentences));
                             }
-                        }).catch(() => {
-                            getLessonSentences(lessonLanguage, lessonId)
-                                .then((sentences) => {
-                                    if (sentences && sentences.length > 0) {
-                                        trackElement.src = convertSentencesToVttBlobUrl(sentences);
-                                        trackElement.track.mode = "showing";
-                                    }
-                                });
                         });
-                    }
+
+                    Promise.all([
+                        getLessonSimpleData(lessonLanguage, lessonId),
+                        getLessonWordsData(lessonLanguage, lessonId)
+                    ]).then(([simpleData]) => {
+                        if (simpleData?.tokenizedText) {
+                            attachSubtitleOverlay(videoElement, subtitleOverlay, buildSubtitleCues(simpleData));
+                        } else {
+                            return attachSentenceFallback();
+                        }
+                    }).catch(attachSentenceFallback);
+                }
                     
                     setupBox.style.display = "none";
-                    videoElement.style.display = "block";
+                    videoStage.style.display = "block";
                     progressWrapper.style.display = "block";
                     
                     if (selectedVideoFile) {
@@ -9950,6 +9883,7 @@
         let audioPlayerObserver = null;
         let updateFooterFrame = null;
         let youtubeProgressThumb = null;
+        let youtubeSubtitleUpdate = null;
 
         function bindYoutubeProgressBar() {
             if (youtubeProgressThumb?.isConnected) return;
@@ -9962,6 +9896,7 @@
                 const maxValue = parseFloat(sliderThumb.getAttribute("aria-valuemax")) || 1;
                 const currentValue = parseFloat(sliderThumb.getAttribute("aria-valuenow")) || 0;
                 progressBar.style.width = `${(currentValue / maxValue) * 100}%`;
+                youtubeSubtitleUpdate?.(currentValue);
             };
             new MutationObserver(updateProgress).observe(sliderThumb, {
                 attributes: true,
@@ -10381,13 +10316,6 @@
                         video.load();
                     } catch (e) {}
                 }
-                const track = container.querySelector("#addonLocalVideoTrack");
-                if (track && track.src) {
-                    try {
-                        URL.revokeObjectURL(track.src);
-                        track.removeAttribute("src");
-                    } catch (e) {}
-                }
                 container.remove();
             }
             document.querySelectorAll('#addonLocalVideo').forEach((video) => {
@@ -10502,6 +10430,7 @@
             
             baseCSS += layoutCSS;
             baseCSS += specificCSS;
+            if (currentStyle !== "off") baseCSS += generateSubtitleOverlayCSS();
             if (settings.skipEndPage) {
                 baseCSS += `
                 [id$="-content-lessonCompleted"] > div.pb-24 > div:nth-child(1) > div.gap-2,
@@ -10741,14 +10670,58 @@
                     border-radius: .25rem;
                 }
 
-                .sentence-item.band,
-                .sentence-item.band-revealed {
-                    border-color: var(--lingq-border) !important;
+                .sentence-item.band {
+                    --phrase-border: var(--lingq-border-learned);
+                    border-color: var(--phrase-border) !important;
+                    box-shadow: inset 0 1px 0 0 var(--phrase-border), inset 0 -1px 0 0 var(--phrase-border) !important;
+                }
+
+                .sentence-item.band.band-0,
+                .sentence-item.band.band-1,
+                .sentence-item.band.band-2 {
+                    --phrase-border: var(--lingq-border);
+                }
+
+                .sentence-item.band.run-start {
+                    box-shadow: inset 1px 0 0 0 var(--phrase-border), inset 0 1px 0 0 var(--phrase-border), inset 0 -1px 0 0 var(--phrase-border) !important;
+                    border-radius: .25rem 0 0 .25rem;
+                }
+
+                .sentence-item.band.run-end {
+                    box-shadow: inset -1px 0 0 0 var(--phrase-border), inset 0 1px 0 0 var(--phrase-border), inset 0 -1px 0 0 var(--phrase-border) !important;
+                    border-radius: 0 .25rem .25rem 0;
+                }
+
+                .sentence-item.band.run-start.run-end {
+                    box-shadow: inset 0 0 0 1px var(--phrase-border) !important;
+                    border-radius: .25rem;
                 }
 
                 .sentence-item.band-revealed {
-                    box-shadow: none !important;
-                    background-color: color-mix(in srgb, var(--lingq-background) 65%, transparent) !important;
+                    --phrase-border: var(--lingq-border-learned);
+                    --edge-top: inset 0 1px 0 0 var(--phrase-border);
+                    --edge-bottom: inset 0 -1px 0 0 var(--phrase-border);
+                    --edge-left: inset 1px 0 0 0 var(--phrase-border);
+                    --edge-right: inset -1px 0 0 0 var(--phrase-border);
+                    background-color: transparent !important;
+                    border-color: transparent !important;
+                    border-radius: 0;
+                    box-shadow: var(--edge-top), var(--edge-top), var(--edge-bottom), var(--edge-bottom) !important;
+                }
+
+                .sentence-item.band-revealed:not(.band-revealed + .band-revealed) {
+                    box-shadow: var(--edge-left), var(--edge-left), var(--edge-top), var(--edge-top), var(--edge-bottom), var(--edge-bottom) !important;
+                    border-radius: .25rem 0 0 .25rem;
+                }
+
+                .sentence-item.band-revealed:not(:has(+ .band-revealed)) {
+                    box-shadow: var(--edge-right), var(--edge-right), var(--edge-top), var(--edge-top), var(--edge-bottom), var(--edge-bottom) !important;
+                    border-radius: 0 .25rem .25rem 0;
+                }
+
+                .sentence-item.band-revealed:not(.band-revealed + .band-revealed):not(:has(+ .band-revealed)) {
+                    box-shadow: inset 0 0 0 1px var(--phrase-border), inset 0 0 0 1px var(--phrase-border) !important;
+                    border-radius: .25rem;
                 }
 
                 .sentence-item.ar-lingq.ar-lingq-0,
@@ -10817,9 +10790,7 @@
                     box-shadow: inset 0 0 0 1px var(--unknown-border) !important;
                 }
 
-                .sentence-item.ar-lingq:hover,
-                .sentence-item.band:hover,
-                .sentence-item.band-revealed:hover {
+                .sentence-item.ar-lingq:hover {
                     box-shadow: inset 0 0 0 1px var(--lingq-border) !important;
                 }
 
@@ -11712,7 +11683,6 @@
             let layoutCSS = `
             :root {
                 --height-big: ${settings.heightBig || 400}px;
-                --caption-font-size: ${settings.captionFontsize}px;
             }
             #local-video-container {
                 display: flex;
@@ -11944,44 +11914,122 @@
                 background-color: rgb(76, 175, 80);
                 transition: width 0.1s linear;
             }
-            #addonLocalVideo {
+            .local-video-stage {
+                position: relative !important;
                 flex: none !important;
                 width: min(100cqw, calc((100cqh - 5px) * var(--video-ratio, 1.7778))) !important;
                 height: auto !important;
                 aspect-ratio: var(--video-ratio, 1.7778) !important;
-                object-fit: contain !important;
                 align-self: center !important;
                 margin: 0 !important;
             }
-            video::-webkit-media-text-track-container {
-                font-size: var(--caption-font-size) !important;
+            #addonLocalVideo {
+                display: block !important;
+                width: 100% !important;
+                height: 100% !important;
+                object-fit: contain !important;
+                margin: 0 !important;
             }
-            ::cue, video::cue {
-                background-color: rgba(0, 0, 0, 0.75) !important;
-                color: #ffffff !important;
-                font-family: var(--custom-font, sans-serif) !important;
-                line-height: 1.2 !important;
+            `;
+        }
+
+        function generateSubtitleOverlayCSS() {
+            return `
+            :root {
+                --caption-font-size: ${settings.captionFontsize}px;
             }
-            ::cue(.ar-new), video::cue(.ar-new), ::cue(c.ar-new), video::cue(c.ar-new) {
-                background-color: rgba(37, 75, 160, 0.88) !important;
-                color: #ffffff !important;
+            .addon-subtitle-overlay {
+                position: absolute;
+                left: 0;
+                right: 0;
+                bottom: 1%;
+                max-height: 100%;
+                overflow: hidden;
+                overflow-wrap: anywhere;
+                padding: 0 5%;
+                text-align: center;
+                font-size: var(--caption-font-size);
+                font-family: var(--custom-font, sans-serif);
+                line-height: 1.5;
+                color: #ffffff;
+                pointer-events: none;
+                user-select: none;
+                -webkit-user-select: none;
+                z-index: 5;
             }
-            ::cue(.ar-lingq-0), video::cue(.ar-lingq-0), ::cue(c.ar-lingq-0), video::cue(c.ar-lingq-0) {
-                background-color: rgba(175, 130, 35, 0.88) !important;
-                color: #ffffff !important;
+            .addon-subtitle-overlay.below {
+                top: calc(100% + 5px);
+                bottom: auto;
+                max-height: none;
+                overflow: visible;
             }
-            ::cue(.ar-lingq-1), video::cue(.ar-lingq-1), ::cue(c.ar-lingq-1), video::cue(c.ar-lingq-1) {
-                background-color: rgba(175, 130, 35, 0.58) !important;
-                color: #ffffff !important;
+            .addon-subtitle-line {
+                display: block;
+                width: fit-content;
+                max-width: 100%;
+                margin: 0 auto;
+                white-space: pre-line;
+                background-color: rgba(0, 0, 0, 0.75);
+                padding: 0 0.3em;
+                box-decoration-break: clone;
+                -webkit-box-decoration-break: clone;
             }
-            ::cue(.ar-lingq-2), video::cue(.ar-lingq-2), ::cue(c.ar-lingq-2), video::cue(c.ar-lingq-2) {
-                background-color: rgba(175, 130, 35, 0.32) !important;
-                color: #ffffff !important;
+            .addon-sub-word {
+                pointer-events: auto;
+                cursor: pointer;
+                border: 1px solid transparent;
+                border-radius: .25rem;
             }
-            ::cue(.ar-lingq-learned), video::cue(.ar-lingq-learned), ::cue(c.ar-lingq-learned), video::cue(c.ar-lingq-learned) {
-                background-color: transparent !important;
-                color: #ffffff !important;
-                text-decoration: underline dotted 1px rgba(255, 255, 255, 0.95) !important;
+            .addon-sub-word.ar-new {
+                background-color: var(--unknown-background);
+                border-color: var(--unknown-border);
+            }
+            .addon-sub-word.ar-lingq {
+                border-color: var(--lingq-border);
+            }
+            .addon-sub-word.ar-lingq-0 {
+                background-color: color-mix(in srgb, var(--lingq-background) 65%, transparent);
+            }
+            .addon-sub-word.ar-lingq-1 {
+                background-color: color-mix(in srgb, var(--lingq-background) 35%, transparent);
+            }
+            .addon-sub-word.ar-lingq-2 {
+                background-color: color-mix(in srgb, var(--lingq-background) 15%, transparent);
+            }
+            .addon-sub-word.ar-lingq-3 {
+                background-color: rgba(0, 0, 0, 0);
+                border-color: var(--lingq-border-learned);
+            }
+            .addon-sub-phrase {
+                --phrase-border: var(--lingq-border-learned);
+                border: 1px solid var(--phrase-border);
+                border-radius: .25rem;
+            }
+            .addon-sub-phrase.band-0,
+            .addon-sub-phrase.band-1,
+            .addon-sub-phrase.band-2 {
+                --phrase-border: var(--lingq-border);
+            }
+            .addon-sub-phrase.band-0 {
+                background-color: color-mix(in srgb, var(--lingq-background) 65%, transparent);
+            }
+            .addon-sub-phrase.band-1 {
+                background-color: color-mix(in srgb, var(--lingq-background) 35%, transparent);
+            }
+            .addon-sub-phrase.band-2 {
+                background-color: color-mix(in srgb, var(--lingq-background) 15%, transparent);
+            }
+            .addon-sub-phrase:hover {
+                box-shadow: inset 0 0 0 1px var(--phrase-border);
+            }
+            .addon-sub-word.ar-learned {
+                border-color: var(--lingq-border-learned);
+            }
+            .addon-sub-word:hover {
+                box-shadow: inset 0 0 0 1px var(--lingq-border-learned);
+            }
+            body:has([id$="-content-lessonCompleted"][data-state="active"]) .addon-subtitle-overlay {
+                display: none !important;
             }
             `;
         }
@@ -12001,6 +12049,74 @@
             bindYoutubeProgressBar();
         }
 
+        async function attachYoutubeSubtitles(videoStage) {
+            const lessonId = String(getLessonId());
+            const existingOverlay = videoStage.querySelector(".addon-subtitle-overlay");
+            if (existingOverlay?.dataset.lessonId === lessonId) return;
+            existingOverlay?.remove();
+            youtubeSubtitleUpdate = null;
+
+            const overlay = createElement("div", {className: "addon-subtitle-overlay"});
+            overlay.dataset.lessonId = lessonId;
+            videoStage.appendChild(overlay);
+
+            // Keep the overlay inside the actual video picture, not the whole (possibly taller) stage
+            let videoRatio = 16 / 9;
+            const fitOverlayToVideoFrame = () => {
+                if (!overlay.isConnected) {
+                    resizeObserver.disconnect();
+                    return;
+                }
+                const {clientWidth: stageWidth, clientHeight: stageHeight} = videoStage;
+                const frameWidth = Math.min(stageWidth, stageHeight * videoRatio);
+                const frameHeight = Math.min(stageHeight, stageWidth / videoRatio);
+                const offsetX = (stageWidth - frameWidth) / 2;
+                const offsetY = (stageHeight - frameHeight) / 2;
+                const progressBarHeight = 5;
+                const fitsBelow = overlay.scrollHeight <= offsetY - progressBarHeight;
+                Object.assign(overlay.style, {left: `${offsetX}px`, right: `${offsetX}px`}, fitsBelow
+                    ? {top: `${offsetY + frameHeight}px`, bottom: "auto", maxHeight: "none", overflow: "visible"}
+                    : {top: "auto", bottom: `${offsetY + frameHeight * 0.01}px`, maxHeight: `${frameHeight}px`, overflow: "hidden"});
+            };
+            const resizeObserver = new ResizeObserver(fitOverlayToVideoFrame);
+            resizeObserver.observe(videoStage);
+
+            const handleYoutubeMessage = (event) => {
+                if (!overlay.isConnected) {
+                    window.removeEventListener("message", handleYoutubeMessage);
+                    return;
+                }
+                if (event.source !== videoStage.querySelector("iframe")?.contentWindow || typeof event.data !== "string") return;
+                let rect;
+                try {
+                    rect = JSON.parse(event.data).info?.videoContentRect;
+                } catch (error) {
+                    return;
+                }
+                if (!rect?.width || !rect?.height) return;
+                const nextRatio = rect.width / rect.height;
+                if (Math.abs(nextRatio - videoRatio) > 0.001) {
+                    videoRatio = nextRatio;
+                    fitOverlayToVideoFrame();
+                }
+            };
+            window.addEventListener("message", handleYoutubeMessage);
+
+            const lessonLanguage = getLessonLanguage();
+            const simpleData = await getLessonSimpleData(lessonLanguage, lessonId);
+            let cues = null;
+            if (simpleData?.tokenizedText) {
+                cues = buildSubtitleCues(simpleData);
+            } else {
+                const sentences = await getLessonSentences(lessonLanguage, lessonId).catch(() => null);
+                if (sentences?.length > 0) cues = buildSubtitleCuesFromSentences(sentences);
+            }
+            if (!cues || !overlay.isConnected) return;
+            youtubeSubtitleUpdate = createSubtitleRenderer(overlay, cues, {onRender: fitOverlayToVideoFrame});
+            const sliderValue = parseFloat(document.querySelector('footer [role="slider"]')?.getAttribute("aria-valuenow"));
+            if (!Number.isNaN(sliderValue)) youtubeSubtitleUpdate(sliderValue);
+        }
+
         function setupYoutubePlayerCustomization() {
             function customizeIframe(iframe) {
                 if (!iframe || iframe.dataset.addonCustomized) return;
@@ -12011,9 +12127,6 @@
                 if (newSrc.includes("disablekb=1")) {
                     newSrc = newSrc.replace("disablekb=1", "disablekb=0");
                 }
-                if (!newSrc.includes("cc_load_policy=")) {
-                    newSrc += "&cc_load_policy=1";
-                }
                 if (newSrc !== src) {
                     iframe.dataset.addonCustomized = "true";
                     iframe.setAttribute("src", newSrc);
@@ -12023,6 +12136,7 @@
             const videoStage = document.querySelector('div[data-reader-video-stage="true"]');
             if (videoStage) {
                 attachYoutubeProgressBar(videoStage);
+                attachYoutubeSubtitles(videoStage);
                 const existingIframe = videoStage.querySelector('iframe[src*="youtube"]');
                 if (existingIframe) customizeIframe(existingIframe);
 
@@ -16273,7 +16387,9 @@
             .ytp-paid-content-overlay,
             .ytmPaidContentOverlayHost,
             .ytp-watermark,
-            .ytp-ce-element {
+            .ytp-ce-element,
+            .ytp-caption-window-container,
+            .caption-window {
                 display: none !important;
             }
 
@@ -16289,68 +16405,7 @@
             }
         `;
         applyCSS(youtubeLayoutCSS);
-        
-        async function adjustCaptionPosition() {
-            const youtubeCaptionCSS = `
-                :root {
-                    --caption-font-size: ${settings.captionFontsize}px;
-                }
 
-                .caption-window.ytp-caption-window-bottom {
-                    display: unset !important;
-                    width: 90% !important;
-                    bottom: var(--custom-caption-bottom, 10%) !important;
-                    top: var(--custom-caption-top, auto) !important;
-                    margin-bottom: 0 !important;
-                }
-                .ytp-caption-segment {
-                    font-size: var(--caption-font-size) !important;
-                }
-            `;
-            applyCSS(youtubeCaptionCSS);
-            
-            const video = await waitForElement('video.html5-main-video', 10000);
-            const player = await waitForElement('.html5-video-player', 10000);
-            
-            if (!video || !player) return;
-            
-            const pRect = player.getBoundingClientRect();
-            const vRect = video.getBoundingClientRect();
-            
-            function updatePosition() {
-                const pRect = player.getBoundingClientRect();
-                const vRect = video.getBoundingClientRect();
-                
-                if (pRect.height === 0 || vRect.height === 0) return;
-                
-                const gap = (pRect.height - vRect.height) / 2;
-                
-                if (settings.relocateCaption === "inside") {
-                    const targetBottom = gap + 10;
-                    const percentBottom = (targetBottom / pRect.height) * 100;
-                    
-                    player.style.setProperty('--custom-caption-bottom', `${percentBottom}%`);
-                    player.style.setProperty('--custom-caption-top', 'auto');
-                } else {
-                    const targetTop = pRect.height - gap + 5;
-                    const percentTop = (targetTop / pRect.height) * 100;
-                    
-                    player.style.setProperty('--custom-caption-top', `${percentTop}%`);
-                    player.style.setProperty('--custom-caption-bottom', 'auto');
-                }
-            }
-            
-            let resizeTimeout;
-            const resizeObserver = new ResizeObserver(() => {
-                clearTimeout(resizeTimeout);
-                resizeTimeout = setTimeout(() => {
-                    updatePosition();
-                }, 100);
-            });
-            resizeObserver.observe(player);
-        }
-        
-        if (settings.relocateCaption !== "default") adjustCaptionPosition();
     }
     
     async function init() {

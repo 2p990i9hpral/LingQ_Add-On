@@ -153,11 +153,10 @@ Play your own downloaded movies, anime, or video lessons directly within LingQ, 
   - **Playing Underline**: Color of the highlight underline tracking the active playback sentence.
 
 ### 1.8 Video Captions & Player Tweaks
+- **Subtitle Word Highlighting** : The addon draws its own subtitles over the video so you can study vocabulary without leaving the video. You don't need to shift your eyes from the caption to the reader to check new words or LingQs.
+  - **Same highlighting as the reader**: Words and phrases are displayed in the same format as in the reader.
+  - **Click to look up**: Clicking a subtitle word opens the word widget, so you can read the meaning, change the status, or add a LingQ.
 - **Video Caption Font Size**: Slider to scale video subtitles for optimal legibility.
-- **Location**:
-  - `Default`: Standard YouTube player subtitle position.
-  - `Inside`: Repositioned inside the lower portion of the frame.
-  - `Below`: Relocated underneath the video viewport so video visuals remain completely unobstructed.
 - **YouTube Simplification**: The addon automatically suppresses the intrusive "More videos" overlay when pausing embedded YouTube videos.
 
 ### 1.9 Selective UI Hiding
