@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      20.0.1
+// @version      20.0.2
 // @license      GPL-3.0-or-later
 // @grant       GM_setValue
 // @grant       GM_getValue
@@ -3727,9 +3727,7 @@
             });
             addSlider(videoSettings, "heightBigSlider", "Video Height:", "heightBigValue", settings.heightBig, "px", 300, 1200, 10);
             panels.layout.appendChild(videoSettings);
-            
-            addSlider(panels.layout, "widgetWidthSlider", "Widget Width:", "widgetWidthValue", settings.widgetWidth, "px", 330, 500, 10);
-            
+
             addSectionTitle(panels.layout, "Video Captions");
             const videoCaptionSection = createElement("div");
             addSlider(videoCaptionSection, "captionFontsizeSlider", "Caption Font Size:", "captionFontsizeValue", settings.captionFontsize, "px", 10, 30, 1);
@@ -3821,7 +3819,9 @@
             const widgetCheckboxesGroup = createElement("div", {
                 style: "display: flex; gap: 16px; justify-content: flex-end; width: 230px;"
             });
-            
+
+            addSlider(widgetSection, "widgetWidthSlider", "Widget Width:", "widgetWidthValue", settings.widgetWidth, "px", 330, 500, 10);
+
             [
                 {id: "hidePopularMeaningsCheckbox", text: "Meanings", checked: settings.hidePopularMeanings},
                 {id: "hideDictionariesCheckbox", text: "Dictionaries", checked: settings.hideDictionaries},
