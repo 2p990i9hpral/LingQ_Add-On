@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      20.1.4
+// @version      20.1.5
 // @license      GPL-3.0-or-later
 // @grant       GM_setValue
 // @grant       GM_getValue
@@ -3680,7 +3680,7 @@
                 {id: "style", label: "Style"},
                 {id: "reader", label: "Reader"},
                 {id: "shortcuts", label: "Shortcuts"},
-                {id: "chat", label: "Chat"},
+                {id: "chat", label: "AI"},
                 {id: "tts", label: "TTS"}
             ];
             
@@ -3903,13 +3903,8 @@
                 style: `${settings.chatWidget ? "" : "display: none;"} margin-top: 8px;`
             });
             
-            addSelect(chatWidgetSection, "llmResponseLanguageSelector", "Response Language:",
-                [{value: "auto", text: "Auto"}],
-                settings.llmResponseLanguage
-            );
-            
-            addSlider(chatWidgetSection, "chatWidgetHeightSlider", "Chat Widget Height:", "chatWidgetHeightValue", settings.chatWidgetHeight, "", 150, 700, 10);
-            
+            addSectionTitle(chatWidgetSection, "Model", true);
+
             addSelect(chatWidgetSection, "llmProviderSelector", "Chat Provider:", [
                 {value: "openai", text: "OpenAI"},
                 {value: "google", text: "Google"},
@@ -4009,8 +4004,19 @@
             vertexCredentialsContainer.appendChild(jsonUploadRow);
             
             chatWidgetSection.appendChild(vertexCredentialsContainer);
-            
+
+            addSelect(chatWidgetSection, "llmResponseLanguageSelector", "Response Language:",
+                [{value: "auto", text: "Auto"}],
+                settings.llmResponseLanguage
+            );
+
+            addSectionTitle(chatWidgetSection, "Chat Widget");
+
+            addSlider(chatWidgetSection, "chatWidgetHeightSlider", "Chat Widget Height:", "chatWidgetHeightValue", settings.chatWidgetHeight, "", 150, 700, 10);
             addCheckbox(chatWidgetSection, "askSelectedCheckbox", "Enable asking with selected text", settings.askSelected);
+
+            addSectionTitle(chatWidgetSection, "Summary");
+
             addCheckbox(chatWidgetSection, "prependSummaryCheckbox", "Prepend a quick Summary", settings.prependSummary[language]);
             
             const difficultyOptions = [
@@ -4027,7 +4033,12 @@
             difficultyContainer.id = "summaryDifficultySection";
             difficultyContainer.style.display = settings.prependSummary[language] ? "block" : "none";
             
-            addRadioGroup(chatWidgetSection, "dbMode", "DB Type:", [
+            panels.chat.appendChild(chatWidgetSection);
+
+            const flashcardDbSection = createElement("div", {id: "flashcardDbSection"});
+            addSectionTitle(flashcardDbSection, "Flashcard DB");
+
+            addRadioGroup(flashcardDbSection, "dbMode", "DB Type:", [
                 {value: "central", text: "Built-in"},
                 {value: "personal", text: "Custom"}
             ], settings.useCentralDb ? "central" : "personal");
@@ -4089,7 +4100,7 @@
             dbKeyInputGroup.append(dbKeyInput, testDBConnectionButton);
             dbKeyContainer.appendChild(dbKeyInputGroup);
             personalDbSection.appendChild(dbKeyContainer);
-            chatWidgetSection.appendChild(personalDbSection);
+            flashcardDbSection.appendChild(personalDbSection);
             
             const centralDbSection = createElement("div", {
                 id: "centralDbSection",
@@ -4143,9 +4154,9 @@
                 createElement("button", {id: "signOutButton", textContent: "Logout", className: "popup-button"}));
             
             centralDbSection.append(centralEmailRow, centralOtpRow, centralLoggedInRow);
-            chatWidgetSection.appendChild(centralDbSection);
-            
-            panels.chat.appendChild(chatWidgetSection);
+            flashcardDbSection.appendChild(centralDbSection);
+
+            panels.chat.appendChild(flashcardDbSection);
             
             addTabHeaderCheckbox(panels.tts, "ttsCheckbox", "Enable AI-TTS", settings.tts);
             
@@ -4214,7 +4225,7 @@
             
             const panelsContainer = createElement("div", {
                 id: "settingsTabPanelsContainer",
-                style: "min-height: 550px; box-sizing: border-box;"
+                style: "min-height: 610px; box-sizing: border-box;"
             });
             Object.values(panels).forEach(panel => panelsContainer.appendChild(panel));
             
