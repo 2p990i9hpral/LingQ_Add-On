@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      20.2.0
+// @version      20.2.1
 // @license      GPL-3.0-or-later
 // @grant       GM_setValue
 // @grant       GM_getValue
@@ -3741,10 +3741,7 @@
             addSlider(videoSettings, "heightBigSlider", "Video Height:", "heightBigValue", settings.heightBig, "px", 300, 1200, 10);
             panels.layout.appendChild(videoSettings);
 
-            addSectionTitle(panels.layout, "Video Captions");
-            const videoCaptionSection = createElement("div");
-            addSlider(videoCaptionSection, "captionFontsizeSlider", "Caption Font Size:", "captionFontsizeValue", settings.captionFontsize, "px", 10, 30, 1);
-            panels.layout.appendChild(videoCaptionSection);
+            addSlider(panels.layout, "captionFontsizeSlider", "Caption Font Size:", "captionFontsizeValue", settings.captionFontsize, "px", 10, 30, 1);
             
             addSectionTitle(panels.style, "Typography", true);
             addSlider(panels.style, "fontSizeSlider", "Font Size:", "fontSizeValue", settings.fontSize[language], "rem", 0.8, 1.8, 0.05);
