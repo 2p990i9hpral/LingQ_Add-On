@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      20.1.8
+// @version      20.2.0
 // @license      GPL-3.0-or-later
 // @grant       GM_setValue
 // @grant       GM_getValue
@@ -40,6 +40,7 @@
         customFont: {},
         
         colorMode: "white",
+        customColors: true,
         white_fontColor: "rgb(0, 0, 0)",
         white_translationFontColor: "rgb(0, 0, 0)",
         white_lingqBackground: "rgba(255, 232, 149, 1)",
@@ -3784,14 +3785,17 @@
             ], settings.hoverAnnotation);
             addSlider(panels.style, "annotationScaleSlider", "Annotation Size:", "annotationScaleValue", settings.annotationScale[language], "%", 40, 80, 5);
             
-            addSectionTitle(panels.style, "Theme & Colors");
-            const colorSection = createElement("div");
+            addTabHeaderCheckbox(panels.style, "customColorsCheckbox", "Theme & Colors", settings.customColors);
+            const colorSection = createElement("div", {
+                id: "colorSection",
+                style: settings.customColors ? "" : "display: none;"
+            });
             
             addRadioGroup(colorSection, "colorMode", "Color Mode:", [
                 {value: "white", text: "White"},
                 {value: "dark", text: "Dark"}
             ], settings.colorMode, "230px", "32px");
-            
+
             [
                 {id: "fontColor", label: "Font Color:", value: colorSettings.fontColor},
                 {
@@ -3806,7 +3810,7 @@
                 {id: "unknownBorder", label: "Unknown Border:", value: colorSettings.unknownBorder},
                 {id: "playingUnderline", label: "Playing Underline:", value: colorSettings.playingUnderline}
             ].forEach(config => addColorPicker(colorSection, config.id, config.label, config.value));
-            
+
             panels.style.appendChild(colorSection);
             
             addSectionTitle(panels.layout, "Widget Settings");
@@ -5454,7 +5458,9 @@
                 
                 updateColorInputs(defaultColorSettings);
                 updateColorPickerBackgrounds(defaultColorSettings);
-                
+                document.getElementById("customColorsCheckbox").checked = defaults.customColors;
+                document.getElementById("colorSection").style.display = defaults.customColors ? "" : "none";
+
                 const defaultHasPos = languageScopedDefaults.styleType !== "off";
                 document.getElementById("positionSettingsContainer").style.display = defaultHasPos ? "block" : "none";
                 document.getElementById("videoSettings").style.display = defaultHasPos && ["Top", "Bottom"].includes(languageScopedDefaults.videoPosition) ? "block" : "none";
@@ -10589,6 +10595,12 @@
                 radio.addEventListener("change", applyStyles);
             });
 
+            document.getElementById("customColorsCheckbox")?.addEventListener("change", (event) => {
+                settings.customColors = event.target.checked;
+                document.getElementById("colorSection").style.display = event.target.checked ? "" : "none";
+                applyStyles();
+            });
+
             [
                 "skipEndPageCheckbox",
                 "hidePopularMeaningsCheckbox",
@@ -10674,6 +10686,7 @@
                 }
                 ` : ""}
 
+                ${settings.customColors ? `
                 .reader-paragraph,
                 .reader-sentence,
                 .poc-line,
@@ -10694,6 +10707,7 @@
                     text-decoration: underline !important;
                     text-decoration-color: var(--is-playing-underline) !important;
                 }
+                ` : ""}
 
                 .reader-body[data-playing="block"] .reader-sentence.playing,
                 .reader-body .poc-page .playing-run {
@@ -10719,6 +10733,7 @@
                     padding: 0 !important;
                 }
 
+                ${settings.customColors ? `
                 .sentence-item.ar-new {
                     background-color: var(--unknown-background) !important;
                     border: 1px solid var(--unknown-border) !important;
@@ -10740,6 +10755,11 @@
                 .sentence-item.band.band-1,
                 .sentence-item.band.band-2 {
                     --phrase-border: var(--lingq-border);
+                }
+
+                .sentence-item.band.band-new {
+                    --phrase-border: var(--unknown-border);
+                    background-color: var(--unknown-background) !important;
                 }
 
                 .sentence-item.band.run-start {
@@ -10857,6 +10877,7 @@
                 .sentence-item.ar-learned:hover {
                     box-shadow: inset 0 0 0 1px var(--lingq-border-learned) !important;
                 }
+                ` : ""}
 
                 /*Chat*/
 
@@ -12072,6 +12093,10 @@
             }
             .addon-sub-phrase.band-2 {
                 background-color: color-mix(in srgb, var(--lingq-background) 15%, transparent);
+            }
+            .addon-sub-phrase.band-new {
+                --phrase-border: var(--unknown-border);
+                background-color: var(--unknown-background);
             }
             .addon-sub-phrase:hover {
                 box-shadow: inset 0 0 0 1px var(--phrase-border);
