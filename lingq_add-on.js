@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      20.2.1
+// @version      20.2.2
 // @license      GPL-3.0-or-later
 // @grant       GM_setValue
 // @grant       GM_getValue
@@ -12005,12 +12005,29 @@
             `;
         }
 
+        function boostColorAlpha(color, factor) {
+            const match = color?.match(/rgba?\(([^)]+)\)/);
+            if (!match) return color;
+            const [red, green, blue, alpha = 1] = match[1].split(",").map(parseFloat);
+            return `rgba(${red}, ${green}, ${blue}, ${Math.min(1, alpha * factor)})`;
+        }
+
+        // Subtitles always sit on a dark backdrop, so they use the dark palette with a stronger alpha
         function generateSubtitleOverlayCSS() {
+            const darkColors = getColorSettings("dark");
+            const backgroundBoost = 1.5;
+            const borderBoost = 2.5;
+            const learnedBorderBoost = 1.5;
             return `
             :root {
                 --caption-font-size: ${settings.captionFontsize}px;
             }
             .addon-subtitle-overlay {
+                --sub-lingq-background: ${boostColorAlpha(darkColors.lingqBackground, backgroundBoost)};
+                --sub-unknown-background: ${boostColorAlpha(darkColors.unknownBackground, backgroundBoost)};
+                --sub-lingq-border: ${boostColorAlpha(darkColors.lingqBorder, borderBoost)};
+                --sub-lingq-border-learned: ${boostColorAlpha(darkColors.lingqBorderLearned, learnedBorderBoost)};
+                --sub-unknown-border: ${boostColorAlpha(darkColors.unknownBorder, borderBoost)};
                 position: absolute;
                 left: 0;
                 right: 0;
@@ -12053,56 +12070,56 @@
                 border-radius: .25rem;
             }
             .addon-sub-word.ar-new {
-                background-color: var(--unknown-background);
-                border-color: var(--unknown-border);
+                background-color: var(--sub-unknown-background);
+                border-color: var(--sub-unknown-border);
             }
             .addon-sub-word.ar-lingq {
-                border-color: var(--lingq-border);
+                border-color: var(--sub-lingq-border);
             }
             .addon-sub-word.ar-lingq-0 {
-                background-color: color-mix(in srgb, var(--lingq-background) 65%, transparent);
+                background-color: color-mix(in srgb, var(--sub-lingq-background) 65%, transparent);
             }
             .addon-sub-word.ar-lingq-1 {
-                background-color: color-mix(in srgb, var(--lingq-background) 35%, transparent);
+                background-color: color-mix(in srgb, var(--sub-lingq-background) 35%, transparent);
             }
             .addon-sub-word.ar-lingq-2 {
-                background-color: color-mix(in srgb, var(--lingq-background) 15%, transparent);
+                background-color: color-mix(in srgb, var(--sub-lingq-background) 15%, transparent);
             }
             .addon-sub-word.ar-lingq-3 {
                 background-color: rgba(0, 0, 0, 0);
-                border-color: var(--lingq-border-learned);
+                border-color: var(--sub-lingq-border-learned);
             }
             .addon-sub-phrase {
-                --phrase-border: var(--lingq-border-learned);
+                --phrase-border: var(--sub-lingq-border-learned);
                 border: 1px solid var(--phrase-border);
                 border-radius: .25rem;
             }
             .addon-sub-phrase.band-0,
             .addon-sub-phrase.band-1,
             .addon-sub-phrase.band-2 {
-                --phrase-border: var(--lingq-border);
+                --phrase-border: var(--sub-lingq-border);
             }
             .addon-sub-phrase.band-0 {
-                background-color: color-mix(in srgb, var(--lingq-background) 65%, transparent);
+                background-color: color-mix(in srgb, var(--sub-lingq-background) 65%, transparent);
             }
             .addon-sub-phrase.band-1 {
-                background-color: color-mix(in srgb, var(--lingq-background) 35%, transparent);
+                background-color: color-mix(in srgb, var(--sub-lingq-background) 35%, transparent);
             }
             .addon-sub-phrase.band-2 {
-                background-color: color-mix(in srgb, var(--lingq-background) 15%, transparent);
+                background-color: color-mix(in srgb, var(--sub-lingq-background) 15%, transparent);
             }
             .addon-sub-phrase.band-new {
-                --phrase-border: var(--unknown-border);
-                background-color: var(--unknown-background);
+                --phrase-border: var(--sub-unknown-border);
+                background-color: var(--sub-unknown-background);
             }
             .addon-sub-phrase:hover {
                 box-shadow: inset 0 0 0 1px var(--phrase-border);
             }
             .addon-sub-word.ar-learned {
-                border-color: var(--lingq-border-learned);
+                border-color: var(--sub-lingq-border-learned);
             }
             .addon-sub-word:hover {
-                box-shadow: inset 0 0 0 1px var(--lingq-border-learned);
+                box-shadow: inset 0 0 0 1px var(--sub-lingq-border-learned);
             }
             body:has([id$="-content-lessonCompleted"][data-state="active"]) .addon-subtitle-overlay {
                 display: none !important;
