@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      20.1.0
+// @version      20.1.1
 // @license      GPL-3.0-or-later
 // @grant       GM_setValue
 // @grant       GM_getValue
@@ -4203,7 +4203,9 @@
             if (validVoice !== currentVoice) {
                 settings.ttsVoice = {...settings.ttsVoice, [language]: validVoice};
             }
-            addSelect(ttsSection, "ttsVoiceSelector", "TTS Voice:", currentVoiceOptions, validVoice);
+            const ttsVoiceContainer = addSelect(ttsSection, "ttsVoiceSelector", "TTS Voice:", currentVoiceOptions, validVoice);
+            ttsVoiceContainer.id = "ttsVoiceContainer";
+            ttsVoiceContainer.style.display = settings.ttsProvider === "google translate" ? "none" : "block";
             
             addCheckbox(ttsSection, "ttsWordCheckbox", "Enable AI-TTS for words", settings.ttsWord);
             addCheckbox(ttsSection, "ttsSentenceCheckbox", "Enable AI-TTS for sentences", settings.ttsSentence);
@@ -5376,6 +5378,7 @@
                 const savedTtsKeys = settings.ttsApiKeys;
                 ttsApiKeyInput.value = savedTtsKeys[provider] || "";
                 document.getElementById("ttsApiKeyContainer").style.display = provider === "google translate" ? "none" : "flex";
+                document.getElementById("ttsVoiceContainer").style.display = provider === "google translate" ? "none" : "block";
 
                 ttsVoiceSelector.innerHTML = "";
                 const newVoiceOptions = getAvailableVoicesForProvider(provider, language);
@@ -5521,6 +5524,7 @@
                 document.getElementById("ttsApiKeyInput").value = "";
                 document.getElementById("ttsProviderSelector").value = defaults.ttsProvider;
                 document.getElementById("ttsApiKeyContainer").style.display = defaults.ttsProvider === "google translate" ? "none" : "flex";
+                document.getElementById("ttsVoiceContainer").style.display = defaults.ttsProvider === "google translate" ? "none" : "block";
                 const ttsModelSelector = document.getElementById("ttsModelSelector");
                 if (ttsModelSelector) {
                     ttsModelSelector.value = defaults.ttsModel;
@@ -11987,7 +11991,7 @@
                 margin: 0 auto;
                 white-space: pre-line;
                 background-color: rgba(0, 0, 0, 0.75);
-                padding: 0.2em 0.5em;
+                padding: 0.1em;
                 box-decoration-break: clone;
                 -webkit-box-decoration-break: clone;
             }
