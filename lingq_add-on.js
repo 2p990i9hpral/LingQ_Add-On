@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      20.1.3
+// @version      20.1.4
 // @license      GPL-3.0-or-later
 // @grant       GM_setValue
 // @grant       GM_getValue
@@ -12561,7 +12561,7 @@
                 function createAndPrependSummaryElement(section) {
                     if (!section || section.querySelector(".quick-summary") || section.parentNode?.querySelector?.(".quick-summary")) return;
                     
-                    const shouldShowSummary = Boolean(settings.prependSummary[language]) && isFirstPageInPageMode();
+                    const shouldShowSummary = Boolean(settings.chatWidget) && Boolean(settings.prependSummary[language]) && isFirstPageInPageMode();
                     const summaryElement = createElement("div", {
                         className: "quick-summary",
                         style: `position: relative; ${shouldShowSummary ? '' : 'display: none;'}`
@@ -12715,10 +12715,12 @@
                     ? `Title: ${lessonTitle}\n\n${lessonContent}`
                     : lessonContent;
 
-                if (settings.prependSummary[language]) {
+                if (settings.prependSummary[language] && settings.chatWidget) {
                     await getQuickSummary(llmProvider, llmApiKey, llmModel, cachedContextualContent);
                 }
-                
+
+                if (!settings.chatWidget) return;
+
                 getLessonSummary(llmProvider, llmApiKey, llmModel, cachedContextualContent)
                     .then(summary => {
                         lessonSummary = convertMarkdownToHTML(summary);
@@ -12925,7 +12927,7 @@
             function updateQuickSummaryPageVisibility() {
                 const summaryEl = document.querySelector(".quick-summary");
                 if (!summaryEl) return;
-                if (!settings.prependSummary[language] || !isFirstPageInPageMode()) {
+                if (!settings.chatWidget || !settings.prependSummary[language] || !isFirstPageInPageMode()) {
                     summaryEl.style.display = "none";
                 } else {
                     summaryEl.style.display = "block";
