@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      20.0.2
+// @version      20.0.3
 // @license      GPL-3.0-or-later
 // @grant       GM_setValue
 // @grant       GM_getValue
@@ -9207,7 +9207,8 @@
                 });
                 
                 const handleSpacebarStart = (event) => {
-                    if (event.code === "Space" && !startButton.disabled && setupBox.style.display !== "none") {
+                    const isTyping = event.target.closest("input, textarea, [contenteditable='true']");
+                    if (event.code === "Space" && !isTyping && !startButton.disabled && setupBox.style.display !== "none") {
                         event.preventDefault();
                         event.stopImmediatePropagation();
                         startButton.click();
