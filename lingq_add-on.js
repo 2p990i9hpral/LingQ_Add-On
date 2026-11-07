@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      20.1.1
+// @version      20.1.2
 // @license      GPL-3.0-or-later
 // @grant       GM_setValue
 // @grant       GM_getValue
@@ -4207,8 +4207,9 @@
             ttsVoiceContainer.id = "ttsVoiceContainer";
             ttsVoiceContainer.style.display = settings.ttsProvider === "google translate" ? "none" : "block";
             
-            addCheckbox(ttsSection, "ttsWordCheckbox", "Enable AI-TTS for words", settings.ttsWord);
-            addCheckbox(ttsSection, "ttsSentenceCheckbox", "Enable AI-TTS for sentences", settings.ttsSentence);
+            addSectionTitle(ttsSection, "AI-TTS on first play");
+            addCheckbox(ttsSection, "ttsWordCheckbox", "Words", settings.ttsWord);
+            addCheckbox(ttsSection, "ttsSentenceCheckbox", "Sentences", settings.ttsSentence);
             panels.tts.appendChild(ttsSection);
             
             const panelsContainer = createElement("div", {
@@ -15029,7 +15030,7 @@
                         if (currentText && currentText !== lastActiveWordText) {
                             lastActiveWordText = currentText;
                             console.debug('Observer:', `Widget changed from word/sentence: ${currentText}`);
-                            updateWidget(false);
+                            updateWidget();
                         }
                     });
                     selectedTextObserver.observe(wordTitleHeader, {subtree: true, characterData: true, childList: true});
@@ -15050,7 +15051,7 @@
                             if (currentText && currentText !== lastActiveWordText) {
                                 lastActiveWordText = currentText;
                                 console.debug('Observer:', `Widget target changed in sideColumn: ${currentText}`);
-                                updateWidget(false);
+                                updateWidget();
                                 return;
                             }
                             for (const node of mutation.addedNodes) {

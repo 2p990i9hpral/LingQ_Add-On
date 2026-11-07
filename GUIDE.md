@@ -276,6 +276,7 @@ Click the **Usage Log** button to open the token monitoring popup:
 
 <img src="images/settings-tts.png" width=450></br>
 
+> Turn off **Speak selected words** in LingQ's own settings. If it stays on, LingQ's native TTS and AI TTS voices overlap.
 - **Autoplay TTS voice**: Automatically pronounces the target word upon selection.
 - **TTS API Key**: Enter your API key for the chosen voice provider.
 - **TTS Provider**:
@@ -287,6 +288,7 @@ Click the **Usage Log** button to open the token monitoring popup:
   - `ElevenLabs` ([Get API Key](https://try.elevenlabs.io/8rtfehmrtlc2)): Human-like, highly expressive voice synthesis across 21 default voices (`Bella`, `George`, `Sarah`, `Charlie`, `Alice`, `Brian`, etc.).
     - **Model**: Select the synthesis model (`Eleven v4 Turbo`, `Eleven v4`, `Eleven Flash v2.5`, `Eleven Turbo v2.5`, `Eleven Multilingual v2`, `Eleven v3`).
     - **Free Tier & Billing**: Offers a free tier with 10,000 credits per month (up to 20,000 characters with Turbo/Flash models). Also supports Pay-as-you-go prepaid balance and monthly subscriptions.
+  - `Google Translate`: Free, unofficial Google Translate voice. No API key or voice selection is needed.
 - **TTS Voice**: Select a specific voice or set to `Random` (or regional random such as `en-US Random`, `en-GB Random`).
 
 #### Supported Languages by Provider
@@ -299,8 +301,7 @@ Click the **Usage Log** button to open the token monitoring popup:
 | **ElevenLabs** | **Multilingual (90+ languages with v4/v4 Turbo, 70+ with v3, 32 with v2.5)** — English, Japanese, Korean, Chinese, Spanish, French, German, Italian, Portuguese, Russian, Arabic, Hindi, etc. |
 
 ### 5.2 Pronunciation Trigger Scopes
-- **Enable AI-TTS for words**: Replaces LingQ's default TTS with AI voice generation when clicking individual vocabulary words.
-- **Enable AI-TTS for sentences**: Narrates entire sentences in high-fidelity AI TTS.
+The **AI-TTS on first play** options choose which voice plays the **first** playback (autoplay or the first click of the Listen button). Every later playback of the same word or sentence always uses AI TTS.
 
 ---
 
