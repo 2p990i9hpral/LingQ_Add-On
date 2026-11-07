@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      20.0.4
+// @version      20.1.0
 // @license      GPL-3.0-or-later
 // @grant       GM_setValue
 // @grant       GM_getValue
@@ -338,7 +338,8 @@
         "openai": openaiVoiceOptions,
         "google gemini": googleGeminiVoiceOptions,
         "google cloud": googleCloudVoiceOptions,
-        "elevenlabs": elevenLabsVoiceOptions
+        "elevenlabs": elevenLabsVoiceOptions,
+        "google translate": [{value: "default", text: "Default"}]
     };
     
     function getAvailableVoicesForProvider(provider, language = getLessonLanguage()) {
@@ -2379,6 +2380,23 @@
         }
     }
     
+    // Unofficial Google Translate endpoint; no API key, text is capped at 200 characters
+    function googleTranslateTTS(text, language = getLessonLanguage()) {
+        const languageMap = {zh: "zh-CN"};
+        const url = `https://translate.google.com/translate_tts?ie=UTF-8&client=tw-ob&tl=${encodeURIComponent(languageMap[language] || language)}&q=${encodeURIComponent(text.slice(0, 200))}`;
+        console.log('[TTS]', `google translate, ${language}`, `"${text}"`);
+        return new Promise((resolve, reject) => {
+            GM_xmlhttpRequest({
+                method: "GET",
+                url,
+                responseType: "arraybuffer",
+                onload: (res) => res.status === 200 ? resolve(res.response) : reject(new Error(`Google Translate TTS failed: ${res.status}`)),
+                onerror: () => reject(new Error("Google Translate TTS network error")),
+                ontimeout: () => reject(new Error("Google Translate TTS timed out"))
+            });
+        });
+    }
+
     async function getTTSResponse(provider, apiKey, voice, text, ttsInstructions = "Speak in a natural, authentic native speaker tone with steady pacing, clear articulation, and an engaging narrative flow: ", model = settings.ttsModel) {
         const availableOptions = getAvailableVoicesForProvider(provider);
         const validValues = availableOptions.map(option => option.value);
@@ -2406,6 +2424,8 @@
                 return await googleCloudTTS(text, apiKey, resolvedVoice);
             case "elevenlabs":
                 return await elevenLabsTTS(text, apiKey, resolvedVoice, model);
+            case "google translate":
+                return await googleTranslateTTS(text);
         }
     }
     
@@ -3799,7 +3819,9 @@
             
             addSectionTitle(panels.reader, "Widget Settings", true);
             const widgetSection = createElement("div");
-            
+
+            addSlider(widgetSection, "widgetWidthSlider", "Widget Width:", "widgetWidthValue", settings.widgetWidth, "px", 330, 500, 10);
+
             const widgetRadioGroup = addRadioGroup(widgetSection, "widgetVerticalAlign", "Align:", [
                 {value: "flex-start", text: "Top"},
                 {value: "center", text: "Center"},
@@ -3819,9 +3841,7 @@
             const widgetCheckboxesGroup = createElement("div", {
                 style: "display: flex; gap: 16px; justify-content: flex-end; width: 230px;"
             });
-
-            addSlider(widgetSection, "widgetWidthSlider", "Widget Width:", "widgetWidthValue", settings.widgetWidth, "px", 330, 500, 10);
-
+            
             [
                 {id: "hidePopularMeaningsCheckbox", text: "Meanings", checked: settings.hidePopularMeanings},
                 {id: "hideDictionariesCheckbox", text: "Dictionaries", checked: settings.hideDictionaries},
@@ -4137,8 +4157,9 @@
             addCheckbox(ttsSection, "ttsAutoplayCheckbox", "Autoplay TTS voice", settings.ttsAutoplay);
             
             const ttsApiKeyContainer = createElement("div", {
+                id: "ttsApiKeyContainer",
                 className: "popup-row",
-                style: "display: flex; align-items: center; justify-content: space-between; margin: 9px 0;"
+                style: `display: ${settings.ttsProvider === "google translate" ? "none" : "flex"}; align-items: center; justify-content: space-between; margin: 9px 0;`
             });
             ttsApiKeyContainer.appendChild(createElement("label", {
                 htmlFor: "ttsApiKeyInput",
@@ -4161,7 +4182,8 @@
                 {value: "openai", text: "OpenAI"},
                 {value: "google gemini", text: "Google Gemini"},
                 {value: "google cloud", text: "Google Cloud"},
-                {value: "elevenlabs", text: "ElevenLabs"}
+                {value: "elevenlabs", text: "ElevenLabs"},
+                {value: "google translate", text: "Google Translate (Free)"}
             ], settings.ttsProvider);
             
             const activeTtsModels = ttsModelsByProvider[settings.ttsProvider] || [];
@@ -5353,7 +5375,8 @@
                 
                 const savedTtsKeys = settings.ttsApiKeys;
                 ttsApiKeyInput.value = savedTtsKeys[provider] || "";
-                
+                document.getElementById("ttsApiKeyContainer").style.display = provider === "google translate" ? "none" : "flex";
+
                 ttsVoiceSelector.innerHTML = "";
                 const newVoiceOptions = getAvailableVoicesForProvider(provider, language);
                 newVoiceOptions.forEach(option => {
@@ -5497,6 +5520,7 @@
                 document.getElementById("ttsAutoplayCheckbox").value = defaults.ttsAutoplay;
                 document.getElementById("ttsApiKeyInput").value = "";
                 document.getElementById("ttsProviderSelector").value = defaults.ttsProvider;
+                document.getElementById("ttsApiKeyContainer").style.display = defaults.ttsProvider === "google translate" ? "none" : "flex";
                 const ttsModelSelector = document.getElementById("ttsModelSelector");
                 if (ttsModelSelector) {
                     ttsModelSelector.value = defaults.ttsModel;
@@ -15976,6 +16000,9 @@
                         break;
                     case "elevenlabs":
                         RPM_LIMIT = 100;
+                        break;
+                    case "google translate":
+                        RPM_LIMIT = 30;
                         break;
                 }
                 RPM_LIMIT = RPM_LIMIT * 0.9;
