@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      20.2.2
+// @version      20.2.3
 // @license      GPL-3.0-or-later
 // @grant       GM_setValue
 // @grant       GM_getValue
@@ -9502,55 +9502,29 @@
                         return 0;
                     }
 
-                    let initialTime = getLingQAudioProgress();
+                    let resumeTime = getLingQAudioProgress();
 
-                    const startPlayback = () => {
-                        const targetTime = initialTime;
-                        
-                        if (typeof targetTime === "number" && !isNaN(targetTime)) {
-                            videoElement.currentTime = targetTime;
-                            if (typeof mediaInstances !== "undefined") {
-                                mediaInstances.forEach(media => {
-                                    if (media) media.currentTime = targetTime;
-                                });
-                            }
-                            document.querySelectorAll('audio').forEach(audio => {
-                                if (audio && audio.id !== "addonLocalVideo" && !audio.src?.includes('/tts/')) {
-                                    audio.currentTime = targetTime;
-                                }
-                            });
-                        }
-                        
-                        const playButton = document.querySelector('footer button[aria-label="Play"], .section--player button.lingq-audio-player');
-                        if (playButton) {
-                            playButton.click();
-                        }
-                    };
-
-                    const pauseButton = document.querySelector('footer button[aria-label="Pause"], .section--player button.lingq-audio-player .svg-icon--pause')?.closest('button');
-                    if (pauseButton) {
+                    const audioHeld = waitForElement('footer button[aria-label="Pause"]').then(pauseButton => {
+                        if (!pauseButton) return;
                         pauseButton.click();
-                    }
-                    if (typeof mediaInstances !== "undefined") {
-                        mediaInstances.forEach(media => {
-                            if (media && media.id !== "addonLocalVideo") {
-                                try { media.pause(); } catch (e) {}
-                            }
-                        });
-                    }
-                    document.querySelectorAll('audio').forEach(audio => {
-                        if (audio && audio.id !== "addonLocalVideo" && !audio.src?.includes('/tts/')) {
-                            try { audio.pause(); } catch (e) {}
-                        }
+                        resumeTime = Math.max(resumeTime, getLingQAudioProgress());
                     });
+
+                    const startPlayback = async () => {
+                        await audioHeld;
+
+                        if (resumeTime > 0) videoElement.currentTime = resumeTime;
+                        bindLingQPlayerControls(videoElement);
+
+                        const playButton = await waitForElement('footer button[aria-label="Play"]', 2000);
+                        playButton?.click();
+                    };
 
                     if (videoElement.readyState >= 3) {
                         startPlayback();
                     } else {
                         videoElement.addEventListener("canplay", startPlayback, { once: true });
                     }
-                    
-                    bindLingQPlayerControls(videoElement);
                     window.removeEventListener("keydown", handleSpacebarStart, true);
                 });
             }
