@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      20.1.7
+// @version      20.1.8
 // @license      GPL-3.0-or-later
 // @grant       GM_setValue
 // @grant       GM_getValue
@@ -4159,28 +4159,6 @@
             
             addCheckbox(ttsSection, "ttsAutoplayCheckbox", "Autoplay TTS voice", settings.ttsAutoplay);
             
-            const ttsApiKeyContainer = createElement("div", {
-                id: "ttsApiKeyContainer",
-                className: "popup-row",
-                style: `display: ${settings.ttsProvider === "google translate" ? "none" : "flex"}; align-items: center; justify-content: space-between; margin: 9px 0;`
-            });
-            ttsApiKeyContainer.appendChild(createElement("label", {
-                htmlFor: "ttsApiKeyInput",
-                textContent: "TTS API Key:",
-                style: "flex: 0 0 185px; white-space: nowrap;"
-            }));
-            
-            const savedTtsKeys = settings.ttsApiKeys;
-            const ttsApiKeyInput = createElement("input", {
-                type: "password",
-                id: "ttsApiKeyInput",
-                value: savedTtsKeys[settings.ttsProvider] || "",
-                className: "popup-input",
-                style: "flex: 0 0 230px; width: 230px; box-sizing: border-box;"
-            });
-            ttsApiKeyContainer.appendChild(ttsApiKeyInput);
-            ttsSection.appendChild(ttsApiKeyContainer);
-            
             addSelect(ttsSection, "ttsProviderSelector", "TTS Provider:", [
                 {value: "openai", text: "OpenAI"},
                 {value: "google gemini", text: "Google Gemini"},
@@ -4199,7 +4177,29 @@
             const ttsModelContainer = addSelect(ttsSection, "ttsModelSelector", "Model: (Price per 1M tokens)", activeTtsModels, activeTtsModel);
             ttsModelContainer.id = "ttsModelContainer";
             ttsModelContainer.style.display = activeTtsModels.length > 0 ? "block" : "none";
-            
+
+            const ttsApiKeyContainer = createElement("div", {
+                id: "ttsApiKeyContainer",
+                className: "popup-row",
+                style: `display: ${settings.ttsProvider === "google translate" ? "none" : "flex"}; align-items: center; justify-content: space-between; margin: 9px 0;`
+            });
+            ttsApiKeyContainer.appendChild(createElement("label", {
+                htmlFor: "ttsApiKeyInput",
+                textContent: "TTS API Key:",
+                style: "flex: 0 0 185px; white-space: nowrap;"
+            }));
+
+            const savedTtsKeys = settings.ttsApiKeys;
+            const ttsApiKeyInput = createElement("input", {
+                type: "password",
+                id: "ttsApiKeyInput",
+                value: savedTtsKeys[settings.ttsProvider] || "",
+                className: "popup-input",
+                style: "flex: 0 0 230px; width: 230px; box-sizing: border-box;"
+            });
+            ttsApiKeyContainer.appendChild(ttsApiKeyInput);
+            ttsSection.appendChild(ttsApiKeyContainer);
+
             const currentVoiceOptions = getAvailableVoicesForProvider(settings.ttsProvider, language);
             const currentVoice = settings.ttsVoice[language];
             const validVoice = currentVoiceOptions.some(opt => opt.value === currentVoice) ? currentVoice : (currentVoiceOptions[0]?.value || "random");
