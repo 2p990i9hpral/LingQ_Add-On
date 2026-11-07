@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      20.0.3
+// @version      20.0.4
 // @license      GPL-3.0-or-later
 // @grant       GM_setValue
 // @grant       GM_getValue
@@ -11963,7 +11963,7 @@
                 margin: 0 auto;
                 white-space: pre-line;
                 background-color: rgba(0, 0, 0, 0.75);
-                padding: 0 0.3em;
+                padding: 0.2em 0.5em;
                 box-decoration-break: clone;
                 -webkit-box-decoration-break: clone;
             }
