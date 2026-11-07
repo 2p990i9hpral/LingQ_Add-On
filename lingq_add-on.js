@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      20.0.0
+// @version      20.0.1
 // @license      GPL-3.0-or-later
 // @grant       GM_setValue
 // @grant       GM_getValue
@@ -3184,13 +3184,10 @@
     }
 
     function takesReaderWordIndex(token) {
-        if (token.text) return true;
-        return Boolean(token.punct)
-            && /[\p{L}\p{N}]/u.test(token.punct)
-            && !/[\p{L}\p{N}]-[\p{L}\p{N}]/u.test(token.punct);
+        return Boolean(token.text || token.isNumber);
     }
 
-    // Reader numbers every word and every letter/digit punct token, in order, from 0
+    // Reader numbers every word and every number token, in order, from 0
     function buildSubtitleCues(simpleData) {
         let readerWordIndex = 0;
         return simpleData.tokenizedText.flat().flatMap((sentence) => {
@@ -8782,7 +8779,8 @@
                 };
                 
                 const getLingQSpeed = () => {
-                    if (isCustomSpeedActive()) return settings.lingqSpeed[getLessonLanguage()];
+                    const savedSpeed = settings.lingqSpeed[getLessonLanguage()];
+                    if (savedSpeed) return savedSpeed;
                     const speedBtn = document.querySelector('footer button[aria-label^="Playback speed"]');
                     if (speedBtn) return parseFloat(speedBtn.textContent) || 1.0;
                     return parseFloat(speedLabel?.textContent ?? 1.0);
@@ -11408,14 +11406,8 @@
             div[data-word-widget] div[class*="overflow-y-auto"] {
                 flex: 0 1 auto !important;
             }
-            div[data-reader-widget] > [role="region"] { /* Sidebar region: stack chat widget and vocabulary panel */
-                display: flex !important;
-                flex-direction: column !important;
-            }
-            div[data-reader-widget] > [role="region"] > div.h-full { /* Vocabulary panel fills only the space left below the chat widget */
-                flex: 1 1 auto !important;
-                height: auto !important;
-                min-height: 400px !important;
+            div[data-reader-widget] ul.flex.flex-col { /* Vocabulary/terms list max height limiter */
+                max-height: 500px !important;
             }
             div[data-reader-side-column="true"].contents #memo-widget-container { /* Hidden memo container when sidebar is collapsed */
                 display: none !important;
