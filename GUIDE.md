@@ -51,7 +51,7 @@ This guide is structured around the **Settings Popup** (where the majority of fe
 
 # Part I: Settings & Reader Experience
 
-The addon provides a modular **Settings Popup** organized into dedicated tabs (`Layout`, `Style`, `Reader`, `Shortcuts`, `AI`, and `TTS`). Each section below outlines the corresponding settings and reader capabilities.
+The addon provides a modular **Settings Popup** organized into dedicated tabs (`Reader`, `Style`, `Shortcuts`, `AI`, and `TTS`). Each section below outlines the corresponding settings and reader capabilities.
 
 ---
 

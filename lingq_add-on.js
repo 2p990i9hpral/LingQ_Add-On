@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      20.1.5
+// @version      20.1.7
 // @license      GPL-3.0-or-later
 // @grant       GM_setValue
 // @grant       GM_getValue
@@ -3446,7 +3446,7 @@
             const popup = createElement("div", {
                 id: "lingqAddonSettingsPopup",
                 className: "popup",
-                style: "width: 530px; box-sizing: border-box; overflow-x: hidden;"
+                style: "width: 500px; box-sizing: border-box; overflow-x: hidden;"
             });
             
             const dragHandle = createElement("div", {
@@ -3585,14 +3585,8 @@
             }
             
             function addTabHeaderCheckbox(parent, id, labelText, checked) {
-                const container = createElement("div", {
-                    className: "popup-row",
-                    style: "margin: 2px 0 10px 0; padding-bottom: 5px; border-bottom: 1px solid rgba(125, 125, 125, 0.25);"
-                });
-                const label = createElement("label", {
-                    htmlFor: id,
-                    style: "display: inline-flex; align-items: center; gap: 8px; cursor: pointer; font-weight: 600; font-size: 0.95em; color: var(--font-color);"
-                });
+                const container = createElement("div", {className: "popup-row popup-tab-header"});
+                const label = createElement("label", {htmlFor: id});
                 const checkbox = createElement("input", {type: "checkbox", id, checked});
                 label.appendChild(checkbox);
                 label.appendChild(document.createTextNode(labelText));
@@ -3667,7 +3661,7 @@
             
             function addSectionTitle(parent, title, isFirst = false) {
                 const header = createElement("div", {
-                    style: `font-weight: 600; font-size: 0.88em; color: var(--font-color); margin: ${isFirst ? "2px" : "16px"} 0 8px 0; padding-bottom: 4px; border-bottom: 1px solid rgba(125, 125, 125, 0.2); letter-spacing: 0.02em;`
+                    className: `popup-section-title${isFirst ? " first" : ""}`
                 }, title);
                 parent.appendChild(header);
                 return header;
@@ -3676,9 +3670,8 @@
             const popupLayout = createElement("div", {style: "width: 100%; box-sizing: border-box; padding: 4px;"});
             
             const tabs = [
-                {id: "layout", label: "Layout"},
+                {id: "layout", label: "Reader"},
                 {id: "style", label: "Style"},
-                {id: "reader", label: "Reader"},
                 {id: "shortcuts", label: "Shortcuts"},
                 {id: "chat", label: "AI"},
                 {id: "tts", label: "TTS"}
@@ -3692,7 +3685,6 @@
             const panels = {
                 layout: createElement("div", {id: "tabPanelLayout"}),
                 style: createElement("div", {id: "tabPanelStyle", style: "display: none;"}),
-                reader: createElement("div", {id: "tabPanelReader", style: "display: none;"}),
                 shortcuts: createElement("div", {id: "tabPanelShortcuts", style: "display: none;"}),
                 chat: createElement("div", {id: "tabPanelChat", style: "display: none;"}),
                 tts: createElement("div", {id: "tabPanelTTS", style: "display: none;"})
@@ -3817,7 +3809,7 @@
             
             panels.style.appendChild(colorSection);
             
-            addSectionTitle(panels.reader, "Widget Settings", true);
+            addSectionTitle(panels.layout, "Widget Settings");
             const widgetSection = createElement("div");
 
             addSlider(widgetSection, "widgetWidthSlider", "Widget Width:", "widgetWidthValue", settings.widgetWidth, "px", 330, 500, 10);
@@ -3860,15 +3852,15 @@
             widgetHideRow.appendChild(widgetCheckboxesGroup);
             widgetSection.appendChild(widgetHideRow);
             addCheckbox(widgetSection, "showMemoWidgetCheckbox", "Show Memo Widget", settings.showMemoWidget);
-            panels.reader.appendChild(widgetSection);
-            
-            addSectionTitle(panels.reader, "Reader Behavior");
+            panels.layout.appendChild(widgetSection);
+
+            addSectionTitle(panels.layout, "Reader Behavior");
             const readerBehaviorSection = createElement("div");
             addCheckbox(readerBehaviorSection, "hideReaderPopupCheckbox", "Hide Meaning Popup", settings.hideReaderPopup);
             addCheckbox(readerBehaviorSection, "hideLynxUICheckbox", "Hide Lynx AI UI", settings.hideLynxUI);
             addCheckbox(readerBehaviorSection, "focusSelectedTextCheckbox", "Focus on Selected Text", settings.focusSelectedText);
             addCheckbox(readerBehaviorSection, "skipEndPageCheckbox", "Skip End Page", settings.skipEndPage);
-            panels.reader.appendChild(readerBehaviorSection);
+            panels.layout.appendChild(readerBehaviorSection);
             
             addTabHeaderCheckbox(panels.shortcuts, "keyboardShortcutCheckbox", "Enable the Keyboard Shortcuts", settings.keyboardShortcut);
             
@@ -4225,7 +4217,7 @@
             
             const panelsContainer = createElement("div", {
                 id: "settingsTabPanelsContainer",
-                style: "min-height: 610px; box-sizing: border-box;"
+                style: "min-height: 600px; box-sizing: border-box;"
             });
             Object.values(panels).forEach(panel => panelsContainer.appendChild(panel));
             
@@ -8147,6 +8139,35 @@
                     padding: 5px 10px;
                     border-radius: 5px;
                     margin: 10px 0;
+                }
+
+                .popup-tab-header {
+                    margin: 0 0 10px 0;
+                    padding-bottom: 5px;
+                    border-bottom: 1px solid rgba(125, 125, 125, 0.25);
+                }
+
+                .popup-tab-header label {
+                    display: inline-flex;
+                    align-items: center;
+                    gap: 8px;
+                    cursor: pointer;
+                    font-weight: 600;
+                    font-size: 0.95em;
+                    color: var(--font-color);
+                }
+
+                .popup-section-title {
+                    font-weight: 600;
+                    font-size: 0.85em;
+                    color: var(--font-color);
+                    margin: 10px 0 5px 0;
+                    padding-bottom: 5px;
+                    border-bottom: 1px solid rgba(125, 125, 125, 0.2);
+                }
+
+                .popup-section-title.first {
+                    margin-top: 2px;
                 }
 
                 .popup-input {
