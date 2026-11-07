@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      20.1.2
+// @version      20.1.3
 // @license      GPL-3.0-or-later
 // @grant       GM_setValue
 // @grant       GM_getValue
@@ -2380,10 +2380,10 @@
         }
     }
     
-    // Unofficial Google Translate endpoint; no API key, text is capped at 200 characters
+    // Unofficial Google Translate endpoint; no API key. The server rejects text over 200 characters with HTTP 400
     function googleTranslateTTS(text, language = getLessonLanguage()) {
         const languageMap = {zh: "zh-CN"};
-        const url = `https://translate.google.com/translate_tts?ie=UTF-8&client=tw-ob&tl=${encodeURIComponent(languageMap[language] || language)}&q=${encodeURIComponent(text.slice(0, 200))}`;
+        const url = `https://translate.google.com/translate_tts?ie=UTF-8&client=tw-ob&tl=${encodeURIComponent(languageMap[language] || language)}&q=${encodeURIComponent(text)}`;
         console.log('[TTS]', `google translate, ${language}`, `"${text}"`);
         return new Promise((resolve, reject) => {
             GM_xmlhttpRequest({
