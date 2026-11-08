@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      20.3.0
+// @version      20.3.1
 // @license      GPL-3.0-or-later
 // @grant       GM_setValue
 // @grant       GM_getValue
@@ -12811,6 +12811,7 @@
                 mountSummaryToReaderBody = createAndPrependSummaryElement;
                 quickSummary = "";
                 lessonSummary = "";
+                document.querySelectorAll(".quick-summary").forEach((element) => element.remove());
                 let cachedContextualContent = "";
                 const existingSection = readerContainer.matches?.('.reader-body')
                     ? readerContainer
