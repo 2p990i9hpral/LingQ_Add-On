@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      20.2.3
+// @version      20.3.0
 // @license      GPL-3.0-or-later
 // @grant       GM_setValue
 // @grant       GM_getValue
@@ -9871,6 +9871,49 @@
             return title;
         }
 
+        const LESSON_COUNTER_ITEMS = [
+            { key: 'newWordsCount', label: 'New Words' },
+            { key: 'cardsCount', label: 'LingQs' },
+            { key: 'knownWordsCount', label: 'Known Words' }
+        ];
+
+        function ensureLessonCounterPills() {
+            const existing = document.getElementById('lingqAddonLessonCounters');
+            if (existing?.isConnected) return existing;
+
+            const anchor = document.querySelector('header[data-site-header="true"] .truncate')?.parentElement?.parentElement;
+            if (!anchor) return null;
+            anchor.classList.add('lesson-info-anchor');
+
+            const pills = createElement('div', { id: 'lingqAddonLessonCounters', className: 'lesson-counters' });
+            LESSON_COUNTER_ITEMS.forEach(({ key }) => {
+                pills.appendChild(createElement('span', { className: `lesson-counter lesson-counter-${key}` },
+                    createElement('span', { className: 'lesson-counter-dot' }),
+                    createElement('span', { className: 'lesson-counter-count', textContent: '-' }),
+                    createElement('span', { className: 'lesson-counter-percent' })
+                ));
+            });
+
+            anchor.appendChild(pills);
+            return pills;
+        }
+
+        async function updateLessonCounterPills(lessonId) {
+            const counters = await getLessonInfo(lessonId).catch(() => null);
+            if (!counters?.uniqueWordsCount || String(getLessonId()) !== String(lessonId)) return;
+
+            const pills = ensureLessonCounterPills();
+            if (!pills) return;
+
+            LESSON_COUNTER_ITEMS.forEach(({ key, label }) => {
+                const count = counters[key] ?? 0;
+                const item = pills.querySelector(`.lesson-counter-${key}`);
+                item.querySelector('.lesson-counter-count').textContent = count;
+                item.querySelector('.lesson-counter-percent').textContent = `(${Math.round((count / counters.uniqueWordsCount) * 100)}%)`;
+                item.title = `${count} ${label}`;
+            });
+        }
+
         function updateDocumentTitle(lessonTitle = null) {
             const title = (lessonTitle || getLessonTitle())?.trim();
             if (!title) return;
@@ -11321,6 +11364,52 @@
                 width: 36px !important;
                 height: 36px !important;
                 margin-top: 2px !important;
+            }
+            .lesson-counters { /* Hover popup under the header (positioned against the sticky header) showing new/LingQ/known counts */
+                position: absolute;
+                top: 100%;
+                z-index: 50;
+                display: none;
+                align-items: center;
+                gap: 8px;
+                margin-top: 4px;
+                padding: 4px 10px;
+                border: 1px solid var(--border);
+                border-radius: 8px;
+                background-color: var(--popover);
+                color: var(--popover-foreground);
+                font-size: 0.875rem;
+                pointer-events: none;
+            }
+            .lesson-info-anchor:hover .lesson-counters {
+                display: flex;
+            }
+            .lesson-counter {
+                display: flex;
+                flex-shrink: 0;
+                align-items: center;
+                gap: 3px;
+            }
+            .lesson-counter-dot {
+                width: 16px;
+                height: 8px;
+                flex-shrink: 0;
+                border-radius: 9999px;
+            }
+            .lesson-counter-newWordsCount .lesson-counter-dot { background: var(--color-secondary, #3b82f6); }
+            .lesson-counter-cardsCount .lesson-counter-dot { background: var(--color-word-status-1, #facc15); }
+            .lesson-counter-knownWordsCount .lesson-counter-dot { background: var(--color-default-lighter, #d4d4d8); }
+            .lesson-counter-count {
+                display: inline-block;
+                width: 3ch;
+                text-align: right;
+                font-variant-numeric: tabular-nums;
+            }
+            .lesson-counter-percent {
+                display: inline-block;
+                width: 5ch;
+                font-size: 0.75rem;
+                font-variant-numeric: tabular-nums;
             }
 
             .reader-appearance > div > div:first-child { /* Reader sub-header bar containing title, audio scrubber, and options */
@@ -13164,6 +13253,7 @@
                 const lessonId = getLessonId();
                 if (lessonLanguage && lessonId) {
                     getLessonSentences(lessonLanguage, lessonId).catch(() => {});
+                    updateLessonCounterPills(lessonId);
                 }
                 generateLessonSummary(node).catch((error) => {
                     console.error("Failed to generate lesson summary:", error);
