@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      20.4.1
+// @version      20.4.2
 // @license      GPL-3.0-or-later
 // @grant       GM_setValue
 // @grant       GM_getValue
@@ -10610,9 +10610,7 @@
             if (settings.hideLynxUI) {
                 baseCSS += `
                 footer button[data-reader-lynx-entry="true"],
-                footer button[data-reader-lynx-entry="true"] + span,
-                div[data-slot="dropdown-menu-content"] > [role="menuitem"]:last-child,
-                [role="menuitem"]:has(> svg:not([class*="lucide"])) {
+                footer button[data-reader-lynx-entry="true"] + span {
                     display: none !important;
                 }
                 `;
