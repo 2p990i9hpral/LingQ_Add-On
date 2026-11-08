@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      20.3.1
+// @version      20.3.2
 // @license      GPL-3.0-or-later
 // @grant       GM_setValue
 // @grant       GM_getValue
@@ -15777,11 +15777,13 @@
         
         function setupReaderHeaderControls() {
             function relocateControls() {
-                const exitBtn = document.querySelector('button[aria-label="Exit lesson"]');
-                const themeBtn = document.querySelector('button[aria-label="Theme and font"]') ||
-                                 document.querySelector('button:has(> svg.lucide-case-sensitive)');
-                const optionsBtn = document.querySelector('button[aria-label="Reader options"]') ||
-                                   document.querySelector('button:has(> svg.lucide-ellipsis-vertical)');
+                const findNativeButton = (...selectors) => selectors
+                    .flatMap((selector) => [...document.querySelectorAll(selector)])
+                    .find((btn) => !btn.closest('#lingqAddonLessonNavControls'));
+
+                const exitBtn = findNativeButton('button[aria-label="Exit lesson"]');
+                const themeBtn = findNativeButton('button[aria-label="Theme and font"]', 'button:has(> svg.lucide-case-sensitive)');
+                const optionsBtn = findNativeButton('button[aria-label="Reader options"]', 'button:has(> svg.lucide-ellipsis-vertical)');
 
                 if (!exitBtn && !themeBtn && !optionsBtn) return;
 
@@ -15826,6 +15828,10 @@
                         controlsWrapper.appendChild(btn);
                     }
                 });
+
+                [...controlsWrapper.children]
+                    .filter((child) => !buttons.includes(child))
+                    .forEach((child) => child.remove());
             }
 
             relocateControls();
