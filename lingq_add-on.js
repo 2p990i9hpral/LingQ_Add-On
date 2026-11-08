@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      20.3.2
+// @version      20.4.0
 // @license      GPL-3.0-or-later
 // @grant       GM_setValue
 // @grant       GM_getValue
@@ -9965,6 +9965,53 @@
         let youtubeProgressThumb = null;
         let youtubeSubtitleUpdate = null;
 
+        const PLAYBACK_TIME_PATTERN = /^(-?)(\d+(?::\d+)*)\s*\/\s*(\d+(?::\d+)*)$/;
+        let showRemainingTime = false;
+        let boundTimeElement = null;
+
+        function formatClock(totalSeconds) {
+            const hours = Math.floor(totalSeconds / 3600);
+            const minutes = Math.floor((totalSeconds % 3600) / 60);
+            const seconds = totalSeconds % 60;
+            const pad = (value) => String(value).padStart(2, "0");
+            return hours ? `${hours}:${pad(minutes)}:${pad(seconds)}` : `${minutes}:${pad(seconds)}`;
+        }
+
+        function renderPlaybackTime(timeElement) {
+            const match = timeElement.textContent.trim().match(PLAYBACK_TIME_PATTERN);
+            if (!match) return;
+            const [, sign, shown, total] = match;
+            if ((sign === "-") === showRemainingTime) return;
+
+            const toSeconds = (text) => text.split(":").reduce((sum, part) => sum * 60 + Number(part), 0);
+            const flippedSeconds = Math.max(toSeconds(total) - toSeconds(shown), 0);
+            const currentText = `${sign}${shown}`;
+            const flippedText = `${showRemainingTime ? "-" : ""}${formatClock(flippedSeconds)}`;
+
+            const walker = document.createTreeWalker(timeElement, NodeFilter.SHOW_TEXT);
+            let textNode = walker.nextNode();
+            while (textNode && !textNode.data.includes(currentText)) {
+                textNode = walker.nextNode();
+            }
+            if (textNode) textNode.data = textNode.data.replace(currentText, flippedText);
+        }
+
+        function bindRemainingTimeToggle() {
+            const timeElement = [...document.querySelectorAll("footer span.tabular-nums")]
+                .find((element) => PLAYBACK_TIME_PATTERN.test(element.textContent.trim()));
+            if (!timeElement || timeElement === boundTimeElement) return;
+
+            boundTimeElement = timeElement;
+            timeElement.classList.add("addon-time-toggle");
+            timeElement.addEventListener("click", () => {
+                showRemainingTime = !showRemainingTime;
+                renderPlaybackTime(timeElement);
+            });
+            new MutationObserver(() => renderPlaybackTime(timeElement))
+                .observe(timeElement, { childList: true, characterData: true, subtree: true });
+            renderPlaybackTime(timeElement);
+        }
+
         function bindYoutubeProgressBar() {
             if (youtubeProgressThumb?.isConnected) return;
             const progressBar = document.querySelector(".addon-yt-progress-bar");
@@ -10027,6 +10074,7 @@
             setupSpeedController();
             setupVolumeController();
             setupCustomSkipController();
+            bindRemainingTimeToggle();
         }
 
         function scheduleFooterUpdate() {
@@ -11419,6 +11467,11 @@
                 min-height: 36px !important;
                 padding-top: 2px !important;
                 padding-bottom: 2px !important;
+            }
+
+            .addon-time-toggle { /* Footer playback time; click toggles elapsed / remaining */
+                cursor: pointer;
+                user-select: none;
             }
 
             footer { /* Bottom audio/video media player bar */
