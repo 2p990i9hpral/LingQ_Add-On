@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      20.6.0
+// @version      20.6.1
 // @license      GPL-3.0-or-later
 // @grant       GM_setValue
 // @grant       GM_getValue
@@ -8834,6 +8834,11 @@
             return Boolean(setupBox) && container.style.display !== "none" && setupBox.style.display !== "none" && Boolean(startButton?.disabled);
         }
 
+        // A root class instead of a :root:has() rule, which forced style recalculation on every DOM change
+        function syncLocalVideoAwaitingClass() {
+            document.documentElement.classList.toggle("addon-local-video-awaiting", isLocalVideoAwaitingStart());
+        }
+
         function markVideoEnded() {
             if (isVideoEnded) return;
             isVideoEnded = true;
@@ -9244,6 +9249,7 @@
 
                 if (currentStyle !== "localVideo") {
                     if (container) container.style.display = "none";
+                    syncLocalVideoAwaitingClass();
                     return;
                 }
 
@@ -9257,6 +9263,7 @@
                     if (container.parentElement !== targetParent) {
                         targetParent.insertBefore(container, readerBody);
                     }
+                    syncLocalVideoAwaitingClass();
                     return;
                 }
                 
@@ -9330,7 +9337,8 @@
                 setupBox.append(title, buttonRow, startButton);
                 container.appendChild(setupBox);
                 targetParent.insertBefore(container, readerBody);
-                
+                syncLocalVideoAwaitingClass();
+
                 const titleBar = createElement("div", {
                     className: "local-video-title-bar",
                     style: "display: none;"
@@ -9395,6 +9403,7 @@
                         folderLabel.title = statusText;
                         folderLabel.appendChild(folderInput);
                         startButton.disabled = false;
+                        syncLocalVideoAwaitingClass();
                         return true;
                     }
                     return false;
@@ -9413,11 +9422,13 @@
                         fileLabel.title = statusText;
                         fileLabel.appendChild(fileInput);
                         startButton.disabled = false;
+                        syncLocalVideoAwaitingClass();
                     } else {
                         fileLabel.textContent = "Missing Video File! Try Again.";
                         fileLabel.title = "Missing Video File! Try Again.";
                         fileLabel.appendChild(fileInput);
                         startButton.disabled = true;
+                        syncLocalVideoAwaitingClass();
                         selectedSubtitleFile = null;
                     }
                 });
@@ -9487,6 +9498,7 @@
                 }
                     
                     setupBox.style.display = "none";
+                    syncLocalVideoAwaitingClass();
                     videoStage.style.display = "block";
                     progressWrapper.style.display = "block";
                     
@@ -10546,6 +10558,7 @@
                     } catch (e) {}
                 }
                 container.remove();
+                syncLocalVideoAwaitingClass();
             }
             document.querySelectorAll('#addonLocalVideo').forEach((video) => {
                 try {
@@ -12203,7 +12216,7 @@
             .local-video-button:disabled:hover {
                 background-color: rgb(125 125 125 / 10%);
             }
-            :root:has(#local-video-container:not([style*="display: none"]) .local-video-setup-box:not([style*="display: none"]) .local-video-start-button:disabled) footer button[aria-label="Play"] {
+            .addon-local-video-awaiting footer button[aria-label="Play"] {
                 opacity: 0.4;
                 cursor: not-allowed;
             }
