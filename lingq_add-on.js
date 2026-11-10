@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      20.4.2
+// @version      20.4.3
 // @license      GPL-3.0-or-later
 // @grant       GM_setValue
 // @grant       GM_getValue
@@ -10867,6 +10867,19 @@
                     border-radius: .25rem;
                 }
 
+                /* Selected phrase loses its band-N class, so read the status from the word widget instead */
+                :root:has([data-button-status][data-variant="new"][data-is-active="true"]) .reader-body .sentence-item.band-revealed.selected {
+                    background-color: color-mix(in srgb, var(--lingq-background) 65%, transparent) !important;
+                }
+
+                :root:has([data-button-status][data-variant="recognized"][data-is-active="true"]) .reader-body .sentence-item.band-revealed.selected {
+                    background-color: color-mix(in srgb, var(--lingq-background) 35%, transparent) !important;
+                }
+
+                :root:has([data-button-status][data-variant="familiar"][data-is-active="true"]) .reader-body .sentence-item.band-revealed.selected {
+                    background-color: color-mix(in srgb, var(--lingq-background) 15%, transparent) !important;
+                }
+
                 .sentence-item.ar-lingq.ar-lingq-0,
                 .sentence-item.band.band-0 {
                     background-color: color-mix(in srgb, var(--lingq-background) 65%, transparent) !important;
@@ -11421,7 +11434,7 @@
                 display: none;
                 align-items: center;
                 gap: 8px;
-                margin-top: 4px;
+                margin-top: 2px;
                 padding: 4px 10px;
                 border: 1px solid var(--border);
                 border-radius: 8px;
