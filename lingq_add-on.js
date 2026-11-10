@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      20.6.1
+// @version      20.7.0
 // @license      GPL-3.0-or-later
 // @grant       GM_setValue
 // @grant       GM_getValue
@@ -3380,24 +3380,37 @@
     let isSubtitleHoverHeld = false;
     const HOVER_HOLD_LEAD_SECONDS = 0.3;
 
-    function attachSubtitleOverlay(video, overlay, cues) {
-        const updateCue = createSubtitleRenderer(overlay, cues, {onRender: () => placeSubtitleOverlay(overlay)});
+    // Pause just before the cue ends while the pointer is on the subtitle, so it stays readable; resume when it leaves
+    function createSubtitleHoverHold(overlay, updateCue, getPlaybackRate) {
         let heldCue = null;
-        // Pause just before the cue ends while the pointer is on the subtitle, so it stays readable
-        const holdAtCueEnd = () => {
+        overlay.addEventListener("mouseleave", () => {
+            if (!isSubtitleHoverHeld) return;
+            isSubtitleHoverHeld = false;
+            clickElement('footer button[aria-label="Play"]');
+        });
+        // The user resumed playback by hand, so the hold no longer applies
+        const releaseOnManualPlay = (event) => {
+            if (!overlay.isConnected) {
+                document.removeEventListener("click", releaseOnManualPlay, true);
+                return;
+            }
+            if (event.isTrusted && event.target.closest?.('footer button[aria-label="Play"]')) isSubtitleHoverHeld = false;
+        };
+        document.addEventListener("click", releaseOnManualPlay, true);
+        return (time) => {
             const cue = updateCue.getActiveCue();
-            if (!cue || cue === heldCue || video.currentTime < cue.end - HOVER_HOLD_LEAD_SECONDS * video.playbackRate || !overlay.firstElementChild?.matches(":hover")) return;
+            if (!cue || cue === heldCue || time < cue.end - HOVER_HOLD_LEAD_SECONDS * getPlaybackRate() || !overlay.firstElementChild?.matches(":hover")) return;
             const pauseButton = document.querySelector('footer button[aria-label="Pause"]');
             if (!pauseButton) return;
             heldCue = cue;
             isSubtitleHoverHeld = true;
             pauseButton.click();
         };
-        overlay.addEventListener("mouseleave", () => {
-            if (!isSubtitleHoverHeld) return;
-            isSubtitleHoverHeld = false;
-            clickElement('footer button[aria-label="Play"]');
-        });
+    }
+
+    function attachSubtitleOverlay(video, overlay, cues) {
+        const updateCue = createSubtitleRenderer(overlay, cues, {onRender: () => placeSubtitleOverlay(overlay)});
+        const holdAtCueEnd = createSubtitleHoverHold(overlay, updateCue, () => video.playbackRate);
         const stage = overlay.parentElement;
         new ResizeObserver(() => placeSubtitleOverlay(overlay)).observe(stage);
         new ResizeObserver(() => placeSubtitleOverlay(overlay)).observe(stage.parentElement);
@@ -3408,7 +3421,7 @@
         };
         const tick = () => {
             update();
-            if (!video.paused) holdAtCueEnd();
+            if (!video.paused) holdAtCueEnd(video.currentTime);
             frameId = video.paused ? null : requestAnimationFrame(tick);
         };
         video.addEventListener("play", () => {
@@ -10208,7 +10221,7 @@
         
         let lastPrevSentenceIndex = null;
         let lastPrevSentenceClickAt = 0;
-        const PREV_SENTENCE_CHAIN_MS = 600;
+        const PREV_SENTENCE_CHAIN_MS = 800;
 
         async function playPreviousSentence() {
             const sentences = (await getLessonSentences(getLessonLanguage(), getLessonId()))
@@ -12458,7 +12471,13 @@
                 if (sentences?.length > 0) cues = buildSubtitleCuesFromSentences(sentences);
             }
             if (!cues || !overlay.isConnected) return;
-            youtubeSubtitleUpdate = createSubtitleRenderer(overlay, cues, {onRender: fitOverlayToVideoFrame});
+            const updateCue = createSubtitleRenderer(overlay, cues, {onRender: fitOverlayToVideoFrame});
+            const getPlaybackRate = () => parseFloat(document.querySelector('footer button[aria-label^="Playback speed"]')?.textContent) || 1;
+            const holdAtCueEnd = createSubtitleHoverHold(overlay, updateCue, getPlaybackRate);
+            youtubeSubtitleUpdate = (time) => {
+                if (!isSubtitleHoverHeld) updateCue(time);
+                holdAtCueEnd(time);
+            };
             const sliderValue = parseFloat(document.querySelector('footer [role="slider"]')?.getAttribute("aria-valuenow"));
             if (!Number.isNaN(sliderValue)) youtubeSubtitleUpdate(sliderValue);
         }
