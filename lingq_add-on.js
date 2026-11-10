@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      20.5.1
+// @version      20.5.2
 // @license      GPL-3.0-or-later
 // @grant       GM_setValue
 // @grant       GM_getValue
@@ -59,6 +59,7 @@
         dark_playingUnderline: "rgb(255, 255, 255)",
         
         librarySortOption: 0,
+        showRemainingTime: false,
         focusSelectedText: false,
         hoverAnnotation: "off",
         skipEndPage: false,
@@ -106,10 +107,10 @@
         ttsModel: "gemini-3.8-flash-lite-tts",
         ttsVoice: {},
         ttsWord: false,
+        ttsSentence: false,
         
         lingqVolume: 1.0,
         lingqSpeed: {},
-        ttsSentence: false,
     };
     
     const languageScopedDefaults = {
@@ -10004,7 +10005,6 @@
         let youtubeSubtitleUpdate = null;
 
         const PLAYBACK_TIME_PATTERN = /^(-?)(\d+(?::\d+)*)\s*\/\s*(\d+(?::\d+)*)$/;
-        let showRemainingTime = false;
         let boundTimeElement = null;
 
         function formatClock(totalSeconds) {
@@ -10019,12 +10019,12 @@
             const match = timeElement.textContent.trim().match(PLAYBACK_TIME_PATTERN);
             if (!match) return;
             const [, sign, shown, total] = match;
-            if ((sign === "-") === showRemainingTime) return;
+            if ((sign === "-") === settings.showRemainingTime) return;
 
             const toSeconds = (text) => text.split(":").reduce((sum, part) => sum * 60 + Number(part), 0);
             const flippedSeconds = Math.max(toSeconds(total) - toSeconds(shown), 0);
             const currentText = `${sign}${shown}`;
-            const flippedText = `${showRemainingTime ? "-" : ""}${formatClock(flippedSeconds)}`;
+            const flippedText = `${settings.showRemainingTime ? "-" : ""}${formatClock(flippedSeconds)}`;
 
             const walker = document.createTreeWalker(timeElement, NodeFilter.SHOW_TEXT);
             let textNode = walker.nextNode();
@@ -10042,7 +10042,7 @@
             boundTimeElement = timeElement;
             timeElement.classList.add("addon-time-toggle");
             timeElement.addEventListener("click", () => {
-                showRemainingTime = !showRemainingTime;
+                settings.showRemainingTime = !settings.showRemainingTime;
                 renderPlaybackTime(timeElement);
             });
             new MutationObserver(() => renderPlaybackTime(timeElement))
