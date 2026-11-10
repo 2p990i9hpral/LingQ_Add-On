@@ -10,15 +10,14 @@ This guide is structured around the **Settings Popup** (where the majority of fe
 
 - [Part I: Settings & Reader Experience](#part-i-settings--reader-experience)
   - [1. Reader & Display Settings](#1-reader--display-settings)
-    - [1.1 Paging Mode & Reader Flow](#11-paging-mode--reader-flow)
-    - [1.2 Layout Styles](#12-layout-styles)
-    - [1.3 Video Orientation & Dimensions](#13-video-orientation--dimensions)
-    - [1.4 Media Controller: Volume, Playback Speed & Skip Duration](#14-media-controller-volume-playback-speed--skip-duration)
-    - [1.5 Local Video Player Setup & Lesson Requirements](#15-local-video-player-setup--lesson-requirements)
-    - [1.6 Typography, Sizing & Memo Widget](#16-typography-sizing--memo-widget)
+    - [1.1 Layout Styles](#11-layout-styles)
+    - [1.2 Video Orientation & Dimensions](#12-video-orientation--dimensions)
+    - [1.3 Local Video Player Setup & Lesson Requirements](#13-local-video-player-setup--lesson-requirements)
+    - [1.4 Widgets & Reader Behavior](#14-widgets--reader-behavior)
+    - [1.5 Lesson Word Counts](#15-lesson-word-counts)
+    - [1.6 Typography & Sizing](#16-typography--sizing)
     - [1.7 Color Themes & Palette](#17-color-themes--palette)
-    - [1.8 Video Captions & Player Tweaks](#18-video-captions--player-tweaks)
-    - [1.9 Selective UI Hiding](#19-selective-ui-hiding)
+    - [1.8 Media Controller: Volume, Playback Speed & Skip Duration](#18-media-controller-volume-playback-speed--skip-duration)
   - [2. Keyboard Shortcuts](#2-keyboard-shortcuts)
     - [2.1 Configuration & Hotkeys Table](#21-configuration--hotkeys-table)
   - [3. AI Chat & Interactive Dictionary](#3-ai-chat--interactive-dictionary)
@@ -57,18 +56,7 @@ The addon provides a modular **Settings Popup** organized into dedicated tabs (`
 
 ## 1. Reader & Display Settings
 
-### 1.1 Paging Mode & Reader Flow
-- **Use Paging Mode**: Replaces vertical page scrolling with discrete, book-like page flipping.
-- **Focus on Playing Sentence**: Automatically scrolls to the actively playing sentence in the reader during audio/video playback.
-- **Focus on Selected Text**: Automatically scrolls to the newly selected element in the reader.
-- **Skip End Page**: Automatically skips LingQ's lesson completion summary screen and hide clutters.
-- **Finish Lesson Automatically**: Marks the lesson as complete as soon as the YouTube video track reaches the end.
-- **Show Translation Automatically**: Automatically turns on the translations.
-- **Auto-Dismiss Promo Banners**: Automatically detects and closes LingQ's promotional banners and marketing popups in the background.
-
-### 1.2 Layout Styles
-
-<img src="images/settings-layout.png" width=450></br>
+### 1.1 Layout Styles
 
 Customize the reader layout based on the media format of your lesson:
 - **Default (Auto)**: Automatically adapts the reader layout to the lesson's media format. Integrates YouTube video players into the reader grid for video lessons, while maximizing text space for audio-only lessons.
@@ -82,30 +70,14 @@ Customize the reader layout based on the media format of your lesson:
 
 *(Layout style is saved independently for each target language)*
 
-### 1.3 Video Orientation & Dimensions
+### 1.2 Video Orientation & Dimensions
 *(Active when Layout Style is set to Default (Auto) or Local Video)*
 - **Video Position**: `Right` | `Left` | `Top` | `Bottom`
 - **Video Height**: Slider to adjust player height when `Top` or `Bottom` position is chosen.
-- **Sentence View Video Height**: Slider for video sizing while in LingQ's Sentence Mode.
-- **Autoplay in Sentence View**: Checkbox to toggle automatic playback when stepping through sentences in Sentence Mode.
 
-### 1.4 Media Controller: Volume, Playback Speed & Skip Duration
+### 1.3 Local Video Player Setup & Lesson Requirements
 
-<img src="images/volume control.png" width=400></br>
-
-The addon enhances LingQ's media controller with volume, playback speed, and customizable skip duration controls across audio, local video, and YouTube lessons:
-- **Volume Controller Button**:
-  - **Click to Cycle Levels**: Click the volume button to cycle through preset volume levels: `0%`(Mute) → `25%` → `50%` → `75%` → `100%`.
-  - **Mouse Wheel Fine Adjustment**: Hover over the button and scroll the mouse wheel up or down to adjust volume in `5%` increments.
-- **Playback Speed Controller Button**:
-  - **Click to Cycle Presets**: Click the speed button to cycle through preset playback speeds.
-  - **Mouse Wheel Fine Adjustment**: Hover over the button and scroll the mouse wheel to adjust playback speed from `0.5x` to `3.0x`.
-- **Customizable Skip Duration**:
-  - **Configurable Interval**: Set the skip duration from `1` to `30` seconds using the **Skip Duration** slider in Settings (default: `5s`).
-
-### 1.5 Local Video Player Setup & Lesson Requirements
-
-<img src="images/local video player.jpeg" width=800></br>
+<img src="images/local video player.jpeg" width=600></br>
 
 #### Overview & Purpose
 Play your own downloaded movies, anime, or video lessons directly within LingQ, synchronizing timestamps with lesson text and routing local audio smoothly.
@@ -123,7 +95,27 @@ Play your own downloaded movies, anime, or video lessons directly within LingQ, 
 - Since the addon plays the local video's native audio, the lesson's audio file on LingQ only needs to match the total duration and can be completely silent.
 - **Silent Audio Generator Tool**: A standalone tool is provided ([`tools/LingQ_Silent_Audio_Generator.exe`](tools/LingQ_Silent_Audio_Generator.exe)). You can drag and drop `.mp4` files onto the executable (or double-click to open the file selector) to automatically generate matching silent `.mp3` audio files in the video's directory without needing to install Python or FFmpeg.
 
-### 1.6 Typography, Sizing & Memo Widget
+### 1.4 Widgets & Reader Behavior
+
+Customize the side widgets and the reading view:
+- **Widget Width**: Slider to adjust the width of side widgets (Chat / Memo).
+- **Align**: Aligns side widgets vertically (`Top` | `Center` | `Bottom`).
+- **Show Memo Widget**: Enables a persistent notepad docked beside the reader. Notes are preserved in local storage across browser refreshes and lesson transitions.
+- **Focus on Selected Text**: Automatically scrolls the newly selected word or phrase into view.
+- **Skip End Page**: Skips LingQ's lesson completion summary screen.
+- **Hide Meanings**: Hides the community/popular meanings list in the word widget.
+- **Hide Dictionaries**: Hides the external dictionary section in the word widget.
+- **Hide Sentence**: Hides the example sentence section in the word widget.
+- **Hide Lynx AI UI**: Hides Lynx AI assistant buttons across the site header, footer player, and word widget.
+- **Hide Meaning Popup**: Suppresses the floating popup dialog when selecting words or sentences.
+
+### 1.5 Lesson Word Counts
+
+<img src="images/lesson-word.png" width=500></br>
+
+Hover over the lesson title in the reader header to see how many **New Words**, **LingQs**, and **Known Words** the lesson contains, with each count's share of the lesson's unique words.
+
+### 1.6 Typography & Sizing
 
 <img src="images/settings-style.png" width=450></br>
 
@@ -135,11 +127,9 @@ Play your own downloaded movies, anime, or video lessons directly within LingQ, 
   - `All`: Hidden by default in both the reader text and quick summary, revealed on mouse hover.
 - **Line Height**: Slider for line spacing.
 - **Google Web Font Name**: Input the name of any font from [Google Fonts](https://fonts.google.com) (e.g., `Noto Sans JP`, `Roboto Slab`, `Merriweather`). The addon loads and renders the font automatically.
-- **Widget Width**: Slider to adjust the width of side widgets (Chat / Memo).
-- **Widget**: Aligns side widgets vertically (`Top` | `Center` | `Bottom`).
-- **Show Memo Widget**: Enables a persistent notepad docked beside the reader. Notes are preserved in local storage across browser refreshes and lesson transitions.
 
 ### 1.7 Color Themes & Palette
+- **Theme & Colors**: Turn this off to use LingQ's native word highlighting instead of the custom reader colors.
 - **Color Mode**: Switch between `White` and `Dark`. Changing this option automatically switches LingQ's native site theme to match.
 - **Custom Color Pickers**:
   - **Font Color**: Base reading text color.
@@ -149,23 +139,22 @@ Play your own downloaded movies, anime, or video lessons directly within LingQ, 
   - **Unknown Background & Border**: Highlight styling for new/unknown words.
   - **Playing Underline**: Color of the highlight underline tracking the active playback sentence.
 
-### 1.8 Video Captions & Player Tweaks
-- **Subtitle Word Highlighting** : The addon draws its own subtitles over the video so you can study vocabulary without leaving the video. You don't need to shift your eyes from the caption to the reader to check new words or LingQs.
-  - **Same highlighting as the reader**: Words and phrases are displayed in the same format as in the reader.
-  - **Click to look up**: Clicking a subtitle word opens the word widget, so you can read the meaning, change the status, or add a LingQ.
-- **Video Caption Font Size**: Slider to scale video subtitles for optimal legibility.
-- **YouTube Simplification**: The addon automatically suppresses the intrusive "More videos" overlay when pausing embedded YouTube videos.
+### 1.8 Media Controller: Volume, Playback Speed & Skip Duration
 
-### 1.9 Selective UI Hiding
+<img src="images/volume control.png" width=400></br>
 
-<img src="images/settings-reader.png" width=450></br>
-
-Clean up and customize your reading view by selectively hiding default LingQ interface elements:
-- **Hide Meanings**: Hides the community/popular meanings list in the word widget.
-- **Hide Dictionaries**: Hides the external dictionary section in the word widget.
-- **Hide Sentence**: Hides the example sentence section in the word widget.
-- **Hide Lynx AI UI**: Hides Lynx AI assistant buttons across the site header, footer player, and word widget.
-- **Hide Meaning Popup**: Suppresses the floating popup dialog when selecting words or sentences.
+The addon enhances LingQ's media controller with volume, playback speed, and customizable skip duration controls across audio, local video, and YouTube lessons:
+- **Volume Controller Button**:
+  - **Click to Cycle Levels**: Click the volume button to cycle through preset volume levels: `0%`(Mute) → `25%` → `50%` → `75%` → `100%`.
+  - **Mouse Wheel Fine Adjustment**: Hover over the button and scroll the mouse wheel up or down to adjust volume in `5%` increments.
+- **Playback Speed Controller Button**:
+  - **Click to Cycle Presets**: Click the speed button to cycle through preset playback speeds.
+  - **Mouse Wheel Fine Adjustment**: Hover over the button and scroll the mouse wheel to adjust playback speed from `0.5x` to `3.0x`.
+- **Customizable Skip Duration**:
+  - **Configurable Interval**: Set the skip duration from `1` to `30` seconds using the **Skip Duration** slider in Settings (default: `5s`).
+- **Previous Sentence Button**: A button next to the Play button that jumps back by sentence, using the lesson's sentence timestamps.
+  - Also available as a hotkey (see [2.1](#21-configuration--hotkeys-table)).
+- **Elapsed / Remaining Time**: Click the time label in the footer player to switch between elapsed time and remaining time.
 
 ---
 
@@ -181,6 +170,7 @@ Check **Enable the Keyboard Shortcuts** to activate single-key navigation withou
 | :--- | :---: | :--- |
 | **Rewind (Skip Backward)** | `a` | Jumps playback backward by the configured skip duration. |
 | **Fast Forward (Skip Forward)** | `s` | Jumps playback forward by the configured skip duration. |
+| **Previous Sentence** | `z` | Jumps to the start of the current sentence; press repeatedly to step back one sentence at a time. |
 | **Play TTS Audio** | `w` | Triggers AI TTS narration for the selected word or active sentence. |
 | **Make Word Known** | `d` | Instantly advances the selected word to "Known" status. |
 | **Open Dictionary** | `f` | Opens the configured external dictionary. |
