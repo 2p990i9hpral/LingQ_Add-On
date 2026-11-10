@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      20.8.0
+// @version      20.8.1
 // @license      GPL-3.0-or-later
 // @grant       GM_setValue
 // @grant       GM_getValue
@@ -763,13 +763,17 @@
     }
     
     let isSettingMeaning = false;
-    
+    // The meaning field is an <input> or a <textarea> depending on the widget state
+    const MEANING_INPUT_SELECTOR = 'div[data-word-widget] :is(input, textarea)[name="text"]';
+    const ADD_MEANING_BUTTON_SELECTOR = 'div[data-word-widget] button:not([aria-label]):has(svg.lucide-plus)';
+    const MEANING_WAIT_MS = 3000;
+
     async function setLingQMeaning(newMeaning) {
         if (!newMeaning) return;
         const meaningText = String(newMeaning).trim();
         if (!meaningText) return;
         
-        let input = document.querySelector('div[data-word-widget] form input[name="text"], div[data-word-widget] input[name="text"]');
+        let input = document.querySelector(MEANING_INPUT_SELECTOR);
         let navigatedToMeanings = false;
         const wordWidget = document.querySelector('div[data-word-widget]');
         const initialHeight = wordWidget?.offsetHeight;
@@ -781,13 +785,11 @@
             }
             
             if (!input) {
-                const directAddBtn = Array.from(document.querySelectorAll('div[data-word-widget] button')).find((btn) =>
-                    btn.textContent.includes('Add Meaning') || btn.querySelector('svg.lucide-plus')
-                );
-                
+                const directAddBtn = document.querySelector(ADD_MEANING_BUTTON_SELECTOR);
+
                 if (directAddBtn && !document.querySelector('div[data-word-widget] button[aria-label="Open Meanings"]')) {
                     directAddBtn.click();
-                    input = await waitForElement('div[data-word-widget] form input[name="text"], div[data-word-widget] input[name="text"]', 500);
+                    input = await waitForElement(MEANING_INPUT_SELECTOR, MEANING_WAIT_MS);
                 } else {
                     const openMeaningsBtn = document.querySelector('div[data-word-widget] button[aria-label="Open Meanings"]') ||
                         Array.from(document.querySelectorAll('div[data-word-widget] button')).find((btn) =>
@@ -797,16 +799,9 @@
                         openMeaningsBtn.click();
                         navigatedToMeanings = true;
                         
-                        let addMeaningBtn = await waitForElement('div[data-word-widget] button:has(svg.lucide-plus)', 300);
-                        if (!addMeaningBtn) {
-                            addMeaningBtn = Array.from(document.querySelectorAll('div[data-word-widget] button')).find((btn) =>
-                                btn.textContent.includes('Add Meaning') || btn.querySelector('svg.lucide-plus')
-                            );
-                        }
-                        if (addMeaningBtn) {
-                            addMeaningBtn.click();
-                        }
-                        input = await waitForElement('div[data-word-widget] form input[name="text"], div[data-word-widget] input[name="text"]', 500);
+                        const addMeaningBtn = await waitForElement(ADD_MEANING_BUTTON_SELECTOR, MEANING_WAIT_MS);
+                        addMeaningBtn?.click();
+                        input = await waitForElement(MEANING_INPUT_SELECTOR, MEANING_WAIT_MS);
                     }
                 }
             }
@@ -815,7 +810,7 @@
                 const editBtn = document.querySelector('div[data-word-widget] button[aria-label^="Edit this meaning"]');
                 if (editBtn) {
                     editBtn.click();
-                    input = await waitForElement('div[data-word-widget] form input[name="text"], div[data-word-widget] input[name="text"]', 500);
+                    input = await waitForElement(MEANING_INPUT_SELECTOR, MEANING_WAIT_MS);
                 }
             }
             
@@ -824,7 +819,7 @@
             input.focus();
             input.dispatchEvent(new FocusEvent("focus", {bubbles: true}));
             
-            Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set.call(input, meaningText);
+            Object.getOwnPropertyDescriptor(Object.getPrototypeOf(input), "value")?.set.call(input, meaningText);
             input.dispatchEvent(new InputEvent("input", {bubbles: true, composed: true, data: meaningText}));
             input.dispatchEvent(new Event("change", {bubbles: true}));
             
