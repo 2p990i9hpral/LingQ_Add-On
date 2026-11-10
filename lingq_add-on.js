@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      20.8.1
+// @version      20.9.0
 // @license      GPL-3.0-or-later
 // @grant       GM_setValue
 // @grant       GM_getValue
@@ -3280,6 +3280,44 @@
         ["mousedown", "mouseup"].forEach((type) => element.dispatchEvent(new MouseEvent(type, {bubbles: true})));
     }
 
+    // Reader builds a phrase from the native selection on mouseup, so recreate it over the reader words
+    function selectReaderPhrase(fromIndex, toIndex) {
+        const [first, last] = [fromIndex, toIndex].sort((a, b) => a - b);
+        const startElement = getReaderWordElement(first);
+        const endElement = getReaderWordElement(last);
+        if (!startElement || !endElement) return;
+        startElement.dispatchEvent(new MouseEvent("mousedown", {bubbles: true}));
+        getSelection().setBaseAndExtent(startElement, 0, endElement, endElement.childNodes.length);
+        endElement.dispatchEvent(new MouseEvent("mouseup", {bubbles: true}));
+    }
+
+    let subtitleDragStart = null;
+    let subtitleDragEnd = null;
+
+    function bindSubtitleWordDrag(word, wordIndex) {
+        word.addEventListener("mousedown", (event) => {
+            if (event.button !== 0) return;
+            subtitleDragStart = subtitleDragEnd = wordIndex;
+            document.addEventListener("mouseup", () => {
+                const [from, to] = [subtitleDragStart, subtitleDragEnd];
+                subtitleDragStart = null;
+                if (from === to) return;
+                selectReaderPhrase(from, to);
+                // The click that follows a drag lands on a common ancestor and would toggle video playback
+                const swallowClick = (event) => {
+                    if (!event.isTrusted) return;
+                    event.stopPropagation();
+                    document.removeEventListener("click", swallowClick, true);
+                };
+                document.addEventListener("click", swallowClick, true);
+                document.addEventListener("mousedown", () => document.removeEventListener("click", swallowClick, true), {capture: true, once: true});
+            }, {once: true});
+        });
+        word.addEventListener("mouseenter", () => {
+            if (subtitleDragStart !== null) subtitleDragEnd = wordIndex;
+        });
+    }
+
     function getReaderStatusClasses(wordIndex) {
         return [...(getReaderWordElement(wordIndex)?.classList || [])]
             .filter((name) => /^(ar-|band|run-)/.test(name));
@@ -3329,6 +3367,7 @@
                 event.stopPropagation();
                 clickReaderWord(token.wordIndex, token.text);
             });
+            bindSubtitleWordDrag(word, token.wordIndex);
             (phrase ?? line).append(word);
             if (statusClasses.includes("run-end")) phrase = null;
         });
@@ -12344,6 +12383,8 @@
             }
             .addon-sub-word {
                 pointer-events: auto;
+                user-select: text;
+                -webkit-user-select: text;
                 cursor: pointer;
                 border: 1px solid transparent;
                 border-radius: .25rem;
