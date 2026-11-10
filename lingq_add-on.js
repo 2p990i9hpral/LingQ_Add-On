@@ -82,6 +82,7 @@
         shortcutMeaningInput: '`',
         shortcutChatInput: 'q',
         shortcutFlashcard: 'r',
+        shortcutPrevSentence: 'z',
         
         chatWidget: false,
         chatWidgetHeight: 350,
@@ -3888,6 +3889,7 @@
             addShortcutInput(shortcutGrid, "shortcutMeaningInput", "Meaning Input Focus:", settings.shortcutMeaningInput);
             addShortcutInput(shortcutGrid, "shortcutChatInput", "Chat Input Focus:", settings.shortcutChatInput);
             addShortcutInput(shortcutGrid, "shortcutFlashcard", "Make a flashcard:", settings.shortcutFlashcard);
+            addShortcutInput(shortcutGrid, "shortcutPrevSentenceInput", "Previous Sentence:", settings.shortcutPrevSentence);
             
             shortcutSection.appendChild(shortcutGrid);
             panels.shortcuts.appendChild(shortcutSection);
@@ -5141,6 +5143,7 @@
             setupShortcutInput("shortcutMeaningInput", "shortcutMeaningInput");
             setupShortcutInput("shortcutChatInput", "shortcutChatInput");
             setupShortcutInput("shortcutFlashcard", "shortcutFlashcard");
+            setupShortcutInput("shortcutPrevSentenceInput", "shortcutPrevSentence");
             
             const chatWidgetCheckbox = document.getElementById("chatWidgetCheckbox");
             chatWidgetCheckbox.addEventListener('change', (event) => {
@@ -5503,6 +5506,7 @@
                 document.getElementById("shortcutMeaningInput").value = defaults.shortcutMeaningInput;
                 document.getElementById("shortcutChatInput").value = defaults.shortcutChatInput;
                 document.getElementById("shortcutFlashcard").value = defaults.shortcutFlashcard;
+                document.getElementById("shortcutPrevSentenceInput").value = defaults.shortcutPrevSentence;
                 
                 document.getElementById("chatWidgetCheckbox").value = defaults.chatWidget;
                 document.getElementById("chatWidgetHeightSlider").value = defaults.chatWidgetHeight;
@@ -12509,6 +12513,7 @@
                     [settings.shortcutTTSPlay]: () => clickElement('div[data-word-widget] button[aria-label="Listen"], #addon-sentence-header button.addon-sentence-tts-btn, div[data-reader-popup="true"] button[aria-label="Listen"]'), // Play tts audio
                     [settings.shortcutBackward5s]: () => triggerThrottledSkip(-settings.skipDuration), // Rewind
                     [settings.shortcutForward5s]: () => triggerThrottledSkip(settings.skipDuration), // Fast Forward
+                    [settings.shortcutPrevSentence]: () => playPreviousSentence(), // Previous sentence
                     [settings.shortcutMakeKnown]: () => document.dispatchEvent(new KeyboardEvent("keydown", {key: "k"})), // Simulate original 'k' for Make Word Known
                     [settings.shortcutDictionary]: () => clickElement('div[data-word-widget] a[href*="dict"], div[data-word-widget] a[target="_blank"], .dictionary-resources > a:nth-child(1)'), // Open Dictionary
                     [settings.shortcutCopySelected]: () => copySelectedText() // Copy selected text
