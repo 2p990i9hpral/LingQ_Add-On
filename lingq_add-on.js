@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      20.5.0
+// @version      20.5.1
 // @license      GPL-3.0-or-later
 // @grant       GM_setValue
 // @grant       GM_getValue
@@ -8799,6 +8799,14 @@
             return Date.now() - lastSkipTimestamp < 800;
         }
 
+        function isLocalVideoAwaitingStart() {
+            if (settings.styleType[getLessonLanguage()] !== "localVideo") return false;
+            const container = document.getElementById("local-video-container");
+            const setupBox = container?.querySelector(".local-video-setup-box");
+            const startButton = container?.querySelector(".local-video-start-button");
+            return Boolean(setupBox) && container.style.display !== "none" && setupBox.style.display !== "none" && Boolean(startButton?.disabled);
+        }
+
         function markVideoEnded() {
             if (isVideoEnded) return;
             isVideoEnded = true;
@@ -9272,17 +9280,21 @@
                 buttonRow.append(fileLabel, folderLabel);
                 
                 const startButton = createElement("button", {
-                    className: "local-video-button",
+                    className: "local-video-button local-video-start-button",
                     textContent: "Start Player",
                     disabled: true,
                 });
                 
                 const handleSpacebarStart = (event) => {
                     const isTyping = event.target.closest("input, textarea, [contenteditable='true']");
-                    if (event.code === "Space" && !isTyping && !startButton.disabled && setupBox.style.display !== "none") {
+                    if (event.code !== "Space" || isTyping) return;
+                    if (!startButton.disabled && setupBox.style.display !== "none") {
                         event.preventDefault();
                         event.stopImmediatePropagation();
                         startButton.click();
+                    } else if (isLocalVideoAwaitingStart()) {
+                        event.preventDefault();
+                        event.stopImmediatePropagation();
                     }
                 };
                 window.addEventListener("keydown", handleSpacebarStart, true);
@@ -9610,6 +9622,12 @@
                     return Promise.resolve();
                 }
 
+                const playSrc = this.src || '';
+                if (this.id !== "addonLocalVideo" && !playSrc.startsWith('data:') && !playSrc.includes('/tts/') && isLocalVideoAwaitingStart()) {
+                    this.pause();
+                    return Promise.resolve();
+                }
+
                 const lessonLang = getLessonLanguage();
                 const isLocalVideoActive = lessonLang && settings.styleType[lessonLang] === "localVideo";
 
@@ -9658,6 +9676,13 @@
             });
         }
         setupMediaElementHook();
+
+        document.addEventListener("click", (event) => {
+            if (!isLocalVideoAwaitingStart()) return;
+            if (!event.target.closest?.('footer button[aria-label="Play"], footer button[aria-label="Pause"]')) return;
+            event.preventDefault();
+            event.stopImmediatePropagation();
+        }, true);
 
         function isCustomSpeedActive() {
             return Boolean(document.getElementById('addon-speed-controller'));
@@ -12143,6 +12168,17 @@
             }
             .local-video-button:hover {
                 background-color: rgb(125 125 125 / 25%);
+            }
+            .local-video-button:disabled {
+                opacity: 0.4;
+                cursor: not-allowed;
+            }
+            .local-video-button:disabled:hover {
+                background-color: rgb(125 125 125 / 10%);
+            }
+            :root:has(#local-video-container:not([style*="display: none"]) .local-video-setup-box:not([style*="display: none"]) .local-video-start-button:disabled) footer button[aria-label="Play"] {
+                opacity: 0.4;
+                cursor: not-allowed;
             }
             .local-video-file-input {
                 display: none !important;
