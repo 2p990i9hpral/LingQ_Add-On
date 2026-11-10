@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      20.7.0
+// @version      20.7.1
 // @license      GPL-3.0-or-later
 // @grant       GM_setValue
 // @grant       GM_getValue
@@ -12321,6 +12321,7 @@
                 pointer-events: auto;
                 display: block;
                 width: fit-content;
+                min-width: min(15em, 100%);
                 max-width: 100%;
                 margin: 0 auto;
                 white-space: pre-line;
