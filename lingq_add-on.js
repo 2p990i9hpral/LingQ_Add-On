@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      20.4.3
+// @version      20.5.0
 // @license      GPL-3.0-or-later
 // @grant       GM_setValue
 // @grant       GM_getValue
@@ -9750,24 +9750,30 @@
             }
         }
 
-        function skipPlayback(deltaSeconds) {
-            unlockVideoEnded();
+        function getPlaybackTime() {
             const localVideo = document.getElementById("addonLocalVideo");
             const isLocalVideoActive = localVideo && localVideo.style.display !== "none" && !isNaN(localVideo.currentTime);
             const sliderHandle = document.querySelector('footer [data-slot="slider-thumb"], footer [role="slider"], .audio-player--progress .rc-slider-handle');
+            return isLocalVideoActive
+                ? localVideo.currentTime
+                : (sliderHandle ? (parseFloat(sliderHandle.getAttribute("aria-valuenow")) || 0) : 0);
+        }
 
+        function skipPlayback(deltaSeconds) {
+            unlockVideoEnded();
             const now = Date.now();
-            let baseTime;
-            if (lastSkipTargetTime !== null && (now - lastSkipTimestamp < 800)) {
-                baseTime = lastSkipTargetTime;
-            } else {
-                baseTime = isLocalVideoActive
-                    ? localVideo.currentTime
-                    : (sliderHandle ? (parseFloat(sliderHandle.getAttribute("aria-valuenow")) || 0) : 0);
-            }
+            const baseTime = (lastSkipTargetTime !== null && (now - lastSkipTimestamp < 800))
+                ? lastSkipTargetTime
+                : getPlaybackTime();
             const targetTime = Math.max(0, baseTime + deltaSeconds);
             lastSkipTargetTime = targetTime;
             lastSkipTimestamp = now;
+            seekPlayback(targetTime);
+        }
+
+        function seekPlayback(targetTime) {
+            const localVideo = document.getElementById("addonLocalVideo");
+            const isLocalVideoActive = localVideo && localVideo.style.display !== "none" && !isNaN(localVideo.currentTime);
 
             if (isLocalVideoActive && !isNaN(localVideo.duration)) {
                 localVideo.currentTime = Math.min(localVideo.duration, targetTime);
@@ -10077,6 +10083,7 @@
             setupSpeedController();
             setupVolumeController();
             setupCustomSkipController();
+            setupPrevSentenceButton();
             bindRemainingTimeToggle();
         }
 
@@ -10131,6 +10138,41 @@
         
         attachAudioPlayerObserver();
         
+        let lastPrevSentenceIndex = null;
+        let lastPrevSentenceClickAt = 0;
+        const PREV_SENTENCE_CHAIN_MS = 600;
+
+        async function playPreviousSentence() {
+            const sentences = (await getLessonSentences(getLessonLanguage(), getLessonId()))
+                .filter((sentence) => sentence.timestamp?.length >= 2);
+            if (sentences.length === 0) return;
+
+            const now = Date.now();
+            const isChained = lastPrevSentenceIndex !== null && now - lastPrevSentenceClickAt < PREV_SENTENCE_CHAIN_MS;
+            const targetIndex = isChained
+                ? Math.max(0, lastPrevSentenceIndex - 1)
+                : Math.max(0, sentences.findLastIndex((sentence) => sentence.timestamp[0] <= getPlaybackTime() + 0.05));
+
+            lastPrevSentenceIndex = targetIndex;
+            lastPrevSentenceClickAt = now;
+            unlockVideoEnded();
+            seekPlayback(sentences[targetIndex].timestamp[0]);
+        }
+
+        function setupPrevSentenceButton() {
+            const replayBtn = document.querySelector('footer button[aria-label^="Replay"]');
+            if (!replayBtn || document.getElementById("addon-prev-sentence-btn")) return;
+            const button = createElement("button", {
+                id: "addon-prev-sentence-btn",
+                type: "button",
+                className: replayBtn.className,
+                title: "Previous sentence (click repeatedly to go further back)",
+                innerHTML: `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="19 20 9 12 19 4 19 20"/><line x1="5" x2="5" y1="19" y2="5"/></svg>`
+            });
+            button.addEventListener("click", playPreviousSentence);
+            replayBtn.before(button);
+        }
+
         function setupCustomSkipController() {
             const footer = document.querySelector('footer');
             const controllers = document.querySelector('.audio-player--controllers');
