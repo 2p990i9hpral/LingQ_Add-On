@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      20.7.1
+// @version      20.8.0
 // @license      GPL-3.0-or-later
 // @grant       GM_setValue
 // @grant       GM_getValue
@@ -3296,6 +3296,15 @@
             .join("|");
     }
 
+    // Annotation markup differs per script: furigana nests <ruby> inside the word, other scripts wrap it
+    function getReaderAnnotatedNodes(wordIndex, text) {
+        const element = getReaderWordElement(wordIndex);
+        if (!element) return null;
+        if (element.querySelector("ruby")) return [...element.cloneNode(true).childNodes];
+        const annotation = element.closest("ruby")?.querySelector("rt")?.textContent;
+        return annotation ? [createElement("ruby", {}, text, createElement("rt", {textContent: annotation}))] : null;
+    }
+
     function renderSubtitleCue(overlay, cue) {
         if (!cue) {
             overlay.replaceChildren();
@@ -3315,10 +3324,12 @@
                 });
                 line.append(phrase);
             }
+            const annotatedNodes = getReaderAnnotatedNodes(token.wordIndex, token.text);
             const word = createElement("span", {
                 className: ["addon-sub-word", ...statusClasses.filter((name) => name.startsWith("ar-"))].join(" "),
-                textContent: token.text
+                ...(annotatedNodes ? {} : {textContent: token.text})
             });
+            if (annotatedNodes) word.append(...annotatedNodes);
             word.addEventListener("click", (event) => {
                 event.stopPropagation();
                 clickReaderWord(token.wordIndex, token.text);
@@ -12329,6 +12340,12 @@
                 padding: 0.1em;
                 box-decoration-break: clone;
                 -webkit-box-decoration-break: clone;
+            }
+            .addon-sub-word rt {
+                visibility: hidden;
+            }
+            .addon-sub-word:hover rt {
+                visibility: visible;
             }
             .addon-sub-word {
                 pointer-events: auto;
