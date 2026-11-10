@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      20.5.2
+// @version      20.6.0
 // @license      GPL-3.0-or-later
 // @grant       GM_setValue
 // @grant       GM_getValue
@@ -3369,24 +3369,50 @@
             });
             statusObserver.observe(readerRoot, {attributes: true, attributeFilter: ["class"], subtree: true});
         }
-        return (time) => {
+        const updateCue = (time) => {
             const cue = findActiveCue(cues, time);
             if (cue !== activeCue) render(cue);
         };
+        updateCue.getActiveCue = () => activeCue;
+        return updateCue;
     }
+
+    let isSubtitleHoverHeld = false;
+    const HOVER_HOLD_LEAD_SECONDS = 0.3;
 
     function attachSubtitleOverlay(video, overlay, cues) {
         const updateCue = createSubtitleRenderer(overlay, cues, {onRender: () => placeSubtitleOverlay(overlay)});
+        let heldCue = null;
+        // Pause just before the cue ends while the pointer is on the subtitle, so it stays readable
+        const holdAtCueEnd = () => {
+            const cue = updateCue.getActiveCue();
+            if (!cue || cue === heldCue || video.currentTime < cue.end - HOVER_HOLD_LEAD_SECONDS * video.playbackRate || !overlay.firstElementChild?.matches(":hover")) return;
+            const pauseButton = document.querySelector('footer button[aria-label="Pause"]');
+            if (!pauseButton) return;
+            heldCue = cue;
+            isSubtitleHoverHeld = true;
+            pauseButton.click();
+        };
+        overlay.addEventListener("mouseleave", () => {
+            if (!isSubtitleHoverHeld) return;
+            isSubtitleHoverHeld = false;
+            clickElement('footer button[aria-label="Play"]');
+        });
         const stage = overlay.parentElement;
         new ResizeObserver(() => placeSubtitleOverlay(overlay)).observe(stage);
         new ResizeObserver(() => placeSubtitleOverlay(overlay)).observe(stage.parentElement);
         let frameId = null;
-        const update = () => updateCue(video.currentTime);
+        // Keep the held cue on screen even if the paused time lands past its end
+        const update = () => {
+            if (!isSubtitleHoverHeld) updateCue(video.currentTime);
+        };
         const tick = () => {
             update();
+            if (!video.paused) holdAtCueEnd();
             frameId = video.paused ? null : requestAnimationFrame(tick);
         };
         video.addEventListener("play", () => {
+            isSubtitleHoverHeld = false;
             if (!frameId) frameId = requestAnimationFrame(tick);
         });
         ["pause", "seeked"].forEach((eventName) => video.addEventListener(eventName, update));
@@ -8994,6 +9020,7 @@
                         videoElement.pause();
                     }
                     
+                    if (isSubtitleHoverHeld) return;
                     if (isVideoSeeking && !isSkipActive()) return;
                     if (videoElement.readyState < 3) return;
                     if (isVideoAtEnd && isTargetNearEnd) return;
@@ -12265,6 +12292,7 @@
                 overflow: visible;
             }
             .addon-subtitle-line {
+                pointer-events: auto;
                 display: block;
                 width: fit-content;
                 max-width: 100%;
