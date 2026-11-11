@@ -18,6 +18,7 @@ This guide is structured around the **Settings Popup** (where the majority of fe
     - [1.6 Typography & Sizing](#16-typography--sizing)
     - [1.7 Color Themes & Palette](#17-color-themes--palette)
     - [1.8 Media Controller: Volume, Playback Speed & Skip Duration](#18-media-controller-volume-playback-speed--skip-duration)
+    - [1.9 Video Subtitles](#19-video-subtitles)
   - [2. Keyboard Shortcuts](#2-keyboard-shortcuts)
     - [2.1 Configuration & Hotkeys Table](#21-configuration--hotkeys-table)
   - [3. AI Chat & Interactive Dictionary](#3-ai-chat--interactive-dictionary)
@@ -74,6 +75,7 @@ Customize the reader layout based on the media format of your lesson:
 *(Active when Layout Style is set to Default (Auto) or Local Video)*
 - **Video Position**: `Right` | `Left` | `Top` | `Bottom`
 - **Video Height**: Slider to adjust player height when `Top` or `Bottom` position is chosen.
+- **Reader Padding**: Slider (`0%`–`30%`) to add left and right margins to the reader text in Scroll Mode.
 
 ### 1.3 Local Video Player Setup & Lesson Requirements
 
@@ -103,6 +105,11 @@ Customize the side widgets and the reading view:
 - **Show Memo Widget**: Enables a persistent notepad docked beside the reader. Notes are preserved in local storage across browser refreshes and lesson transitions.
 - **Focus on Selected Text**: Automatically scrolls the newly selected word or phrase into view.
 - **Skip End Page**: Skips LingQ's lesson completion summary screen.
+- **Hover Pause**: Pauses playback right before the sentence ends while the pointer rests on it, so you can read or click words without the next sentence starting. Moving the pointer away resumes playback.
+  - `Off`: Disabled.
+  - `Subtitle`: Only on video subtitles (default).
+  - `All`: On video subtitles and on the playing sentence in the reader.
+  - Jumping with Rewind, Fast Forward, or Previous Sentence during a hover pause resumes playback from the new position.
 - **Hide Meanings**: Hides the community/popular meanings list in the word widget.
 - **Hide Dictionaries**: Hides the external dictionary section in the word widget.
 - **Hide Sentence**: Hides the example sentence section in the word widget.
@@ -155,6 +162,16 @@ The addon enhances LingQ's media controller with volume, playback speed, and cus
 - **Previous Sentence Button**: A button next to the Play button that jumps back by sentence, using the lesson's sentence timestamps.
   - Also available as a hotkey (see [2.1](#21-configuration--hotkeys-table)).
 - **Elapsed / Remaining Time**: Click the time label in the footer player to switch between elapsed time and remaining time.
+
+### 1.9 Video Subtitles
+*(YouTube and Local Video lessons)*
+
+The addon highlights video subtitles word by word, using the same status colors as the reader, so you can study vocabulary without leaving the video.
+- **Same highlighting as the reader**: Words and phrases are highlighted by their status, just like in the reader.
+- **Click to look up**: Clicking a subtitle word opens the word widget, where you can read the meaning, change the status, or add a LingQ.
+- **Drag to select a phrase**: Drag across subtitle words to select them as a phrase. Dragging does not toggle playback.
+- **Caption Font Size**: Slider (`10`–`40px`) to adjust the subtitle size.
+- **Hover Pause**: See [1.4](#14-widgets--reader-behavior).
 
 ---
 
