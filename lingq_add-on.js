@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      20.11.1
+// @version      20.12.0
 // @license      GPL-3.0-or-later
 // @grant       GM_setValue
 // @grant       GM_getValue
@@ -29,6 +29,206 @@
         set: (key, value) => GM_setValue(key, value)
     };
     
+    const colorThemes = {
+        white: {
+            default: {
+                fontColor: "rgba(51, 48, 44, 1)",
+                translationFontColor: "rgba(51, 48, 44, 0.5)",
+                lingqBackground: "rgba(255, 214, 102, 0.5)",
+                lingqBorder: "rgba(196, 134, 0, 0.65)",
+                lingqBorderLearned: "rgba(196, 134, 0, 0.65)",
+                unknownBackground: "rgba(140, 190, 255, 0.4)",
+                unknownBorder: "rgba(0, 111, 255, 0.3)",
+                playingUnderline: "rgba(51, 48, 44, 0.5)"
+            },
+            soft: {
+                fontColor: "rgba(70, 70, 75, 1)",
+                translationFontColor: "rgba(70, 70, 75, 0.45)",
+                lingqBackground: "rgba(255, 226, 150, 0.3)",
+                lingqBorder: "rgba(220, 170, 60, 0.35)",
+                lingqBorderLearned: "rgba(220, 170, 60, 0.35)",
+                unknownBackground: "rgba(160, 200, 255, 0.25)",
+                unknownBorder: "rgba(90, 150, 230, 0.25)",
+                playingUnderline: "rgba(70, 70, 75, 0.4)"
+            },
+            vivid: {
+                fontColor: "rgba(30, 30, 34, 1)",
+                translationFontColor: "rgba(30, 30, 34, 0.55)",
+                lingqBackground: "rgba(255, 200, 60, 0.55)",
+                lingqBorder: "rgba(200, 130, 0, 0.85)",
+                lingqBorderLearned: "rgba(200, 130, 0, 0.85)",
+                unknownBackground: "rgba(90, 160, 255, 0.45)",
+                unknownBorder: "rgba(20, 100, 240, 0.7)",
+                playingUnderline: "rgba(30, 30, 34, 0.7)"
+            },
+            contrast: {
+                fontColor: "rgba(0, 0, 0, 1)",
+                translationFontColor: "rgba(0, 0, 0, 0.6)",
+                lingqBackground: "rgba(255, 205, 0, 0.6)",
+                lingqBorder: "rgba(120, 70, 0, 0.9)",
+                lingqBorderLearned: "rgba(0, 0, 0, 0.5)",
+                unknownBackground: "rgba(80, 150, 255, 0.5)",
+                unknownBorder: "rgba(0, 40, 160, 0.9)",
+                playingUnderline: "rgba(0, 0, 0, 0.85)"
+            },
+            outline: {
+                fontColor: "rgba(51, 48, 44, 1)",
+                translationFontColor: "rgba(51, 48, 44, 0.5)",
+                lingqBackground: "rgba(255, 214, 102, 0.08)",
+                lingqBorder: "rgba(196, 134, 0, 0.8)",
+                lingqBorderLearned: "rgba(196, 134, 0, 0.5)",
+                unknownBackground: "rgba(140, 190, 255, 0.08)",
+                unknownBorder: "rgba(0, 111, 255, 0.7)",
+                playingUnderline: "rgba(51, 48, 44, 0.5)"
+            },
+            marker: {
+                fontColor: "rgba(51, 48, 44, 1)",
+                translationFontColor: "rgba(51, 48, 44, 0.5)",
+                lingqBackground: "rgba(255, 214, 102, 0.7)",
+                lingqBorder: "rgba(255, 214, 102, 0)",
+                lingqBorderLearned: "rgba(196, 134, 0, 0.35)",
+                unknownBackground: "rgba(140, 190, 255, 0.6)",
+                unknownBorder: "rgba(0, 111, 255, 0)",
+                playingUnderline: "rgba(51, 48, 44, 0.5)"
+            },
+            sepia: {
+                fontColor: "rgba(67, 52, 34, 1)",
+                translationFontColor: "rgba(67, 52, 34, 0.5)",
+                lingqBackground: "rgba(222, 170, 90, 0.35)",
+                lingqBorder: "rgba(160, 100, 20, 0.55)",
+                lingqBorderLearned: "rgba(160, 100, 20, 0.55)",
+                unknownBackground: "rgba(120, 150, 170, 0.28)",
+                unknownBorder: "rgba(70, 110, 140, 0.4)",
+                playingUnderline: "rgba(67, 52, 34, 0.5)"
+            },
+            mono: {
+                fontColor: "rgba(40, 40, 40, 1)",
+                translationFontColor: "rgba(40, 40, 40, 0.45)",
+                lingqBackground: "rgba(120, 120, 120, 0.22)",
+                lingqBorder: "rgba(90, 90, 90, 0.5)",
+                lingqBorderLearned: "rgba(90, 90, 90, 0.3)",
+                unknownBackground: "rgba(70, 100, 140, 0.18)",
+                unknownBorder: "rgba(70, 100, 140, 0.4)",
+                playingUnderline: "rgba(40, 40, 40, 0.5)"
+            }
+        },
+        dark: {
+            default: {
+                fontColor: "rgba(200, 197, 192, 1)",
+                translationFontColor: "rgba(216, 216, 216, 0.3)",
+                lingqBackground: "rgba(108, 87, 43, 0.7)",
+                lingqBorder: "rgba(254, 203, 72, 0.3)",
+                lingqBorderLearned: "rgba(254, 203, 72, 0.3)",
+                unknownBackground: "rgba(37, 57, 82, 0.7)",
+                unknownBorder: "rgba(72, 154, 254, 0.3)",
+                playingUnderline: "rgba(255, 255, 255, 0.5)"
+            },
+            soft: {
+                fontColor: "rgba(190, 190, 195, 1)",
+                translationFontColor: "rgba(190, 190, 195, 0.3)",
+                lingqBackground: "rgba(130, 105, 50, 0.35)",
+                lingqBorder: "rgba(230, 190, 90, 0.22)",
+                lingqBorderLearned: "rgba(230, 190, 90, 0.22)",
+                unknownBackground: "rgba(60, 90, 130, 0.35)",
+                unknownBorder: "rgba(110, 170, 240, 0.22)",
+                playingUnderline: "rgba(190, 190, 195, 0.4)"
+            },
+            vivid: {
+                fontColor: "rgba(225, 225, 228, 1)",
+                translationFontColor: "rgba(225, 225, 228, 0.4)",
+                lingqBackground: "rgba(160, 115, 20, 0.6)",
+                lingqBorder: "rgba(255, 205, 70, 0.6)",
+                lingqBorderLearned: "rgba(255, 205, 70, 0.6)",
+                unknownBackground: "rgba(30, 80, 160, 0.6)",
+                unknownBorder: "rgba(100, 170, 255, 0.6)",
+                playingUnderline: "rgba(255, 255, 255, 0.7)"
+            },
+            contrast: {
+                fontColor: "rgba(255, 255, 255, 1)",
+                translationFontColor: "rgba(255, 255, 255, 0.55)",
+                lingqBackground: "rgba(190, 140, 0, 0.65)",
+                lingqBorder: "rgba(255, 230, 120, 0.85)",
+                lingqBorderLearned: "rgba(255, 255, 255, 0.5)",
+                unknownBackground: "rgba(20, 80, 200, 0.65)",
+                unknownBorder: "rgba(150, 200, 255, 0.85)",
+                playingUnderline: "rgba(255, 255, 255, 0.9)"
+            },
+            outline: {
+                fontColor: "rgba(200, 197, 192, 1)",
+                translationFontColor: "rgba(216, 216, 216, 0.3)",
+                lingqBackground: "rgba(254, 203, 72, 0.06)",
+                lingqBorder: "rgba(254, 203, 72, 0.65)",
+                lingqBorderLearned: "rgba(254, 203, 72, 0.4)",
+                unknownBackground: "rgba(72, 154, 254, 0.06)",
+                unknownBorder: "rgba(72, 154, 254, 0.65)",
+                playingUnderline: "rgba(255, 255, 255, 0.5)"
+            },
+            marker: {
+                fontColor: "rgba(200, 197, 192, 1)",
+                translationFontColor: "rgba(216, 216, 216, 0.3)",
+                lingqBackground: "rgba(150, 115, 30, 0.75)",
+                lingqBorder: "rgba(254, 203, 72, 0)",
+                lingqBorderLearned: "rgba(254, 203, 72, 0.25)",
+                unknownBackground: "rgba(45, 85, 140, 0.75)",
+                unknownBorder: "rgba(72, 154, 254, 0)",
+                playingUnderline: "rgba(255, 255, 255, 0.5)"
+            },
+            sepia: {
+                fontColor: "rgba(214, 200, 176, 1)",
+                translationFontColor: "rgba(214, 200, 176, 0.35)",
+                lingqBackground: "rgba(150, 105, 45, 0.45)",
+                lingqBorder: "rgba(230, 175, 90, 0.4)",
+                lingqBorderLearned: "rgba(230, 175, 90, 0.4)",
+                unknownBackground: "rgba(70, 95, 110, 0.5)",
+                unknownBorder: "rgba(130, 170, 195, 0.4)",
+                playingUnderline: "rgba(214, 200, 176, 0.5)"
+            },
+            mono: {
+                fontColor: "rgba(205, 205, 205, 1)",
+                translationFontColor: "rgba(205, 205, 205, 0.3)",
+                lingqBackground: "rgba(160, 160, 160, 0.22)",
+                lingqBorder: "rgba(200, 200, 200, 0.4)",
+                lingqBorderLearned: "rgba(200, 200, 200, 0.25)",
+                unknownBackground: "rgba(110, 140, 185, 0.25)",
+                unknownBorder: "rgba(140, 170, 215, 0.4)",
+                playingUnderline: "rgba(255, 255, 255, 0.5)"
+            }
+        }
+    };
+
+    const colorSwatchLabels = {
+        fontColor: "Font Color",
+        translationFontColor: "Translation Font Color",
+        lingqBackground: "LingQ Background",
+        lingqBorder: "LingQ Border",
+        lingqBorderLearned: "LingQ Border Learned",
+        unknownBackground: "Unknown Background",
+        unknownBorder: "Unknown Border",
+        playingUnderline: "Playing Underline"
+    };
+
+    function renderColorSwatches(container, colorSettings) {
+        container.replaceChildren(...Object.entries(colorSwatchLabels).map(([key, label]) =>
+            createElement("span", {
+                className: "color-swatch",
+                title: `${label}: ${colorSettings[key]}`,
+                style: `background-color: ${colorSettings[key]};`
+            })
+        ));
+    }
+
+    function getColorThemeOptions(colorMode) {
+        const presetNames = Object.keys(colorThemes[colorMode]);
+        return [...presetNames, "custom"].map((name) => ({value: name, text: name.charAt(0).toUpperCase() + name.slice(1)}));
+    }
+
+    function getColorSettings(colorMode) {
+        const mode = colorMode === "dark" ? "dark" : "white";
+        const preset = colorThemes[mode][settings.colorTheme[mode]];
+
+        return preset ?? {...colorThemes[mode].default, ...settings.customColorSet[mode]};
+    }
+
     const defaults = {
         styleType: {},
         videoPosition: {},
@@ -43,23 +243,10 @@
         
         colorMode: "white",
         customColors: true,
-        white_fontColor: "rgb(0, 0, 0)",
-        white_translationFontColor: "rgb(0, 0, 0)",
-        white_lingqBackground: "rgba(255, 232, 149, 1)",
-        white_lingqBorder: "rgba(255, 200, 0, 0)",
-        white_lingqBorderLearned: "rgba(255, 200, 0, 0)",
-        white_unknownBackground: "rgba(198, 223, 255, 1)",
-        white_unknownBorder: "rgba(0, 111, 255, 0)",
-        white_playingUnderline: "rgb(0, 0, 0)",
-        dark_fontColor: "rgb(255, 255, 255)",
-        dark_translationFontColor: "rgb(255, 255, 255)",
-        dark_lingqBackground: "rgba(108, 87, 43, 1)",
-        dark_lingqBorder: "rgba(254, 203, 72, 0)",
-        dark_lingqBorderLearned: "rgba(254, 203, 72, 0)",
-        dark_unknownBackground: "rgba(37, 57, 82, 1)",
-        dark_unknownBorder: "rgba(72, 154, 254, 0)",
-        dark_playingUnderline: "rgb(255, 255, 255)",
-        
+        colorTheme: {white: "default", dark: "default"},
+        // Colors of the "custom" theme per color mode, starting from the default preset
+        customColorSet: {white: colorThemes.white.default, dark: colorThemes.dark.default},
+
         librarySortOption: 0,
         showRemainingTime: false,
         focusSelectedText: false,
@@ -3580,21 +3767,6 @@
     }
     
     function setupPopups() {
-        function getColorSettings(colorMode) {
-            const prefix = colorMode === "dark" ? "dark_" : "white_";
-            
-            return {
-                fontColor: settings[prefix + "fontColor"],
-                translationFontColor: settings[prefix + "translationFontColor"],
-                lingqBackground: settings[prefix + "lingqBackground"],
-                lingqBorder: settings[prefix + "lingqBorder"],
-                lingqBorderLearned: settings[prefix + "lingqBorderLearned"],
-                unknownBackground: settings[prefix + "unknownBackground"],
-                unknownBorder: settings[prefix + "unknownBorder"],
-                playingUnderline: settings[prefix + "playingUnderline"],
-            };
-        }
-        
         function createSettingsPopup() {
             const popup = createElement("div", {
                 id: "lingqAddonSettingsPopup",
@@ -3946,6 +4118,21 @@
                 {value: "dark", text: "Dark"}
             ], settings.colorMode, "230px", "32px");
 
+            const selectedTheme = settings.colorTheme[settings.colorMode];
+            addSelect(colorSection, "colorThemeSelector", "Theme:", getColorThemeOptions(settings.colorMode), selectedTheme);
+
+            const colorThemeSwatches = createElement("div", {
+                id: "colorThemeSwatches",
+                style: selectedTheme === "custom" ? "display: none;" : ""
+            });
+            renderColorSwatches(colorThemeSwatches, colorSettings);
+            colorSection.appendChild(colorThemeSwatches);
+
+            const customColorFields = createElement("div", {
+                id: "customColorFields",
+                style: selectedTheme === "custom" ? "" : "display: none;"
+            });
+
             [
                 {id: "fontColor", label: "Font Color:", value: colorSettings.fontColor},
                 {
@@ -3959,8 +4146,9 @@
                 {id: "unknownBackground", label: "Unknown Background:", value: colorSettings.unknownBackground},
                 {id: "unknownBorder", label: "Unknown Border:", value: colorSettings.unknownBorder},
                 {id: "playingUnderline", label: "Playing Underline:", value: colorSettings.playingUnderline}
-            ].forEach(config => addColorPicker(colorSection, config.id, config.label, config.value));
+            ].forEach(config => addColorPicker(customColorFields, config.id, config.label, config.value));
 
+            colorSection.appendChild(customColorFields);
             panels.style.appendChild(colorSection);
             
             addSectionTitle(panels.layout, "Widget Settings");
@@ -5003,9 +5191,11 @@
             function initializePickrs() {
                 function setupRGBAPickr(pickerId, textId, settingKey, cssVar) {
                     function saveColorSetting(key, value) {
-                        const currentColorMode = document.querySelector('input[name="colorMode"]:checked')?.value;
-                        const prefix = currentColorMode === "dark" ? "dark_" : "white_";
-                        settings[prefix + key] = value;
+                        const currentColorMode = document.querySelector('input[name="colorMode"]:checked')?.value === "dark" ? "dark" : "white";
+                        settings.customColorSet = {
+                            ...settings.customColorSet,
+                            [currentColorMode]: {...settings.customColorSet[currentColorMode], [key]: value}
+                        };
                     }
                     
                     const pickerElement = document.getElementById(pickerId);
@@ -5130,18 +5320,45 @@
                 document.documentElement.style.setProperty("--is-playing-underline", colorSettings.playingUnderline);
             }
             
-            function updateColorMode(event) {
-                event.stopPropagation();
-                
-                const selectedColorMode = event.currentTarget.value;
-                settings.colorMode = selectedColorMode;
-                document.documentElement.style.setProperty("--background-color", selectedColorMode === "dark" ? "#2a2c2e" : "#ffffff");
-                
-                const colorSettings = getColorSettings(selectedColorMode);
-                
+            function renderThemeControls(colorMode) {
+                const selectedTheme = settings.colorTheme[colorMode];
+                const themeSelector = document.getElementById("colorThemeSelector");
+
+                themeSelector.replaceChildren(...getColorThemeOptions(colorMode).map((option) =>
+                    createElement("option", {value: option.value, textContent: option.text})
+                ));
+                themeSelector.value = selectedTheme;
+                document.getElementById("customColorFields").style.display = selectedTheme === "custom" ? "" : "none";
+
+                const swatchRow = document.getElementById("colorThemeSwatches");
+                swatchRow.style.display = selectedTheme === "custom" ? "none" : "";
+                renderColorSwatches(swatchRow, getColorSettings(colorMode));
+            }
+
+            function applyColorSettings(colorMode) {
+                const colorSettings = getColorSettings(colorMode);
+
                 updateColorInputs(colorSettings);
                 updateCssColorVariables(colorSettings);
                 updateColorPickerBackgrounds(colorSettings);
+            }
+
+            function updateColorMode(event) {
+                event.stopPropagation();
+
+                const selectedColorMode = event.currentTarget.value;
+                settings.colorMode = selectedColorMode;
+                document.documentElement.style.setProperty("--background-color", selectedColorMode === "dark" ? "#2a2c2e" : "#ffffff");
+
+                renderThemeControls(selectedColorMode);
+                applyColorSettings(selectedColorMode);
+            }
+
+            function updateColorTheme(event) {
+                settings.colorTheme = {...settings.colorTheme, [settings.colorMode]: event.currentTarget.value};
+
+                renderThemeControls(settings.colorMode);
+                applyColorSettings(settings.colorMode);
             }
             
             function setupSlider(sliderId, valueId, settingKey, unit, cssVar, valueTransform) {
@@ -5209,6 +5426,7 @@
             document.querySelectorAll('input[name="colorMode"]').forEach((radio) => {
                 radio.addEventListener("change", updateColorMode);
             });
+            document.getElementById("colorThemeSelector").addEventListener("change", updateColorTheme);
             
             const focusSelectedTextCheckbox = document.getElementById("focusSelectedTextCheckbox");
             focusSelectedTextCheckbox.addEventListener('change', (event) => {
@@ -5614,7 +5832,7 @@
                 if (!confirm("Reset all settings to default?")) return;
                 
                 const currentColorMode = document.querySelector('input[name="colorMode"]:checked')?.value;
-                const defaultColorSettings = getColorSettings(currentColorMode);
+                const defaultColorSettings = colorThemes[currentColorMode].default;
                 
                 document.getElementById("styleTypeSelector").value = languageScopedDefaults.styleType;
                 document.getElementById("heightBigSlider").value = defaults.heightBig;
@@ -5631,6 +5849,10 @@
                 document.getElementById("lineHeightValue").textContent = defaults.lineHeight;
                 document.getElementById("customFontInput").value = defaults.customFont;
                 
+                document.getElementById("colorThemeSelector").value = "default";
+                document.getElementById("customColorFields").style.display = "none";
+                document.getElementById("colorThemeSwatches").style.display = "";
+                renderColorSwatches(document.getElementById("colorThemeSwatches"), defaultColorSettings);
                 updateColorInputs(defaultColorSettings);
                 updateColorPickerBackgrounds(defaultColorSettings);
                 document.getElementById("customColorsCheckbox").checked = defaults.customColors;
@@ -8249,6 +8471,20 @@
                     border: 1px solid rgba(125, 125, 125, 30%);
                 }
 
+                #colorThemeSwatches {
+                    display: flex;
+                    gap: 4px;
+                    width: 230px;
+                    margin: 9px 0 9px auto;
+                }
+
+                .color-swatch {
+                    flex: 1;
+                    height: 18px;
+                    border-radius: 4px;
+                    border: 1px solid rgba(125, 125, 125, 45%);
+                }
+
                 .pcr-app {
                     z-index: 200000 !important;
                 }
@@ -10808,21 +11044,6 @@
             });
         }
         
-        function getColorSettings(colorMode) {
-            const prefix = colorMode === "dark" ? "dark_" : "white_";
-            
-            return {
-                fontColor: settings[prefix + "fontColor"],
-                translationFontColor: settings[prefix + "translationFontColor"],
-                lingqBackground: settings[prefix + "lingqBackground"],
-                lingqBorder: settings[prefix + "lingqBorder"],
-                lingqBorderLearned: settings[prefix + "lingqBorderLearned"],
-                unknownBackground: settings[prefix + "unknownBackground"],
-                unknownBorder: settings[prefix + "unknownBorder"],
-                playingUnderline: settings[prefix + "playingUnderline"],
-            };
-        }
-        
         async function syncLingQTheme(colorMode = settings.colorMode) {
             const targetTheme = colorMode === "dark" ? "dark" : "light";
             const currentTheme = document.body.getAttribute("data-reader-theme");
@@ -10980,6 +11201,7 @@
             document.querySelectorAll('input[name="colorMode"]').forEach((radio) => {
                 radio.addEventListener("change", applyStyles);
             });
+            document.getElementById("colorThemeSelector")?.addEventListener("change", applyStyles);
             
             document.querySelectorAll('input[name="widgetVerticalAlign"]').forEach((radio) => {
                 radio.addEventListener("change", applyStyles);
