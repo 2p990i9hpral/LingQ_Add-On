@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      20.9.5
+// @version      20.9.6
 // @license      GPL-3.0-or-later
 // @grant       GM_setValue
 // @grant       GM_getValue
@@ -12083,6 +12083,9 @@
                 overflow: hidden;
                 cursor: pointer;
                 container-type: size;
+            }
+            div.contents > div:has(> [data-reader-video-stage="true"]) {
+                display: none !important;
             }
             `;
             
