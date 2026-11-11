@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      20.10.0
+// @version      20.11.0
 // @license      GPL-3.0-or-later
 // @grant       GM_setValue
 // @grant       GM_getValue
@@ -34,6 +34,7 @@
         videoPosition: {},
         heightBig: 400,
         widgetWidth: 400,
+        readerPadding: 0,
         fontSize: {},
         captionFontsize: {},
         annotationScale: {},
@@ -3892,6 +3893,7 @@
             addSlider(videoSettings, "heightBigSlider", "Video Height:", "heightBigValue", settings.heightBig, "px", 300, 1200, 10);
             panels.layout.appendChild(videoSettings);
 
+            addSlider(panels.layout, "readerPaddingSlider", "Reader Padding:", "readerPaddingValue", settings.readerPadding, "%", 0, 30, 1);
             addSlider(panels.layout, "captionFontsizeSlider", "Caption Font Size:", "captionFontsizeValue", settings.captionFontsize[language], "px", 10, 40, 1);
             
             addSectionTitle(panels.style, "Typography", true);
@@ -5183,6 +5185,7 @@
             
             setupSlider("heightBigSlider", "heightBigValue", "heightBig", "px", "--height-big", (val) => `${val}px`);
             setupSlider("widgetWidthSlider", "widgetWidthValue", "widgetWidth", "px", "--widget-width", (val) => `${val}px`);
+            setupSlider("readerPaddingSlider", "readerPaddingValue", "readerPadding", "%", "--reader-padding", (val) => `${val}%`);
             setupSlider("fontSizeSlider", "fontSizeValue", "fontSize", "rem", "--font-size", (val) => `${val}rem`);
             setupSlider("annotationScaleSlider", "annotationScaleValue", "annotationScale", "%", "--annotation-size", (val) => `${val}%`);
             setupSlider("lineHeightSlider", "lineHeightValue", "lineHeight", "", "--line-height", (val) => val);
@@ -5609,6 +5612,8 @@
                 document.getElementById("heightBigValue").textContent = defaults.heightBig;
                 document.getElementById("widgetWidthSlider").value = defaults.widgetWidth;
                 document.getElementById("widgetWidthValue").value = defaults.widgetWidth;
+                document.getElementById("readerPaddingSlider").value = defaults.readerPadding;
+                document.getElementById("readerPaddingValue").textContent = defaults.readerPadding;
                 document.getElementById("fontSizeSlider").value = defaults.fontSize;
                 document.getElementById("fontSizeValue").textContent = defaults.fontSize;
                 document.getElementById("annotationScaleSlider").value = languageScopedDefaults.annotationScale;
@@ -5632,6 +5637,7 @@
                 document.documentElement.style.setProperty("--height-big", `${defaults.heightBig}px`);
                 document.documentElement.style.setProperty("--custom-font", defaults.lineHeight);
                 document.documentElement.style.setProperty("--widget-width", `${defaults.widgetWidth}px`);
+                document.documentElement.style.setProperty("--reader-padding", `${defaults.readerPadding}%`);
                 updateCssColorVariables(defaultColorSettings);
                 
                 document.getElementById("focusSelectedTextCheckbox").checked = defaults.focusSelectedText;
@@ -11686,6 +11692,7 @@
             return `
             :root {
                 --widget-width: ${settings.widgetWidth}px;
+                --reader-padding: ${settings.readerPadding}%;
                 --chat-widget-height: ${settings.chatWidgetHeight}px;
             }
 
@@ -11860,6 +11867,7 @@
             .reader-body:not(:has(.poc-page)) { /* Scroll mode text sizing and line spacing */
                 line-height: var(--line-height) !important;
                 font-size: var(--font-size) !important;
+                padding-inline: var(--reader-padding) !important;
             }
             .reader-body:has(.poc-page) { /* Page mode vertical scroll wrapper */
                 overflow-y: auto !important;
