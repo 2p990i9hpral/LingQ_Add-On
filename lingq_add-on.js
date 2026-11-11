@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      20.12.0
+// @version      20.12.1
 // @license      GPL-3.0-or-later
 // @grant       GM_setValue
 // @grant       GM_getValue
@@ -4198,15 +4198,15 @@
 
             addSectionTitle(panels.layout, "Reader Behavior");
             const readerBehaviorSection = createElement("div");
-            addCheckbox(readerBehaviorSection, "hideReaderPopupCheckbox", "Hide Meaning Popup", settings.hideReaderPopup);
-            addCheckbox(readerBehaviorSection, "hideLynxUICheckbox", "Hide Lynx AI UI", settings.hideLynxUI);
-            addCheckbox(readerBehaviorSection, "focusSelectedTextCheckbox", "Focus on Selected Text", settings.focusSelectedText);
-            addCheckbox(readerBehaviorSection, "skipEndPageCheckbox", "Skip End Page", settings.skipEndPage);
             addRadioGroup(readerBehaviorSection, "hoverPause", "Hover Pause:", [
                 {value: "off", text: "Off"},
                 {value: "subtitle", text: "Subtitle"},
                 {value: "all", text: "All"}
             ], settings.hoverPause);
+            addCheckbox(readerBehaviorSection, "hideReaderPopupCheckbox", "Hide Meaning Popup", settings.hideReaderPopup);
+            addCheckbox(readerBehaviorSection, "hideLynxUICheckbox", "Hide Lynx AI UI", settings.hideLynxUI);
+            addCheckbox(readerBehaviorSection, "focusSelectedTextCheckbox", "Focus on Selected Text", settings.focusSelectedText);
+            addCheckbox(readerBehaviorSection, "skipEndPageCheckbox", "Skip End Page", settings.skipEndPage);
             panels.layout.appendChild(readerBehaviorSection);
             
             addTabHeaderCheckbox(panels.shortcuts, "keyboardShortcutCheckbox", "Enable the Keyboard Shortcuts", settings.keyboardShortcut);
@@ -8574,9 +8574,6 @@
                     border-color: rgb(125 125 125 / 80%);
                     font-weight: 600;
                     text-decoration: none;
-                }
-                .popup-guide-button:hover {
-                    background-color: rgb(125 125 125 / 35%);
                 }
 
                 .popup-section {
