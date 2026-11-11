@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      20.9.8
+// @version      20.9.9
 // @license      GPL-3.0-or-later
 // @grant       GM_setValue
 // @grant       GM_getValue
@@ -3853,7 +3853,7 @@
             addSlider(videoSettings, "heightBigSlider", "Video Height:", "heightBigValue", settings.heightBig, "px", 300, 1200, 10);
             panels.layout.appendChild(videoSettings);
 
-            addSlider(panels.layout, "captionFontsizeSlider", "Caption Font Size:", "captionFontsizeValue", settings.captionFontsize[language], "px", 10, 30, 1);
+            addSlider(panels.layout, "captionFontsizeSlider", "Caption Font Size:", "captionFontsizeValue", settings.captionFontsize[language], "px", 10, 40, 1);
             
             addSectionTitle(panels.style, "Typography", true);
             addSlider(panels.style, "fontSizeSlider", "Font Size:", "fontSizeValue", settings.fontSize[language], "rem", 0.8, 1.8, 0.05);
