@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      20.9.2
+// @version      20.9.3
 // @license      GPL-3.0-or-later
 // @grant       GM_setValue
 // @grant       GM_getValue
@@ -3418,6 +3418,14 @@
             const cue = findActiveCue(cues, time);
             if (cue !== activeCue) render(cue);
         };
+        const refreshOnSeek = (event) => {
+            if (!overlay.isConnected) {
+                document.removeEventListener("addon-seek", refreshOnSeek);
+                return;
+            }
+            updateCue(event.detail);
+        };
+        document.addEventListener("addon-seek", refreshOnSeek);
         updateCue.getActiveCue = () => activeCue;
         return updateCue;
     }
@@ -9899,6 +9907,7 @@
         }
 
         function seekPlayback(targetTime) {
+            document.dispatchEvent(new CustomEvent("addon-seek", {detail: targetTime}));
             const localVideo = document.getElementById("addonLocalVideo");
             const isLocalVideoActive = localVideo && localVideo.style.display !== "none" && !isNaN(localVideo.currentTime);
 
@@ -10267,6 +10276,7 @@
         let lastPrevSentenceIndex = null;
         let lastPrevSentenceClickAt = 0;
         const PREV_SENTENCE_CHAIN_MS = 800;
+        const PREV_SENTENCE_RESTART_THRESHOLD_SECONDS = 0.1;
 
         async function playPreviousSentence() {
             const sentences = (await getLessonSentences(getLessonLanguage(), getLessonId()))
@@ -10274,10 +10284,13 @@
             if (sentences.length === 0) return;
 
             const now = Date.now();
+            const playbackTime = getPlaybackTime();
+            const currentIndex = Math.max(0, sentences.findLastIndex((sentence) => sentence.timestamp[0] <= playbackTime + 0.05));
+            const isNearSentenceStart = playbackTime - sentences[currentIndex].timestamp[0] < PREV_SENTENCE_RESTART_THRESHOLD_SECONDS;
             const isChained = lastPrevSentenceIndex !== null && now - lastPrevSentenceClickAt < PREV_SENTENCE_CHAIN_MS;
             const targetIndex = isChained
                 ? Math.max(0, lastPrevSentenceIndex - 1)
-                : Math.max(0, sentences.findLastIndex((sentence) => sentence.timestamp[0] <= getPlaybackTime() + 0.05));
+                : Math.max(0, currentIndex - (isNearSentenceStart ? 1 : 0));
 
             lastPrevSentenceIndex = targetIndex;
             lastPrevSentenceClickAt = now;
