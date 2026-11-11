@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      20.9.3
+// @version      20.9.4
 // @license      GPL-3.0-or-later
 // @grant       GM_setValue
 // @grant       GM_getValue
@@ -13433,6 +13433,8 @@
                 window.hasPreventHorizontalScrollLinked = true;
                 
                 window.addEventListener('keydown', (event) => {
+                    // Keep the Finish Lesson button out of the tab order so Tab never scrolls the page to the bottom
+                    if (event.key === "Tab" && !isFinishPageActive()) getFinishLessonButton()?.setAttribute("tabindex", "-1");
                     if (['ArrowLeft', 'ArrowRight'].includes(event.key)) {
                         const target = event.target;
                         const isTextInput = target.localName === "text" ||
