@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      20.9.6
+// @version      20.9.7
 // @license      GPL-3.0-or-later
 // @grant       GM_setValue
 // @grant       GM_getValue
@@ -456,7 +456,21 @@
             body: JSON.stringify(payload)
         });
     }
-    
+
+    // Count a finished local video lesson as listened once, since LingQ stops reporting listen time for it
+    async function ensureLessonListened(lessonLanguage, lessonId) {
+        const url = `https://www.lingq.com/api/v2/${lessonLanguage}/lesson-stats/${lessonId}/`;
+        const {listenTimes} = await (await fetch(url)).json();
+        const missingListens = 1 - (listenTimes ?? 0);
+        if (missingListens <= 0) return;
+
+        await fetch(url, {
+            method: "PATCH",
+            headers: {"Content-Type": "application/json"},
+            body: JSON.stringify({listenTimes: missingListens, action: "increment", automatic: false, app: "Web"})
+        });
+    }
+
     const lessonSentencesCache = new Map();
     const lessonSimpleCache = new Map();
     const lessonWordsCache = new Map();
@@ -13191,6 +13205,11 @@
                 const onCompletedActive = async () => {
                     if (isCompletedHandled) return;
                     isCompletedHandled = true;
+
+                    const lessonLanguage = getLessonLanguage();
+                    if (settings.styleType[lessonLanguage] === "localVideo") {
+                        ensureLessonListened(lessonLanguage, getLessonId()).catch((error) => console.error("Error updating listen times:", error));
+                    }
 
                     const usageStats = lessonUsageHistory.reduce((acc, usage) => {
                         const category = usage.type.includes("TTS") ? "TTS"
