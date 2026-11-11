@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      20.9.7
+// @version      20.9.8
 // @license      GPL-3.0-or-later
 // @grant       GM_setValue
 // @grant       GM_getValue
@@ -9905,10 +9905,15 @@
         function getPlaybackTime() {
             const localVideo = document.getElementById("addonLocalVideo");
             const isLocalVideoActive = localVideo && localVideo.style.display !== "none" && !isNaN(localVideo.currentTime);
+            if (isLocalVideoActive) return localVideo.currentTime;
+
             const sliderHandle = document.querySelector('footer [data-slot="slider-thumb"], footer [role="slider"], .audio-player--progress .rc-slider-handle');
-            return isLocalVideoActive
-                ? localVideo.currentTime
-                : (sliderHandle ? (parseFloat(sliderHandle.getAttribute("aria-valuenow")) || 0) : 0);
+            if (sliderHandle) return parseFloat(sliderHandle.getAttribute("aria-valuenow")) || 0;
+
+            const lingqMedia = typeof mediaInstances !== "undefined"
+                ? [...mediaInstances].find((media) => media && media.id !== "addonLocalVideo" && !isNaN(media.currentTime))
+                : null;
+            return lingqMedia?.currentTime ?? 0;
         }
 
         function skipPlayback(deltaSeconds) {
@@ -11879,13 +11884,13 @@
             `;
         }
         
-        function getNativeProgressHoverCSS() {
+        function getNativeProgressHoverCSS(scopeSelector = "") {
             return `
-                footer [data-slot="slider"] {
+                ${scopeSelector} footer [data-slot="slider"] {
                     opacity: 0 !important;
                     transition: opacity 0.15s !important;
                 }
-                footer:hover [data-slot="slider"] {
+                ${scopeSelector} footer:hover [data-slot="slider"] {
                     opacity: 1 !important;
                 }
             `;
@@ -12075,7 +12080,7 @@
                 `;
             }
 
-            layoutCSS += getNativeProgressHoverCSS();
+            layoutCSS += getNativeProgressHoverCSS('body:has(div[data-reader-video-stage="true"])');
 
             return layoutCSS;
         }
