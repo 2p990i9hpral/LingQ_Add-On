@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      20.11.0
+// @version      20.11.1
 // @license      GPL-3.0-or-later
 // @grant       GM_setValue
 // @grant       GM_getValue
@@ -4382,6 +4382,7 @@
             Object.values(panels).forEach(panel => panelsContainer.appendChild(panel));
             
             const buttonContainer = createElement("div", {
+                id: "settingsFooter",
                 style: "display: flex; justify-content: space-between; align-items: center; margin-top: 10px;",
                 className: "popup-row"
             });
@@ -4392,12 +4393,20 @@
                 className: "popup-button"
             }));
             
-            const donationButton = createElement("a", {href: "https://www.buymeacoffee.com/mutti", target: "_blank"})
+            const donationButton = createElement("a", {href: "https://www.buymeacoffee.com/mutti", target: "_blank", style: "display: flex;"})
             donationButton.appendChild(createElement("img", {
                 src: "https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png",
                 style: "width: 125px; height: 35px"
             }))
             buttonContainer.appendChild(donationButton);
+            
+            buttonContainer.appendChild(createElement("a", {
+                href: "https://github.com/2p990i9hpral/LingQ_Add-On/blob/main/GUIDE.md",
+                target: "_blank",
+                textContent: "Guide",
+                title: "Open the feature guide",
+                className: "popup-button popup-guide-button"
+            }));
             
             buttonContainer.appendChild(createElement("button", {
                 id: "closeSettingsBtn",
@@ -8311,6 +8320,27 @@
                 .popup-button:disabled {
                     opacity: 0.5;
                     pointer-events: none;
+                }
+
+                #settingsFooter .popup-button {
+                    display: inline-flex;
+                    align-items: center;
+                    justify-content: center;
+                    box-sizing: border-box;
+                    min-width: 72px;
+                    height: 35px;
+                    margin: 0;
+                }
+
+                .popup-guide-button {
+                    width: 125px;
+                    background-color: rgb(125 125 125 / 25%);
+                    border-color: rgb(125 125 125 / 80%);
+                    font-weight: 600;
+                    text-decoration: none;
+                }
+                .popup-guide-button:hover {
+                    background-color: rgb(125 125 125 / 35%);
                 }
 
                 .popup-section {
