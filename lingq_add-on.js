@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      20.9.1
+// @version      20.9.2
 // @license      GPL-3.0-or-later
 // @grant       GM_setValue
 // @grant       GM_getValue
@@ -3320,7 +3320,7 @@
 
     function getReaderStatusClasses(wordIndex) {
         return [...(getReaderWordElement(wordIndex)?.classList || [])]
-            .filter((name) => /^(ar-|band|run-)/.test(name));
+            .filter((name) => /^(ar-|band|run-|selected$|sel-)/.test(name));
     }
 
     function getCueSignature(cue) {
@@ -3359,7 +3359,7 @@
             }
             const annotatedNodes = getReaderAnnotatedNodes(token.wordIndex, token.text);
             const word = createElement("span", {
-                className: ["addon-sub-word", ...statusClasses.filter((name) => name.startsWith("ar-"))].join(" "),
+                className: ["addon-sub-word", ...statusClasses.filter((name) => /^(ar-|selected$|sel-|run-)/.test(name))].join(" "),
                 ...(annotatedNodes ? {} : {textContent: token.text})
             });
             if (annotatedNodes) word.append(...annotatedNodes);
@@ -12375,6 +12375,10 @@
                 box-decoration-break: clone;
                 -webkit-box-decoration-break: clone;
             }
+            .addon-sub-word ruby,
+            .addon-sub-word rt {
+                ruby-align: center;
+            }
             .addon-sub-word rt {
                 visibility: hidden;
                 user-select: none;
@@ -12452,6 +12456,23 @@
             }
             .addon-sub-word:hover {
                 box-shadow: inset 0 0 0 1px var(--sub-lingq-border-learned);
+            }
+            .addon-sub-word.selected {
+                box-shadow: inset 0 2px 0 0 #fff, inset 0 -2px 0 0 #fff;
+                border-radius: 0;
+            }
+            .addon-sub-word.selected.run-start {
+                box-shadow: inset 2px 0 0 0 #fff, inset 0 2px 0 0 #fff, inset 0 -2px 0 0 #fff;
+                border-radius: .25rem 0 0 .25rem;
+            }
+            .addon-sub-word.selected.run-end {
+                box-shadow: inset -2px 0 0 0 #fff, inset 0 2px 0 0 #fff, inset 0 -2px 0 0 #fff;
+                border-radius: 0 .25rem .25rem 0;
+            }
+            .addon-sub-word.selected.run-start.run-end,
+            .addon-sub-word.selected.sel-word:not(.sel-phrase) {
+                box-shadow: inset 0 0 0 2px #fff;
+                border-radius: .25rem;
             }
             body:has([id$="-content-lessonCompleted"][data-state="active"]) .addon-subtitle-overlay {
                 display: none !important;
