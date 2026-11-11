@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      20.9.9
+// @version      20.10.0
 // @license      GPL-3.0-or-later
 // @grant       GM_setValue
 // @grant       GM_getValue
@@ -63,6 +63,7 @@
         showRemainingTime: false,
         focusSelectedText: false,
         hoverAnnotation: "off",
+        hoverPause: "subtitle",
         skipEndPage: false,
         widgetVerticalAlign: 'flex-start',
         showMemoWidget: false,
@@ -3445,34 +3446,72 @@
         return updateCue;
     }
 
-    let isSubtitleHoverHeld = false;
-    const HOVER_HOLD_LEAD_SECONDS = 0.3;
+    let isHoverHeld = false;
+    let isHoverHoldReleaseBound = false;
+    const HOVER_HOLD_SCHEDULE_SECONDS = 0.3;
+    const HOVER_HOLD_GUARD_SECONDS = 0.05;
 
-    // Pause just before the cue ends while the pointer is on the subtitle, so it stays readable; resume when it leaves
-    function createSubtitleHoverHold(overlay, updateCue, getPlaybackRate) {
-        let heldCue = null;
-        overlay.addEventListener("mouseleave", () => {
-            if (!isSubtitleHoverHeld) return;
-            isSubtitleHoverHeld = false;
-            clickElement('footer button[aria-label="Play"]');
-        });
-        // The user resumed playback by hand, so the hold no longer applies
-        const releaseOnManualPlay = (event) => {
-            if (!overlay.isConnected) {
-                document.removeEventListener("click", releaseOnManualPlay, true);
-                return;
-            }
-            if (event.isTrusted && event.target.closest?.('footer button[aria-label="Play"]')) isSubtitleHoverHeld = false;
-        };
-        document.addEventListener("click", releaseOnManualPlay, true);
-        return (time) => {
-            const cue = updateCue.getActiveCue();
-            if (!cue || cue === heldCue || time < cue.end - HOVER_HOLD_LEAD_SECONDS * getPlaybackRate() || !overlay.firstElementChild?.matches(":hover")) return;
+    // Pause right before the given item ends while the pointer is on it; resume when the pointer leaves
+    function createHoverHold(getPlaybackRate) {
+        let heldItem = null;
+        let scheduledItem = null;
+        let holdTimer = null;
+        let latestItem = null;
+        let latestHoverElement = null;
+        let latestLeaveElement = null;
+        if (!isHoverHoldReleaseBound) {
+            isHoverHoldReleaseBound = true;
+            // The user resumed playback by hand, so the hold no longer applies
+            document.addEventListener("click", (event) => {
+                if (event.isTrusted && event.target.closest?.('footer button[aria-label="Play"]')) isHoverHeld = false;
+            }, true);
+        }
+
+        function hold(item) {
+            holdTimer = null;
+            scheduledItem = null;
+            if (item !== latestItem || !latestHoverElement?.matches(":hover")) return;
             const pauseButton = document.querySelector('footer button[aria-label="Pause"]');
             if (!pauseButton) return;
-            heldCue = cue;
-            isSubtitleHoverHeld = true;
+            heldItem = item;
+            isHoverHeld = true;
             pauseButton.click();
+            latestLeaveElement.addEventListener("mouseleave", () => {
+                if (!isHoverHeld) return;
+                isHoverHeld = false;
+                clickElement('footer button[aria-label="Play"]');
+            }, {once: true});
+        }
+
+        return (time, item, itemEnd, hoverElement, leaveElement = hoverElement) => {
+            latestItem = item;
+            latestHoverElement = hoverElement;
+            latestLeaveElement = leaveElement;
+            if (settings.hoverPause === "off" || !item || itemEnd === undefined) return;
+            const remainingSeconds = (itemEnd - time) / getPlaybackRate();
+            if (remainingSeconds > HOVER_HOLD_SCHEDULE_SECONDS) {
+                // Seeked back into the item, so it may hold again
+                if (item === heldItem) heldItem = null;
+                if (item === scheduledItem) {
+                    clearTimeout(holdTimer);
+                    holdTimer = null;
+                    scheduledItem = null;
+                }
+                return;
+            }
+            if (item === heldItem || item === scheduledItem) return;
+            scheduledItem = item;
+            clearTimeout(holdTimer);
+            // Time updates arrive in coarse steps, so time the pause from the latest reading instead of waiting for the next one
+            holdTimer = setTimeout(() => hold(item), Math.max(0, remainingSeconds - HOVER_HOLD_GUARD_SECONDS) * 1000);
+        };
+    }
+
+    function createSubtitleHoverHold(overlay, updateCue, getPlaybackRate) {
+        const holdAtEnd = createHoverHold(getPlaybackRate);
+        return (time) => {
+            const cue = updateCue.getActiveCue();
+            holdAtEnd(time, cue, cue?.end, overlay.firstElementChild, overlay);
         };
     }
 
@@ -3485,7 +3524,7 @@
         let frameId = null;
         // Keep the held cue on screen even if the paused time lands past its end
         const update = () => {
-            if (!isSubtitleHoverHeld) updateCue(video.currentTime);
+            if (!isHoverHeld) updateCue(video.currentTime);
         };
         const tick = () => {
             update();
@@ -3493,7 +3532,7 @@
             frameId = video.paused ? null : requestAnimationFrame(tick);
         };
         video.addEventListener("play", () => {
-            isSubtitleHoverHeld = false;
+            isHoverHeld = false;
             if (!frameId) frameId = requestAnimationFrame(tick);
         });
         ["pause", "seeked"].forEach((eventName) => video.addEventListener(eventName, update));
@@ -3973,6 +4012,11 @@
             addCheckbox(readerBehaviorSection, "hideLynxUICheckbox", "Hide Lynx AI UI", settings.hideLynxUI);
             addCheckbox(readerBehaviorSection, "focusSelectedTextCheckbox", "Focus on Selected Text", settings.focusSelectedText);
             addCheckbox(readerBehaviorSection, "skipEndPageCheckbox", "Skip End Page", settings.skipEndPage);
+            addRadioGroup(readerBehaviorSection, "hoverPause", "Hover Pause:", [
+                {value: "off", text: "Off"},
+                {value: "subtitle", text: "Subtitle"},
+                {value: "all", text: "All"}
+            ], settings.hoverPause);
             panels.layout.appendChild(readerBehaviorSection);
             
             addTabHeaderCheckbox(panels.shortcuts, "keyboardShortcutCheckbox", "Enable the Keyboard Shortcuts", settings.keyboardShortcut);
@@ -5164,7 +5208,13 @@
                     settings.hoverAnnotation = event.currentTarget.value;
                 });
             });
-            
+
+            document.querySelectorAll('input[name="hoverPause"]').forEach((radio) => {
+                radio.addEventListener("change", (event) => {
+                    settings.hoverPause = event.currentTarget.value;
+                });
+            });
+
             const skipEndPageCheckbox = document.getElementById("skipEndPageCheckbox");
             skipEndPageCheckbox.addEventListener('change', (event) => {
                 settings.skipEndPage = event.target.checked;
@@ -5587,6 +5637,9 @@
                 document.getElementById("focusSelectedTextCheckbox").checked = defaults.focusSelectedText;
                 document.querySelectorAll('input[name="hoverAnnotation"]').forEach((radio) => {
                     radio.checked = radio.value === defaults.hoverAnnotation;
+                });
+                document.querySelectorAll('input[name="hoverPause"]').forEach((radio) => {
+                    radio.checked = radio.value === defaults.hoverPause;
                 });
                 document.getElementById("skipEndPageCheckbox").checked = defaults.skipEndPage;
                 document.querySelectorAll('input[name="widgetVerticalAlign"]').forEach((radio) => {
@@ -9108,7 +9161,7 @@
                         videoElement.pause();
                     }
                     
-                    if (isSubtitleHoverHeld) return;
+                    if (isHoverHeld) return;
                     if (isVideoSeeking && !isSkipActive()) return;
                     if (videoElement.readyState < 3) return;
                     if (isVideoAtEnd && isTargetNearEnd) return;
@@ -9916,6 +9969,13 @@
             return lingqMedia?.currentTime ?? 0;
         }
 
+        // A hover hold is an automatic pause, so jumping elsewhere resumes playback
+        function resumeIfHoverHeld() {
+            if (!isHoverHeld) return;
+            isHoverHeld = false;
+            clickElement('footer button[aria-label="Play"]');
+        }
+
         function skipPlayback(deltaSeconds) {
             unlockVideoEnded();
             const now = Date.now();
@@ -9925,6 +9985,8 @@
             const targetTime = Math.max(0, baseTime + deltaSeconds);
             lastSkipTargetTime = targetTime;
             lastSkipTimestamp = now;
+            // LingQ ignores a Play click right after a seek, so resume before seeking
+            resumeIfHoverHeld();
             seekPlayback(targetTime);
         }
 
@@ -10294,7 +10356,8 @@
         }
         
         attachAudioPlayerObserver();
-        
+        setupReaderSentenceHoverHold();
+
         let lastPrevSentenceIndex = null;
         let lastPrevSentenceClickAt = 0;
         const PREV_SENTENCE_CHAIN_MS = 800;
@@ -10317,6 +10380,7 @@
             lastPrevSentenceIndex = targetIndex;
             lastPrevSentenceClickAt = now;
             unlockVideoEnded();
+            resumeIfHoverHeld();
             seekPlayback(sentences[targetIndex].timestamp[0]);
         }
 
@@ -10332,6 +10396,29 @@
             });
             button.addEventListener("click", playPreviousSentence);
             replayBtn.before(button);
+        }
+
+        // Pause just before the playing reader sentence ends while the pointer is on it
+        function setupReaderSentenceHoverHold() {
+            const holdAtEnd = createHoverHold(() => settings.lingqSpeed[getLessonLanguage()] || 1.0);
+            let frameId = null;
+
+            function tick(sentences) {
+                frameId = null;
+                if (settings.hoverPause !== "all" || !document.querySelector(".reader-sentence[data-s]:hover")) return;
+                frameId = requestAnimationFrame(() => tick(sentences));
+
+                const playingSentence = document.querySelector(".reader-sentence.playing[data-s]:hover");
+                if (!playingSentence) return;
+                const sentence = sentences.find((item) => item.index === Number(playingSentence.dataset.s));
+                holdAtEnd(getPlaybackTime(), sentence, sentence?.timestamp?.[1], playingSentence);
+            }
+
+            document.addEventListener("mouseover", async (event) => {
+                if (frameId || settings.hoverPause !== "all" || !event.target.closest?.(".reader-sentence[data-s]")) return;
+                const sentences = await getLessonSentences(getLessonLanguage(), getLessonId());
+                if (!frameId) frameId = requestAnimationFrame(() => tick(sentences));
+            });
         }
 
         function setupCustomSkipController() {
@@ -12600,7 +12687,7 @@
             const getPlaybackRate = () => parseFloat(document.querySelector('footer button[aria-label^="Playback speed"]')?.textContent) || 1;
             const holdAtCueEnd = createSubtitleHoverHold(overlay, updateCue, getPlaybackRate);
             youtubeSubtitleUpdate = (time) => {
-                if (!isSubtitleHoverHeld) updateCue(time);
+                if (!isHoverHeld) updateCue(time);
                 holdAtCueEnd(time);
             };
             const sliderValue = parseFloat(document.querySelector('footer [role="slider"]')?.getAttribute("aria-valuenow"));
