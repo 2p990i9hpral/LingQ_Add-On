@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      20.9.0
+// @version      20.9.1
 // @license      GPL-3.0-or-later
 // @grant       GM_setValue
 // @grant       GM_getValue
@@ -12377,6 +12377,8 @@
             }
             .addon-sub-word rt {
                 visibility: hidden;
+                user-select: none;
+                -webkit-user-select: none;
             }
             .addon-sub-word:hover rt {
                 visibility: visible;
@@ -12431,6 +12433,16 @@
             .addon-sub-phrase.band-new {
                 --phrase-border: var(--sub-unknown-border);
                 background-color: var(--sub-unknown-background);
+            }
+            /* Selected phrase loses its band-N class, so read the status from the word widget instead */
+            :root:has([data-button-status][data-variant="new"][data-is-active="true"]) .addon-sub-phrase.band-revealed {
+                background-color: color-mix(in srgb, var(--sub-lingq-background) 65%, transparent);
+            }
+            :root:has([data-button-status][data-variant="recognized"][data-is-active="true"]) .addon-sub-phrase.band-revealed {
+                background-color: color-mix(in srgb, var(--sub-lingq-background) 35%, transparent);
+            }
+            :root:has([data-button-status][data-variant="familiar"][data-is-active="true"]) .addon-sub-phrase.band-revealed {
+                background-color: color-mix(in srgb, var(--sub-lingq-background) 15%, transparent);
             }
             .addon-sub-phrase:hover {
                 box-shadow: inset 0 0 0 1px var(--phrase-border);
