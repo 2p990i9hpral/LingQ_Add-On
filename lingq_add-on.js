@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      20.9.4
+// @version      20.9.5
 // @license      GPL-3.0-or-later
 // @grant       GM_setValue
 // @grant       GM_getValue
@@ -35,6 +35,7 @@
         heightBig: 400,
         widgetWidth: 400,
         fontSize: {},
+        captionFontsize: {},
         annotationScale: {},
         lineHeight: {},
         customFont: {},
@@ -63,7 +64,6 @@
         focusSelectedText: false,
         hoverAnnotation: "off",
         skipEndPage: false,
-        captionFontsize: 1.1,
         widgetVerticalAlign: 'flex-start',
         showMemoWidget: false,
         hidePopularMeanings: false,
@@ -120,6 +120,7 @@
         prependSummary: false,
         summaryDifficulty: "unset",
         fontSize: 1.1,
+        captionFontsize: 18,
         annotationScale: 50,
         lineHeight: 1.7,
         ttsVoice: "random",
@@ -3838,7 +3839,7 @@
             addSlider(videoSettings, "heightBigSlider", "Video Height:", "heightBigValue", settings.heightBig, "px", 300, 1200, 10);
             panels.layout.appendChild(videoSettings);
 
-            addSlider(panels.layout, "captionFontsizeSlider", "Caption Font Size:", "captionFontsizeValue", settings.captionFontsize, "px", 10, 30, 1);
+            addSlider(panels.layout, "captionFontsizeSlider", "Caption Font Size:", "captionFontsizeValue", settings.captionFontsize[language], "px", 10, 30, 1);
             
             addSectionTitle(panels.style, "Typography", true);
             addSlider(panels.style, "fontSizeSlider", "Font Size:", "fontSizeValue", settings.fontSize[language], "rem", 0.8, 1.8, 0.05);
@@ -5577,7 +5578,9 @@
                 document.querySelectorAll('input[name="widgetVerticalAlign"]').forEach((radio) => {
                     radio.checked = radio.value === defaults.widgetVerticalAlign;
                 });
-                document.getElementById("captionFontsizeSlider").value = defaults.captionFontsize;
+                document.getElementById("captionFontsizeSlider").value = languageScopedDefaults.captionFontsize;
+                document.getElementById("captionFontsizeValue").textContent = languageScopedDefaults.captionFontsize;
+                document.documentElement.style.setProperty("--caption-font-size", `${languageScopedDefaults.captionFontsize}px`);
                 
                 document.getElementById("keyboardShortcutCheckbox").value = defaults.keyboardShortcut;
                 const skipSlider = document.getElementById("skipDurationSlider");
@@ -12343,7 +12346,7 @@
             const learnedBorderBoost = 1.5;
             return `
             :root {
-                --caption-font-size: ${settings.captionFontsize}px;
+                --caption-font-size: ${settings.captionFontsize[getLessonLanguage()]}px;
             }
             .addon-subtitle-overlay {
                 --sub-lingq-background: ${boostColorAlpha(darkColors.lingqBackground, backgroundBoost)};
