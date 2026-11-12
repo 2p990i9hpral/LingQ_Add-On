@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      20.12.2
+// @version      20.12.3
 // @license      GPL-3.0-or-later
 // @grant       GM_setValue
 // @grant       GM_getValue
@@ -899,7 +899,20 @@
     }
     
     /* Utils */
-    
+
+    // Exponential moving average whose value is kept within [min, max]
+    function createClampedEma({initial, smoothing, min, max}) {
+        let average = null;
+        const clamp = (value) => Math.min(max, Math.max(min, value));
+        return {
+            get: () => clamp(average ?? initial),
+            update(value) {
+                average = average === null ? value : average + smoothing * (value - average);
+                return clamp(average);
+            }
+        };
+    }
+
     function createElement(tag, props = {}, ...children) {
         const svgTags = new Set(['svg', 'text', 'tspan', 'path', 'circle', 'rect', 'line', 'polyline', 'polygon', 'g', 'use']);
         const element = svgTags.has(tag)
@@ -3660,7 +3673,8 @@
     let isHoverHeld = false;
     let isHoverHoldReleaseBound = false;
     const HOVER_HOLD_SCHEDULE_SECONDS = 0.3;
-    const HOVER_HOLD_GUARD_SECONDS = 0.05;
+    // Adapts to the measured delay between the pause click and the media actually pausing
+    const hoverHoldGuard = createClampedEma({initial: 0.10, smoothing: 0.3, min: 0.05, max: 0.3});
 
     // Pause right before the given item ends while the pointer is on it; resume when the pointer leaves
     function createHoverHold(getPlaybackRate) {
@@ -3670,6 +3684,7 @@
         let latestItem = null;
         let latestHoverElement = null;
         let latestLeaveElement = null;
+        let pauseClickTime = null;
         if (!isHoverHoldReleaseBound) {
             isHoverHoldReleaseBound = true;
             // The user resumed playback by hand, so the hold no longer applies
@@ -3686,6 +3701,7 @@
             if (!pauseButton) return;
             heldItem = item;
             isHoverHeld = true;
+            pauseClickTime = performance.now();
             pauseButton.click();
             latestLeaveElement.addEventListener("mouseleave", () => {
                 if (!isHoverHeld) return;
@@ -3694,7 +3710,15 @@
             }, {once: true});
         }
 
-        return (time, item, itemEnd, hoverElement, leaveElement = hoverElement) => {
+        function reportPaused() {
+            if (pauseClickTime === null) return;
+            const latencySeconds = (performance.now() - pauseClickTime) / 1000;
+            pauseClickTime = null;
+            if (latencySeconds > 1) return;
+            hoverHoldGuard.update(latencySeconds);
+        }
+
+        const holdAtEnd = (time, item, itemEnd, hoverElement, leaveElement = hoverElement) => {
             latestItem = item;
             latestHoverElement = hoverElement;
             latestLeaveElement = leaveElement;
@@ -3710,20 +3734,32 @@
                 }
                 return;
             }
-            if (item === heldItem || item === scheduledItem) return;
+            if (item === heldItem) return;
+            const guardSeconds = hoverHoldGuard.get();
+            if (remainingSeconds <= guardSeconds) {
+                // Also covers the end being skipped past by a jump, which a pending timer would miss
+                clearTimeout(holdTimer);
+                hold(item);
+                return;
+            }
+            if (item === scheduledItem) return;
             scheduledItem = item;
             clearTimeout(holdTimer);
             // Time updates arrive in coarse steps, so time the pause from the latest reading instead of waiting for the next one
-            holdTimer = setTimeout(() => hold(item), Math.max(0, remainingSeconds - HOVER_HOLD_GUARD_SECONDS) * 1000);
+            holdTimer = setTimeout(() => hold(item), Math.max(0, remainingSeconds - guardSeconds) * 1000);
         };
+        holdAtEnd.reportPaused = reportPaused;
+        return holdAtEnd;
     }
 
     function createSubtitleHoverHold(overlay, updateCue, getPlaybackRate) {
         const holdAtEnd = createHoverHold(getPlaybackRate);
-        return (time) => {
+        const holdAtCueEnd = (time) => {
             const cue = updateCue.getActiveCue();
             holdAtEnd(time, cue, cue?.end, overlay.firstElementChild, overlay);
         };
+        holdAtCueEnd.reportPaused = holdAtEnd.reportPaused;
+        return holdAtCueEnd;
     }
 
     function attachSubtitleOverlay(video, overlay, cues) {
@@ -3746,6 +3782,7 @@
             isHoverHeld = false;
             if (!frameId) frameId = requestAnimationFrame(tick);
         });
+        video.addEventListener("pause", () => holdAtCueEnd.reportPaused());
         ["pause", "seeked"].forEach((eventName) => video.addEventListener(eventName, update));
         tick();
     }
