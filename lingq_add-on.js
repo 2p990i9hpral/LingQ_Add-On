@@ -4,7 +4,7 @@
 // @match        https://www.lingq.com/*
 // @match        https://www.youtube-nocookie.com/*
 // @match        https://www.youtube.com/embed/*
-// @version      20.12.1
+// @version      20.12.2
 // @license      GPL-3.0-or-later
 // @grant       GM_setValue
 // @grant       GM_getValue
@@ -649,15 +649,38 @@
     // Count a finished local video lesson as listened once, since LingQ stops reporting listen time for it
     async function ensureLessonListened(lessonLanguage, lessonId) {
         const url = `https://www.lingq.com/api/v2/${lessonLanguage}/lesson-stats/${lessonId}/`;
-        const {listenTimes} = await (await fetch(url)).json();
-        const missingListens = 1 - (listenTimes ?? 0);
-        if (missingListens <= 0) return;
+        const fetchStats = async () => (await fetch(url)).json();
+        const stats = await fetchStats();
+        const missingListens = 1 - (stats.listenTimes ?? 0);
+        if (missingListens <= 0) return stats;
 
         await fetch(url, {
             method: "PATCH",
             headers: {"Content-Type": "application/json"},
             body: JSON.stringify({listenTimes: missingListens, action: "increment", automatic: false, app: "Web"})
         });
+        return fetchStats();
+    }
+
+    function formatListeningTime(totalSeconds) {
+        const seconds = Math.round(totalSeconds);
+        const units = [[Math.floor(seconds / 3600), "h"], [Math.floor(seconds % 3600 / 60), "m"], [seconds % 60, "s"]];
+        const firstVisibleIndex = units.findIndex(([value]) => value > 0);
+
+        return units.slice(firstVisibleIndex === -1 ? units.length - 1 : firstVisibleIndex)
+            .map(([value, unit]) => `${value}${unit}`)
+            .join(" ");
+    }
+
+    // Reflect the listening stats on the lesson completed card, which was rendered before the stats were updated
+    async function updateListenedCard({listeningTime, listenTimes}) {
+        const card = await waitForElement('[id$="-content-lessonCompleted"] [data-slot="card"] div.grid > div:nth-child(5)', 5000);
+        if (!card) return;
+
+        const timeElement = card.querySelector("p.truncate");
+        const timesElement = card.querySelector("div.flex-wrap > span.shrink-0.text-foreground");
+        if (timeElement) timeElement.textContent = formatListeningTime(listeningTime ?? 0);
+        if (timesElement) timesElement.textContent = `${(listenTimes ?? 0).toFixed(1)}x`;
     }
 
     const lessonSentencesCache = new Map();
@@ -13557,7 +13580,9 @@
 
                     const lessonLanguage = getLessonLanguage();
                     if (settings.styleType[lessonLanguage] === "localVideo") {
-                        ensureLessonListened(lessonLanguage, getLessonId()).catch((error) => console.error("Error updating listen times:", error));
+                        ensureLessonListened(lessonLanguage, getLessonId())
+                            .then(updateListenedCard)
+                            .catch((error) => console.error("Error updating listen times:", error));
                     }
 
                     const usageStats = lessonUsageHistory.reduce((acc, usage) => {
